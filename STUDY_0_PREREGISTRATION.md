@@ -2,7 +2,7 @@
 
 ```yaml
 id: S0
-version: 0.5   # v0.4 → v0.5：GPT 第三轮终审 5 项全采纳（分钟内 adverse 路径等），详见修订记录
+version: 0.6   # v0.5 → v0.6：GPT 第四轮 2 项逻辑缝隙＋2 项精确补丁，全部采纳；批准冻结
 status: DRAFT — 待批准冻结；冻结时本字段在 Freeze Commit A 内改为 FROZEN
 date: 2026-07-27
 trial_ledger: formal_trial_count 登记 S0 = 1；researcher_exposure 另行记账（见 §9）
@@ -106,12 +106,13 @@ de_pm   = |C1544 − O1000| / path_pm
   **Stress = Base 的 market_friction × 2（platform_fee 不重复翻倍）**；Severe = P95＋3 tick/边。
 - 代理假设明示：2025Q1 spread 分布用于其他年份，四档场景共同覆盖该不确定性。
 
-**反事实 Micro 执行披露（冻结，强制分开报告）**：MNQ 于 2019-05 上市。
-2010-06-06 → 2019-05 段的结果 = 用历史 NQ 价格路径套 MNQ 乘数与 2025Q1 摩擦，
+**反事实 Micro 执行披露（冻结，强制分开报告）**：MNQ 于 **2019-05-06** 开始交易（CME 官方）。
+2010-06-06 → 2019-05-06(excl) 段的结果 = 用历史 NQ 价格路径套 MNQ 乘数与 2025Q1 摩擦，
 回答"若当前 Micro 执行条件存在于过去体制"，**不是历史上真实可交易的 MNQ 回测**；
 整个 Development 使用 NQ 路径代理，非 MNQ 历史 mid-price 路径。报告必须按
-`counterfactual_micro_execution`（2010 → 2019-05）与 `actual_micro_available_era`
-（2019-05 → 2021-12）两个时代轴分列，禁止将前者描述为真实 Micro 历史表现。
+`counterfactual_micro_execution`（2010-06-06 → 2019-05-06 excl）与
+`actual_micro_available_era`（2019-05-06 → 2022-01-01 excl）两个时代轴分列，
+禁止将前者描述为真实 Micro 历史表现。
 
 **成交公式（d = +1 多头，−1 空头）**：
 
@@ -209,14 +210,16 @@ S0 代码可并行开发，但在 MC_METHOD_SPEC 冻结前不得运行产出可�
   ——若把判定分位数直接作用于单次尝试结果分布，挑战费的二元损失质量会使
   P5 几乎永远为负，GO 将系统性无法触发（对 GPT 提案的必要修正）。
 
-### 10.4 判定表（统计量 = 认知层分布；组合 = 平台 × 账户类型 × risk policy × sizing policy）
+### 10.4 判定表（互斥且穷尽；**按顺序判定：STOP → GO → β → α**）
 
-| 判定 | 条件 |
-|---|---|
-| **STOP** | E1 与 E2 的所有预注册组合：Conservative 下认知层 P95 ≤ 0 |
-| **GO** | 存在**同一**E1 组合：Conservative 下认知层 P5 > 0 **且** Stress 下认知层中位数 ≥ 0，且整数仓位、频率、payout 路径可行性经 MC 确认 |
-| **边界区 α** | 非 STOP 非 GO，且有 E1 组合 Conservative 认知层中位数 > 0 |
-| **边界区 β** | 所有 E1 组合不成立但存在 E2 组合 Conservative 认知层 P5 > 0；或 E1 满足 EV 条件而可行性未过 |
+统计量 = 认知层分布；组合 = 平台 × 账户类型 × risk policy × sizing policy。
+
+| 序 | 判定 | 条件 |
+|---|---|---|
+| 1 | **STOP** | E1 与 E2 的所有预注册组合：Conservative 下认知层 P95 ≤ 0 |
+| 2 | **GO** | 存在**同一**E1 组合：Conservative 下认知层 P5 > 0 **且** Stress 下认知层中位数 ≥ 0，且整数仓位、频率、payout 路径可行性经 MC 确认 |
+| 3 | **边界区 β** | （非 STOP、非 GO 时）存在 E2 组合 Conservative 认知层 P5 > 0 而无任何 E1 组合满足之；**或**存在 E1 组合满足 GO 的 EV 证据条件但可行性未过 |
+| 4 | **边界区 α** | **其余全部情况（兜底类别）** |
 
 边界区处理：一次预注册检查（α：敏感性检查；β：替代风险结构检查）后**强制一次性判决**，
 判据 = **与主门槛完全相同**（同一组合：Conservative 认知层 P5 > 0 ∧ Stress 认知层中位数 ≥ 0
@@ -245,7 +248,10 @@ MVE 概念保留为解释性诊断与 classifier feasibility 工具，不作最�
 1. **Freeze Commit A**（tag `s0-freeze-v1`）包含四个文件：`.gitattributes`（字节稳定基础配置，随同提交）
    ＋ 被冻结并登记 SHA-256 的三份：`PROJECT_CHARTER.md`、`STUDY_0_PREREGISTRATION.md`、
    `purchase_plan.yaml`。Commit A 内本文件 status 同步改为 FROZEN。
-2. **Registry Commit B**：三份冻结文件的字节 SHA-256 ＋ Commit A hash 写入 FREEZE_LOG.md 后提交；锚定 Commit A。
+2. **Registry Commit B**：三份冻结文件的 SHA-256 **从 Commit A 的 git blob 重新计算**
+   （非工作区文件），连同 Commit A hash 写入 FREEZE_LOG.md 后提交；锚定 Commit A。
+   机械检查清单：本文件与 purchase_plan.yaml 的 status 已在 Commit A 内翻转为 frozen；
+   Commit A 变更集只触及约定文件；purchase_approval.yaml 不进 Commit A，只进 Commit C。
 3. **Purchase Approval Commit C**：填写并提交 `purchase_approval.yaml`（含 purchase_plan.yaml 冻结字节哈希）；
    执行脚本核对哈希一致且实际可用 credit ≥ 实际重报价，否则中止。
 4. Gate 1 快照与 `MC_METHOD_SPEC` 冻结适用同样的两阶段流程（tag `mc-freeze-v1`），顺序见 §10.2。
@@ -276,7 +282,14 @@ D_FP：Y_cont < θ 的日子，仍按 d_open 方向按同规则交易的逐日 U
    高收益 TP 而优于该基准，也可能偏好边缘 TP 或更差 FP 而劣于该基准；
    是否存在正向或负向幅度选择，只能由 H1 用真实特征验证；
 4. 形成交易日标记序列，与每合约日内路径（§10.1）共同交给 MC；
-5. 可行区域 = {(q,r) : prop_operating_EV 认知层 P5 > 0 于至少一个预注册组合}。
+   **强制输出实际值**：取整导致实际 precision/recall 偏离目标，须同时报告
+   `target_precision / realized_precision / target_recall / realized_recall`，
+   MC 使用实际抽到的交易数与 realized 值，不用理论网格值；
+5. 报告**两个区域**（与主门槛对齐，v0.6）：
+   - `positive_EV_region` = {(q,r) : 至少一个组合 Conservative 认知层 P5 > 0}；
+   - `deployable_region` = {(q,r) : **同一组合**满足 Conservative P5 > 0 ∧ Stress 中位数 ≥ 0
+     ∧ 频率/整数仓位/payout 路径可行}。
+   两区域同时呈现，但**只有 deployable_region 有资格支持进入 H1**。
 
 年交易数 F(q,r) = p·r·N/q（N≈252）随网格一并报告。
 **网格地位限定**：仅为可行性边界，不构成 H1 表现宣称；禁止因某格漂亮而把该格的
@@ -293,6 +306,15 @@ E1/E2 双判据＋E3 删除；MVE 函数化；ADR14；成交公式化；整数�
 3. F3/F8/Y2 公式唯一化（close-path 版本）；成本公式补 spread/2、Stress 范围、signed-d、gap 穿越 trigger_ref；风险输出分 planned/realized。
 4. [Claude 补丁] GO 条件要求 Conservative 与 Stress 由**同一组合**满足，防止拼凑通过。
 5. [Claude 补丁] E1 满足 EV 但可行性未过 → 归入边界区 β，避免判定表出现未定义单元格。
+
+**v0.5 → v0.6**（GPT 第四轮终审，全部核查成立、全部采纳）：
+1. 判定表改为互斥且穷尽：优先顺序 STOP → GO → β → α，α 成为兜底类别
+   （修复"E1 P95>0 但中位数≤0、E2 全负"等未定义单元格）。
+2. 附录 A 拆分 `positive_EV_region` 与 `deployable_region`，仅后者支持进入 H1
+   （消除附录判据弱于主门槛的不一致）。
+3. MNQ 边界精确为 2019-05-06（CME 官方上市日），两时代轴给出精确排他边界。
+4. 强制报告 target/realized precision–recall，MC 使用 realized 值。
+5. §12 补 Registry Commit B 的 blob 哈希计算要求与机械检查清单。
 
 **v0.4 → v0.5**（GPT 第三轮终审 5 项，全部核查成立、全部采纳）：
 1. 交接路径双数组化：`mtm_close_pnl_1m[]` ＋ `mtm_adverse_pnl_1m[]`（多头 minute_low／空头 minute_high）；
