@@ -7,7 +7,7 @@
 
 plan_id: PP-2026-07-27-A
 revision: 4
-status: draft_pending_freeze_and_approval
+status: frozen_pending_approval   # Freeze Commit A（tag s0-freeze-v1）；批准记录见 purchase_approval.yaml
 
 budget:
   credit_available_usd_approx: 29.00       # 执行时以 portal/API 实查为准

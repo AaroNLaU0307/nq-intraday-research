@@ -2,7 +2,7 @@
 
 ```yaml
 version: 1.2-r2   # r2: 采纳 GPT 评审新增条款 13/14、第二副本期限、两阶段冻结
-status: DRAFT — 待 Aaron 评审后冻结（两阶段 commit，见 FREEZE_LOG.md 流程）
+status: FROZEN（Freeze Commit A，tag s0-freeze-v1，2026-07-27；修订仅可以新版本条目追加）
 date: 2026-07-27
 parties: Aaron（决策）/ Claude Code（main agent，执行与证伪）/ GPT（consultant）
 ```

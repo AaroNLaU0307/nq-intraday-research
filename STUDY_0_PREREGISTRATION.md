@@ -3,7 +3,7 @@
 ```yaml
 id: S0
 version: 0.6   # v0.5 → v0.6：GPT 第四轮 2 项逻辑缝隙＋2 项精确补丁，全部采纳；批准冻结
-status: DRAFT — 待批准冻结；冻结时本字段在 Freeze Commit A 内改为 FROZEN
+status: FROZEN（Freeze Commit A，tag s0-freeze-v1，2026-07-27；修订仅可以 S0.x 增补追加）
 date: 2026-07-27
 trial_ledger: formal_trial_count 登记 S0 = 1；researcher_exposure 另行记账（见 §9）
 ```
