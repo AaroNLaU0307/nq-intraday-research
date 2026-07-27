@@ -37,7 +37,9 @@ Prop 不是终点，是过渡层。
 12. Alpha/Risk 边界：平台状态（buffer、consistency、日损）只允许进入 Risk Engine，
     永远不进入 Alpha Engine；Risk Engine 对信号只有缩减/跳过/停止权限，且政策全部预注册。
 13. 研究暴露记账：所有已查看的特征、标签、切片和参数候选进入 EXPOSURE_LEDGER.md；
-    即使不构成正式 trial，也计入后续选择偏差评估（deflated Sharpe 以 exposure 计数为准）。
+    raw exposure count 作为**保守上界**完整报告；正式多重检验必须预注册从 raw exposure
+    推导相关性调整后 N_eff 的方法（或使用适合相关候选的校正方法）；
+    禁止只使用最终存活的策略版本数量。
 14. 数据角色隔离：Development / Internal Validation / Execution Cost Calibration /
     Physical Lockbox 必须具有独立目录、读取边界和用途；成本校准数据不得用于
     Alpha 特征或收益分析。

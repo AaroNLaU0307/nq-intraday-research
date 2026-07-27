@@ -1,42 +1,44 @@
-# Databento 采购计划 PP-2026-07-27-A rev2（A′ + Execution Cost Calibration probe）
-# 状态：草案，等待（1）章程与 S0 冻结（Commit A/B），（2）Aaron 填写批准字段（Commit C）
-# 执行工具必须：仅 batch；提交前重新报价；核对 approved_*_sha256 与当前文件一致；
-# 核对实际可用 credit ≥ 实际重报价合计；超 cap 即中止；下载后 SHA-256 校验；
-# 生成 manifest（data/support 分列）；key 仅从 DATABENTO_API_KEY 读取；完成后提醒撤销 key。
+# Databento 采购计划 PP-2026-07-27-A rev3（A′-dev + Execution Cost Calibration probe）
+# rev3 变更：A1 只买 Development（2010→2022-01-01），IV 改为未来独立采购 A3（现在不买、不上机）；
+#           approval 哈希改用 canonical 算法消除自引用；A1 报价改为估算、执行时强制重报价。
+# 状态：草案，等待（1）Freeze Commit A/B，（2）Aaron 填批准字段（Commit C）
 
 plan_id: PP-2026-07-27-A
-revision: 2
+revision: 3
 status: draft_pending_freeze_and_approval
 
 approval:                          # Aaron 批准时填写（Purchase Approval Commit C）
   approved_by: null
   approved_date: null
-  approved_charter_sha256: null            # 指向 Freeze Commit A 中的文件
-  approved_preregistration_sha256: null    # 指向 Freeze Commit A 中的文件
-  approved_purchase_plan_sha256: null      # 本文件填写批准字段前状态的哈希
+  approved_charter_sha256: null            # Freeze Commit A 中文件哈希
+  approved_preregistration_sha256: null    # Freeze Commit A 中文件哈希
+  approved_plan_body_sha256: null          # 按下方算法对本文件（除 approval 节点）计算
+  plan_hash_algorithm: "sha256-canonical-json-excluding-approval-v1"
+  #   算法：读取 YAML → 删除整个 approval 节点 → 其余内容转键排序 canonical JSON
+  #   → UTF-8 编码 → SHA-256。填写批准字段不改变被批准的采购主体哈希。
   max_out_of_pocket_usd: 0.00
   approval_note: null
 
 budget:
-  credit_available_usd_approx: 29.00       # 执行时以 API/portal 实查为准
-  quoted_total_usd: 25.19
-  hard_cost_cap_usd: 27.00                 # 重报价合计超过 → 中止
-  requote_tolerance: 1.10                  # 单项重报价超原报价 110% → 中止
-  credit_check_required: true              # 实际可用 credit ≥ 实际重报价合计，否则中止
+  credit_available_usd_approx: 29.00       # 执行时以 portal/API 实查为准（credit_check_required）
+  estimated_total_usd: 20.93               # A1 估算 14.30 + A2 已报价 6.63
+  hard_cost_cap_usd: 23.00                 # 重报价合计超过 → 中止
+  requote_tolerance: 1.10                  # 单项重报价超估算/原报价 110% → 中止
+  credit_check_required: true
 
 items:
   - id: A1
-    data_role: development_signal          # S0 §1：Development + IV 分区的信号数据
+    data_role: development_signal
     dataset: GLBX.MDP3
     symbols: NQ.v.0
     stype_in: continuous
     schema: ohlcv-1m
     start: "2010-06-06"
-    end: "2025-07-01"                      # exclusive；物理 lockbox 边界
-    quoted_usd: 18.56
-    quoted_date: "2026-07-27"
+    end: "2022-01-01"                      # exclusive；与 S0 Development 分区边界一致
+    estimated_usd: 14.30                   # 按全窗报价 $18.56 天数比例估算；执行时必须重报价
+    estimate_basis: "18.56 × (2010-06-06..2022-01-01 天数 / 2010-06-06..2025-07-01 天数)"
   - id: A2
-    data_role: execution_cost_calibration  # 不属于 Development，也不属于 IV（S0 §1 第四角色）
+    data_role: execution_cost_calibration
     dataset: GLBX.MDP3
     symbols: MNQ.v.0
     stype_in: continuous
@@ -49,8 +51,29 @@ items:
       原始文件仅 cost_calibration/ 模块可读，产出 spread_cost_table.parquet；
       alpha_research/ 禁止读取原始 BBO（章程条款 14）。
 
-explicitly_not_purchased:
-  - lockbox 任何部分（2025-07-01 之后的任何数据）
+future_items_not_in_this_approval:
+  - id: A3
+    data_role: internal_validation_signal
+    dataset: GLBX.MDP3
+    symbols: NQ.v.0
+    stype_in: continuous
+    schema: ohlcv-1m
+    start: "2022-01-01"
+    end: "2025-07-01"
+    estimated_usd: 4.30
+    purchase_trigger: "H1 Freeze Commit 完成后"
+    status: not_approved_in_current_plan   # 届时需独立的批准 commit；此前 IV 数据不得存在于本机
+  - id: A4
+    data_role: physical_lockbox
+    start: "2025-07-01"
+    end: "最终评估日"
+    estimated_usd: ~1.40
+    purchase_trigger: "最终评估时刻"
+    status: not_approved_in_current_plan
+
+explicitly_not_purchased_now:
+  - IV 段（2022-01-01 之后的 NQ 任何数据）
+  - lockbox 任何部分
   - MNQ/MES/MGC ohlcv-1m
   - ES / GC / MES / MGC 任何 schema
   - trades / tbbo 任何窗口
@@ -60,15 +83,15 @@ post_purchase_pipeline:
   - SHA-256 逐文件校验
   - 归档至 C:\Users\Aaron\quant-data\databento-archive\intraday-trend\<job_id>\
   - 按 data_role 建立独立目录与读取边界
-  - 生成本地 manifest（data_file_count / support_file_count 分列）
+  - 本地 manifest（data_file_count / support_file_count 分列）
   - 记录换月 symbology 映射
   - 提醒撤销临时 API key
-  - 第二物理副本（不同介质）在首次研究计算前完成（章程数据治理条款）
+  - 第二物理副本（不同介质）在首次研究计算前完成
   - S0 冻结 commit 之前，研究代码不得读取任何新购数据
 
 sequencing_precondition: |
-  1. PROJECT_CHARTER.md v1.2-r2 + STUDY_0_PREREGISTRATION.md v0.2 → Freeze Commit A（tag: s0-freeze-v1）
-  2. FREEZE_LOG.md 登记 Commit A 哈希 → Registry Commit B
-  3. Aaron 填写本文件 approval 字段 → Purchase Approval Commit C
+  1. PROJECT_CHARTER.md + STUDY_0_PREREGISTRATION.md → Freeze Commit A（tag: s0-freeze-v1）
+  2. FREEZE_LOG.md 登记 → Registry Commit B
+  3. Aaron 填写 approval（含 canonical 哈希）→ Purchase Approval Commit C
   4. 新建临时 Databento key 注入环境变量
-  5. 执行采购 → 下载 → 校验 → 归档 → 撤销 key
+  5. 重报价 → 核对 cap/credit/哈希 → 采购 → 下载 → 校验 → 归档 → 撤销 key
