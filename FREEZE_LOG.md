@@ -16,9 +16,10 @@
 
 | 日期 | 文件 | 版本 | SHA-256 | Freeze Commit A | 备注 |
 |---|---|---|---|---|---|
-| — | PROJECT_CHARTER.md | v1.2-r2 | （Commit B 时填写） | — | 待 Aaron 复核 |
-| — | STUDY_0_PREREGISTRATION.md | v0.2 | （Commit B 时填写） | — | 待 Aaron 复核 |
-| — | purchase_plan.yaml | PP-2026-07-27-A rev2 | （Commit C 时填写） | — | 待冻结后批准 |
+| — | PROJECT_CHARTER.md | v1.2-r2 | （Commit B 时填写） | — | 待批准冻结 |
+| — | STUDY_0_PREREGISTRATION.md | v0.5 | （Commit B 时填写） | — | 待批准冻结 |
+| — | purchase_plan.yaml | PP-2026-07-27-A rev4 | （Commit B 时填写；随 Commit A 冻结） | — | 待批准冻结 |
+| — | purchase_approval.yaml | — | （Commit C 时填写） | 不适用 | Aaron 批准时提交 |
 
 ## IV_ACCESS_LOG（Internal Validation 访问台账）
 
@@ -36,12 +37,12 @@ Study 0: 不得访问
     下一次独立确认只能使用 Physical Lockbox 或新市场数据
 ```
 
-## 判决封存顺序（Checkpoint 0）
+## 判决封存顺序（Checkpoint 0，v0.5 修正依赖顺序）
 
 ```
-冻结 S0 规范（Commit A，tag s0-freeze-v1）
-→ 冻结 MC_METHOD_SPEC（tag mc-freeze-v1：方法、平台规则快照、risk policy 组合、商业 EV 判定条件）
-→ 冻结 Gate 1 费用快照
+冻结 S0 规范与采购计划（Commit A，tag s0-freeze-v1；含 .gitattributes 随同提交）
+→ 冻结 Gate 1 官方规则/费率快照
+→ 冻结引用这些快照 hash 的 MC_METHOD_SPEC（tag mc-freeze-v1）
 → 运行 S0 与 MC
 → 合并判决
 MC_METHOD_SPEC 冻结前，禁止运行产出任何可读的 S0 数字报告。

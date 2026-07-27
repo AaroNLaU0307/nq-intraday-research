@@ -2,8 +2,8 @@
 
 ```yaml
 id: S0
-version: 0.4   # v0.3 → v0.4：MC 交接改为每合约日内路径；判定统计量两层化；TP/FP 选日规则冻结
-status: DRAFT — 待 Aaron diff 复核；冻结时本字段在 Freeze Commit A 内改为 FROZEN
+version: 0.5   # v0.4 → v0.5：GPT 第三轮终审 5 项全采纳（分钟内 adverse 路径等），详见修订记录
+status: DRAFT — 待批准冻结；冻结时本字段在 Freeze Commit A 内改为 FROZEN
 date: 2026-07-27
 trial_ledger: formal_trial_count 登记 S0 = 1；researcher_exposure 另行记账（见 §9）
 ```
@@ -106,6 +106,13 @@ de_pm   = |C1544 − O1000| / path_pm
   **Stress = Base 的 market_friction × 2（platform_fee 不重复翻倍）**；Severe = P95＋3 tick/边。
 - 代理假设明示：2025Q1 spread 分布用于其他年份，四档场景共同覆盖该不确定性。
 
+**反事实 Micro 执行披露（冻结，强制分开报告）**：MNQ 于 2019-05 上市。
+2010-06-06 → 2019-05 段的结果 = 用历史 NQ 价格路径套 MNQ 乘数与 2025Q1 摩擦，
+回答"若当前 Micro 执行条件存在于过去体制"，**不是历史上真实可交易的 MNQ 回测**；
+整个 Development 使用 NQ 路径代理，非 MNQ 历史 mid-price 路径。报告必须按
+`counterfactual_micro_execution`（2010 → 2019-05）与 `actual_micro_available_era`
+（2019-05 → 2021-12）两个时代轴分列，禁止将前者描述为真实 Micro 历史表现。
+
 **成交公式（d = +1 多头，−1 空头）**：
 
 ```
@@ -161,24 +168,35 @@ Topstep 实时监控含未实现盈亏的 MLL、盘中触及即违规（官方�
 ```
 trade_date, entry_timestamp, exit_timestamp, direction,
 entry_fill, exit_fill, final_pnl_per_contract,
-running_pnl_1m[]           # 1 分钟 mark-to-market 全路径（保留，不只压缩统计）
+mtm_close_pnl_1m[]         # 每分钟收盘价 mark-to-market
+mtm_adverse_pnl_1m[]       # 每分钟最不利 mark：多头用 minute_low，空头用 minute_high
 max_adverse_pnl, max_favourable_pnl, time_of_max_adverse,
 planned_stop, actual_stop_fill, stop_triggered
 ```
+
+**双路径使用规则（冻结）**：Base 平台模拟用 close-path；实时判违规平台（Topstep 及
+Lucid 的实时变体）用 adverse-path 判断是否触及限制。分钟内"先触发 stop 还是先触及
+MLL"无法从 OHLC 还原时，采用对账户更不利的顺序，或标记 `ambiguous` 并双场景报告。
+adverse 标记仅在持仓期间有效：stop 在某 bar 内触发时，该 bar 的 adverse 标记截断于
+stop 成交价（最坏情形已实现），之后分钟不再计入。
 
 **仓位逻辑归属**：S0 不再按风险预算预生成固定向量；下 0/1/N 手、buffer 不足跳过、
 合约上限、平台状态缩仓，全部由 MC 依账户当时状态决定。§8 的 {$50–$150} 预算档
 仅保留为描述性覆盖率报告。
 
-**开放核实项（Gate 1 阻断）**：Lucid EOD 回撤的盘中违规判定在第三方描述中互相矛盾
-（"盘中回落不爆仓" vs "盘中触及即违规"）；必须以官方 Level-2 快照钉死；
-钉死前 MC 对 Lucid 同时建模两种变体并分别报告。
+**开放核实项（Gate 1 阻断）**：Lucid 官方文本尚未把"EOD 更新阈值"与"盘中是否以
+实时 equity 对固定 MLL 触发违规"明确拆开（官方页同时写"MLL 按最高日终余额更新"与
+"余额达到 MLL 即违约"）。Gate 1 动作：(a) 保存现有官方页快照；(b) 向 Lucid support
+取得书面回答（Level 2 证据）；(c) 回答前 MC 同时建模两种变体并分别报告：
+静态阈值＋实时 equity 触发 ／ 仅日终 balance 触发。不以第三方网站作为主要证据。
 
 ### 10.2 封存顺序（冻结）
 
-`MC_METHOD_SPEC`（方法、平台规则快照、risk policy 组合、EV 判定条件、重抽次数与 seeds）
-必须在**任何人查看 S0 数字结果之前** commit 冻结（tag `mc-freeze-v1`）。顺序：
-冻结 S0 规范 → 冻结 MC_METHOD_SPEC → 冻结 Gate 1 费用快照 → 运行 S0 与 MC → 合并判决。
+`MC_METHOD_SPEC`（方法、risk policy 组合、EV 判定条件、重抽次数与 seeds）必须在
+**任何人查看 S0 数字结果之前** commit 冻结（tag `mc-freeze-v1`）。
+**依赖顺序（v0.5 修正——MC 规范引用 Gate 1 快照，故快照必须先冻结）**：
+冻结 S0 规范与采购计划 → 冻结 Gate 1 官方规则/费率快照 →
+冻结引用这些快照 hash 的 MC_METHOD_SPEC → 运行 S0 与 MC → 合并判决。
 S0 代码可并行开发，但在 MC_METHOD_SPEC 冻结前不得运行产出可读报告。
 
 ### 10.3 两层不确定性（判定统计量的定义）
@@ -201,7 +219,9 @@ S0 代码可并行开发，但在 MC_METHOD_SPEC 冻结前不得运行产出可�
 | **边界区 β** | 所有 E1 组合不成立但存在 E2 组合 Conservative 认知层 P5 > 0；或 E1 满足 EV 条件而可行性未过 |
 
 边界区处理：一次预注册检查（α：敏感性检查；β：替代风险结构检查）后**强制一次性判决**，
-判据冻结为：同一组合 Conservative 认知层中位数 > 0 且 Stress 认知层中位数 ≥ 0 → GO，否则 STOP。
+判据 = **与主门槛完全相同**（同一组合：Conservative 认知层 P5 > 0 ∧ Stress 认知层中位数 ≥ 0
+∧ 可行性通过 → GO，否则 STOP）。证据不足＋额外消耗一次研究自由度之后，
+门槛只能持平，不得降低；β 的替代风险结构作为新受限候选，同样适用主门槛。
 
 ### 10.5 EV 台账定义（MC 输出，全部报告）
 
@@ -222,11 +242,13 @@ MVE 概念保留为解释性诊断与 classifier feasibility 工具，不作最�
 
 ## 12. 冻结机制（两阶段 commit）
 
-1. **Freeze Commit A**：仅含冻结文档（本文件＋PROJECT_CHARTER.md）；annotated tag `s0-freeze-v1`。
-2. **Registry Commit B**：Commit A 内文件 SHA-256 ＋ Commit A hash 写入 FREEZE_LOG.md 后提交；锚定 Commit A。
-3. **Purchase Approval Commit C**：purchase_plan.yaml 批准字段（含 canonical 哈希，见该文件算法）单独提交；
-   执行脚本核对哈希与实际可用 credit ≥ 实际重报价，否则中止。
-4. `MC_METHOD_SPEC` 冻结适用同样的两阶段流程（tag `mc-freeze-v1`）。
+1. **Freeze Commit A**（tag `s0-freeze-v1`）包含四个文件：`.gitattributes`（字节稳定基础配置，随同提交）
+   ＋ 被冻结并登记 SHA-256 的三份：`PROJECT_CHARTER.md`、`STUDY_0_PREREGISTRATION.md`、
+   `purchase_plan.yaml`。Commit A 内本文件 status 同步改为 FROZEN。
+2. **Registry Commit B**：三份冻结文件的字节 SHA-256 ＋ Commit A hash 写入 FREEZE_LOG.md 后提交；锚定 Commit A。
+3. **Purchase Approval Commit C**：填写并提交 `purchase_approval.yaml`（含 purchase_plan.yaml 冻结字节哈希）；
+   执行脚本核对哈希一致且实际可用 credit ≥ 实际重报价，否则中止。
+4. Gate 1 快照与 `MC_METHOD_SPEC` 冻结适用同样的两阶段流程（tag `mc-freeze-v1`），顺序见 §10.2。
 
 ## 附录 A：precision–recall 可行性 —— 经验分布混合法（主要方法）
 
@@ -237,16 +259,22 @@ D_TP：Y_cont ≥ θ 的日子，按真实 E1/E2 规则交易（方向 d_open）
 D_FP：Y_cont < θ 的日子，仍按 d_open 方向按同规则交易的逐日 USD P&L
 ```
 
-对每个 (precision q, recall r) 网格点（q ∈ {0.35..0.75}, r ∈ {0.2..0.8}）：
+**网格（冻结）**：q ∈ {0.35, 0.40, 0.45, …, 0.75}（步长 0.05），r ∈ {0.20, 0.30, …, 0.80}（步长 0.10）。
+**取整（冻结）**：`n_tp = floor(r × N_TP可用)`；`n_fp = round_half_up(n_tp × (1−q)/q)`。
+某分层的可用日不足时，缺额按其余层的可用日数比例重新分配；全部层合计仍不足时，
+该网格点标记 `infeasible_by_sample` 跳过并完整报告。
 
-1. 从 D_TP 按 recall 抽取 true positives；
-2. 从 D_FP 补足 false positives 使组合达到 precision q；
+对每个网格点：
+
+1. 从 D_TP 按上式抽取 true positives；
+2. 从 D_FP 补足 false positives 达到 precision q；
 3. **选日规则（冻结）**：TP 必须在 Y_cont ≥ θ 日中、FP 必须在 Y_cont < θ 日中
    按 year × volatility_regime × event_flag 分层后**层内均匀随机**选择，使用预注册
    seeds {7, 13, 31}；**禁止**按未来 P&L、MFE、Y_cont 幅度或任何结果标签排序选择——
    否则网格会变成"不仅知道哪些日子是 TP、还知道哪些 TP 最赚钱"的半 Oracle。
-   均匀抽样 = 幅度中性假设，是可行性的保守下界；任何"分类器偏好大幅度日"的
-   加成主张只能由 H1 用真实特征证明；
+   **均匀抽样是幅度中性的可行性基准，不构成乐观或保守界**：真实分类器可能偏好
+   高收益 TP 而优于该基准，也可能偏好边缘 TP 或更差 FP 而劣于该基准；
+   是否存在正向或负向幅度选择，只能由 H1 用真实特征验证；
 4. 形成交易日标记序列，与每合约日内路径（§10.1）共同交给 MC；
 5. 可行区域 = {(q,r) : prop_operating_EV 认知层 P5 > 0 于至少一个预注册组合}。
 
@@ -265,6 +293,19 @@ E1/E2 双判据＋E3 删除；MVE 函数化；ADR14；成交公式化；整数�
 3. F3/F8/Y2 公式唯一化（close-path 版本）；成本公式补 spread/2、Stress 范围、signed-d、gap 穿越 trigger_ref；风险输出分 planned/realized。
 4. [Claude 补丁] GO 条件要求 Conservative 与 Stress 由**同一组合**满足，防止拼凑通过。
 5. [Claude 补丁] E1 满足 EV 但可行性未过 → 归入边界区 β，避免判定表出现未定义单元格。
+
+**v0.4 → v0.5**（GPT 第三轮终审 5 项，全部核查成立、全部采纳）：
+1. 交接路径双数组化：`mtm_close_pnl_1m[]` ＋ `mtm_adverse_pnl_1m[]`（多头 minute_low／空头 minute_high）；
+   实时判违规平台用 adverse-path；分钟内顺序不明取对账户更不利者或标记 ambiguous 双场景；
+   stop 触发 bar 的 adverse 标记截断于 stop 成交价。
+2. 边界区强制判决改用与主门槛完全相同的判据（禁止降门槛——证据不足＋额外自由度后门槛只能持平）。
+3. Commit A 范围统一为 .gitattributes ＋ 三份冻结文件；封存顺序修正为
+   S0/采购计划 → Gate 1 快照 → 引用快照 hash 的 MC_METHOD_SPEC → 运行。
+4. "保守下界"更正为"幅度中性基准，不构成乐观或保守界"；网格步长、n_tp/n_fp 取整、
+   分层不足处理规则冻结。
+5. 新增反事实 Micro 执行披露：2010→2019-05 为 counterfactual_micro_execution，
+   与 actual_micro_available_era 强制分列。
+   另：Lucid 开放项改为官方文本歧义框架（快照＋书面回答，Level 2 证据），不再引用第三方冲突。
 
 **v0.3 → v0.4**（GPT 第二轮终审 2 项＋Claude 修正 1 项＋抽样规则）：
 1. [GPT，采纳] MC 交接单位改为每 1 手 MNQ 的日内 1 分钟 P&L 路径（Topstep 实时判违规已官方证实）；
