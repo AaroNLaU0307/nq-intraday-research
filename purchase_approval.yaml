@@ -1,0 +1,17 @@
+# 采购批准记录 —— 与 purchase_plan.yaml 分离，消除自引用哈希问题
+# Aaron 批准时填写本文件并单独提交（Purchase Approval Commit C）。
+# approved_plan_sha256 = 对冻结状态的 purchase_plan.yaml 原始文件字节的 SHA-256
+# （仓库 .gitattributes 已禁用行尾转换，工作区字节即提交字节）。
+# 执行脚本运行前必须验证：SHA256(purchase_plan.yaml 当前字节) == approved_plan_sha256，
+# 不一致 → 中止。
+
+approval:
+  plan_id: PP-2026-07-27-A
+  plan_revision: 4
+  approved_plan_sha256: null        # 冻结后由工具计算填入
+  approved_charter_sha256: null     # Freeze Commit A 中 PROJECT_CHARTER.md 字节哈希
+  approved_prereg_sha256: null      # Freeze Commit A 中 STUDY_0_PREREGISTRATION.md 字节哈希
+  approved_by: null                 # Aaron
+  approved_at: null                 # ISO 8601
+  max_out_of_pocket_usd: 0.00
+  approval_note: null

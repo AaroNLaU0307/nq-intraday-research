@@ -1,30 +1,23 @@
-# Databento 采购计划 PP-2026-07-27-A rev3（A′-dev + Execution Cost Calibration probe）
-# rev3 变更：A1 只买 Development（2010→2022-01-01），IV 改为未来独立采购 A3（现在不买、不上机）；
-#           approval 哈希改用 canonical 算法消除自引用；A1 报价改为估算、执行时强制重报价。
-# 状态：草案，等待（1）Freeze Commit A/B，（2）Aaron 填批准字段（Commit C）
+# Databento 采购计划 PP-2026-07-27-A rev4（A′-dev + Execution Cost Calibration probe）
+# rev4 变更：批准字段拆分到 purchase_approval.yaml（对本文件冻结字节做 SHA-256，
+#           取代自定义 canonical 算法）；hard cap 修正 $23 → $24（消除与 110% 容差的算术冲突）；
+#           执行脚本必须同时满足三个条件（见 budget 注释）。
+# 状态：草案，等待（1）Freeze Commit A/B，（2）purchase_approval.yaml 批准（Commit C）
+# 本文件冻结后不再修改；批准信息全部在 purchase_approval.yaml。
 
 plan_id: PP-2026-07-27-A
-revision: 3
+revision: 4
 status: draft_pending_freeze_and_approval
 
-approval:                          # Aaron 批准时填写（Purchase Approval Commit C）
-  approved_by: null
-  approved_date: null
-  approved_charter_sha256: null            # Freeze Commit A 中文件哈希
-  approved_preregistration_sha256: null    # Freeze Commit A 中文件哈希
-  approved_plan_body_sha256: null          # 按下方算法对本文件（除 approval 节点）计算
-  plan_hash_algorithm: "sha256-canonical-json-excluding-approval-v1"
-  #   算法：读取 YAML → 删除整个 approval 节点 → 其余内容转键排序 canonical JSON
-  #   → UTF-8 编码 → SHA-256。填写批准字段不改变被批准的采购主体哈希。
-  max_out_of_pocket_usd: 0.00
-  approval_note: null
-
 budget:
-  credit_available_usd_approx: 29.00       # 执行时以 portal/API 实查为准（credit_check_required）
+  credit_available_usd_approx: 29.00       # 执行时以 portal/API 实查为准
   estimated_total_usd: 20.93               # A1 估算 14.30 + A2 已报价 6.63
-  hard_cost_cap_usd: 23.00                 # 重报价合计超过 → 中止
-  requote_tolerance: 1.10                  # 单项重报价超估算/原报价 110% → 中止
-  credit_check_required: true
+  hard_cost_cap_usd: 24.00                 # 安全护栏，非目标花费
+  requote_tolerance: 1.10
+  # 执行脚本必须同时满足（AND，缺一即中止）：
+  #   1. 每项 actual_quote ≤ 该项 estimated/quoted × 1.10
+  #   2. Σ actual_quote ≤ hard_cost_cap_usd
+  #   3. Σ actual_quote ≤ 实查可用 credit（超出部分需 approval 中 max_out_of_pocket 覆盖）
 
 items:
   - id: A1
@@ -91,7 +84,11 @@ post_purchase_pipeline:
 
 sequencing_precondition: |
   1. PROJECT_CHARTER.md + STUDY_0_PREREGISTRATION.md → Freeze Commit A（tag: s0-freeze-v1）
+     （本文件同时在 Commit A 冻结，status 改 frozen）
   2. FREEZE_LOG.md 登记 → Registry Commit B
-  3. Aaron 填写 approval（含 canonical 哈希）→ Purchase Approval Commit C
+  3. Aaron 填写 purchase_approval.yaml（含本文件冻结字节的 SHA-256）→ Purchase Approval Commit C
   4. 新建临时 Databento key 注入环境变量
-  5. 重报价 → 核对 cap/credit/哈希 → 采购 → 下载 → 校验 → 归档 → 撤销 key
+  5. 执行脚本核对：approval 哈希 == 本文件当前字节哈希 → 重报价 → 三条件检查 →
+     采购 → 下载 → 校验 → 归档 → 撤销 key
+  注：仓库已置 .gitattributes（* -text）禁用行尾自动转换，保证工作区字节 == 提交字节，
+  文件字节哈希无歧义。

@@ -2,8 +2,8 @@
 
 ```yaml
 id: S0
-version: 0.3   # v0.2 → v0.3：GPT 终审 3 项文档级修订（判定表去标量化、附录A经验分布化、公式唯一化）
-status: DRAFT — 待 Aaron diff 复核；冻结 = 两阶段 commit（见 §12）
+version: 0.4   # v0.3 → v0.4：MC 交接改为每合约日内路径；判定统计量两层化；TP/FP 选日规则冻结
+status: DRAFT — 待 Aaron diff 复核；冻结时本字段在 Freeze Commit A 内改为 FROZEN
 date: 2026-07-27
 trial_ledger: formal_trial_count 登记 S0 = 1；researcher_exposure 另行记账（见 §9）
 ```
@@ -28,6 +28,8 @@ trial_ledger: formal_trial_count 登记 S0 = 1；researcher_exposure 另行记�
 
 - Bar 时间戳约定：`ts_event` = bar 开始时刻；"HH:MM bar" 指以该时刻开始的 1 分钟 bar。
 - 换月：`is_roll_transition` = continuous 映射实际切换的交易日；`is_roll_window` = 切换日前后各 2 个 RTH 交易日；symbology 映射随数据归档。
+- `.v.0` 按**前一交易日**成交量排名换月（无当日前视，已核官方说明）；管道验证项：
+  实证检查映射从不在同一 RTH session 内切换；禁止把 roll jump 解释为 alpha。
 
 ## 2. Development 内部稳定性检查（替代 IV 访问）
 
@@ -150,23 +152,66 @@ E3 已删除（留待 H1）。1R = E1 初始止损距离（仅归一化）；**�
 
 ## 10. Kill Gate（Checkpoint 0 —— 由 MC 商业 EV 直接裁决）
 
-**交接**：向 MC 提交可执行 Oracle 的逐日 USD P&L 向量（每引擎 × 每成本场景 × 每风险预算，
-含整数取整与预算不足跳过）。MC 在预注册的平台规则 × risk policy 组合下输出 **net_business_EV**。
+### 10.1 交接单位：每 1 手 MNQ 的日内交易路径（非日终向量）
 
-**封存顺序（冻结）**：`MC_METHOD_SPEC`（方法、平台规则快照、risk policy 组合、商业 EV 判定条件）
-必须在**任何人查看 S0 数字结果之前** commit 冻结。执行顺序：
+Topstep 实时监控含未实现盈亏的 MLL、盘中触及即违规（官方确认）；E2 无止损时
+"盘中 −$1,800、收盘 +$300" 的日子在日终向量里是盈利日、在实时判违规平台上是爆仓日。
+因此 S0 向 MC 交付的**原子记录**为（每引擎 × 每成本场景，每笔、每合约）：
+
+```
+trade_date, entry_timestamp, exit_timestamp, direction,
+entry_fill, exit_fill, final_pnl_per_contract,
+running_pnl_1m[]           # 1 分钟 mark-to-market 全路径（保留，不只压缩统计）
+max_adverse_pnl, max_favourable_pnl, time_of_max_adverse,
+planned_stop, actual_stop_fill, stop_triggered
+```
+
+**仓位逻辑归属**：S0 不再按风险预算预生成固定向量；下 0/1/N 手、buffer 不足跳过、
+合约上限、平台状态缩仓，全部由 MC 依账户当时状态决定。§8 的 {$50–$150} 预算档
+仅保留为描述性覆盖率报告。
+
+**开放核实项（Gate 1 阻断）**：Lucid EOD 回撤的盘中违规判定在第三方描述中互相矛盾
+（"盘中回落不爆仓" vs "盘中触及即违规"）；必须以官方 Level-2 快照钉死；
+钉死前 MC 对 Lucid 同时建模两种变体并分别报告。
+
+### 10.2 封存顺序（冻结）
+
+`MC_METHOD_SPEC`（方法、平台规则快照、risk policy 组合、EV 判定条件、重抽次数与 seeds）
+必须在**任何人查看 S0 数字结果之前** commit 冻结（tag `mc-freeze-v1`）。顺序：
 冻结 S0 规范 → 冻结 MC_METHOD_SPEC → 冻结 Gate 1 费用快照 → 运行 S0 与 MC → 合并判决。
 S0 代码可并行开发，但在 MC_METHOD_SPEC 冻结前不得运行产出可读报告。
 
-| 判定 | 条件（成本场景均指 Conservative，另有注明除外） |
+### 10.3 两层不确定性（判定统计量的定义）
+
+- **认知层（epistemic）**：对历史交易日做 block bootstrap 形成 B 个数据世界；
+  每个世界内运行大量平台路径模拟并**取均值**，得到该世界的平均商业 EV；
+  B 个均值构成 **估计均值 EV 的分布** —— 判定分位数作用于此分布。
+- **结果层（aleatoric）**：单账户尝试的结果分布（含挑战费损失概率、尾部、离散度）
+  单独完整报告，用于 bankroll 与多账户规划，**不作为 GO 门槛**。
+  ——若把判定分位数直接作用于单次尝试结果分布，挑战费的二元损失质量会使
+  P5 几乎永远为负，GO 将系统性无法触发（对 GPT 提案的必要修正）。
+
+### 10.4 判定表（统计量 = 认知层分布；组合 = 平台 × 账户类型 × risk policy × sizing policy）
+
+| 判定 | 条件 |
 |---|---|
-| **STOP** | E1 与 E2 在所有预注册平台 × risk policy 组合下 net_business_EV 均 ≤ 0 → 终止策略族 |
-| **GO** | 存在**同一** E1 组合：Conservative 下 EV > 0 **且** Stress 下 EV ≥ 0，且整数仓位、交易频率、payout 路径可行性经 MC 确认 → 进入 H1 预注册（附录 A 出可行区域） |
-| **边界区 α** | 有 E1 组合 Conservative 为正，但无组合同时满足 Stress ≥ 0 → 一次预注册敏感性检查 → 一次性 GO/STOP |
-| **边界区 β** | 所有 E1 组合不成立，但存在 E2 组合 EV > 0；**或** E1 满足 EV 条件但可行性检查未过 → 现象可能存在而风险架构不成立：一次预注册替代风险结构检查 → 一次性 GO/STOP |
+| **STOP** | E1 与 E2 的所有预注册组合：Conservative 下认知层 P95 ≤ 0 |
+| **GO** | 存在**同一**E1 组合：Conservative 下认知层 P5 > 0 **且** Stress 下认知层中位数 ≥ 0，且整数仓位、频率、payout 路径可行性经 MC 确认 |
+| **边界区 α** | 非 STOP 非 GO，且有 E1 组合 Conservative 认知层中位数 > 0 |
+| **边界区 β** | 所有 E1 组合不成立但存在 E2 组合 Conservative 认知层 P5 > 0；或 E1 满足 EV 条件而可行性未过 |
+
+边界区处理：一次预注册检查（α：敏感性检查；β：替代风险结构检查）后**强制一次性判决**，
+判据冻结为：同一组合 Conservative 认知层中位数 > 0 且 Stress 认知层中位数 ≥ 0 → GO，否则 STOP。
+
+### 10.5 EV 台账定义（MC 输出，全部报告）
+
+`strategy_account_EV`（平台内交易 EV）→ `prop_operating_EV`（含评估费/重置/订阅与重购政策）
+→ `net_business_EV_after_RD`（扣数据摊销与 R&D burn）→ `risk_haircut_EV`（Gate 4 场景折扣后）。
+**Checkpoint 0 判定表使用 `prop_operating_EV`**；最终部署要求 `risk_haircut_EV > 0`。
+EV 计量单位：预注册重购政策下 T 月期的月均净 USD（T 在 MC_METHOD_SPEC 冻结）。
 
 **频率输出（强制）**：延续事件基础率 p、每年可交易日数、Oracle 月均频率、附录 A 网格预期交易数。
-MVE 概念保留为**解释性诊断与 classifier feasibility 工具**，不再作为最终生死判据。
+MVE 概念保留为解释性诊断与 classifier feasibility 工具，不作最终生死判据。
 辅助直觉检查（不决定 GO）：q_min ≤ min(65%, 2.2p)。
 
 ## 11. 禁止事项
@@ -196,11 +241,18 @@ D_FP：Y_cont < θ 的日子，仍按 d_open 方向按同规则交易的逐日 U
 
 1. 从 D_TP 按 recall 抽取 true positives；
 2. 从 D_FP 补足 false positives 使组合达到 precision q；
-3. 抽样以年份 × 波动率状态 × 时间块为单位，保留相关性结构；
-4. 形成逐日 USD P&L 向量 → 交 MC 计算该网格点的 net_business_EV；
-5. 可行区域 = {(q,r) : net_business_EV > 0 于至少一个预注册组合}。
+3. **选日规则（冻结）**：TP 必须在 Y_cont ≥ θ 日中、FP 必须在 Y_cont < θ 日中
+   按 year × volatility_regime × event_flag 分层后**层内均匀随机**选择，使用预注册
+   seeds {7, 13, 31}；**禁止**按未来 P&L、MFE、Y_cont 幅度或任何结果标签排序选择——
+   否则网格会变成"不仅知道哪些日子是 TP、还知道哪些 TP 最赚钱"的半 Oracle。
+   均匀抽样 = 幅度中性假设，是可行性的保守下界；任何"分类器偏好大幅度日"的
+   加成主张只能由 H1 用真实特征证明；
+4. 形成交易日标记序列，与每合约日内路径（§10.1）共同交给 MC；
+5. 可行区域 = {(q,r) : prop_operating_EV 认知层 P5 > 0 于至少一个预注册组合}。
 
 年交易数 F(q,r) = p·r·N/q（N≈252）随网格一并报告。
+**网格地位限定**：仅为可行性边界，不构成 H1 表现宣称；禁止因某格漂亮而把该格的
+时间选择模式反向用于分类器设计。
 参数化公式 E(q) = q·mean(D_TP) − (1−q)·|mean(D_FP)| 仅作 sanity check，不作为主要计算。
 
 ---
@@ -213,3 +265,11 @@ E1/E2 双判据＋E3 删除；MVE 函数化；ADR14；成交公式化；整数�
 3. F3/F8/Y2 公式唯一化（close-path 版本）；成本公式补 spread/2、Stress 范围、signed-d、gap 穿越 trigger_ref；风险输出分 planned/realized。
 4. [Claude 补丁] GO 条件要求 Conservative 与 Stress 由**同一组合**满足，防止拼凑通过。
 5. [Claude 补丁] E1 满足 EV 但可行性未过 → 归入边界区 β，避免判定表出现未定义单元格。
+
+**v0.3 → v0.4**（GPT 第二轮终审 2 项＋Claude 修正 1 项＋抽样规则）：
+1. [GPT，采纳] MC 交接单位改为每 1 手 MNQ 的日内 1 分钟 P&L 路径（Topstep 实时判违规已官方证实）；
+   S0 与 MC 的仓位逻辑解耦（预算档降为描述性）；新增 Lucid 盘中/日终判违规开放核实项。
+2. [GPT，采纳＋修正] 判定加入分位数门槛，但统计量修正为**认知层**（估计均值 EV 的 bootstrap 分布）——
+   GPT 原表述若作用于单次尝试结果分布，挑战费二元损失会使 P5 恒负、GO 永不触发；
+   结果层分布单独报告用于 bankroll 规划。新增边界区强制判决的冻结判据与四级 EV 台账。
+3. [GPT，采纳] 附录 A 冻结 TP/FP 分层均匀随机选日规则＋幅度中性声明＋网格地位限定。
