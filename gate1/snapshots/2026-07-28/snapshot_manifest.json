@@ -1,0 +1,150 @@
+{
+  "fetched_utc": "2026-07-27T23:21:28.549390+00:00",
+  "pages": {
+    "lucid_flex_evaluation": {
+      "url": "https://support.lucidtrading.com/en/articles/12945790-lucidflex-evaluation-account",
+      "file": "lucid_flex_evaluation.html",
+      "http_status": 200,
+      "bytes": 67902,
+      "sha256": "e859d2de1884d387f3ad09c4abb0cd9e29bae59cc765630f14d0b5a2dc989b83",
+      "title": "LucidFlex Evaluation Account | Lucid Trading Help Center"
+    },
+    "lucid_flex_funded": {
+      "url": "https://support.lucidtrading.com/en/articles/12945795-lucidflex-funded-account",
+      "file": "lucid_flex_funded.html",
+      "http_status": 200,
+      "bytes": 69611,
+      "sha256": "cc4a482e58c4b3a82a11f07fb6277a12466b7aa55071435e461f5a070e7cb74a",
+      "title": "LucidFlex Funded Account | Lucid Trading Help Center"
+    },
+    "lucid_flex_drawdown": {
+      "url": "https://support.lucidtrading.com/en/articles/12945815-lucidflex-drawdown",
+      "file": "lucid_flex_drawdown.html",
+      "http_status": 200,
+      "bytes": 65727,
+      "sha256": "fedb6b86c0cb3d0691bd5c443ef2fdee99fde95c3cadf80267508391fb7ccee1",
+      "title": "LucidFlex Drawdown | Lucid Trading Help Center"
+    },
+    "lucid_flex_payouts": {
+      "url": "https://support.lucidtrading.com/en/articles/12945796-lucidflex-payouts",
+      "file": "lucid_flex_payouts.html",
+      "http_status": 200,
+      "bytes": 82833,
+      "sha256": "5f5a9cefecf43061b826b22bd74583565cc93d8ea2f1a7eca7493c65d669315d",
+      "title": "LucidFlex Payouts | Lucid Trading Help Center"
+    },
+    "lucid_permitted": {
+      "url": "https://support.lucidtrading.com/en/articles/11404728-permitted-activities",
+      "file": "lucid_permitted.html",
+      "http_status": 200,
+      "bytes": 72723,
+      "sha256": "c59c93682645bc4a6f43e8aea803b4b5c16e08e2a20624583f4556c137caaaf6",
+      "title": "Other Activities | Lucid Trading Help Center"
+    },
+    "lucid_prohibited_hft": {
+      "url": "https://support.lucidtrading.com/en/articles/11404736-prohibited-high-frequency-trading",
+      "file": "lucid_prohibited_hft.html",
+      "http_status": 200,
+      "bytes": 66198,
+      "sha256": "9d0fde96f3cee1a816ae5f53be2f7c16a6db7be3e52d97249147ea6777606f25",
+      "title": "Prohibited: High Frequency Trading | Lucid Trading Help Center"
+    },
+    "lucid_products_comms": {
+      "url": "https://support.lucidtrading.com/en/articles/11508978-approved-products-and-commissions",
+      "file": "lucid_products_comms.html",
+      "http_status": 200,
+      "bytes": 87644,
+      "sha256": "59555a69e5c276b9a0770b65eff69d983952eba38b7a26d357086fa26baadce2",
+      "title": "Approved Products and Commissions | Lucid Trading Help Center"
+    },
+    "lucid_restricted": {
+      "url": "https://support.lucidtrading.com/en/articles/11404636-restricted-countries",
+      "file": "lucid_restricted.html",
+      "http_status": 200,
+      "bytes": 57614,
+      "sha256": "51306003e5b30996069e481ba2c9ba3150f6d039de8e937db8162a9a66f25e62",
+      "title": "Restricted Countries | Lucid Trading Help Center"
+    },
+    "lucid_live_structure": {
+      "url": "https://support.lucidtrading.com/en/articles/13425130-new-live-structure",
+      "file": "lucid_live_structure.html",
+      "http_status": 200,
+      "bytes": 97014,
+      "sha256": "7b5a9ffc4b6c12e02fda4d0248f0ce7c43b8367e7817ee5581b55c2d533ef3a5",
+      "title": "New Live Structure | Lucid Trading Help Center"
+    },
+    "lucid_platforms": {
+      "url": "https://support.lucidtrading.com/en/articles/11404614-lucid-trading-supported-platforms",
+      "file": "lucid_platforms.html",
+      "http_status": 200,
+      "bytes": 67988,
+      "sha256": "af610a205592fb1dcb2706e604fdb98766d64a7cc3e0c2bb58966322159bb69a",
+      "title": "Lucid Trading Supported Platforms | Lucid Trading Help Center"
+    },
+    "topstep_mll": {
+      "url": "https://help.topstep.com/en/articles/8284204-what-is-the-maximum-loss-limit",
+      "file": "topstep_mll.html",
+      "http_status": 200,
+      "bytes": 109022,
+      "sha256": "87bfb2e77a083a482ea8f57142714387463c47ee363fd7770041ab923fb2eb0c",
+      "title": "What is the Maximum Loss Limit? | Topstep Help Center"
+    },
+    "topstep_dll": {
+      "url": "https://help.topstep.com/en/articles/8284207-what-is-the-daily-loss-limit-and-what-happens-if-i-exceed-it",
+      "file": "topstep_dll.html",
+      "http_status": 200,
+      "bytes": 112711,
+      "sha256": "ff5ae33154bef0d7c9dd01a3cc8a5fc06ad58eed74f12929b0c5fbafaed54cf2",
+      "title": "Daily Loss Limit in the Trading Combine and Express Funded Account | Topstep Help Center"
+    },
+    "topstep_api": {
+      "url": "https://help.topstep.com/en/articles/11187768-topstepx-api-access",
+      "file": "topstep_api.html",
+      "http_status": 200,
+      "bytes": 118482,
+      "sha256": "e857986d03398f483eb115e607470803a758765729fed0cfdd442c231f5523d0",
+      "title": "TopstepX™ API Access | Topstep Help Center"
+    },
+    "topstep_live_funded": {
+      "url": "https://help.topstep.com/en/articles/10657969-live-funded-account-parameters",
+      "file": "topstep_live_funded.html",
+      "http_status": 200,
+      "bytes": 124613,
+      "sha256": "1358e6e7e9a6947c0cee9fde4fe0905a395a74919692e6aca52edeb7b2b1a033",
+      "title": "Live Funded Account Parameters | Topstep Help Center"
+    },
+    "topstep_scaling": {
+      "url": "https://help.topstep.com/en/articles/8284223-what-is-the-scaling-plan",
+      "file": "topstep_scaling.html",
+      "http_status": 200,
+      "bytes": 99496,
+      "sha256": "d350ba29b5bc43ba13728d1bad78470f224c4daf817d147bea7fdf7912b02b55",
+      "title": "What is the Scaling Plan? | Topstep Help Center"
+    },
+    "topstep_payout": {
+      "url": "https://help.topstep.com/en/articles/8284233-topstep-payout-policy",
+      "file": "topstep_payout.html",
+      "http_status": 200,
+      "bytes": 168978,
+      "sha256": "e10a0f4cfee43214bada8435da781dc90d3fe41e6065beada102f2dca63ff973",
+      "title": "Topstep Payout Policy | Topstep Help Center"
+    },
+    "topstep_pricing": {
+      "url": "https://help.topstep.com/en/articles/14289835-topstep-pricing-and-payment-questions",
+      "file": "topstep_pricing.html",
+      "http_status": 200,
+      "bytes": 134806,
+      "sha256": "5936b41bedf63cb34382f5c12ba6c9225a9eacdcdba98d1a43194e06e18a2d3a",
+      "title": "Topstep Pricing and Payment Questions | Topstep Help Center"
+    },
+    "topstep_eligibility": {
+      "url": "https://help.topstep.com/en/articles/8284116-am-i-eligible-to-trade-with-topstep",
+      "file": "topstep_eligibility.html",
+      "http_status": 200,
+      "bytes": 113892,
+      "sha256": "12fc34b6ef6b167987ba9260a001c240561610c94cb36e619a2a03b6720986ec",
+      "title": "Am I Eligible to Trade with Topstep? | Topstep Help Center"
+    }
+  },
+  "failures": {}
+}
