@@ -1,0 +1,471 @@
+Topstep Payout Policy | Topstep Help Center Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Skip to main content 
+
+ Discord Topstep TopstepTV 
+
+ Discord Topstep TopstepTV 
+
+ Search for articles... 
+
+ All Collections 
+
+ Topstep Program 
+
+ Payout Information 
+
+ Topstep Payout Policy
+
+ Topstep Payout Policy
+ You earned it. Here&#x27;s how to get paid.
+
+ Updated over a week ago 
+
+ Table of contents
+
+ Topstep&#x27;s Payout policy is one of the best in the game — and it&#x27;s built for Traders who put in the work. Stack 30 winning days in your Live Funded Account® and you unlock daily access to up to 100% of your profits. Put in the reps. The Payouts follow.
+
+ The Basics
+
+ Request Payouts in the Express Funded Account (XFA) and Live Funded Account (LFA) via your Topstep Dashboard 
+
+ Available during CME market hours: Sunday 5 PM CT – Friday 5 PM CT (excluding holidays)
+
+ Minimum Payout: $125
+
+ 90/10 profit split — you keep 90%
+
+ 2 paths. 1 goal. Express Funded Account® Standard. Express Funded Account® Consistency. Pick your lane.
+
+ Standard Path 
+
+ Consistency Path 
+
+ 5 winning days of $150+
+
+ 3 days with 40% consistency target
+
+ Request 50% of the account balance
+
+ up to $5000*
+
+ Request 50% of the account balance 
+
+ up to $6,000*
+
+ 90/10 split
+
+ 90/10 split
+
+ ⚠️ Note for traders who joined the new Topstep dashboard before January 12, 2026: You receive 100% of your first $10,000 in lifetime profits. After that, the 90/10 split applies.
+
+ Payout caps by account size
+
+ Max Payout per request: 50% of your account balance up to the cap below.
+
+ Account Size 
+
+ XFA Standard 
+
+ XFA Consistency 
+
+ $50K
+
+ $2,000
+
+ $3,000
+
+ $100K
+
+ $3,000
+
+ $4,000
+
+ $150K
+
+ $5,000
+
+ $6,000
+
+ 👉 Payout caps apply to XFA accounts only. Live Funded Account Payouts are not capped. Another reason Live is the goal — no ceiling, no clock, no limit on the upside.
+
+ Remember: The XFA isn&#x27;t where you run up stats. Take your Payouts, stay consistent, and position yourself for Live — where there are no caps and no ceiling on what you can earn.
+
+ ⏰ Limited Time Offering: Add a Daily Loss Limit (DLL) at checkout in the Trading Combine, and increase your Payout Cap once you pass and activate an Express Funded Account. Available starting at 3:30 PM CT on Tuesday, June 2nd. ​
+
+ Traders who voluntarily add a Daily Loss Limit to their account unlock double per-request payout caps. No DLL added = current caps remain unchanged. 
+
+ Account 
+
+ Path 
+
+ Current Cap 
+
+ With DLL (new) 
+
+ $50K
+
+ Standard
+
+ $2,000
+
+ $4,000 
+
+ $50K
+
+ Consistency
+
+ $3,000
+
+ $6,000 
+
+ $100K
+
+ Standard
+
+ $3,000
+
+ $6,000 
+
+ $100K
+
+ Consistency
+
+ $4,000
+
+ $8,000 
+
+ $150K
+
+ Standard
+
+ $5,000
+
+ $10,000 
+
+ $150K
+
+ Consistency
+
+ $6,000
+
+ $12,000 
+
+ Limited Time Offering: Payout Cap Increase FAQs
+
+ Is this available for all Traders? 
+
+ Yes! All Traders who make a new Trading Combine purchase and add a Daily Loss Limit (DLL) at checkout will receive the increased Payout cap, during this limited time offering beginning at 3:30 PM CT on Tuesday, June 2nd. ​ ​ Why is this a limited-time offering, and how long will this last? 
+
+ We&#x27;re always looking for new ways to reward responsible trading — this is one of them. Keep an eye on our social channels to find out when this offer will expire and what is coming up next.
+
+ If I add a DLL at checkout during Express Funded Account activation or Reactivation, will I still get the increased Payout cap? 
+
+ No. Only if you already added the DLL when you purchased your Trading Combine. Adding it at the XFA stage doesn&#x27;t unlock the higher cap.
+
+ If I already added a Daily Loss Limit before this release, will I see an increased Payout cap? No — the increased cap is only available on new Trading Combine purchases. That said, the DLL still protects you. 63% of Traders lost their Combine on day 1. It&#x27;s worth having.
+
+ Does this apply to both Trading Combine paths? Yes — Standard and Consistency both qualify.
+
+ Express Funded Account Standard
+
+ To request a Payout, you must meet both requirements:
+
+ 5 winning days of $150+ Net P&L. Days don&#x27;t need to be consecutive. A day locks in at 4:00 PM CT. The trading day your Payout is requested doesn&#x27;t count toward your next 5.
+
+ Positive net profit since your last Payout. You must have earned at least $0.01 since your last Payout. Your first Payout is exempt.
+
+ After each Payout: Your Maximum Loss Limit (MLL) resets to $0 permanently, and your 5-day count restarts.
+
+ How the eligible Payout balance works
+
+ Balance 
+
+ Eligible? 
+
+ Payout 1 
+
+ $6,000 (starting from $0)
+
+ ✅ No profit requirement on first Payout
+
+ Take $3,000 Payout
+
+ New balance: $3,000
+
+ —
+
+ Payout 2 
+
+ $4,000 (up from $3,000)
+
+ ✅ Profitable since last Payout
+
+ Take $1,800 Payout
+
+ New balance: $2,200
+
+ —
+
+ Payout 3 
+
+ $4,500 (up from $2,200)
+
+ ✅ Profitable since last Payout
+
+ Take $2,000 Payout
+
+ New balance: $2,500
+
+ —
+
+ Payout 4 
+
+ $1,800 (down from $2,500)
+
+ ❌ Not profitable — keep trading
+
+ Express Funded Account Consistency
+
+ To request a Payout, you must meet both requirements:
+
+ 3 trading days with at least 1 trade per day. 
+
+ Stay at or below the 40% consistency target. Your largest single day cannot exceed 40% of your total net profit. Days lock in at 4:00 PM CT. The trading day your Payout is requested doesn&#x27;t count toward your next 3.
+
+ After each Payout: Your Maximum Loss Limit resets to $0 permanently, your consistency calculation resets, and your 3-day count restarts.
+
+ Live Funded Account
+
+ 5 winning days of $150+ Net P&L per Payout cycle (not consecutive)
+
+ Request up to 50% of your account balance with no dollar cap
+
+ After you request a Payout, your winning day count restarts. You&#x27;ll need 5 new winning days before you&#x27;re eligible to request your next Payout. 
+
+ Daily Payouts (after 30 winning days in the LFA): 
+
+ Once you&#x27;ve earned $150+ Net P&L on 30 non-consecutive days in your Live Funded Account, you unlock daily Payouts — request as much of your unlocked balance as you want, once per day (min $125). Winning days from the XFA do not count toward this total.
+
+ Note: Requesting a full 100% Payout closes your LFA since the balance reaches the Maximum Loss Limit.
+
+ Payout Methods
+
+ Method 
+
+ Availability 
+
+ Processing Time 
+
+ Fee 
+
+ Prop-to-Brokerage Payouts 
+
+ US only
+
+ Same day*
+
+ No Fee
+
+ Aeropay 
+
+ US banks only
+
+ Instant after approval
+
+ No Topstep fee**
+
+ Wise 
+
+ International and domestic
+
+ 1-3 business days
+
+ No Topstep fee**
+
+ ACH 
+
+ US banks only
+
+ 1-3 business days
+
+ $30
+
+ Wire/SWIFT 
+
+ International
+
+ 5-10 business days
+
+ $30
+
+ * If requested by 12 pm CT 
+
+ **Please note: No Topstep fee for Aeropay or Wise, but your bank or those services may charge their own fees. Processing times are estimates and exclude weekends and holidays. Internal approval can take 1-3 business days.
+
+ ​ Example (ACH, $500 request): $500 minus $50 (10% split) minus $30 (processing fee) = $420 received 
+
+ Prop-to-Brokerage Payouts
+
+ Earned a prop Payout? U.S. Topstep Prop Traders can direct eligible Payouts to their Topstep Brokerage account – same day, if requested by 12 PM CT.
+
+ What is Aeropay?
+
+ Aeropay is a Pay by Bank service for U.S. domestic Traders. Link your bank account and receive approved Payouts directly, with real-time payment processing after approval.
+
+ Instant payments are subject to your bank&#x27;s support of real-time transactions. If your bank doesn&#x27;t support it, funds may take 1-3 business days.
+
+ How do I link my bank account? In your Topstep Dashboard, select Aeropay as your Payout method. You&#x27;ll be redirected to Aeropay&#x27;s proprietary bank-link flow and authenticate through Aerosync.
+
+ Is my banking information secure? Yes. The setup uses Aerosync&#x27;s authentication flow and data encryption. No banking credentials are stored in Topstep&#x27;s system.
+
+ A few things to note: 
+
+ Instant payments are available for XFA Payouts through Aeropay Real-time Payments (RTP).
+
+ Available to U.S.-based Traders with a U.S.-based bank that supports real-time payments. Check participating institutions here .
+
+ Not all Aeropay Payouts deliver instantly — processing times may vary depending on review and approval steps. 
+
+ What is Wise?
+
+ Wise is an international money transfer service offering lower fees and real exchange rates. ​ ​ Don&#x27;t have a Wise account? Request your Payout to Wise anyway. You&#x27;ll get an email from Wise to sign up and claim your funds. You have 7 calendar days to claim. Unclaimed funds are canceled and returned to Topstep.
+
+ Already have a Wise account? Use the same email as your Topstep profile. If they differ, contact Trader Support .
+
+ Best for international Traders: Wise. Fastest, most cost-effective, and supports local currency conversion.
+
+ Proof of Payout
+
+ Want to show off a Payout? We&#x27;ve got you covered with Proof of Payout (POP) Cards. A POP Card is a downloadable image that generates automatically in the My Payouts tab of your Topstep dashboard once a Payout is completed. POP Cards are available for all Payouts going back to January 1, 2026. ​
+
+ Stacked POP Cards 
+
+ A Stacked POP Card combines all Payouts from the same day into a single downloadable, shareable card. Cards are generated for a Trader&#x27;s top 6 highest-earning days, going back to January 1, 2026. ​
+
+ FAQs
+
+ What does Topstep review before approving a Payout?
+
+ Payout Policy requirements (outlined above)
+
+ Prohibited Conduct , Terms of Use , and Professional Behavior 
+
+ Prohibited Trading Strategies 
+
+ What tax forms are required?
+
+ W-9 for US persons, W-8BEN for non-US persons. Submitted as part of the Payout request process.
+
+ Can my Payout go to a third-party bank account?
+
+ No. Payouts can only be sent to a bank account in your own name.
+
+ Can I get a bank verification letter from Topstep?
+
+ No. You can provide your bank with a copy of your Express Funded Account Agreement instead.
+
+ What does "RA" mean in Payout references?
+
+ RA stands for Research Analyst, the designation Topstep uses for Traders operating in the simulated environment.
+
+ Which countries can&#x27;t receive Payouts?
+
+ See the full Eligibility Requirements list. Review before purchasing a Trading Combine.
+
+ How do Payouts affect my Scaling Plan?
+
+ If a Payout reduces your balance to a lower tier, your maximum contract size decreases accordingly. See the Scaling Plan .
+
+ How do Payouts affect my Maximum Loss Limit?
+
+ Your MLL is set to $0 after your first Payout. If it&#x27;s already at $0, it stays there. The remaining balance becomes your effective loss floor.
+
+ Can my account move up or down between Payouts?
+
+ Yes. Your account can move up or down as you trade and take Payouts. You just need to be profitable ($.01 or more) since your last Payout before you can request the next one.
+
+ I hit the Daily Loss Limit, can I still request a Payout?
+
+ Yes — but not yet. Hitting the Daily Loss Limit puts your account in a Temporary Violation. It lifts at the start of the next trading session. Once it clears, you can request a Payout as long as you&#x27;ve met the Payout Policy requirements. The same goes for any personal Lock-outs you&#x27;ve set in Risk Settings.
+
+ How does trading impact my Payout request while it is being processed?
+
+ Once you request a Payout, the funds are transferred immediately, allowing you to start trading again right away. However, please keep in mind the Payout processing times to determine which trading day will not count toward winning day objectives.
+
+ Live Accounts: Please note that after submitting a Payout request, trading should be paused until the Payout has been fully processed and the funds have been deducted from the account.
+
+ Will I still get my Payout if I hit the MLL after requesting?
+
+ Yes. Once the Payout amount has been deducted from your balance, hitting the MLL won&#x27;t affect it.
+
+ What happens to copy trading during a Payout?
+
+ Your copy-trading connection is automatically disabled while a Payout processes. Once the deduction is complete and your balance updates, you must manually re-enable it.
+
+ How do Payouts work across multiple XFAs?
+
+ Each XFA follows its own Payout Policy independently. Requests from one account don&#x27;t affect another.
+
+ When should I start taking Payouts?
+
+ We recommend reaching a balance where your MLL is at $0 first. This gives your account a healthier base. MLL levels by account size:
+
+ Account Size 
+
+ Maximum Loss Limit 
+
+ $50K
+
+ $2,000
+
+ $100K
+
+ $3,000
+
+ $150K
+
+ $4,500
+
+ Please note: the trading day your Payout is requested will not count toward your winning days for the next Payout cycle. The trading day runs from 5:00 PM CT to 3:10 PM CT the following day. A request submitted after 5:00 PM CT belongs to the next trading day — that day becomes the Payout request day and is excluded from the new cycle. This applies to all account types. ​
+
+ Example: A Payout request submitted at 5:59 PM CT on Monday belongs to the Tuesday trading session. Tuesday is the Payout request day and does not count. The new cycle begins on Wednesday.
+
+ Related Articles
+ Am I Eligible to Trade with Topstep? 
+
+ Express Funded Account™ Parameters 
+
+ Getting Started with the Topstep Dashboard 
+
+ Live Funded Account Parameters 
+
+ Topstep Pricing and Payment Questions 
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Your Privacy Choices

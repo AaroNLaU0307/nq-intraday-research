@@ -1,0 +1,120 @@
+LucidFlex Payouts | Lucid Trading Help Center Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Skip to main content 
+
+ Lucid Home 
+
+ Lucid Home 
+
+ Search for articles... 
+
+ All Collections 
+
+ LucidFlex 
+
+ LucidFlex Payouts
+
+ LucidFlex Payouts
+ LucidFlex payout rules explained: 90% split, no buffer balance required, no fixed payout window. Request anytime. Funds within 2 business days.
+
+ A 
+ Written by AJ 
+ Updated over a month ago 
+
+ Table of contents
+
+ LucidFlex uses the simplest payout system in the futures prop firm industry.
+
+ General Requirements
+
+ To be eligible for a payout from a LucidFlex account:
+
+ You must not violate any Trading Rules , Terms & Conditions, or the LucidFlex Account Agreement.
+
+ Payout requests are final once submitted, they cannot be edited or canceled.
+
+ Profit Split Structure
+
+ All LucidFlex funded account payouts are split 90% to the trader and 10% to Lucid Trading.
+
+ Payout Eligibility Criteria
+
+ There are two requirements must be met in LucidFlex to qualify for a payout.
+
+ 1. Trading Days with Profit
+
+ Traders must earn at least the minimum required profit on 5 separate days during the payout cycle. The minimum profit on trading days reset and must be earned again after every approved payout.
+
+ Account Size
+
+ Minimum Daily Profit
+
+ $25,000 
+
+ $100
+
+ $50,000 
+
+ $150
+
+ $100,000 
+
+ $200
+
+ $150,000 
+
+ $250
+
+ 2. Net Profit in Payout Cycle
+
+ Traders must have positive net profit (even just $1) during each payout cycle in order to request a payout. This objective simply ensures traders have made at least some amount of money between requests. As long as you meet the Trading Days with Profit requirement and have positive net profit for the payout cycle, you are eligible for payout.
+
+ Payout Minimums and Maximums
+
+ Minimum payout request: $500
+
+ Maximum payout request: Futures traders may request 50% of their account balance up to a maximum dollar amount. The max dollar amount depends on account size and is laid out below:
+
+ Number of requests per account: Traders may take up to 5 payouts from each LucidFlex account after which they will be moved live.
+
+ Account Size
+
+ Payout Maximum 
+
+ $25,000 
+
+ 50% of Profit up to $1,000
+
+ $50,000 
+
+ 50% of Profit up to $2,000
+
+ $100,000 
+
+ 50% of Profit up to $2,500
+
+ $150,000 
+
+ 50% of Profit up to $3,000
+
+ There is no buffer balance that must be maintained in LucidFlex funded accounts .
+
+ Unlike our other prop firm funded accounts, the maximums here do not scale up with more payouts. The table above shows the payout maximums for all requests.
+
+ Important: If you take a trade before your payout is processed that drops your balance below the required amount, your request may be denied.
+
+ Payout Timing and Processing
+
+ There is no fixed payout window, you may request a payout any day after meeting all eligibility criteria.
+
+ Once approved:
+
+ Funds will be deducted from your account within a few minutes.
+
+ Payouts will be disbursed to your payment method within 2 business days.
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Lucid Trading Help Center

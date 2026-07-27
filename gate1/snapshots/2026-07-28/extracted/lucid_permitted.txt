@@ -1,0 +1,81 @@
+Other Activities | Lucid Trading Help Center Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Skip to main content 
+
+ Lucid Home 
+
+ Lucid Home 
+
+ Search for articles... 
+
+ All Collections 
+
+ Rules and Guidelines 
+
+ Other Activities
+
+ Other Activities
+
+ A 
+ Written by AJ 
+ Updated today 
+
+ Table of contents
+
+ News Trading
+
+ Not allowed on Daily
+
+ Trading red folder news on the LucidDaily is a hard breach
+
+ Allowed on Flex, Pro and Direct
+
+ Traders may enter or exit positions around scheduled or unscheduled news events on these plans without it being a breach
+
+ Important: News-driven markets are highly volatile and may involve slippage or velocity logic triggers- Sudden price movements during news events may result in slippage, influencing trade execution at unexpected prices or triggering unique order behaviors due to velocity logic mechanisms.
+
+ Traders assume full responsibility for all outcomes when trading during news events- This responsibility emphasizes the necessity for careful planning and risk assessment, particularly during volatile conditions.
+
+ Scaling Into Trades (DCA)
+
+ Traders are free to scale into positions or use Dollar Cost Averaging (DCA)
+
+ Lucid does not impose limits on entry methods- Scaling can serve as an effective risk management measure, allowing traders to adapt positions incrementally to varying market conditions.
+
+ Note of caution:
+
+ While scaling is permitted, martingaling, continuously adding to losing positions in hopes of recovery, is strongly discouraged
+
+ Martingaling can quickly escalate risk and is not considered a sustainable long-term strategy
+
+ Genuine Scalping
+
+ Genuine scalping is allowed
+
+ Short-term entries and exits that reflect realistic execution and market behavior are welcome
+
+ Traders must ensure that their activity remains within Microscalping policy guidelines
+
+ Scalping is considered valid as long as trades are taken in good faith and not intended to manipulate fill logic
+
+ Automated Strategies
+
+ Automated trading systems and trade copiers are permitted
+
+ All automated activity must comply with Lucid Trading rules
+
+ Traders are fully responsible for any software errors, malfunctions, or unintended outcomes
+
+ Flipping
+
+ Flipping is allowed
+
+ Flipping refers to taking a quick in-and-out trade for the purpose of meeting minimum trading day requirements
+
+ While we encourage meaningful trading activity, we do not restrict this practice
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Lucid Trading Help Center

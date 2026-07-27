@@ -1,0 +1,187 @@
+What is the Maximum Loss Limit? | Topstep Help Center Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Skip to main content 
+
+ Discord Topstep TopstepTV 
+
+ Discord Topstep TopstepTV 
+
+ Search for articles... 
+
+ All Collections 
+
+ Topstep FAQs 
+
+ What is the Maximum Loss Limit?
+
+ What is the Maximum Loss Limit?
+ Topstep&#x27;s singular rule - the Maximum Loss Limit.
+
+ Updated over 3 weeks ago 
+
+ Table of contents
+
+ The Maximum Loss Limit (MLL) is the lowest point your account balance is allowed to reach. If your balance hits it at any point during the trading day, including on unrealized P&L, your account is liquidated immediately.
+
+ Account Size 
+
+ Maximum Loss Limit 
+
+ $50K
+
+ $2,000
+
+ $100K
+
+ $3,000
+
+ $150K
+
+ $4,500
+
+ ⚠️ The MLL cannot be adjusted or changed. Topstep makes no exceptions.
+
+ How the MLL works
+
+ The MLL is a trailing limit. It rises as your end-of-day balance grows, but never moves down. Once it reaches your starting balance, it locks permanently. ​
+
+ 📺 Watch: How the Maximum Loss Limit works 
+
+ In the Trading Combine
+
+ Your account starts at the full account size (e.g., $50,000 for a 50K Trading Combine), and your Maximum Loss Limit starts $2,000 below that. ​
+
+ Example: 
+
+ You start a 50K Trading Combine. Balance: $50,000. MLL: $48,000.
+
+ You make $500 on day 1, balance rises to $50,500, MLL trails up to $48,500.
+
+ You lose $500 on day 2, balance drops back to $50,000, but MLL stays at $48,500.
+
+ In the Express Funded Account
+
+ Your Express Funded Account (XFA) balance starts at $0. The 50K, 100K, or 150K label refers to your buying power, not your starting balance. You build your balance from trading profits.
+
+ For a 50K XFA, your MLL starts at -$2,000 and trails upward. Once your balance reaches $2,000, the MLL locks at $0 permanently. From that point on, your balance can never fall below $0.
+
+ Example: You start a 50K XFA at $0. Day 1: +$1,000, balance $1,000, MLL -$1,000. Day 2: +$1,000, balance $2,000, MLL locks at $0.
+
+ 👉 After your first Payout: Your MLL is set to $0 regardless of where it was before. The remaining balance becomes your effective loss floor.
+
+ ​ Example: Balance $10,000. Take a $5,000 Payout. Balance $5,000, MLL $0. If your balance ever hits $0, the account closes.
+
+ In the Live Funded Account
+
+ For the Live Funded Account, refer here . 
+
+ FAQs
+
+ When is the MLL calculated?
+
+ The MLL updates at the end of each trading day but is monitored in real time throughout the session. Both realized and unrealized P&L count toward it. If your Net P&L hits the limit at any point during the day, your account is liquidated immediately. ​
+
+ What happens if I break the MLL?
+
+ Trading Combine: Your account is liquidated for the rest of the trading day and becomes ineligible for funding until you Reset. You can still practice trade.
+
+ Express Funded Account: Your account is permanently closed. Back2Funded may be available if you&#x27;re eligible.
+
+ Live Funded Account® (LFA): Learn more .
+
+ What happens to my MLL when I use Back2Funded?
+
+ When you Reactivate using Back2Funded , your account restarts completely. Balance resets to $0, and all stats reset to zero.
+
+ Your MLL resets to the starting value for your account size:
+
+ Account Size 
+
+ Starting MLL 
+
+ $50K XFA
+
+ -$2,000
+
+ $100K XFA
+
+ -$3,000
+
+ $150K XFA
+
+ -$4,500
+
+ The MLL trails upward as your balance grows and locks at $0 once reached, same as a brand new XFA.
+
+ Can I request that my Maximum Loss Limit be adjusted in my account?
+
+ Maximum Loss Limits cannot be adjusted or changed on your account. Topstep does not make exceptions to the Maximum Loss Limit for any account.
+
+ Why Was My Account Liquidated If My Final Balance Was Above the Risk Limit?
+
+ Risk limits are monitored in real-time using Net P&L — both realized and unrealized. If your account touches or falls below a limit at any point, it&#x27;s a violation and liquidation triggers immediately.
+
+ When liquidation fires, positions close via market orders. Slippage and price movement during execution can push your final realized balance back above the limit — but the violation already happened based on unrealized P&L.
+
+ Example 
+
+ Maximum Loss Limit: $48,000 | Balance: $50,000
+
+ Open trade moves against you → unrealized P&L drops balance to $47,750
+
+ MLL breached → liquidation triggered
+
+ Price moves favorably during exit → final realized balance: $48,050
+
+ Final balance above the limit doesn&#x27;t matter. The breach happened first. Same logic applies to the Daily Loss Limit, Personal Daily Loss Limit, and Personal Daily Profit Target.
+
+ Best Practices 
+
+ Use stop losses before approaching your Maximum Loss Limit
+
+ Monitor unrealized P&L — not just closed trades
+
+ Leave a buffer above your limit during volatile markets
+
+ Avoid trading during high-impact news events
+
+ ⚠️ Your Maximum Loss Limit is calculated on real-time unrealized P&L. The moment your open loss hits the threshold, the system automatically closes your position via market order; slippage may push the fill slightly above or below the limit, but if the threshold was breached while the trade was open, the liquidation stands.
+
+ Related Articles
+ What is a Reset? 
+
+ Express Funded Account™ Parameters 
+
+ Topstep Payout Policy 
+
+ Daily Loss Limit in the Trading Combine and Express Funded Account 
+
+ What is a Pro Account? 
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Your Privacy Choices

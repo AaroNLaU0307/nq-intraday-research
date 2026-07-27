@@ -1,0 +1,89 @@
+LucidFlex Drawdown | Lucid Trading Help Center Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Skip to main content 
+
+ Lucid Home 
+
+ Lucid Home 
+
+ Search for articles... 
+
+ All Collections 
+
+ LucidFlex 
+
+ LucidFlex Drawdown
+
+ LucidFlex Drawdown
+
+ A 
+ Written by AJ 
+ November 26, 2025 
+
+ Table of contents
+
+ End of Day Drawdown
+
+ LucidFlex evaluation and funded accounts use an End-of-Day Drawdown (EOD Drawdown) system to calculate the Max Loss Limit (MLL).
+
+ At the end of each trading session, the system calculates the account’s highest closing balance
+
+ The MLL increases as your balance grows, up to a defined point
+
+ Once your account exceeds the Initial Trail Balance, the MLL locks and no longer moves
+
+ Once you request a payout from LucidFlex, your MLL automatically adjusts to the Locked MLL Balance 
+
+ Account Size 
+
+ MLL Amount 
+
+ Initial Trail Balance 
+
+ Locked MLL Balance 
+
+ $25,000
+
+ $1,000
+
+ $26,100
+
+ $25,100
+
+ $50,000
+
+ $2,000
+
+ $52,100
+
+ $50,100
+
+ $100,000
+
+ $3,000
+
+ $103,100
+
+ $100,100
+
+ $150,000
+
+ $4,500
+
+ $154,600
+
+ $150,100
+
+ As with the other account types:
+
+ The MLL rises with your closing balance until it reaches the trail
+
+ Once the account exceeds the trail, the MLL locks at the initial balance plus $100
+
+ If your account balance reached the MLL, your account will be breached.
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Lucid Trading Help Center

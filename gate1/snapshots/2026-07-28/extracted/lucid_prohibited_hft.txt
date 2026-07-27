@@ -1,0 +1,65 @@
+Prohibited: High Frequency Trading | Lucid Trading Help Center Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Skip to main content 
+
+ Lucid Home 
+
+ Lucid Home 
+
+ Search for articles... 
+
+ All Collections 
+
+ Rules and Guidelines 
+
+ Prohibited: High Frequency Trading
+
+ Prohibited: High Frequency Trading
+
+ A 
+ Written by AJ 
+ June 13, 2025 
+
+ Table of contents
+
+ What Is It?
+
+ High-frequency trading (HFT) is a type of automated trading strategy that involves submitting and executing a high volume of trades within extremely short time frames, often measured in seconds or even milliseconds. These strategies are typically powered by algorithms and designed to exploit minute price inefficiencies at speed.
+
+ What Happens If I Use HFT?
+
+ Lucid Trading employs automated risk detection systems to flag HFT activity. If your account is identified as using high-frequency trading methods:
+
+ First offense:
+
+ You will receive a written warning
+
+ Repeated offenses:
+
+ All profits generated from HFT activity will be removed
+
+ Accounts will be closed
+
+ You will be permanently restricted from using Lucid Trading services
+
+ You may file an appeal if you believe the activity was incorrectly flagged.
+
+ Why Is It Prohibited?
+
+ HFT strategies can result in hundreds of orders being placed within minutes, generating an unusually high load on platform infrastructure.
+
+ Allowing HFT could:
+
+ Degrade platform performance
+
+ Create data instability
+
+ Negatively impact the user experience for all traders
+
+ To maintain a reliable and equitable trading environment, HFT is strictly prohibited.
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Lucid Trading Help Center

@@ -1,0 +1,198 @@
+New Live Structure | Lucid Trading Help Center Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Skip to main content 
+
+ Lucid Home 
+
+ Lucid Home 
+
+ Search for articles... 
+
+ All Collections 
+
+ Live Trading 
+
+ New Live Structure
+
+ New Live Structure
+ LucidLive: Lucid&#x27;s live account program. Earn a live account after Payout 5, receive daily payouts, EOD drawdown, no daily loss limit, plus a one-time Live Bonus up to $4,500. Full rules inside.
+
+ D 
+ Written by Doug 
+ Updated over a week ago 
+
+ Table of contents
+
+ Being Evaluated for Live
+
+ Lucid&#x27;s risk team continuously monitors trader performance to determine when a trader is ready to transition to live futures trading. ​
+
+ Traders enter the live review pool when one or more of the following conditions are met:
+
+ After receiving the final payout (Payout 5) on their plan
+
+ After being paid out a significant amount of capital lifetime
+
+ If they have exceptional performance in sim funded
+
+ If they have previously been moved live
+
+ Payout 5 represents the maximum payout level, not a guaranteed minimum for live eligibility. All live transitions occur at the discretion of the Lucid risk team.
+
+ Transition to Live
+
+ When a futures trader is moved to live:
+
+ Traders receive one live account per eligible funded account
+
+ Each funded account must have received at least one payout to qualify
+
+ All live accounts begin with:
+
+ $0 starting balance
+
+ Daily payouts
+
+ End-of-day drawdown
+
+ No daily loss limit
+
+ Funded Account Size 
+
+ Starting Live Drawdown 
+
+ Max Live Contract Limit* 
+
+ $25,000 
+
+ $1,000
+
+ 2 minis or 20 micros
+
+ $50,000 
+
+ $2,000
+
+ 4 minis or 40 micros
+
+ $100,000 
+
+ $3,000
+
+ 6 minis or 60 micros
+
+ $150,000 
+
+ $4,500
+
+ 10 minis or 100 micros
+
+ *Certain extremely volatile contracts have reduced position sizing to ensure traders do not exceed the live drawdown.
+
+ Consistency Rules at Live
+
+ There are no consistency requirements for live accounts. Once promoted from sim-funded to live, consistency rules no longer apply regardless of your account type (LucidPro, LucidFlex, LucidDirect).
+
+ Locking the Live MLL
+
+ Lucid Live accounts use an End-of-Day Drawdown (EOD Drawdown) system to calculate the Max Loss Limit (MLL).
+
+ At the end of each trading session, the system calculates the account’s highest closing balance. 
+
+ The MLL increases as the account balance grows, up to a defined point. 
+
+ Once a trader generates live profits equal to their starting live drawdown, the Max Loss Limit locks at $100 and no longer moves. 
+
+ If a trader requests a live payout before generating profits over the live drawdown, the Max Loss Limit locks to $100.
+
+ Live Bonus
+
+ The first time a trader is moved live under the new program, they may be eligible to earn a one-time bonus - provided they&#x27;ve never held a Legacy Live account.
+
+ To earn the Live Bonus:
+
+ Generate live profits equal to your starting live drawdown
+
+ When achieved:
+
+ The Live Bonus is paid out
+
+ Funded Account Size 
+
+ Live Target 
+
+ Live Bonus 
+
+ $25,000 
+
+ $1,100
+
+ $1,000
+
+ $50,000 
+
+ $2,100
+
+ $2,000
+
+ $100,000 
+
+ $3,100
+
+ $3,000
+
+ $150,000 
+
+ $4,600
+
+ $4,500
+
+ Example
+
+ A trader is moved live with five $50,000 funded accounts:
+
+ Each account starts with $0 balance and $2,000 drawdown
+
+ The trader earns $2,100 in each account
+
+ Lucid releases a $2,000 Live Bonus as a payout to the trader
+
+ Trader received a $10,000 bonus payout
+
+ The bonus may be earned on all accounts moved live on the first trip under the new system. However, traders moved live 2 or more times will not be eligible for the bonus on subsequent sets of accounts. The bonus is not eligible for traders with LucidMaxx status.
+
+ Cooldown
+
+ Traders who have been moved live may return to purchase a new evaluation after blowing a live account..
+
+ Standard cooldown period: 2 weeks
+
+ Traders who repeatedly blow live accounts due to reckless or "yolo" behavior may be subject to longer cooldowns at the discretion of the risk team
+
+ LucidMaxx Status
+
+ Select traders may eventually earn LucidMaxx status.
+
+ LucidMaxx traders:
+
+ May purchase the LucidMaxx evaluation 
+
+ Receive access to daily, uncapped payouts and instant live capital
+
+ Please refer to the LucidMaxx documentation for full details.
+
+ LucidLive Account FAQ
+
+ Do all funded prop accounts move live at once? Yes. All eligible funded prop accounts (with at least one payout) are moved when a trader transitions to live.
+
+ What happens to remaining simulated prop accounts? All simulated prop accounts are closed when a trader is moved live. If a funded account is not moved live because it has 0 payouts, the evaluation cost of that account will be refunded. If you are not comfortable with evaluations being closed, do not keep evaluations in reserve.
+
+ If I am live, can someone in my household still trade sim? No. If one household member is trading live, others may not trade simulated accounts.
+
+ Can I hedge my live accounts? Absolutely not. Hedging live accounts is strictly prohibited by both Lucid and the CME. Violations will result in a permanent ban.
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Lucid Trading Help Center
