@@ -16,10 +16,15 @@
 
 | 日期 | 文件 | 版本 | SHA-256 | Freeze Commit A | 备注 |
 |---|---|---|---|---|---|
-| — | PROJECT_CHARTER.md | v1.2-r2 | （Commit B 时填写） | — | 待批准冻结 |
-| — | STUDY_0_PREREGISTRATION.md | v0.5 | （Commit B 时填写） | — | 待批准冻结 |
-| — | purchase_plan.yaml | PP-2026-07-27-A rev4 | （Commit B 时填写；随 Commit A 冻结） | — | 待批准冻结 |
+| 2026-07-27 | PROJECT_CHARTER.md | v1.2-r2 | 5176320fb54a30e5e5dcc7f1ee96b828e7d38f727a573e8bd152ca3ff4299327 | 89e2505928342d131c8f6eff93369bcc46f909b4 | FROZEN（tag s0-freeze-v1） |
+| 2026-07-27 | STUDY_0_PREREGISTRATION.md | v0.6 | 6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132 | 89e2505928342d131c8f6eff93369bcc46f909b4 | FROZEN（tag s0-freeze-v1） |
+| 2026-07-27 | purchase_plan.yaml | PP-2026-07-27-A rev4 | 02edbc2cb8481089ecf7b30156fd86eb3cf524112e3f97d253f94acc60c39e6c | 89e2505928342d131c8f6eff93369bcc46f909b4 | FROZEN（tag s0-freeze-v1）；批准记录另见 purchase_approval.yaml |
 | — | purchase_approval.yaml | — | （Commit C 时填写） | 不适用 | Aaron 批准时提交 |
+
+哈希计算方法：对 Commit A（89e2505）的 git blob 做字节级 SHA-256（python hashlib，
+subprocess 捕获 `git cat-file blob` 原始字节），并与工作区 Get-FileHash 交叉验证一致
+（`.gitattributes * -text` 保证两者字节相同）。机械检查：Commit A 变更集仅触及三份
+冻结文件（status 翻转）；purchase_approval.yaml 未进入 Commit A。
 
 ## IV_ACCESS_LOG（Internal Validation 访问台账）
 
