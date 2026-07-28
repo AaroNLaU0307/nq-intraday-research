@@ -26,6 +26,8 @@
 | 2026-07-28 | gate1/G9_EVIDENCE_RESOLUTION.md | MC1.1-G9 | 2aa7e146f38f582504619ca9dc2ad9fb425fef07b61fb3d2d26e9f0cdf48b1ac | f932714 | Evidence Resolution Addendum：CME $0.35/side VERIFIED（Case A，Primary 不变，仅解除 G9） |
 | 2026-07-28 | gate1/platform_params.yaml | v0.6+MC1.1 | 702b983baba88d833ebf7122d358beaf9feb946c99c2e85aad41ecee2863d9ff | f932714 | PROVISIONAL→VERIFIED、hard_run_blocker→false；at-freeze 版本 65bfdd9e… 仍锚定于 mc-freeze-v1 |
 | 2026-07-28 | gate1/evidence_registry.yaml | +CME 证据 | 8ec318088ebedc9a3e3ce65bedf743b8a7741bfaa97481e841dc1802cb66a198 | f932714 | 追加 CME PDF/XLS＋addendum 文档条目；at-freeze 版本 c14d576b… 仍锚定于 mc-freeze-v1 |
+| 2026-07-28 | IR_APPROVAL_PACKET.md | APPROVED_BY_AARON | bfa0c60ce77ab7798872c3303804c0e63046405cf734a3b08b0296268bb3abd3 | 628dce4 | IR-1~11 批复定案（IR-10 separate counters；编号勘误已注） |
+| 2026-07-28 | IMPLEMENTATION_RESOLUTIONS.md | 批复收口 | d54e39fc5d5347fc54636f3bd25a4d1444d2d276f4e51361fafdb6559ef20643 | 628dce4 | B 类转正式 Addendum；冻结历史未动 |
 | — | purchase_approval.yaml | — | （Commit C 时填写） | 不适用 | Aaron 批准时提交 |
 
 哈希计算方法：对 Commit A（89e2505）的 git blob 做字节级 SHA-256（python hashlib，
