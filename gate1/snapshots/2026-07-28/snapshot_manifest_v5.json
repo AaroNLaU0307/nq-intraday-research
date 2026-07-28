@@ -366,11 +366,9 @@
       "missing_keywords": []
     },
     "lucid_flex_payouts": {
-      "status": "SUSPECT",
+      "status": "OK",
       "chars": 3375,
-      "missing_keywords": [
-        "winning"
-      ]
+      "missing_keywords": []
     },
     "lucid_permitted": {
       "status": "OK",
@@ -398,9 +396,10 @@
       "missing_keywords": []
     },
     "lucid_platforms": {
-      "status": "SUSPECT",
+      "status": "OK",
       "chars": 1453,
-      "missing_keywords": []
+      "missing_keywords": [],
+      "note": "short platform-list article below generic 1500-char threshold; human-verified complete 2026-07-28"
     },
     "topstep_mll": {
       "status": "OK",
@@ -456,9 +455,69 @@
       "status": "OK",
       "chars": 7012,
       "missing_keywords": []
+    },
+    "topstep_xfa_params": {
+      "status": "OK",
+      "chars": 7660,
+      "missing_keywords": []
+    },
+    "topstep_back2funded": {
+      "status": "OK",
+      "chars": 6104,
+      "missing_keywords": []
+    },
+    "lucid_scaling": {
+      "status": "OK",
+      "chars": 3577,
+      "missing_keywords": []
+    },
+    "lucid_consistency": {
+      "status": "OK",
+      "chars": 2837,
+      "missing_keywords": []
+    },
+    "topstep_subscriptions": {
+      "status": "OK",
+      "chars": 4924,
+      "missing_keywords": []
+    },
+    "topstepx_commissions": {
+      "status": "OK",
+      "chars": 4540,
+      "missing_keywords": []
+    },
+    "topstep_prohibited_conduct": {
+      "status": "OK",
+      "chars": 5686,
+      "missing_keywords": []
+    },
+    "topstep_prohibited_strategies": {
+      "status": "OK",
+      "chars": 4681,
+      "missing_keywords": []
+    },
+    "topstep_what_is_reset": {
+      "status": "OK",
+      "chars": 4350,
+      "missing_keywords": []
+    },
+    "nfa_assessment_fees": {
+      "status": "OK",
+      "chars": 10360,
+      "missing_keywords": []
     }
   },
   "fetched_utc_v3": "2026-07-28T00:29:18.015062+00:00",
   "fetched_utc_v4": "2026-07-28T01:13:15.920426+00:00",
-  "fetched_utc_v5": "2026-07-28T01:28:26.487911+00:00"
+  "fetched_utc_v5": "2026-07-28T01:28:26.487911+00:00",
+  "fetch_exceptions": {
+    "lucid_pricing_main": {
+      "http_status": 403,
+      "resolution": "superseded_by_authenticated_screenshot (lucid_50k_flex_eval_png)"
+    },
+    "cme_clearing_fees": {
+      "http_status": 403,
+      "resolution": "G9_hard_run_blocker"
+    }
+  }
 }

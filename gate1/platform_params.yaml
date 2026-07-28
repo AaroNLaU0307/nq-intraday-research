@@ -1,10 +1,10 @@
-# platform_params.yaml v0.5 — 平台规则参数转录（与 MC_METHOD_SPEC 一同冻结）
+# platform_params.yaml v0.6 — 平台规则参数转录（与 MC_METHOD_SPEC 一同冻结）
 # 证据：所有 evidence 键指向 gate1/evidence_registry.yaml（完整64位哈希在彼处）。
 # v0.1 → v0.2：GPT 评审 3 项纠错＋5 项遗漏全部落实；其引用的全部新数字均已
 # 由本机新快照独立验证（Lucid scaling/consistency、Back2Funded、XFA params、分层表图片）。
 
 meta:
-  version: 0.5   # v0.4 → v0.5：G8 官方关闭、NFA 纠正与分段、重购保守化、payout 会计、S0 费用交接、机器证据引用
+  version: 0.6   # v0.4 → v0.5：G8 官方关闭、NFA 纠正与分段、重购保守化、payout 会计、S0 费用交接、机器证据引用
                  # execution_costs 数值化、DLL 基准公式、payout rail、AI-bot 证据定级
   transcribed_at: "2026-07-28"
   evidence_registry: gate1/evidence_registry.yaml
@@ -86,6 +86,11 @@ lucidflex_50k:
     fixed_payout_window: none
     processing: "批准后数分钟扣账；2 个工作日到账"
     trading_during_processing_risk: "处理前交易致余额低于要求 → 申请可能被拒"
+    payout_rail:                         # v0.6：移入正确节点；费用未公布 → 保守假设（防乐观偏差）
+      evidence_status: unresolved
+      primary_fee_usd: 30                # 保守假设：以证据中唯一观察到的国际通道费
+      sensitivity_fee_usd: 0             # （Topstep Wire/ACH $30）为代理，非 Lucid 官方数字
+      model_role: conservative_assumption
   commissions_per_side_usd:
     evidence: [lucid_products_comms]
     NQ: 1.75
@@ -113,12 +118,23 @@ execution_costs:
       until_2027_06_30: 1.72             # 2×(0.50+0.35+0.01)
       from_2027_07_01: 1.74              # 2×(0.50+0.35+0.02)；synthetic 日历按日期分段计
     sensitivity_all_in_round_turn_usd: 1.00
-  s0_cost_handoff:                       # v0.5：S0 路径的平台费唯一化
-    method: single_conservative_platform_fee
-    round_turn_platform_fee_usd: 1.74    # = max(两平台, 全期界)；PROVISIONAL 随 G9 联动
-    rationale: "S0 按引擎×成本场景生成路径、不分平台；取全期界最高费保守烘入，
-      Topstep 侧 EV 因此被轻微低估（方向安全），已披露"
+  s0_cost_handoff:                       # v0.6：唯一 Primary 算法＋机器级运行阻断
+    primary_method: constant_full_horizon_upper_cost
+    primary_round_turn_usd: 1.74         # 全 24 个月恒定；= max(两平台, 全期界费率)
+    time_varying_nfa_schedule:
+      decision_role: diagnostic_only     # 1.72/1.74 分段仅作诊断输出，不进 Primary
+    cme_component_status: unresolved_official_confirmation
+    hard_run_blocker: true               # 机器关卡：CME 组件官方确认前，任何真实 S0 计算、
+                                         # 可读报告与 Checkpoint 0 判决必须被程序阻止
+    rationale: "S0 按引擎×成本场景生成路径、不分平台；保守烘入全期界最高费，
+      Topstep 侧 EV 被轻微低估（方向安全），已披露"
     mc_reapply_transaction_fee: false
+
+gate2_cost_guard:                        # v0.6：Lucid 未知执行成本的乐观偏差防护
+  lucid_execution_software_cost_usd_modeled: 0
+  actual_cost_status: unconfirmed_until_gate2_poc
+  guard: lucid_cannot_independently_trigger_go_until_gate2_costs_confirmed
+  # 语义：若 GO 条件仅由 Lucid 组合满足而 Topstep 组合不满足，判决降级为边界区 α
   double_counting_guard: "交易费只在 S0 成交模拟中扣除一次；MC 商业层不得再扣"
 
 payout_accounting:                       # v0.5：gross/net 唯一化（evidence: topstep_payout 示例
@@ -262,10 +278,9 @@ topstep_50k:
         trader_pct_on_first_lifetime_profit: 100
       decision_role: "Primary = 现在新开账户 = 90/10；不得事后选用旧 cohort"
     payout_processing: "XFA 资金即时扣账、可立即交易"
-    payout_rail:                         # v0.4：Primary 通道冻结（马来西亚 = 国际用户）
+    payout_rail:                         # Primary 通道冻结（马来西亚 = 国际用户）
       primary: {method: Wise, topstep_fee_usd: 0, processing: "1-3 工作日", note: "Wise 自身汇兑费不计入平台费"}
       alternatives: {ACH_usd: 30, Wire_usd: 30, Aeropay_usd: 0, Prop_to_brokerage: US_only}
-    lucid_payout_rail: {method_fee_usd: NOT_FOUND, assumption: "Primary 按 $0 建模并披露；到账 2 工作日"}
     back2funded:
       evidence: [topstep_back2funded, topstep_pricing, topstep_mll]
       max_reactivations_per_xfa: 2

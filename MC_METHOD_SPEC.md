@@ -2,17 +2,17 @@
 
 ```yaml
 id: MC1
-version: 0.5   # v0.4 → v0.5：GPT 第四轮 9 项全采纳（G8 官方关闭＋NFA 费率纠正＋G1 重购
-               # 保守化＋gross/net 会计＋S0 费用交接＋计费日历分拆＋证据措辞与引用收口）
-status: DRAFT — 待最终机械封口检查（四文件解析、占位符清零、哈希闭环、状态翻转）
+version: 0.6   # v0.5 → v0.6：GPT 第五轮 6 封口项（生命周期次数上限、Lucid rail 归位＋
+               # 保守费、G9 唯一 Primary＋机器阻断、v5 清单、哈希预填、manifest 检查补全）
+status: DRAFT — seal_check PASS，待 GPT 最终机械确认后冻结（status 翻转在 Freeze Commit A 内）
 date: 2026-07-28
 references:
   charter_sha256: 5176320fb54a30e5e5dcc7f1ee96b828e7d38f727a573e8bd152ca3ff4299327
   s0_prereg_sha256: 6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132
-  gate1_snapshot_manifest_v5_sha256: e789070b1ac19507057821696b10f4916f9b12ae1ace9f93bb2af0b378f5bfc0
-  evidence_registry_sha256: SET_AT_FREEZE   # registry 与本文件同一 Freeze Commit，冻结时填最终哈希
+  gate1_snapshot_manifest_v5_sha256: 5b6083b5ee61db9c44b119fae3bfdb2c0c039b9c53f5d7c67a74c69f6d4e0434
+  evidence_registry_sha256: c14d576ba2076f8f08cb4f8bef16fc5a99c881071baed303f9d8a73964a6b35c
   lucid_breach_reply_png_sha256: 620dee3911e616fafeacf9c399da054dfda4cf1414a0d0a24fd46d2a0358925a
-  lucid_breach_resolution_md_sha256: SET_AT_FREEZE   # RESOLUTION.md 本轮仍在更新（AI-bot 定级）
+  lucid_breach_resolution_md_sha256: af7c498946789b899839af9c34221a6c0a07a4703ba894830e6a1f920964823e
 约束: 本规范冻结之前，S0 不得运行产出任何可读数字报告（S0 §10.2）
 evidence_note: Lucid support 回复为 AI bot 生成（Level 2-AI）；详见 platform_params
   的 evidence_grade_note——无数字参数以 bot 回答为唯一来源，V-A 为保守方向。
@@ -148,7 +148,8 @@ live_transition:
 billing_calendars:
   topstep_combine:  {cadence: every_30_days_from_current_rebill_anchor}   # reset 将锚点重设为 reset 日
   topstep_api:      {cadence: every_30_days_from_activation}
-  nfa_fee_step:     {change_date: "2027-07-01", per_side: "0.01 → 0.02"}  # 期界中段费率跳升
+  nfa_fee_step:     {change_date: "2027-07-01", per_side: "0.01 → 0.02",
+                     decision_role: diagnostic_only}  # Primary 用全期恒定 $1.74（s0_cost_handoff）
   true_calendar_month_services: {cadence: calendar_month}                  # 仅适用真日历月计费项
 ```
 
@@ -176,12 +177,20 @@ payout_policy_sensitivity:
 ### 4.3 失败-重购政策（按账户状态，分平台转录费用）
 
 ```yaml
+lifecycle_attempt_policy:      # v0.6：全生命周期上限唯一化（消除实现 A/B 分歧）
+  scope: entire_24_month_platform_simulation
+  max_evaluation_starts_including_initial: 6    # 含首次；评估 reset 每次计 1 次
+  funded_failure_restart_consumes_attempt: true # funded 死亡后的 new_evaluation/new_combine
+                                                # 消耗同一计数器，不重新获得 6 次
+  counter_does_not_reset_after_passing_evaluation: true
+  action_after_exhaustion: terminate_platform_lifecycle
+
 failure_policy:                # Primary；R0（完全不重购）为敏感性
   evaluation_failure:
-    topstep: {action: invoke_subscription_reset_engine, max_total_attempts: 6}
+    topstep: {action: invoke_subscription_reset_engine}
              # 引擎决定用 Reset Credit（先到期先用、同规格同路径）还是付费 $49；
-             # rebill 锚点重设为 reset 日 + 30 天
-    lucid:   {action: reset, fee_usd: 95, max_total_attempts: 6}
+             # rebill 锚点重设为 reset 日 + 30 天；计数遵循 lifecycle_attempt_policy
+    lucid:   {action: reset, fee_usd: 95}
   funded_pre_first_payout_failure:
     topstep: {action: back2funded, fee_usd: 599, max_per_xfa: 2, window_days: 30,
               after_exhausted: new_combine}
@@ -261,11 +270,12 @@ total_predictive：B×M 混合 → bankroll 压力测试（明示为混合分布
 MC_METHOD_SPEC.md
 gate1/platform_params.yaml
 gate1/evidence_registry.yaml
-gate1/snapshots/2026-07-28/snapshot_manifest_v4.json
+gate1/snapshots/2026-07-28/snapshot_manifest_v5.json
 ```
 
-冻结时本文件 references 中的 SET_AT_FREEZE 占位以 Commit 内 blob 哈希填入
-Registry Commit。原始快照/截图文件本身以 manifest/registry 哈希锚定（体积原因
+本文件 references 中的证据链哈希已在冻结前全部填入实值（v0.6 封口序）；
+Freeze Commit A 前必须重跑 seal_check 确认引用与实际字节一致。
+原始快照/截图文件本身以 manifest/registry 哈希锚定（体积原因
 不入 commit，但任何字节改动都会被哈希暴露）。
 冻结后的新官方证据（如 CME 费表确认 G9、人工客服复确认）按
 **Evidence Resolution Addendum** 处理：原文＋哈希存档 → registry＋params 更新 →
