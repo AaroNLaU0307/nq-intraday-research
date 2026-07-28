@@ -28,10 +28,34 @@ def sha256_file(path: Path, chunk: int = 1 << 20) -> str:
 
 
 def load_manifest(job_dir: Path) -> dict:
-    mp = job_dir / "_local_manifest.json"
-    if not mp.exists():
-        raise ManifestError(f"missing _local_manifest.json in {job_dir}")
-    return json.loads(mp.read_text(encoding="utf-8"))
+    """Load per-file hashes, normalized to {"files": {name: {"sha256": ...}}}.
+
+    Two accepted sources, in priority order:
+      1. _local_manifest.json with a "files" mapping (fabricated fixtures /
+         future pipelines);
+      2. the official Databento manifest.json ({"job_id", "files": [
+         {"filename", "hash": "sha256:..."}]}) — the canonical archive format.
+    """
+    local = job_dir / "_local_manifest.json"
+    if local.exists():
+        data = json.loads(local.read_text(encoding="utf-8"))
+        if isinstance(data.get("files"), dict):
+            return data
+    official = job_dir / "manifest.json"
+    if official.exists():
+        data = json.loads(official.read_text(encoding="utf-8"))
+        entries = data.get("files")
+        if isinstance(entries, list):
+            files = {}
+            for e in entries:
+                h = str(e.get("hash", ""))
+                if e.get("filename") and h.startswith("sha256:"):
+                    files[e["filename"]] = {"sha256": h.split(":", 1)[1]}
+            if files:
+                return {"files": files, "source": "databento_manifest_json"}
+    raise ManifestError(
+        f"no usable manifest in {job_dir} (need _local_manifest.json with a "
+        "'files' mapping or official Databento manifest.json)")
 
 
 def verify_file_against_manifest(path: Path, manifest: dict) -> None:

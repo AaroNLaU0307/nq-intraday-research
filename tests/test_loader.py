@@ -153,6 +153,24 @@ def test_manifest_missing_entry_fails(tmp_path):
         ldr.load_real("other.csv", source_format="synthetic_csv")
 
 
+def test_official_databento_manifest_format_accepted(tmp_path):
+    g, c = flags(tmp_path, True, True)
+    df = fab_bars_utc()
+    job = tmp_path / "development_signal" / "JOB-OFFICIAL"
+    job.mkdir(parents=True)
+    fp = job / "bars.csv"
+    df_out = df.copy()
+    df_out["ts"] = df_out["ts"].astype(str)
+    df_out.to_csv(fp, index=False)
+    official = {"job_id": "JOB-OFFICIAL",
+                "files": [{"filename": "bars.csv", "size": fp.stat().st_size,
+                           "hash": f"sha256:{sha256_file(fp)}"}]}
+    (job / "manifest.json").write_text(json.dumps(official), encoding="utf-8")
+    ldr = DevelopmentSignalLoader(job, g9_flag=g, second_copy_flag=c)
+    out, _ = ldr.load_real("bars.csv", source_format="synthetic_csv")
+    assert len(out) == 30
+
+
 def test_raw_bytes_unchanged_by_loading(tmp_path):
     g, c = flags(tmp_path, True, True)
     df = fab_bars_utc()
