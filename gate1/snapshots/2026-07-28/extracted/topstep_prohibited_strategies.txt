@@ -1,0 +1,113 @@
+Prohibited Trading Strategies at Topstep | Topstep Help Center Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Skip to main content 
+
+ Discord Topstep TopstepTV 
+
+ Discord Topstep TopstepTV 
+
+ Search for articles... 
+
+ All Collections 
+
+ Topstep FAQs 
+
+ Prohibited Trading Strategies at Topstep
+
+ Prohibited Trading Strategies at Topstep
+ From account stacking to SIM exploitation: what&#x27;s not allowed
+
+ June 10, 2026 
+
+ Table of contents
+
+ Topstep prohibits specific trading behaviors that exploit program structure, contradict real-market discipline, or create financial risk for the firm. These aren&#x27;t gray areas — they&#x27;re hard stops.
+
+ Account Stacking 
+
+ Repeatedly trading aggressively, hitting the Maximum Loss Limit (MLL) in one account, then switching to another account and repeating. The goal is to run high-risk attempts until a large win occurs. This exploits risk parameters and is not permitted.
+
+ Intentionally Depleting a Live Funded Account 
+
+ Deliberately drawing down a Live Funded Account® (LFA) balance to force a failure. Not permitted.
+
+ Violating Topstep’s Terms of Use 
+
+ Any trades performed in conflict with Topstep’s Terms of Use or the Trading Combine® (TC) terms and conditions.
+
+ Using Unfair Technology 
+
+ Using software, AI, ultra-high speed systems, or mass data entry that manipulates, abuses, or provides an unfair advantage on the platform or in the program.
+
+ Trading Outside Real Market Behavior 
+
+ Executing trades in a way that contradicts how trading actually works in the applicable futures markets, or in a way that creates justified concern that Topstep may suffer financial or other harm.
+
+ Trading Outside the Best Bid or Offer 
+
+ Placing orders at prices outside the current best bid or offer.
+
+ Trading Maximum Position Size into Major News Events 
+
+ Purposefully trading your full Maximum Position Size directly into a scheduled major news event.
+
+ The Do’s and Don’ts of SIM Fills 
+
+ SIM fills aren’t free money. Exploiting the simulator will get you removed from the program. Topstep prohibits using the simulated environment to gain an unfair edge. We retain the right to reject profit claims if abuse is suspected. If you’re here to trade, this isn’t about you. ​
+
+ Examples of exploiting or manipulating the Topstep simulator include, but are not limited to:
+
+ Running scalping algorithms designed to exploit unrealistic SIM fills
+
+ Making hundreds of rapid trades to take advantage of preferential queue position in SIM
+
+ Initiating reckless trades in gapped markets to profit from stray fills — these are improbable in live markets
+
+ Repeatedly exploiting the relative lack of slippage in SIM to achieve impossible stop-loss execution
+
+ Using tight brackets or auto-breakeven to take advantage of favorable SIM fills
+
+ 👉 If this doesn&#x27;t sound like you, it probably isn&#x27;t. 
+
+ The vast majority of Traders are here to learn and build toward consistent profitability. A few lucky fills won’t get your Payout rejected. The behaviors above are intentional and systematic — usually hundreds or thousands of trades per day, with average durations measured in seconds, not minutes.
+
+ Topstep shuts this down quickly to keep risk managers and coaches focused on helping Traders — not monitoring abuse. ​ For more information, please refer to our Prohibited Conduct and Professional Behavior policies.
+
+ Related Articles
+ Topstep Learning 
+
+ Professional Behavior at Topstep 
+
+ Prohibited Conduct 
+
+ What is Responsible Trading? 
+
+ Understanding Hedging 
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Your Privacy Choices

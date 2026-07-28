@@ -4,8 +4,13 @@
 resolved: 2026-07-28
 evidence: lucid_reply_2026-07-28.png
 evidence_sha256: 620dee3911e616fafeacf9c399da054dfda4cf1414a0d0a24fd46d2a0358925a
-evidence_level: 2（官方 support 书面答复截图）
+evidence_level: 2-AI   # 修订（同日）：Aaron 披露该回复由 Lucid AI support bot 生成，非人工
 question_ref: gate1/lucid_inquiry.md
+retention_rationale: |
+  V-A 维持 Primary 的两点理由：(a) 与官方页原文一致（"If your account balance
+  reached the MLL, your account will be breached"）；(b) V-A 是保守方向——若 bot
+  答错、真实为仅日终判定，建模只会低估生存率导向 STOP，不产生虚假 GO。
+  可选跟进：向人工客服复确认（非阻断）。
 ```
 
 ## 答复内容（转录）

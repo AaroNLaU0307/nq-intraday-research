@@ -156,12 +156,36 @@ evidence_registry:
     http_status: 200
     raw_sha256: "5936b41bedf63cb34382f5c12ba6c9225a9eacdcdba98d1a43194e06e18a2d3a"
     extracted_text_sha256: "f3c5b4a107409f2300277626cfa10df231150bfc2be9d8c789567d756c568049"
+  topstep_prohibited_conduct:
+    file: snapshots/2026-07-28/topstep_prohibited_conduct.html
+    url: "https://help.topstep.com/en/articles/10296582-prohibited-conduct"
+    final_url: "https://help.topstep.com/en/articles/10296582-prohibited-conduct"
+    http_status: 200
+    raw_sha256: "4f22188e447ada4fb34b7fbeff023bf9c3106888d4764710e1606738ba6ae4c6"
+    extracted_text_sha256: "e24f84b219c466a53a2b6b91ced62e46a1a9390a49dc3a100ddfdc1c0d623368"
+    retrieved_at_utc: "2026-07-28T01:13:12.859596+00:00"
+  topstep_prohibited_strategies:
+    file: snapshots/2026-07-28/topstep_prohibited_strategies.html
+    url: "https://help.topstep.com/en/articles/10305426-prohibited-trading-strategies-at-topstep"
+    final_url: "https://help.topstep.com/en/articles/10305426-prohibited-trading-strategies-at-topstep"
+    http_status: 200
+    raw_sha256: "6d1ab5c51de3df9f11dfcaadb2510633f525ab33649bb6e621f1d6913c6c2624"
+    extracted_text_sha256: "83b95e8de6dad351f0fcdcbab4cff950964c2b850510506010713054727cee5a"
+    retrieved_at_utc: "2026-07-28T01:13:14.920077+00:00"
   topstep_scaling:
     file: snapshots/2026-07-28/topstep_scaling.html
     url: "https://help.topstep.com/en/articles/8284223-what-is-the-scaling-plan"
     http_status: 200
     raw_sha256: "d350ba29b5bc43ba13728d1bad78470f224c4daf817d147bea7fdf7912b02b55"
     extracted_text_sha256: "df5c478d87e83733f4fd5558b0c32700f0ceb45cc3d1e12f79d3014921a5018a"
+  topstep_subscriptions:
+    file: snapshots/2026-07-28/topstep_subscriptions.html
+    url: "https://help.topstep.com/en/articles/8284121-trading-combine-subscriptions"
+    final_url: "https://help.topstep.com/en/articles/8284121-trading-combine-subscriptions"
+    http_status: 200
+    raw_sha256: "8525af0e7e43d4194506f9bf6d01dd5393734ecb0c8f62f9784905920e53d0fc"
+    extracted_text_sha256: "3d46b9d6ce39db44ee22f0580e81fc57ee580123c7ce48fad7831a5437b8959a"
+    retrieved_at_utc: "2026-07-28T01:13:08.659234+00:00"
   topstep_xfa_params:
     file: snapshots/2026-07-28/topstep_xfa_params.html
     url: "https://help.topstep.com/en/articles/8284215-express-funded-account-parameters"
@@ -170,10 +194,43 @@ evidence_registry:
     raw_sha256: "1227628eddc55de26fc5318d626f496a901957262bd58b06cfa556c79cb8a026"
     extracted_text_sha256: "5f7f3f9e7cf0f011a6b4ecaa4967d9e8a0fa2a11845ad9b8f5eaffd71c56339f"
     retrieved_at_utc: "2026-07-28T00:29:10.788197+00:00"
+  topstepx_commissions:
+    file: snapshots/2026-07-28/topstepx_commissions.html
+    url: "https://help.topstep.com/en/articles/8284213-topstepx-commissions-and-fees"
+    final_url: "https://help.topstep.com/en/articles/8284213-topstepx-commissions-and-fees"
+    http_status: 200
+    raw_sha256: "01b53ef3ede627c2add7a6b1fe24e116b5cc7ae4e3f19d2b71658a8e442962b3"
+    extracted_text_sha256: "1fe22c6b9c4f3be4502611c42763e4b1a492edb0c4db5671c7fd7be86aafb969"
+    retrieved_at_utc: "2026-07-28T01:13:10.773102+00:00"
   topstep_xfa_scaling_table_png:
     file: snapshots/2026-07-28/topstep_xfa_scaling_table.png
-    provenance: "embedded image in topstep_scaling.html, signed Intercom CDN URL"
+    note: "embedded image in topstep_scaling.html, signed Intercom CDN URL"
     raw_sha256: "55ec76b4b293822849c9bf8a8ac2de362fa895010d39ce9c0d00f4ed275e6cbd"
   lucid_breach_reply_png:
     file: lucid_inquiry_reply/lucid_reply_2026-07-28.png
+    note: "Level 2-AI: Lucid support AI bot answer"
     raw_sha256: "620dee3911e616fafeacf9c399da054dfda4cf1414a0d0a24fd46d2a0358925a"
+  lucid_breach_resolution_md:
+    file: lucid_inquiry_reply/RESOLUTION.md
+    raw_sha256: "af7c498946789b899839af9c34221a6c0a07a4703ba894830e6a1f920964823e"
+  lucid_reply2_png:
+    file: lucid_inquiry_reply/lucid_reply2_2026-07-28.png
+    note: "Level 2-AI: bot confirms docs silent on G3/G6/G7"
+    raw_sha256: "4d9197093c7e865d3c6aa94dd7c612f6e677d1b55e95bf843f213c85735dbec6"
+  lucid_50k_flex_eval_png:
+    file: lucid_pricing_2026-07-28/lucid_50k_flex_eval.png
+    note: "Aaron screenshot 2026-07-28: $98 purchase / $95 reset"
+    raw_sha256: "41dc3293d09bd81234124a5517a9b5431305afbaae7fd2723720653a88d8c046"
+  lucid_50k_pro_eval_png:
+    file: lucid_pricing_2026-07-28/lucid_50k_pro_eval.png
+    raw_sha256: "d506aba3e9fd60b2348d4f0c77396a02514c997a05ddc3facb1bcf702a776506"
+  lucid_50k_direct_png:
+    file: lucid_pricing_2026-07-28/lucid_50k_direct.png
+    note: "instant-funded reference: $364"
+    raw_sha256: "508d68ff66b5abd1908f7c758407d4412826a4cd20c94862dc2d42f6b21395dc"
+  lucid_inquiry_1_md:
+    file: lucid_inquiry.md
+    raw_sha256: "a0887b0008e5769b74819285bc7f8075cb60c5d3daa20a2c6c97f68c49e3af21"
+  lucid_inquiry_2_md:
+    file: lucid_inquiry_2.md
+    raw_sha256: "e1bef5ac72df3abd64421a98db23dfddd8f814e89a7635dabaaff75caed62fa9"

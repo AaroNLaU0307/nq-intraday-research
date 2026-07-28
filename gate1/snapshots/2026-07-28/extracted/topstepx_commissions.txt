@@ -1,0 +1,356 @@
+TopstepX™ — Commissions and Fees | Topstep Help Center Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Skip to main content 
+
+ Discord Topstep TopstepTV 
+
+ Discord Topstep TopstepTV 
+
+ Search for articles... 
+
+ All Collections 
+
+ TopstepX™ 
+
+ TopstepX™ — Commissions and Fees
+
+ TopstepX™ — Commissions and Fees
+ Every trade has a cost. Know yours before you click.
+
+ Updated over a week ago 
+
+ Table of contents
+
+ TopstepX™ — Commissions & Fees 
+
+ These fees apply when trading the Trading Combine, Express Funded Account, and Live Funded Account. Commissions and fees are automatically deducted from each trade, and you&#x27;ll see a breakdown in the TopstepX platform and from your Dashboard! ​ ​ Round-Turn (RT) cost: charged when you complete both sides of a trade. Each side (Buy or Sell) incurs half the total, also called a "per side" fee.
+
+ Round-Turn Cost Breakdown
+
+ Exchange Fee 
+
+ NFA Regulatory Fee 
+
+ Commissions 
+
+ Exchange fees are set by the exchange and do not include the regulatory fee. Each varies by product.
+
+ $0.02 round turn ($0.01 per side)
+
+ Minis $1.00 round turn ($0.50 per side)
+
+ Micros $.50 round turn ($0.25 per side)
+
+ Example using ES & MES 
+
+ ES 
+
+ MES 
+
+ NFA & Regulatory Fees
+
+ $0.02
+
+ $0.02
+
+ Exchange Fee
+
+ $2.76
+
+ $0.70
+
+ Commissions
+
+ $1.00
+
+ $0.50
+
+ Total 
+
+ $3.78
+
+ $1.22
+
+ Starting July 20, 2026, exchange fees for Metals have increased by $0.05-$0.10 cents per side. This includes GC, MGC, SI, SIL, HG, MHG, and PL. Prices below reflect updated fees. 
+
+ Example using GC & MGC 
+
+ GC 
+
+ MGC 
+
+ NFA & Regulatory Fees
+
+ $0.02
+
+ $0.02
+
+ Exchange Fee
+
+ $3.30
+
+ $1.40
+
+ Commissions
+
+ $1.00
+
+ $0.50
+
+ Total 
+
+ $4.32
+
+ $1.92
+
+ Product 
+
+ Round-Turn Cost (RT) 
+
+ CME Equity Futures 
+
+ E-mini S&P 500 (ES)
+
+ $3.78
+
+ Micro E-mini S&P 500 (MES)
+
+ $1.22
+
+ E-mini NASDAQ 100 (NQ)
+
+ $3.78
+
+ Micro E-mini NASDAQ 100 (MNQ)
+
+ $1.22
+
+ E-mini Russell 2000 (RTY)
+
+ $3.78
+
+ Micro E-mini Russell 2000 (M2K)
+
+ $1.22
+
+ Nikkei (NKD)
+
+ $5.32
+
+ Micro E-mini Bitcoin (MBT)
+
+ $2.82
+
+ Micro E-mini Ether (MET)
+
+ $0.82
+
+ CME NYMEX Futures 
+
+ Crude Oil (CL)
+
+ $4.02
+
+ Micro Crude Oil (MCL)
+
+ $1.52
+
+ E-mini Crude Oil (QM)
+
+ $3.42
+
+ Platinum (PL)
+
+ $4.32
+
+ E-mini Natural Gas (QG)
+
+ $2.02
+
+ RBOB Gasoline (RB)
+
+ $4.02
+
+ Heating Oil (HO)
+
+ $4.02
+
+ Natural Gas (NG)
+
+ $4.18
+
+ Micro Henry Hub Natural Gas (MNG)
+
+ $1.72
+
+ CME CBOT Equity Futures 
+
+ Mini-DOW (YM)
+
+ $3.78
+
+ Micro Mini-DOW (MYM)
+
+ $1.22
+
+ CME Foreign Exchange Futures
+
+ Australian $ (6A)
+
+ $4.22
+
+ Micro AUD/USD (M6A)
+
+ $1.00
+
+ British Pound (6B)
+
+ $4.22
+
+ Canadian $ (6C)
+
+ $4.22
+
+ Euro FX (6E)
+
+ $4.22
+
+ Micro EUR/USD (M6E)
+
+ $1.00
+
+ Japanese Yen (6J)
+
+ $4.22
+
+ Swiss Franc (6S)
+
+ $4.22
+
+ E-mini Euro FX (E7)
+
+ $2.22
+
+ Mexican Peso (6M)
+
+ $4.22
+
+ New Zealand $ (6N)
+
+ $4.22
+
+ Micro GBP/USD (M6B)
+
+ $1.00
+
+ CME CBOT Financial / Interest Rate Futures 
+
+ 2-Year Note (ZT)
+
+ $2.32
+
+ 5-Year Note (ZF)
+
+ $2.32
+
+ 10-Year Note (ZN)
+
+ $2.58
+
+ 30-Year Bond (ZB)
+
+ $2.76
+
+ Ultra-Bond (UB)
+
+ $2.92
+
+ Ultra-Note (TN)
+
+ $2.62
+
+ CME COMEX Futures 
+
+ Gold (GC)
+
+ $4.32
+
+ Micro Gold (MGC)
+
+ $1.92
+
+ Silver (SI)
+
+ $4.32
+
+ Micro Silver (SIL)
+
+ $2.72
+
+ Copper (HG)
+
+ $4.32
+
+ Micro Copper (MHG)
+
+ $1.92
+
+ CME Agricultural Futures 
+
+ Lean Hogs (HE)
+
+ $5.22
+
+ Live Cattle (LE)
+
+ $5.22
+
+ CME CBOT Commodity Futures 
+
+ Corn (ZC)
+
+ $5.28
+
+ Wheat (ZW)
+
+ $5.28
+
+ Soybean (ZS)
+
+ $5.28
+
+ Soybean Meal (ZM)
+
+ $5.28
+
+ Soybean Oil (ZL)
+
+ $5.28
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Your Privacy Choices

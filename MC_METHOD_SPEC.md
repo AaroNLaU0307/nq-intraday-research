@@ -2,23 +2,28 @@
 
 ```yaml
 id: MC1
-version: 0.3   # v0.2 → v0.3：吸收 platform_params v0.2/v0.3 的实证发现（XFA 零余额、
-               # scaling 分层×仓位交互、DLL 状态机、Live 排除、分平台 payout 行为）
-status: DRAFT — 待 Aaron/GPT 终审（与 platform_params.yaml v0.3、evidence_registry.yaml 三件套复核）
+version: 0.4   # v0.3 → v0.4：GPT 第三轮 4 封口项（证据 bundle 冻结、订阅状态机、
+               # 成本数值化＋API 归类、DLL/buffer/量词公式化）＋ G1 关闭＋AI-bot 证据定级
+status: DRAFT — 待最终机械封口检查（证据哈希、状态机、会计闭环）
 date: 2026-07-28
 references:
   charter_sha256: 5176320fb54a30e5e5dcc7f1ee96b828e7d38f727a573e8bd152ca3ff4299327
   s0_prereg_sha256: 6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132
-  gate1_snapshot_manifest_sha256: 3c9e2a34c318217d7ac01502a3d1895e191d282afc08bb36df3feec829222a7b
-  lucid_breach_evidence_sha256: 620dee3911e616fafeacf9c399da054dfda4cf1414a0d0a24fd46d2a0358925a
+  gate1_snapshot_manifest_v4_sha256: 2e0bd62bdfa0f261a97bca250cb2f1467eb46a6ef9a555744936a6804b25643b
+  evidence_registry_sha256: SET_AT_FREEZE   # registry 与本文件同一 Freeze Commit，冻结时填最终哈希
+  lucid_breach_reply_png_sha256: 620dee3911e616fafeacf9c399da054dfda4cf1414a0d0a24fd46d2a0358925a
+  lucid_breach_resolution_md_sha256: SET_AT_FREEZE   # RESOLUTION.md 本轮仍在更新（AI-bot 定级）
 约束: 本规范冻结之前，S0 不得运行产出任何可读数字报告（S0 §10.2）
+evidence_note: Lucid support 回复为 AI bot 生成（Level 2-AI）；详见 platform_params
+  的 evidence_grade_note——无数字参数以 bot 回答为唯一来源，V-A 为保守方向。
 ```
 
 ## 0. 与已冻结 S0 的接口约定
 
-S0 §10.4 的判定量词"存在同一组合"作用于**本规范 §2.5 冻结的 Primary 决策集合**；
-Sensitivity 与 Excluded 组合不参与判定、不得翻转判决。此为对 S0 中
-"预注册平台 × risk policy 组合"一词的正式绑定，非对冻结文本的修改。
+S0 §10.4 中的**全部量词——GO 的存在量词、STOP 的全称量词、边界区 α/β 的组合范围——
+均仅作用于本规范 §2.5 冻结的 Primary 决策集合**；Sensitivity 与 Excluded 组合不参与
+任何判定分类（包括不影响 STOP 的"所有组合"条件），不得翻转判决。
+此为对 S0 中"预注册平台 × risk policy 组合"一词的正式绑定，非对冻结文本的修改。
 
 ## 1. 接口
 
@@ -116,6 +121,10 @@ live_transition:
   n=0 → 跳过并计数；scaling 档位取自**上一 session 收盘后**的余额/模拟盈利（盘中不变）。
 - Sizing 政策集合（冻结）：P1 $75；P2 $100（Primary）；P3 剩余 buffer 4%；
   P4 阶梯（>$1500→$100；$800–1500→$75；<$800→$50）。
+- **buffer 定义（v0.4 唯一化，P3/P4 用）**：
+  `buffer_at_entry = 10:00 入场前 realtime_equity − 当前 MLL floor`；
+  不预扣本笔交易费用；**锚定 MLL 而非 DLL**（DLL 非账户死亡线，其 halt 效果由
+  DLL 状态机独立处理，不进入 buffer 计算）。
 - 每日至多 1 笔、不隔夜；个人风控层规则不进入 S0-MC。
 
 ## 4. 商业层
@@ -164,17 +173,26 @@ failure_policy:                # Primary；R0（完全不重购）为敏感性
 
 各动作费用以 platform_params.yaml 为准；Lucid 侧待 G1 截图填入。
 
-### 4.4 会计（v0.2 修正双重计费）
+### 4.4 会计（v0.4：API 归类修正＋订阅引擎＋EV 单位）
 
 ```
-strategy_account_EV      = 平台内交易净损益（分成前）
-prop_operating_EV        = payout 流入 × 分成 − 评估/重置/重购 − 订阅/月费
-                           − activation/reactivation − payout 手续费 + terminal_value
-net_business_EV_after_RD = prop_operating_EV − 数据支出 − 基础设施/软件 − 研究工具
-                           （评估类费用不得再入 R&D）
-risk_haircut_EV          = retention × (未来 payout 流入 + terminal_withdrawable)
-                           − 全部运营与 R&D 成本；retention ∈ {100%, 75%, 50%}
+strategy_account_EV      = 平台内交易净损益（分成前；交易费已在 S0 逐笔扣除，此层禁止再扣）
+prop_operating_EV        = payout 流入 × 分成 − 评估/重置/重购（经订阅引擎与 Reset Credit
+                           状态机计算，30 天 rebill 非自然月）− activation/reactivation
+                           − payout 通道费（Primary: Wise $0）
+                           − required_execution_costs（API $29/30天、必需实时数据/软件）
+                           + terminal_value
+net_business_EV_after_RD = prop_operating_EV − research_costs
+                           （Databento、开发工具、研究软件；评估类与执行类费用不得入此层）
+risk_haircut_EV          = retention × (payout 流入 + terminal_withdrawable)
+                           − 全部运营成本 − research_costs；retention ∈ {100%, 75%, 50%}
 ```
+
+**执行模式（冻结）**：`execution_mode_primary: automated_topstepx_api`（Topstep 侧，
+$29/30 天进 prop_operating；$14.50 折扣价作 current-policy 敏感性）；Lucid 侧经
+账户随附平台自动化（成本按 $0 建模并披露，实际软件费用留待 Gate 2 PoC 核实）。
+**EV 单位（冻结）**：所有 P5/P50/P95、判定门槛与收敛容差 `max($25, 5%)` 的作用对象
+= **24 个月总 prop_operating 结果 ÷ 24 = USD / 日历月**。
 
 Checkpoint 0 判定使用 **prop_operating_EV**；部署门槛 risk_haircut_EV > 0。
 
@@ -210,13 +228,23 @@ total_predictive：B×M 混合 → bankroll 压力测试（明示为混合分布
 分布 vs payout 要求、n=0 跳过率、合约上限触碰率、ambiguous 占比、E2 超预算概率）；
 判定表机械应用结果＋人工复核记录。全部进 STUDY_0_REPORT。
 
-## 7. 冻结与证据修订
+## 7. 冻结与证据修订（v0.4：证据 bundle 纳入冻结范围）
 
-评审通过 → Freeze Commit（本文件＋gate1/platform_params.yaml，tag `mc-freeze-v1`，
-两阶段流程同 S0 §12）。冻结后的新官方证据（如 Lucid 追问答复）按
-**Evidence Resolution Addendum** 处理：原文＋哈希存档 → platform_params 更新 →
-MC1.x evidence-resolution commit → FREEZE_LOG 登记；状态机语义变化必须走此流程，
-不得只改 YAML 字段。
+**Freeze Commit（tag `mc-freeze-v1`）包含全部四件**（两阶段流程同 S0 §12）：
+
+```
+MC_METHOD_SPEC.md
+gate1/platform_params.yaml
+gate1/evidence_registry.yaml
+gate1/snapshots/2026-07-28/snapshot_manifest_v4.json
+```
+
+冻结时本文件 references 中的 SET_AT_FREEZE 占位以 Commit 内 blob 哈希填入
+Registry Commit。原始快照/截图文件本身以 manifest/registry 哈希锚定（体积原因
+不入 commit，但任何字节改动都会被哈希暴露）。
+冻结后的新官方证据（如 CME 费表确认 G9、人工客服复确认）按
+**Evidence Resolution Addendum** 处理：原文＋哈希存档 → registry＋params 更新 →
+MC1.x evidence-resolution commit → FREEZE_LOG 登记；状态机语义变化必须走此流程。
 
 ---
 ### v0.2 → v0.3 修订记录（platform_params 实证发现＋GPT 第二轮 4 阻断项）
