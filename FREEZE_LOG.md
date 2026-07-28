@@ -23,9 +23,9 @@
 | 2026-07-28 | gate1/platform_params.yaml | v0.6 | 65bfdd9e90ba891fac9cde0389387255ea0a10225b23f8a5aead75d5b8a19740 | 5d1ec10 (tag mc-freeze-v1) | FROZEN |
 | 2026-07-28 | gate1/evidence_registry.yaml | — | c14d576ba2076f8f08cb4f8bef16fc5a99c881071baed303f9d8a73964a6b35c | 5d1ec10 (tag mc-freeze-v1) | FROZEN（证据 bundle） |
 | 2026-07-28 | gate1/snapshots/2026-07-28/snapshot_manifest_v5.json | v5 | 5b6083b5ee61db9c44b119fae3bfdb2c0c039b9c53f5d7c67a74c69f6d4e0434 | 5d1ec10 (tag mc-freeze-v1) | FROZEN（证据 bundle） |
-| 2026-07-28 | gate1/G9_EVIDENCE_RESOLUTION.md | MC1.1-G9 | 2aa7e146f38f582504619ca9dc2ad9fb425fef07b61fb3d2d26e9f0cdf48b1ac | （addendum commit 待填） | Evidence Resolution Addendum：CME $0.35/side VERIFIED（Case A，Primary 不变，仅解除 G9） |
-| 2026-07-28 | gate1/platform_params.yaml | v0.6+MC1.1 | 702b983baba88d833ebf7122d358beaf9feb946c99c2e85aad41ecee2863d9ff | （addendum commit 待填） | PROVISIONAL→VERIFIED、hard_run_blocker→false；at-freeze 版本 65bfdd9e… 仍锚定于 mc-freeze-v1 |
-| 2026-07-28 | gate1/evidence_registry.yaml | +CME 证据 | 8ec318088ebedc9a3e3ce65bedf743b8a7741bfaa97481e841dc1802cb66a198 | （addendum commit 待填） | 追加 CME PDF/XLS＋addendum 文档条目；at-freeze 版本 c14d576b… 仍锚定于 mc-freeze-v1 |
+| 2026-07-28 | gate1/G9_EVIDENCE_RESOLUTION.md | MC1.1-G9 | 2aa7e146f38f582504619ca9dc2ad9fb425fef07b61fb3d2d26e9f0cdf48b1ac | f932714 | Evidence Resolution Addendum：CME $0.35/side VERIFIED（Case A，Primary 不变，仅解除 G9） |
+| 2026-07-28 | gate1/platform_params.yaml | v0.6+MC1.1 | 702b983baba88d833ebf7122d358beaf9feb946c99c2e85aad41ecee2863d9ff | f932714 | PROVISIONAL→VERIFIED、hard_run_blocker→false；at-freeze 版本 65bfdd9e… 仍锚定于 mc-freeze-v1 |
+| 2026-07-28 | gate1/evidence_registry.yaml | +CME 证据 | 8ec318088ebedc9a3e3ce65bedf743b8a7741bfaa97481e841dc1802cb66a198 | f932714 | 追加 CME PDF/XLS＋addendum 文档条目；at-freeze 版本 c14d576b… 仍锚定于 mc-freeze-v1 |
 | — | purchase_approval.yaml | — | （Commit C 时填写） | 不适用 | Aaron 批准时提交 |
 
 哈希计算方法：对 Commit A（89e2505）的 git blob 做字节级 SHA-256（python hashlib，
