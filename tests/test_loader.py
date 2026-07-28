@@ -124,7 +124,7 @@ def test_alpha_cannot_obtain_raw_bbo():
     assert set(public) <= {"build_spread_table_real",
                            "build_spread_table_synthetic", "job_dir",
                            "g9_flag", "second_copy_flag"}
-    tbl = CostCalibrationLoader.build_spread_table_synthetic(fab_bbo_utc())
+    tbl, _ = CostCalibrationLoader.build_spread_table_synthetic(fab_bbo_utc())
     assert "bid_px" not in tbl.columns and "ask_px" not in tbl.columns
 
 
@@ -221,6 +221,15 @@ def test_mnq_launch_boundary_fails_closed():
     assert MNQ_LAUNCH_DATE.isoformat() == "2019-05-06"
 
 
+def test_tiny_crossed_fraction_excluded_with_event():
+    bbo = fab_bbo_utc(rows=400)
+    bbo.loc[0, "ask_px"] = bbo.loc[0, "bid_px"] - 1.0         # 1/400 = 0.25%
+    tbl, events = CostCalibrationLoader.build_spread_table_synthetic(bbo)
+    kinds = [e.kind for e in events]
+    assert kinds == ["crossed_or_invalid_spread"] and events[0].count == 1
+    assert int(tbl["n_obs"].sum()) == 399                     # excluded, counted
+
+
 def test_development_window_boundary(tmp_path):
     g, c = flags(tmp_path, True, True)
     df = fab_bars_utc(day="2025-07-01")                       # >= dev end
@@ -250,13 +259,14 @@ def test_dst_conversion_spring_and_fall():
     assert edt["ts"].iloc[0].hour == 9 and edt["ts"].iloc[0].minute == 30
 
 
-def test_spread_table_schema_and_negative_spread():
-    tbl = CostCalibrationLoader.build_spread_table_synthetic(fab_bbo_utc())
+def test_spread_table_schema_and_abnormal_fraction_fails():
+    tbl, events = CostCalibrationLoader.build_spread_table_synthetic(fab_bbo_utc())
     assert list(tbl.columns) == ["minute_of_day_et", "spread_median_points",
                                  "spread_p90_points", "spread_p95_points",
                                  "n_obs"]
     assert tbl["spread_median_points"].tolist() == pytest.approx([0.5] * len(tbl))
-    bad = fab_bbo_utc()
-    bad.loc[0, "ask_px"] = bad.loc[0, "bid_px"] - 1.0         # negative spread
+    assert events == []
+    bad = fab_bbo_utc(rows=40)
+    bad.loc[0, "ask_px"] = bad.loc[0, "bid_px"] - 1.0         # 1/40 = 2.5% > 1%
     with pytest.raises(ValidationError):
         CostCalibrationLoader.build_spread_table_synthetic(bad)

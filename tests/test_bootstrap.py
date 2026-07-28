@@ -235,7 +235,10 @@ def test_start_offset_is_start_phase_only():
     assert summary["no_path_days"] == 3
 
 
-def test_run_real_study_blocked_today():
-    # frozen: platform_params s0_cost_handoff.hard_run_blocker + second copy
+def test_run_real_study_blocked_without_flags(tmp_path):
+    # frozen: platform_params s0_cost_handoff.hard_run_blocker + second copy.
+    # Hermetic: inject absent flag paths (production flags now legitimately
+    # exist since 2026-07-29, so the default path proceeds past the gate).
     with pytest.raises(RunBlockedError):
-        run_real_study()
+        run_real_study(g9_flag=tmp_path / "no_g9.flag",
+                       second_copy_flag=tmp_path / "no_copy.flag")

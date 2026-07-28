@@ -71,8 +71,12 @@ def main() -> int:
     lines += [f"## A2 Cost Calibration ({len(a2_files)} monthly files)", ""]
     import pandas as pd
     tables = []
+    a2_qa: Counter = Counter()
     for name in a2_files:
-        tables.append(cl.build_spread_table_real(name, source_format="dbn"))
+        t, evs = cl.build_spread_table_real(name, source_format="dbn")
+        tables.append(t)
+        for e in evs:
+            a2_qa[e.kind] += e.count
     if tables:
         tbl = (pd.concat(tables).groupby("minute_of_day_et")
                .agg({"spread_median_points": "median",
@@ -87,6 +91,7 @@ def main() -> int:
             f"- minutes covered: {len(tbl)}; RTH minutes: {len(rth)}",
             f"- RTH spread median (points): median {rth.spread_median_points.median():.2f}, "
             f"p90-of-medians {rth.spread_median_points.quantile(0.9):.2f}",
+            f"- A2 QA event tallies: {dict(a2_qa) if a2_qa else 'none'}",
             f"- table written: {out_csv.name}", ""]
 
     OUT.write_text("\n".join(lines), encoding="utf-8")

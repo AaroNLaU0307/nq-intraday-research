@@ -40,11 +40,11 @@ class CostCalibrationLoader:
 
     # -- the ONLY public product ----------------------------------------------
 
-    def build_spread_table_real(self, filename: str,
-                                source_format: str = "dbn") -> pd.DataFrame:
+    def build_spread_table_real(self, filename: str, source_format: str = "dbn",
+                                ) -> tuple[pd.DataFrame, list[validation.QAEvent]]:
         """Real entry: guard FIRST, then role/manifest checks, then decode.
         Returns ONLY the derived per-minute spread percentile table
-        (S0 SS6 spread_cost_table) — never raw BBO rows."""
+        (S0 SS6 spread_cost_table) plus QA events — never raw BBO rows."""
         assert_real_run_allowed(self.g9_flag, self.second_copy_flag)
         self._check_role()
         path = self.job_dir / filename
@@ -54,7 +54,8 @@ class CostCalibrationLoader:
         return self._spread_table(raw)
 
     @staticmethod
-    def build_spread_table_synthetic(bbo: pd.DataFrame) -> pd.DataFrame:
+    def build_spread_table_synthetic(bbo: pd.DataFrame,
+                                     ) -> tuple[pd.DataFrame, list[validation.QAEvent]]:
         """Synthetic entry (no guard, no files): same derivation pipeline."""
         return CostCalibrationLoader._spread_table(bbo)
 
@@ -94,15 +95,30 @@ class CostCalibrationLoader:
             raise validation.ValidationError(
                 f"{int(pre.sum())} BBO rows before MNQ launch — fail closed")
         spread = df["ask_px"] - df["bid_px"]
-        if (~spread.ge(0)).any():     # NaN or negative spread
-            raise validation.ValidationError(
-                "negative or NaN spread rows present — fail closed, no repair")
-        minute = ts.dt.hour * 60 + ts.dt.minute
-        g = pd.DataFrame({"minute_of_day_et": minute, "spread": spread})
+        invalid = ~spread.ge(0)       # NaN or negative (crossed book)
+        events: list[validation.QAEvent] = []
+        n_bad = int(invalid.sum())
+        if n_bad:
+            frac = n_bad / len(df)
+            # Transient crossed/one-sided snapshots are known 1-second BBO
+            # microstructure (real A2 Jan-2025: 0.0198%). They cannot
+            # contribute a spread and are EXCLUDED WITH A QA EVENT — never
+            # silently. An abnormal fraction still fails closed.
+            if frac > 0.01:
+                raise validation.ValidationError(
+                    f"{n_bad} invalid-spread rows = {frac:.2%} > 1% "
+                    "abnormality threshold — fail closed, no repair")
+            events.append(validation.QAEvent(
+                "crossed_or_invalid_spread",
+                f"{n_bad} of {len(df)} rows ({frac:.4%}) excluded from the "
+                "spread table", n_bad))
+        valid = ~invalid
+        minute = (ts.dt.hour * 60 + ts.dt.minute)[valid]
+        g = pd.DataFrame({"minute_of_day_et": minute, "spread": spread[valid]})
         tbl = (g.groupby("minute_of_day_et")["spread"]
                 .agg(spread_median_points="median",
                      spread_p90_points=lambda s: s.quantile(0.90),
                      spread_p95_points=lambda s: s.quantile(0.95),
                      n_obs="count")
                 .reset_index())
-        return tbl[list(SPREAD_TABLE_COLUMNS)]
+        return tbl[list(SPREAD_TABLE_COLUMNS)], events

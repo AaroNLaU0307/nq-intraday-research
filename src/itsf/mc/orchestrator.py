@@ -181,13 +181,15 @@ def run_lifecycle(cfg: LifecycleConfig, days: list[TemplateDay],
     return result
 
 
-def run_real_lifecycle(*args, **kwargs):
-    """SOLE entry for real-data business simulation. Blocked until G9 and the
-    second-physical-copy attestations exist (frozen: hard_run_blocker)."""
-    from itsf.guards import assert_real_run_allowed
-    assert_real_run_allowed()
+def run_real_lifecycle(*args, g9_flag=None, second_copy_flag=None, **kwargs):
+    """SOLE entry for real-data business simulation. Gate logic runs first;
+    flag paths injectable for hermetic gate tests (defaults = production)."""
+    from itsf.guards import (G9_FLAG, SECOND_COPY_FLAG,
+                             assert_real_run_allowed)
+    assert_real_run_allowed(g9_flag or G9_FLAG,
+                            second_copy_flag or SECOND_COPY_FLAG)
     raise NotImplementedError(
-        "real-data loader milestone not implemented (guards passed)")
+        "real S0 execution awaits Aaron's QA-report approval (guards passed)")
 
 
 # --- Lucid ------------------------------------------------------------------

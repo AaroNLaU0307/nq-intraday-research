@@ -188,16 +188,17 @@ def run_account(world_days: Sequence[str], platform: PlatformLike,
     return events, summary
 
 
-def run_real_study(*args, **kwargs):
+def run_real_study(*args, g9_flag=None, second_copy_flag=None, **kwargs):
     """SOLE entry point for any real-market-data study computation.
 
-    Calls the frozen run gate first; today this raises RunBlockedError
-    (G9 hard_run_blocker unresolved + second-copy attestation missing).
+    Calls the frozen run gate first; flag paths injectable so gate tests
+    stay hermetic (defaults = production flags, both attested 2026-07-29).
     # frozen: platform_params execution_costs.s0_cost_handoff.hard_run_blocker
     # frozen: charter data-governance second-copy clause (see itsf.guards)
     """
     from itsf import guards
-    guards.assert_real_run_allowed()           # raises today
+    guards.assert_real_run_allowed(g9_flag or guards.G9_FLAG,
+                                   second_copy_flag or guards.SECOND_COPY_FLAG)
     raise NotImplementedError(
         "real study runner is not implemented; all current simulation "
         "helpers are synthetic-only and must not reach this path")

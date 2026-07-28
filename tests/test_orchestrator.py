@@ -209,9 +209,12 @@ def test_live_phase_is_unreachable():                          # inv 18
     assert all(e.phase in _ALLOWED_PHASES for e in res.events)
 
 
-def test_real_entry_blocked_until_attestations():              # inv 19
+def test_real_entry_blocked_until_attestations(tmp_path):      # inv 19
+    # Hermetic: absent injected flags must block regardless of the (now
+    # legitimately attested) production flags.
     with pytest.raises(RunBlockedError):
-        run_real_lifecycle()
+        run_real_lifecycle(g9_flag=tmp_path / "no_g9.flag",
+                           second_copy_flag=tmp_path / "no_copy.flag")
 
 
 def test_synthetic_mode_not_blocked_by_guard():                # inv 20
