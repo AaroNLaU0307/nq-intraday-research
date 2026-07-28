@@ -44,24 +44,26 @@ def collect(root: Path) -> dict[str, str]:
 
 
 def official_manifest_hashes(root: Path) -> dict[str, str]:
-    """Recorded sha256 from Databento job manifests under root."""
+    """Recorded sha256 from OFFICIAL Databento manifest.json files under root.
+
+    Format: {"job_id": ..., "files": [{"filename", "hash": "sha256:..."}]}.
+    (v2 fix: the earlier collector read the local summary jsons, which carry
+    no per-file hashes -> 0 entries. The official manifests are canonical.)
+    """
     want: dict[str, str] = {}
-    for mf in root.rglob("_local_checksums.json"):
-        data = json.loads(mf.read_text(encoding="utf-8"))
-        # recovery-format manifests carry per-file lists in various shapes;
-        # only 'files' mappings with sha256 are authoritative here
-        files = data.get("files")
-        if isinstance(files, dict):
-            for name, entry in files.items():
-                if isinstance(entry, dict) and entry.get("sha256"):
-                    want[str(mf.parent.relative_to(root) / name).replace("\\", "/")] = entry["sha256"]
-    for mf in root.rglob("_local_manifest.json"):
-        data = json.loads(mf.read_text(encoding="utf-8"))
-        files = data.get("files")
-        if isinstance(files, dict):
-            for name, entry in files.items():
-                if isinstance(entry, dict) and entry.get("sha256"):
-                    want[str(mf.parent.relative_to(root) / name).replace("\\", "/")] = entry["sha256"]
+    for mf in root.rglob("manifest.json"):
+        try:
+            data = json.loads(mf.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            continue
+        entries = data.get("files")
+        if not isinstance(entries, list):
+            continue
+        for e in entries:
+            h = str(e.get("hash", ""))
+            if e.get("filename") and h.startswith("sha256:"):
+                rel = str((mf.parent / e["filename"]).relative_to(root))
+                want[rel.replace("\\", "/")] = h.split(":", 1)[1]
     return want
 
 

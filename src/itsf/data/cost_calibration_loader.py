@@ -76,6 +76,8 @@ class CostCalibrationLoader:
             import databento as db
             store = db.DBNStore.from_file(path)
             df = store.to_df().reset_index().rename(columns={"ts_event": "ts"})
+            # Databento bbo/mbp-1 to_df names top-of-book levels *_00
+            df = df.rename(columns={"bid_px_00": "bid_px", "ask_px_00": "ask_px"})
             return df
         raise ValueError(f"unknown source_format {source_format!r}")
 
