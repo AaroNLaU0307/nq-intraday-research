@@ -26,10 +26,14 @@ FROZEN_HASHES = {
         "02edbc2cb8481089ecf7b30156fd86eb3cf524112e3f97d253f94acc60c39e6c",
     "MC_METHOD_SPEC.md":
         "a6de4a286eaff5ab7487298593f590cbee845afa1939ad4ea675ec219cf29608",
+    # MC1.1-G9 evidence-resolution addendum (2026-07-28): params + registry
+    # updated per MC_METHOD_SPEC SS7; at-freeze hashes remain anchored in
+    # FREEZE_LOG (65bfdd9e... / c14d576b...); these are the CURRENT canonical
+    # bytes registered by the addendum entry.
     "gate1/platform_params.yaml":
-        "65bfdd9e90ba891fac9cde0389387255ea0a10225b23f8a5aead75d5b8a19740",
+        "702b983baba88d833ebf7122d358beaf9feb946c99c2e85aad41ecee2863d9ff",
     "gate1/evidence_registry.yaml":
-        "c14d576ba2076f8f08cb4f8bef16fc5a99c881071baed303f9d8a73964a6b35c",
+        "8ec318088ebedc9a3e3ce65bedf743b8a7741bfaa97481e841dc1802cb66a198",
     "gate1/snapshots/2026-07-28/snapshot_manifest_v5.json":
         "5b6083b5ee61db9c44b119fae3bfdb2c0c039b9c53f5d7c67a74c69f6d4e0434",
 }

@@ -278,6 +278,28 @@ def test_ledger_closure_no_double_count_no_omission():         # inv 24
 
 # --- required paths: boundary / exhaustion / horizon / zero balance / idempotency
 
+def test_breach_settlement_never_enters_prop_operating():      # IR-1 re-review
+    # Death balance is diagnostic only: prop_operating = payouts + terminal
+    # - fees, regardless of the R1 settlement value.
+    days = tdays(6)
+    paths = {"d0000": day_path("d0000", -100.0, adverse_extra=BREACH)}
+    res = run_lifecycle(lucid_cfg(), days, paths)
+    rep = res.ledger_report
+    assert any(e.breached for e in res.events)
+    assert rep["payout_cash_total"] == 0.0 and rep["terminal_cash"] == 0.0
+    assert rep["prop_operating_ev_total"] == pytest.approx(-rep["fees_total"])
+
+
+def test_max_favourable_is_diagnostic_only_static():           # IR-2 marker
+    root = Path(__file__).resolve().parents[1] / "src" / "itsf"
+    hits = []
+    for p in (root / "mc").rglob("*.py"):
+        t = p.read_text(encoding="utf-8")
+        if "max_favourable" in t:
+            hits.append(p.name)
+    assert hits == []      # the mc/verdict layer never consumes the field
+
+
 def test_empty_horizon_boundary():
     res = run_lifecycle(lucid_cfg(), [], {})
     assert res.events == [] and res.attempts_used == 1

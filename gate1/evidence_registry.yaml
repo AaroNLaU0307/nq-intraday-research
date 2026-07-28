@@ -258,3 +258,14 @@ evidence_registry:
   lucid_inquiry_2_md:
     file: lucid_inquiry_2.md
     raw_sha256: "e1bef5ac72df3abd64421a98db23dfddd8f814e89a7635dabaaff75caed62fa9"
+  cme_fee_schedule_2026_07_27_pdf:
+    file: snapshots/2026-07-28/cme_fee_schedule_2026-07-27.pdf
+    note: "MC1.1-G9: official CME fee schedule effective 2026-07-27, fetched via in-app browser session"
+    raw_sha256: "58f842b1c07d8e1a5fe3e31cff798b210d702ff0a6c770aa43ca500f583873d2"
+  cme_fee_schedule_2026_07_27_xls:
+    file: snapshots/2026-07-28/cme_fee_schedule_2026-07-27.xls
+    note: "MC1.1-G9: machine-readable; Equity/Non-Members/Micro E-mini Index Globex-Outrights $0.35 per side"
+    raw_sha256: "7c4ff19c6f732ca176b71c86c273bff8c481615656ad539d29d44dc2915bf90b"
+  g9_evidence_resolution_md:
+    file: G9_EVIDENCE_RESOLUTION.md
+    raw_sha256: "2aa7e146f38f582504619ca9dc2ad9fb425fef07b61fb3d2d26e9f0cdf48b1ac"

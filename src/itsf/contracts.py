@@ -44,7 +44,9 @@ class TradePathRecord:
     mtm_close_pnl_1m: list[float] = field(default_factory=list)
     mtm_adverse_pnl_1m: list[float] = field(default_factory=list)
     max_adverse_pnl: float = 0.0
-    max_favourable_pnl: float = 0.0
+    max_favourable_pnl: float = 0.0    # diagnostic_only: true (IR-2) — never an
+                                       # input to oracle labels, costs,
+                                       # feasibility or the verdict table
     time_of_max_adverse: str = ""
     planned_stop: float | None = None
     actual_stop_fill: float | None = None

@@ -115,8 +115,10 @@ execution_costs:
   lucidflex_mnq:
     evidence: [lucid_products_comms, nfa_assessment_fees]
     lucid_commission_per_side_usd: 0.50
-    cme_exchange_clearing_fee_per_side_usd: 0.35   # PROVISIONAL —— G9 剩余：CME 页 403，
-                                                   # 首次 S0 计算前以官方费表（浏览器渲染）确认
+    cme_exchange_clearing_fee_per_side_usd: 0.35   # VERIFIED —— MC1.1-G9 addendum：
+                                                   # CME 官方费表 2026-07-27 生效版，Non-Members
+                                                   # Micro E-mini Index Globex-Outrights $0.35/side
+                                                   # evidence: cme_fee_schedule_2026_07_27_xls
     nfa_fee_per_side_usd:                # 官方 NFA FAQ（2026-07-28 快照）
       until_2027_06_30: 0.01
       from_2027_07_01: 0.02
@@ -124,14 +126,14 @@ execution_costs:
       until_2027_06_30: 1.72             # 2×(0.50+0.35+0.01)
       from_2027_07_01: 1.74              # 2×(0.50+0.35+0.02)；synthetic 日历按日期分段计
     sensitivity_all_in_round_turn_usd: 1.00
-  s0_cost_handoff:                       # v0.6：唯一 Primary 算法＋机器级运行阻断
+  s0_cost_handoff:                       # v0.6：唯一 Primary 算法（MC1.1-G9 后 VERIFIED）
     primary_method: constant_full_horizon_upper_cost
-    primary_round_turn_usd: 1.74         # 全 24 个月恒定；= max(两平台, 全期界费率)
+    primary_round_turn_usd: 1.74         # 全 24 个月恒定；官方值恰等于冻结假定（Case A，不变）
     time_varying_nfa_schedule:
       decision_role: diagnostic_only     # 1.72/1.74 分段仅作诊断输出，不进 Primary
-    cme_component_status: unresolved_official_confirmation
-    hard_run_blocker: true               # 机器关卡：CME 组件官方确认前，任何真实 S0 计算、
-                                         # 可读报告与 Checkpoint 0 判决必须被程序阻止
+    cme_component_status: verified_official   # MC1.1-G9 addendum（2026-07-28）
+    hard_run_blocker: false              # G9 已解除；真实运行仍受第二物理副本 flag 阻断
+                                         # （guards.assert_real_run_allowed 双 flag 缺一不可）
     rationale: "S0 按引擎×成本场景生成路径、不分平台；保守烘入全期界最高费，
       Topstep 侧 EV 被轻微低估（方向安全），已披露"
     mc_reapply_transaction_fee: false
