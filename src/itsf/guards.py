@@ -55,10 +55,16 @@ def verify_frozen_hashes() -> None:
             raise FrozenTamperError(f"frozen file modified: {rel} ({got[:16]}...)")
 
 
-def assert_real_run_allowed() -> None:
-    """Gate for ANY computation on real market data producing readable numbers."""
+def assert_real_run_allowed(g9_flag: Path = G9_FLAG,
+                            second_copy_flag: Path = SECOND_COPY_FLAG) -> None:
+    """Gate for ANY computation on real market data producing readable numbers.
+
+    The flag-path parameters exist so unit tests can exercise this exact gate
+    logic against temporary attestation files; production callers use the
+    defaults. The gate logic itself is never bypassed or monkeypatched.
+    """
     verify_frozen_hashes()
-    missing = [str(p) for p in (G9_FLAG, SECOND_COPY_FLAG) if not p.exists()]
+    missing = [str(p) for p in (g9_flag, second_copy_flag) if not p.exists()]
     if missing:
         raise RunBlockedError(
             "real S0/MC computation blocked; missing attestations: "
