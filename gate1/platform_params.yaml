@@ -1,162 +1,205 @@
-# platform_params.yaml — 平台规则参数转录（与 MC_METHOD_SPEC 一同冻结）
-# 来源：gate1/snapshots/2026-07-28/（21 页官方快照；逐文件 SHA-256 见
-# snapshot_manifest_v2.json，其哈希 d9db8a6947aebdbd9fdf6c7ebcb37a9fe0d39c7a...）
-# 转录：Claude 2026-07-28；待 GPT 对照快照逐项复核后冻结。
-# 引用格式：source = 快照文件名（哈希由 manifest 提供）。
+# platform_params.yaml v0.2 — 平台规则参数转录（与 MC_METHOD_SPEC 一同冻结）
+# 证据：所有 evidence 键指向 gate1/evidence_registry.yaml（完整64位哈希在彼处）。
+# v0.1 → v0.2：GPT 评审 3 项纠错＋5 项遗漏全部落实；其引用的全部新数字均已
+# 由本机新快照独立验证（Lucid scaling/consistency、Back2Funded、XFA params、分层表图片）。
 
 meta:
+  version: 0.2
   transcribed_at: "2026-07-28"
-  manifest: snapshot_manifest_v2.json
-  status: draft_pending_gpt_verification
+  evidence_registry: gate1/evidence_registry.yaml
+  status: draft_pending_final_gpt_verification
 
 # =============================================================================
 lucidflex_50k:
   evaluation:
-    source: lucid_flex_evaluation.html   # 页面更新 2026-04-15
+    evidence: [lucid_flex_evaluation]
     fee_model: one_time_no_rebilling
-    fee_usd: NOT_FOUND_IN_SNAPSHOT       # 购买页未抓取 —— 缺口 G1
+    fee_usd: NOT_FOUND   # 缺口 G1：主站 403，需浏览器渲染快照或人工截图
     time_limit: none
     profit_target_usd: 3000
-    mll_usd: 2000
-    mll_type: eod_trailing
-    consistency_pct: 50                  # 有内置缓冲，最快 2 天可通过
+    consistency:
+      nominal_pct: 50
+      formula: "largest_single_day_profit / account_profit <= 0.50"
+      cushion:
+        exists: true
+        example_50k: {nominal_usd: 1500, cushion_usd: 1560}   # evidence: lucid_consistency
+        formula: UNKNOWN   # 缺口 G6：官方明示为随实际盈利浮动的百分比，非固定金额
+        decision_role: "Primary 按严格 50%；cushion 仅作敏感性，不进 Primary 判决"
     dll: none
+    scaling_in_evaluation: none          # 评估期无 scaling，第一天即满仓（lucid_scaling）
     max_position: {minis: 4, micros: 40}
-    upgrade: {activation_fee: 0, delay: "5-30 分钟" }
-  breach_evaluation:                     # Level 2 证据（support 书面答复）
-    source: lucid_inquiry_reply/RESOLUTION.md   # sha256 620dee39...
-    threshold_update: end_of_day_closing_balance
-    breach_monitoring: realtime_equity_including_unrealized
-    intraday_touch_is_breach: true       # 评估与 funded 相同
-  drawdown:
-    source: lucid_flex_drawdown.html     # 页面更新 2025-11-26
-    mll_amount_usd: 2000
-    initial_trail_balance_usd: 52100     # 余额超过此值 → MLL 锁定
-    locked_mll_balance_usd: 50100        # 锁定位 = 初始余额 + $100
-    payout_effect: "payout 后 MLL 自动调整到锁定位 $50,100"
+    upgrade: {activation_fee_usd: 0, delay: "5-30 分钟"}
+  mll_engine:                            # 机器公式（GPT 建议格式；数值经快照验证）
+    evidence: [lucid_flex_drawdown, lucid_breach_reply_png]
+    starting_balance_usd: 50000
+    initial_mll_usd: 48000
+    trail_distance_usd: 2000
+    initial_trail_balance_usd: 52100
+    locked_mll_usd: 50100
+    eod_update: "mll_next = min(50100, max(mll_current, eod_closing_balance - 2000))"
+    payout_effect: "mll_next = 50100"
+    intraday_breach: "realtime_equity_including_unrealized <= current_mll → 即时违规"
+    breach_scope: "评估与 funded 相同（Level 2 书面答复）"
   funded:
-    source: lucid_flex_funded.html       # 页面更新 2026-06-02
-    mll_usd: 2000
+    evidence: [lucid_flex_funded, lucid_scaling]
     dll: none
     consistency: none
     payout_buffer: none
-    scaling_plan: true                   # 细则表未在快照中 —— 缺口 G2
-    max_position: {minis: 4, micros: 40}
     profit_split_trader_pct: 90
+    absolute_max_position: {minis: 4, micros: 40}
+    scaling_tiers:                       # 按模拟盈利，双向浮动，session 结束后更新
+      update_time: end_of_session
+      bidirectional: true                # payout 扣减余额可导致降档
+      tiers_50k:
+        - {simulated_profit_usd: "0 - 999",     minis: 2, micros: 20}
+        - {simulated_profit_usd: "1000 - 1999", minis: 3, micros: 30}
+        - {simulated_profit_usd: ">= 2000",     minis: 4, micros: 40}
+      circumvention: "反复规避限额可致当日利润清零/账户审查"
   payouts:
-    source: lucid_flex_payouts.html
+    evidence: [lucid_flex_payouts]
     qualifying_days_required: 5
-    qualifying_day_min_profit_usd: 150   # 50K 档；每次批准 payout 后重置重计
-    cycle_net_profit_required: ">= $0.01"
+    qualifying_day_min_profit_usd: 150   # 每次批准 payout 后重置重计
+    cycle_net_profit: {comparator: ">", threshold_usd: 0, evidence_example_usd: 1}
     min_request_usd: 500
-    max_request: "50% of profit, cap $2,000 (50K)；上限不随次数增长"
+    max_request: "50% of profit, cap $2,000（50K）；上限不随次数增长"
     max_payouts_before_live_review: 5
-    fixed_payout_window: none            # 任意日可申请
-    processing: "批准后数分钟内扣账；2 个工作日到账"
-    trading_during_processing_risk: "若处理前交易使余额低于要求，申请可能被拒"
-  commissions_per_side_usd:              # source: lucid_products_comms.html（2026-02-09）
+    fixed_payout_window: none
+    processing: "批准后数分钟扣账；2 个工作日到账"
+    trading_during_processing_risk: "处理前交易致余额低于要求 → 申请可能被拒"
+  commissions_per_side_usd:
+    evidence: [lucid_products_comms]
     NQ: 1.75
     MNQ: 0.50
     ES: 1.75
     MES: 0.50
     GC: 2.30
     MGC: 0.80
-    fees_inclusiveness: UNCLEAR          # 是否含交易所/清算/NFA 费未写明 —— 缺口 G3
+    fees_inclusiveness: UNCLEAR          # 缺口 G3
   platforms_automation:
-    source: [lucid_platforms.html, lucid_permitted.html, lucid_prohibited_hft.html]
-    cqg: [NinjaTrader, Tradovate, TradingView]
-    rithmic: [MotiveWave, Quantower, Tradesea, SierraChart, Jigsaw, Bookmap, ATAS, RTraderPro, MultiCharts]
-    automation: allowed_with_conditions   # 禁 HFT/microscalping/模拟成交利用
+    evidence: [lucid_platforms, lucid_permitted, lucid_prohibited_hft]
+    automation: allowed_with_conditions
   live_transition:
-    source: lucid_live_structure.html
+    evidence: [lucid_live_structure]
     trigger: "5 次 payout 后进入 live review pool；非保证、时点由风险团队决定"
-    detail_transcription: PENDING_REVIEW  # 细节待 GPT 复核该页时一并核对
 
 # =============================================================================
 topstep_50k:
   trading_day:
-    source: topstep_combine_params.html  # 页面更新 2026-06-24
-    session: "5:00 PM CT → 次日 3:10 PM CT；此后强制平仓至 5:00 PM CT"
+    evidence: [topstep_combine_params]
+    session: "5:00 PM CT → 次日 3:10 PM CT；此后强平至 5:00 PM CT"
   combine:
-    source: topstep_combine_params.html
-    subscription_usd_per_month: {standard_path: 49, no_activation_path: 95}   # topstep_pricing.html
-    reset_fee_usd: {standard_path: 49, no_activation_path: 95}                # topstep_pricing.html
-    profit_target_usd: 3000              # topstep_consistency.html 表
-    mll_usd: 2000
-    mll_mechanics: "起点 $48,000；随日终余额上移、永不下移；达到起始余额后永久锁定"  # topstep_mll.html
-    breach_monitoring: realtime_net_pnl_including_unrealized   # 触及即强平；成交后回升不撤销违规
-    breach_consequence: "当日强平＋资格冻结，Reset 后恢复"
-    consistency_target:                  # 软规则！source: topstep_consistency.html（2026-05-28）
+    evidence: [topstep_combine_params, topstep_pricing, topstep_consistency, topstep_mll]
+    subscription_usd_per_month: {standard_path: 49, no_activation_path: 95}
+    reset_fee_usd: {standard_path: 49, no_activation_path: 95}
+    profit_target_usd: 3000
+    mll_engine:
+      starting_balance_usd: 50000
+      initial_mll_usd: 48000
+      trail_distance_usd: 2000
+      locked_mll_usd: 50000              # MLL 达到起始余额时锁定（≈日终余额达 $52,000）
+      eod_update: "mll_next = min(50000, max(mll_current, eod_balance - 2000))"
+      intraday_breach: "realtime_net_pnl_including_unrealized 触及 → 当日强平；Reset 后恢复资格"
+    consistency_target:
       type: soft_target_increase
-      rule: "最佳单日 > 利润目标 50% → 新目标 = best_day ÷ 0.50"
-      best_day_lock_time: "3:10 PM CT"
-    dll_optional:                        # topstep_dll_optional.html
+      rule: "best_day > 0.5 × profit_target → 新目标 = best_day ÷ 0.50"
+      best_day_lock_time: "15:10 America/Chicago"
+    dll_optional:
       usd: 1000
-      violation: false                   # 触发＝当日禁开仓，非违规
-      note: "购买 Combine 时加 DLL → XFA payout 上限翻倍（2026-06-02 起限时）"  # topstep_payout.html
+      violation: false                   # 触发＝当日禁开仓（Temporary Violation），非违规
     max_position: {minis: 5, micros: 50, ratio: "10:1"}
-    multiple_combines: allowed_single_profile
   activation:
-    source: topstep_pricing.html
-    standard_path_activation_usd: 149    # 每个 XFA 一次
+    evidence: [topstep_pricing]
+    standard_path_activation_usd: 149
     no_activation_path_usd: 0
   xfa:
-    source: [topstep_mll.html, topstep_payout.html, topstep_consistency.html]
-    balance_start_usd: 0                 # ⚠ "50K" 是购买力标签，不是初始余额
-    mll_start_usd: -2000
-    mll_lock: "余额达到 $2,000 → MLL 永久锁定于 $0"
-    breach_monitoring: realtime_net_pnl_including_unrealized
-    breach_consequence: "永久关户；首次 payout 前可用 Back2Funded 复活"
+    evidence: [topstep_xfa_params, topstep_mll, topstep_payout, topstep_consistency]
+    balance_start_usd: 0                 # "50K" 为购买力标签
+    max_active_xfa: 5
+    payout_path_chosen_at_activation: true   # Standard / Consistency 二选一
+    mll_engine:
+      starting_balance_usd: 0
+      initial_mll_usd: -2000
+      locked_mll_usd: 0
+      eod_update: "mll_next = min(0, max(mll_current, eod_balance - 2000))"
+      payout_effect: "mll_next = 0（永久）"
+      intraday_breach: "realtime_net_pnl_including_unrealized 触及 → 永久关户"
+    scaling_tiers:                       # evidence: topstep_xfa_scaling_table_png
+      basis: current_account_balance
+      update: next_session_only          # 盘中不上调
+      tiers_50k:
+        - {balance_usd: "< 1500",       lots: 2, micros: 20}
+        - {balance_usd: "1500 - 2000",  lots: 3, micros: 30}
+        - {balance_usd: "> 2000",       lots: 5, micros: 50}
+      payout_effect: "payout 降低余额至低档 → 上限相应下调"
     payout_paths:
       standard:
         qualifying: "5 个盈利日，每日净利 ≥ $150（不需连续）"
-        day_lock_time: "4:00 PM CT"      # ⚠ 与 consistency 页 3:10 PM CT 矛盾 —— 注记 N1
+        payout_day_lock_time: "16:00 America/Chicago"   # 与 Combine 的 15:10 属不同阶段参数
         cycle_net_profit: ">= $0.01（首次豁免）"
-        max_request: "余额的 50%，cap $2,000（加 DLL 的新购 Combine → $4,000）"
-        after_payout: "MLL 永久重置为 $0；5 日计数重启；申请当日不计入下轮"
+        max_request: "余额 50%，cap $2,000"
+        after_payout: "MLL 永久 = $0；5 日计数重启；申请当日不计入下轮"
       consistency:
-        qualifying: "3 个交易日（每日至少 1 笔）＋最大单日 ≤ 总净利 40%（不取整）"
-        max_request: "余额的 50%，cap $3,000（加 DLL → $6,000）"
-        after_payout: "MLL 重置 $0；consistency 计算与 3 日计数重启（新窗口自次一交易日起）"
+        qualifying: "≥3 交易日（每日≥1笔）＋ largest_winning_day/total_net_profit ≤ 0.40（不取整）"
+        max_request: "余额 50%，cap $3,000"
+        after_payout: "MLL = $0；consistency 与 3 日计数重启（新窗口自次一交易日）"
+    payout_cap_promotion:                # 限时促销，非稳定制度
+      rule: "购买 Combine 时加 DLL → cap 翻倍（$4,000 / $6,000）"
+      status: limited_time_offering
+      offer_expiry: unknown
+      decision_role: "Primary: dll=false, promotion=false；Sensitivity: dll=true, cap×2"
     payout_min_usd: 125
-    profit_split_trader_pct: 90
-    payout_processing: "资金即时扣账，可立即继续交易（XFA）；方式费用：ACH/Wire $30，Aeropay/Wise/Prop-to-brokerage 免 Topstep 费"
-    scaling_plan:
-      source: topstep_scaling.html
-      basis: "按当前余额分层设定最大合约数；盘中不上调，次一 session 生效"
-      tier_table: NOT_FOUND_IN_SNAPSHOT   # 分层表应在 XFA Parameters 页 —— 缺口 G4
+    profit_split:
+      default_trader_pct: 90
+      grandfathered_cohort:
+        condition: "joined_new_dashboard_before_2026-01-12"
+        first_lifetime_profit_usd: 10000
+        trader_pct_on_first_lifetime_profit: 100
+      decision_role: "Primary = 现在新开账户 = 90/10；不得事后选用旧 cohort"
+    payout_processing: "XFA 资金即时扣账、可立即交易；ACH/Wire $30，Aeropay/Wise/Prop-to-brokerage 免 Topstep 费"
     back2funded:
-      source: topstep_pricing.html
-      eligibility: "首次 payout 前失去 XFA；关户后 30 天内"
+      evidence: [topstep_back2funded, topstep_pricing, topstep_mll]
+      max_reactivations_per_xfa: 2
+      availability_after_first_payout: false
+      window_days: 30
+      requires: [topstepx_new_dashboard, good_standing]
+      focused_trader_plan_eligible: false
+      retains: [account_size, payout_path, dll_selection]
       fee_50k_usd: 599
-      effect: "余额归 $0、全部统计清零、MLL 回到 -$2,000（同全新 XFA）"   # topstep_mll.html
+      dll_discount_usd: 50
+      effect: "余额 $0、统计清零、MLL 回 -$2,000（同全新 XFA）；次一 session 可交易"
+      not_counted_toward_5_limit_until_paid: true
   lfa:
-    source: [topstep_payout.html, topstep_live_funded.html, topstep_api.html]
-    payout: "每周期 5 个 ≥$150 盈利日；50% 余额无上限；30 个盈利日后解锁每日提款"
+    evidence: [topstep_payout, topstep_live_funded, topstep_api]
+    payout: "每周期 5 个 ≥$150 盈利日；50% 余额无上限；30 盈利日后解锁每日提款"
     dll: automatic
-    automation: "允许自动化策略，但禁止经 ProjectX API 自动交易"      # 早前已官方证实
-    payout_processing_conduct: "LFA 申请后应暂停交易至处理完成"
-    detail_transcription: PENDING_REVIEW
+    automation: "允许自动化，但禁止经 ProjectX API 自动交易"
+    payout_processing_conduct: "申请后应暂停交易至处理完成"
   api:
-    source: topstep_api.html
-    fee_usd_per_month: 29
-    vps_vpn_remote: prohibited           # 必须个人设备
+    evidence: [topstep_api]
+    list_price_usd_per_month: 29
+    recurring_code_price_usd_per_month: 14.50   # code "topstep"，官方称长期有效
+    discount_dependency: "promo code"
+    decision_role: "Primary（保守）$29；current-policy 敏感性 $14.50"
+    vps_vpn_remote: prohibited
+    allowed_phases: {combine: true, xfa: true, lfa_projectx_api: false}
   data_fees:
-    source: topstep_pricing.html
+    evidence: [topstep_pricing]
     level1: included
     level2_usd_per_month: 38
 
 # =============================================================================
-gaps:                                    # 冻结前须补齐或明确接受
-  G1: "Lucid 50K 评估账户价格（购买页未快照）"
-  G2: "LucidFlex funded scaling plan 细则表"
-  G3: "Lucid 佣金是否全含交易所/清算/NFA 费"
-  G4: "Topstep XFA Parameters 页（scaling 分层表、XFA 其他参数）"
-  G5: "双方 Terms/Account Agreement/Prohibited Conduct 全文快照（GPT 建议项）"
+gaps:
+  G1: "Lucid 50K 评估价格（主站 403 反爬；需浏览器渲染快照或 Aaron 截图购买页）"
+  G3: "Lucid 佣金是否全含交易所/清算/NFA 费（可并入下一次 support 问询）"
+  G5: "双方 Terms / Account Agreement / Prohibited Conduct 全文快照"
+  G6: "LucidFlex 评估 consistency cushion 精确公式（官方明示浮动百分比；处理：Primary 严格 50%）"
+  # G2、G4 已关闭（lucid_scaling 快照；topstep_xfa_scaling_table_png）
 
 transcription_notes:
-  N1: "盈利日锁定时间官方矛盾：payout 页 4:00 PM CT vs consistency 页 3:10 PM CT——需向 Topstep 澄清或以保守者建模"
-  N2: "XFA 余额从 $0 起步——MC_METHOD_SPEC §2.3 的状态机描述需按此修订（spec 未冻结，直接改 v0.3）"
-  N3: "Topstep XFA payout 后可立即交易；Lucid 处理期交易有拒付风险——payout 政策的 halt 条款应分平台"
-  N4: "Combine consistency 为软规则（抬高目标）；评估阶段建模不得写成硬失败"
-  N5: "Lucid payout 后 MLL 直接跳至锁定位 $50,100（非重算 trail）"
+  N1: "已撤回——4:00 PM CT（XFA payout day 锁定）与 3:10 PM CT（Combine best day 锁定）属不同阶段的独立参数，无矛盾"
+  N2: "XFA 余额从 $0 起步——MC_METHOD_SPEC §2.3 需按此修订（v0.3）"
+  N3: "Topstep XFA payout 后可立即交易；Lucid 处理期交易有拒付风险——payout halt 条款分平台"
+  N4: "Combine consistency 为软规则（抬目标），不得建模为硬失败"
+  N5: "Lucid payout 后 MLL 直接跳至锁定位 $50,100"
+  N6: "Lucid funded 首日仅 2 手/20 micro（分层起步），非 absolute max 4/40——初期容量比 v0.1 假设低一半"
+  N7: "Topstep 同时最多 5 个活跃 XFA——多账户阶段（MC v1.1）的硬约束"
