@@ -4,7 +4,7 @@
 # 由本机新快照独立验证（Lucid scaling/consistency、Back2Funded、XFA params、分层表图片）。
 
 meta:
-  version: 0.2
+  version: 0.3   # v0.2 → v0.3：GPT 终审 4 阻断项（机器区间、DLL 状态机、G1 扩展、Live 排除）
   transcribed_at: "2026-07-28"
   evidence_registry: gate1/evidence_registry.yaml
   status: draft_pending_final_gpt_verification
@@ -14,7 +14,11 @@ lucidflex_50k:
   evaluation:
     evidence: [lucid_flex_evaluation]
     fee_model: one_time_no_rebilling
-    fee_usd: NOT_FOUND   # 缺口 G1：主站 403，需浏览器渲染快照或人工截图
+    fees:                                # 缺口 G1（硬阻断）：主站 403；需 Aaron 截图 checkout
+      purchase_fee_usd: NOT_FOUND        #   截图清单：50K 评估最终 checkout 价；
+      reset_fee_usd: NOT_FOUND           #   reset 页 50K 价格；税费行；
+      sales_tax_or_checkout_fee: NOT_FOUND   # 优惠码是否自动应用/能否长期复用
+      discount_policy: NOT_FOUND
     time_limit: none
     profit_target_usd: 3000
     consistency:
@@ -50,10 +54,13 @@ lucidflex_50k:
     scaling_tiers:                       # 按模拟盈利，双向浮动，session 结束后更新
       update_time: end_of_session
       bidirectional: true                # payout 扣减余额可导致降档
-      tiers_50k:
-        - {simulated_profit_usd: "0 - 999",     minis: 2, micros: 20}
-        - {simulated_profit_usd: "1000 - 1999", minis: 3, micros: 30}
-        - {simulated_profit_usd: ">= 2000",     minis: 4, micros: 40}
+      tiers_50k:                         # 机器区间（官方表格式 "$0-$999" 的标准读法）
+        - {lower_inclusive: 0,    upper_exclusive: 1000, minis: 2, micros: 20}
+        - {lower_inclusive: 1000, upper_exclusive: 2000, minis: 3, micros: 30}
+        - {lower_inclusive: 2000,                        minis: 4, micros: 40}
+      negative_simulated_profit_tier: UNRESOLVED   # 官方表自 $0 起；负盈利档位待 support
+                                                   # 书面确认（lucid_inquiry_2.md 问题 1）；
+                                                   # 确认前 MC 保守取最低档 2/20 并标注假设
       circumvention: "反复规避限额可致当日利润清零/账户审查"
   payouts:
     evidence: [lucid_flex_payouts]
@@ -74,7 +81,10 @@ lucidflex_50k:
     MES: 0.50
     GC: 2.30
     MGC: 0.80
-    fees_inclusiveness: UNCLEAR          # 缺口 G3
+    fees_inclusiveness:                  # 缺口 G3 —— Primary 处理已冻结（保守）
+      primary: "假定非全含：另加 CME 交易所费＋清算费＋NFA 费（按 CME 官方费表转录为冻结参数）"
+      sensitivity: "全含（quoted = all-in）"
+      pending: "并入 lucid_inquiry_2.md 问题 2 求书面确认"
   platforms_automation:
     evidence: [lucid_platforms, lucid_permitted, lucid_prohibited_hft]
     automation: allowed_with_conditions
@@ -103,10 +113,22 @@ topstep_50k:
       type: soft_target_increase
       rule: "best_day > 0.5 × profit_target → 新目标 = best_day ÷ 0.50"
       best_day_lock_time: "15:10 America/Chicago"
-    dll_optional:
-      usd: 1000
-      violation: false                   # 触发＝当日禁开仓（Temporary Violation），非违规
     max_position: {minis: 5, micros: 50, ratio: "10:1"}
+  dll:                                   # 完整状态机；同时适用 Combine 与 XFA（checkout 版固定）
+    evidence: [topstep_dll_optional, topstep_payout, topstep_mll]
+    optional: true
+    threshold_usd_50k: 1000
+    breach_path: adverse_path            # 实时 Net P&L 含未实现（topstep_mll："Same logic applies"）
+    on_trigger:
+      flatten_positions: true
+      cancel_orders: true
+      block_new_orders_until: "next session 17:00 America/Chicago"
+      close_account: false
+      temporary_violation: true
+      payout_request_blocked_until_violation_lifts: true
+    set_at_checkout_fixed: true
+    carries_to_xfa: true
+    distinct_from_pdll: "手动 PDLL 可随时调整/移除，属个人风控层，不进平台状态机"
   activation:
     evidence: [topstep_pricing]
     standard_path_activation_usd: 149
@@ -126,10 +148,10 @@ topstep_50k:
     scaling_tiers:                       # evidence: topstep_xfa_scaling_table_png
       basis: current_account_balance
       update: next_session_only          # 盘中不上调
-      tiers_50k:
-        - {balance_usd: "< 1500",       lots: 2, micros: 20}
-        - {balance_usd: "1500 - 2000",  lots: 3, micros: 30}
-        - {balance_usd: "> 2000",       lots: 5, micros: 50}
+      tiers_50k:                         # 图表原文 Below/–/Above 的机器编码
+        - {upper_exclusive: 1500,                        lots: 2, micros: 20}
+        - {lower_inclusive: 1500, upper_inclusive: 2000, lots: 3, micros: 30}
+        - {lower_exclusive: 2000,                        lots: 5, micros: 50}
       payout_effect: "payout 降低余额至低档 → 上限相应下调"
     payout_paths:
       standard:
@@ -189,10 +211,11 @@ topstep_50k:
 
 # =============================================================================
 gaps:
-  G1: "Lucid 50K 评估价格（主站 403 反爬；需浏览器渲染快照或 Aaron 截图购买页）"
-  G3: "Lucid 佣金是否全含交易所/清算/NFA 费（可并入下一次 support 问询）"
+  G1: "【硬阻断】Lucid 50K purchase/reset checkout 价格＋税费＋优惠码政策（Aaron 截图，清单见 evaluation.fees）"
+  G3: "Lucid 佣金全含性——Primary 已冻结为保守叠加；书面确认见 lucid_inquiry_2.md"
   G5: "双方 Terms / Account Agreement / Prohibited Conduct 全文快照"
-  G6: "LucidFlex 评估 consistency cushion 精确公式（官方明示浮动百分比；处理：Primary 严格 50%）"
+  G6: "cushion 公式 UNKNOWN——Primary 严格 50%，公式到手前 Sensitivity 不运行（非阻断）"
+  G7: "Lucid funded 负模拟盈利时的 scaling 档位（lucid_inquiry_2.md 问题 1）"
   # G2、G4 已关闭（lucid_scaling 快照；topstep_xfa_scaling_table_png）
 
 transcription_notes:

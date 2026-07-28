@@ -2,8 +2,9 @@
 
 ```yaml
 id: MC1
-version: 0.2   # v0.1 经 GPT 评审否决冻结；本版实施全部 10 项阻断修正＋Lucid 证据关闭
-status: DRAFT — 待 Aaron/GPT 复核（重点：状态机参数转录、Primary 集合、会计闭环）
+version: 0.3   # v0.2 → v0.3：吸收 platform_params v0.2/v0.3 的实证发现（XFA 零余额、
+               # scaling 分层×仓位交互、DLL 状态机、Live 排除、分平台 payout 行为）
+status: DRAFT — 待 Aaron/GPT 终审（与 platform_params.yaml v0.3、evidence_registry.yaml 三件套复核）
 date: 2026-07-28
 references:
   charter_sha256: 5176320fb54a30e5e5dcc7f1ee96b828e7d38f727a573e8bd152ca3ff4299327
@@ -33,7 +34,15 @@ Sensitivity 与 Excluded 组合不参与判定、不得翻转判决。此为对 
 **变体单位 = firm × product × path × account_size × dll_option × phase**，
 禁止以"Lucid"/"Topstep"为参数单位。
 
-### 2.2 LucidFlex 50K 生命周期（评估 → sim funded →（live 仅作情景））
+### 2.2 LucidFlex 50K 生命周期（评估 → sim funded；live 见 §2.6 排除）
+
+状态机要点（参数与公式见 platform_params.yaml v0.3）：
+- 评估：无 scaling（首日满仓 4/40）、严格 50% consistency（cushion 不进 Primary）、
+  MLL 引擎按机器公式；评估价格/重置价 = 缺口 G1（Aaron 截图后填入，冻结前硬阻断）。
+- Funded：**首日容量仅 2 手/20 micro**（分层 [0,1000)→2、[1000,2000)→3、[2000,∞)→4，
+  EOD 更新、双向浮动、payout 扣减可降档）；负模拟盈利档位 UNRESOLVED（G7），
+  确认前保守取最低档 2/20 并在输出中标注该假设；payout 后 MLL = $50,100。
+- Payout 处理期：**halt**（官方明示处理前交易可致拒付）。
 - **违规判定（已由 Level 2 证据关闭）**：阈值按日终余额更新（EOD trailing），
   违规监控为盘中实时、含未实现盈亏，触及即违规
   （gate1/lucid_inquiry_reply/RESOLUTION.md，哈希见头部）→ **恒用 adverse-path**。
@@ -44,11 +53,18 @@ Sensitivity 与 Excluded 组合不参与判定、不得翻转判决。此为对 
 - Live 迁移**不是确定事件**（进入 review pool ≠ 保证迁移），见 §2.6 情景。
 
 ### 2.3 Topstep 50K 生命周期
-- MLL：地板日终更新、盘中实时含浮亏判违规（topstep_mll.html）→ 恒用 adverse-path。
-- 完整变体维度（各自独立转录）：购买路径 {standard_purchase, no_activation_fee}；
-  XFA payout 路径 {standard, consistency}；DLL {none, with_dll}；
-  **payout 后 MLL 重置行为**（转录重点，对生存概率影响极大）；scaling plan 合约上限。
-- XFA → LFA 由风险团队个案决定，非确定事件，见 §2.6。
+- Combine：$50,000 起步、MLL $48,000 起 trail 锁 $50,000、**consistency 为软规则**
+  （超标 = 目标抬至 best_day÷0.5，不判死）；月费按 synthetic 日历扣取。
+- **XFA：余额从 $0 起步**（"50K"为购买力标签）；MLL −$2,000 → 锁 $0；
+  scaling 按余额分层（<1500→2、[1500,2000]→3、>2000→5 手，次一 session 生效）；
+  payout 后 MLL 永久 = $0、计数重启；**payout 处理期不 halt**（资金即时扣账、
+  官方允许立即交易；申请当日不计入下轮资格）。
+- DLL：Sensitivity 变体使用 platform_params 的完整状态机（平仓＋撤单＋禁新仓至
+  次日 17:00 CT＋临时违规阻断 payout；账户存活）；Primary 无 DLL。
+- 失败-复活：XFA 首次 payout 前死亡 → Back2Funded（**每账户最多 2 次**、30 天窗口、
+  $599、全部清零重来）；payout 后死亡 → 只能新 Combine；评估死亡 → Reset（$49）。
+- 违规判定恒用 adverse-path；XFA → LFA 非确定事件，见 §2.6。
+- 多账户约束（v1.1 用）：同时最多 5 个活跃 XFA。
 
 ### 2.4 FTMO：不建模（S0 §6 已排除）。
 
@@ -72,14 +88,17 @@ decision_roles:
 Primary sizing = **P2（固定 $100/笔 ≈ 初始 MLL 的 5%）**；选择理由：贴近达标盈利日
 金额门槛的可达性；P1/P3/P4 降为敏感性。此选择供评审否决，冻结后不得改。
 
-### 2.6 Live 迁移情景（不发明概率）
+### 2.6 Live 迁移（v0.3 修正：完整排除，不再保留未定义的 Sensitivity）
 
 ```yaml
-live_transition_scenarios:
-  - id: remain_sim_full_horizon          # Primary（保守）：全程 sim funded
-    role: primary
-  - id: transition_at_first_eligible     # Sensitivity 上界
-    role: sensitivity
+live_transition:
+  primary:
+    action: remain_sim_funded_for_full_24_month_horizon
+  sensitivity:
+    action: excluded_until_full_live_state_machine_is_frozen
+    # 理由：Topstep LFA 涉及余额合并、20% 立即可交易、$10,000 最低起始、reserve、
+    # 动态风险扩张、ProjectX API 禁令；Lucid Live 有独立 drawdown/bonus/scaling。
+    # 参数不完整的 Live 状态禁止在任何 MC 运行中出现。
 ```
 
 ## 3. 账户模拟器
@@ -92,7 +111,9 @@ live_transition_scenarios:
   锚点仅用于仓位计算，不是亏损上限。E2 强制报告：
   `realised_loss/sizing_anchor` 分布、`P(realised_loss > 预算)`、
   `P(intraday_adverse_loss > 预算)`、`worst_loss_multiple`。
-- 整数合约 `n = floor(risk_budget ÷ sizing_anchor_usd)`；n=0 → 跳过并计数。
+- 整数合约（v0.3：与 scaling 分层交互）：
+  `n = min( floor(risk_budget ÷ sizing_anchor_usd), 当日 scaling 档位 micro 上限, absolute_max_micros )`；
+  n=0 → 跳过并计数；scaling 档位取自**上一 session 收盘后**的余额/模拟盈利（盘中不变）。
 - Sizing 政策集合（冻结）：P1 $75；P2 $100（Primary）；P3 剩余 buffer 4%；
   P4 阶梯（>$1500→$100；$800–1500→$75；<$800→$50）。
 - 每日至多 1 笔、不隔夜；个人风控层规则不进入 S0-MC。
@@ -112,7 +133,9 @@ business days 计算；达标盈利日按模板月/周期归属。模板起始�
 payout_policy_primary:
   request_timing: first_eligible_session
   request_amount: maximum_allowed
-  trading_while_processing: halt        # 处理期内不开新仓
+  trading_while_processing:             # v0.3：分平台（依官方规则，非拍脑袋）
+    lucidflex: halt                     # 处理前交易可致拒付（官方明示）
+    topstep_xfa: continue               # 资金即时扣账、官方允许立即交易
 payout_policy_sensitivity:
   request_timing: after_drawdown_floor_locked
   request_amount: maximum_allowed
@@ -126,13 +149,20 @@ payout_policy_sensitivity:
 
 ```yaml
 failure_policy:                # Primary；R0（完全不重购）为敏感性
-  evaluation_failure:   {action: cheapest_of(reset, repurchase), max_total_attempts: 6}
-  funded_pre_first_payout_failure:  {action: platform_reactivation_if_cheaper_else_new_eval}
-  funded_post_payout_failure:       {action: platform_reactivation_if_cheaper_else_new_eval}
-  live_failure:         {action: terminate}      # 保守；cooldown 重启作敏感性
+  evaluation_failure:
+    topstep: {action: reset, fee_usd: 49, max_total_attempts: 6}
+    lucid:   {action: reset_or_repurchase, fee_usd: PENDING_G1, max_total_attempts: 6}
+  funded_pre_first_payout_failure:
+    topstep: {action: back2funded, fee_usd: 599, max_per_xfa: 2, window_days: 30,
+              after_exhausted: new_combine}
+    lucid:   {action: new_evaluation}   # Lucid 无同类复活机制（以 platform_params 为准）
+  funded_post_payout_failure:
+    topstep: {action: new_combine}      # B2F 对已 payout 账户不可用（官方）
+    lucid:   {action: new_evaluation}
+  live_failure: {action: not_applicable} # Live 已整体排除（§2.6）
 ```
 
-各动作的实际费用（reset、Back2Funded/reactivation、新评估）由 platform_params 转录。
+各动作费用以 platform_params.yaml 为准；Lucid 侧待 G1 截图填入。
 
 ### 4.4 会计（v0.2 修正双重计费）
 
@@ -189,6 +219,17 @@ MC1.x evidence-resolution commit → FREEZE_LOG 登记；状态机语义变化�
 不得只改 YAML 字段。
 
 ---
+### v0.2 → v0.3 修订记录（platform_params 实证发现＋GPT 第二轮 4 阻断项）
+1. §2.3 重写为 XFA 真实结构（余额 $0 起步、MLL −2000→锁 0、余额分层 scaling）。
+2. §2.2 Lucid funded 首日容量 2 手（非 4）；负盈利档 UNRESOLVED（G7）保守取最低档；
+   payout 处理期 halt。
+3. §2.6 Live 完整排除（Primary 全程 sim；Sensitivity 在 Live 状态机冻结前禁止运行）。
+4. §3 整数合约公式与 scaling 档位交互（min 三元）；档位取上一 session 收盘值。
+5. §4.2 payout 处理期行为分平台（Lucid halt / Topstep XFA continue，均依官方规则）。
+6. §4.3 失败政策按平台×状态展开（Topstep reset $49 / B2F $599×2 / 新 Combine；
+   Lucid 待 G1）。
+7. DLL 引用 platform_params 完整状态机；多账户 5-XFA 上限记入 v1.1 约束。
+
 ### v0.1 → v0.2 修订记录（GPT 评审 10 项阻断全部采纳＋证据关闭）
 1. Lucid 违规判定开放项以 Level 2 证据关闭为 V-A（实时含浮亏）；双变体删除，
    两平台统一 adverse-path。
