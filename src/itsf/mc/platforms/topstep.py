@@ -329,6 +329,17 @@ class XfaLifecycle:
         # frozen: xfa.back2funded.availability_after_first_payout false
         return self.dead and self.payout_count == 0
 
+    def eligible_terminal_gross(self) -> float:
+        """Gross withdrawable if the horizon ended now; 0 when ineligible.
+
+        Keeps the eligibility formula inside the platform (main-agent ruling
+        R5-adjacent: orchestrator must not replicate platform formulas).
+        # frozen: payout_accounting.terminal_withdrawable_value; MC SS4.2
+        """
+        if not self.payout_eligible():
+            return 0.0
+        return min(XFA_PAYOUT_MAX_FRACTION * self.balance, XFA_PAYOUT_CAP_USD)
+
     def payout_eligible(self) -> bool:
         """Standard-path eligibility check against current settled state.
 
