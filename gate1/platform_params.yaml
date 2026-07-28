@@ -4,8 +4,8 @@
 # 由本机新快照独立验证（Lucid scaling/consistency、Back2Funded、XFA params、分层表图片）。
 
 meta:
-  version: 0.6   # v0.4 → v0.5：G8 官方关闭、NFA 纠正与分段、重购保守化、payout 会计、S0 费用交接、机器证据引用
-                 # execution_costs 数值化、DLL 基准公式、payout rail、AI-bot 证据定级
+  version: 0.6   # v0.5 → v0.6：生命周期次数上限、Lucid rail 归位＋保守费、G9 唯一 Primary
+                 # ＋hard_run_blocker、gate2_cost_guard、三处错挂节点归位（结构审计）
   transcribed_at: "2026-07-28"
   evidence_registry: gate1/evidence_registry.yaml
   status: draft_pending_final_seal_check
@@ -91,6 +91,12 @@ lucidflex_50k:
       primary_fee_usd: 30                # 保守假设：以证据中唯一观察到的国际通道费
       sensitivity_fee_usd: 0             # （Topstep Wire/ACH $30）为代理，非 Lucid 官方数字
       model_role: conservative_assumption
+  platforms_automation:                  # v0.6：归位（曾被错挂于 payout_accounting）
+    evidence: [lucid_platforms, lucid_permitted, lucid_prohibited_hft]
+    automation: allowed_with_conditions
+  live_transition:                       # v0.6：归位（曾被错挂于 automation_compliance）
+    evidence: [lucid_live_structure]
+    trigger: "5 次 payout 后进入 live review pool；非保证、时点由风险团队决定"
   commissions_per_side_usd:
     evidence: [lucid_products_comms]
     NQ: 1.75
@@ -129,13 +135,13 @@ execution_costs:
     rationale: "S0 按引擎×成本场景生成路径、不分平台；保守烘入全期界最高费，
       Topstep 侧 EV 被轻微低估（方向安全），已披露"
     mc_reapply_transaction_fee: false
+  double_counting_guard: "交易费只在 S0 成交模拟中扣除一次；MC 商业层不得再扣"   # v0.6 归位
 
 gate2_cost_guard:                        # v0.6：Lucid 未知执行成本的乐观偏差防护
   lucid_execution_software_cost_usd_modeled: 0
   actual_cost_status: unconfirmed_until_gate2_poc
   guard: lucid_cannot_independently_trigger_go_until_gate2_costs_confirmed
   # 语义：若 GO 条件仅由 Lucid 组合满足而 Topstep 组合不满足，判决降级为边界区 α
-  double_counting_guard: "交易费只在 S0 成交模拟中扣除一次；MC 商业层不得再扣"
 
 payout_accounting:                       # v0.5：gross/net 唯一化（evidence: topstep_payout 示例
   gross_request_definition: amount_removed_from_sim_account_balance   # "$6,000 → 取 $3,000 → 余额 $3,000"）
@@ -143,9 +149,6 @@ payout_accounting:                       # v0.5：gross/net 唯一化（evidence
   trader_cash_received: "gross_request_usd × trader_split − payout_rail_fee_usd"
   terminal_withdrawable_value: "eligible_gross × trader_split − payout_rail_fee_usd"
   scaling_and_mll_use: gross_deducted_balance   # 降档与 buffer 计算基于扣除 gross 后的余额
-  platforms_automation:
-    evidence: [lucid_platforms, lucid_permitted, lucid_prohibited_hft]
-    automation: allowed_with_conditions
 
 automation_compliance:                   # v0.5：合规证据机器引用（G5 已快照部分）
   topstep:
@@ -156,9 +159,6 @@ automation_compliance:                   # v0.5：合规证据机器引用（G5 
     evidence: [lucid_permitted, lucid_prohibited_hft]
     notes: "允许自动化/copier；禁 HFT、microscalping、模拟成交利用；
       完整 T&C 全文 = 首次实盘执行前硬阻断（Gate 2）"
-  live_transition:
-    evidence: [lucid_live_structure]
-    trigger: "5 次 payout 后进入 live review pool；非保证、时点由风险团队决定"
 
 # =============================================================================
 topstep_50k:
