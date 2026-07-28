@@ -8,7 +8,7 @@ meta:
                  # ＋hard_run_blocker、gate2_cost_guard、三处错挂节点归位（结构审计）
   transcribed_at: "2026-07-28"
   evidence_registry: gate1/evidence_registry.yaml
-  status: draft_pending_final_seal_check
+  status: frozen   # Freeze Commit A（tag mc-freeze-v1，2026-07-28）；修订走 Evidence Resolution Addendum
 
 # =============================================================================
 lucidflex_50k:

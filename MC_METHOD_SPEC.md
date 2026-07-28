@@ -4,7 +4,7 @@
 id: MC1
 version: 0.6   # v0.5 → v0.6：GPT 第五轮 6 封口项（生命周期次数上限、Lucid rail 归位＋
                # 保守费、G9 唯一 Primary＋机器阻断、v5 清单、哈希预填、manifest 检查补全）
-status: DRAFT — seal_check PASS，待 GPT 最终机械确认后冻结（status 翻转在 Freeze Commit A 内）
+status: FROZEN（Freeze Commit A，tag mc-freeze-v1，2026-07-28；修订仅可以 MC1.x 增补或 Evidence Resolution Addendum 追加）
 date: 2026-07-28
 references:
   charter_sha256: 5176320fb54a30e5e5dcc7f1ee96b828e7d38f727a573e8bd152ca3ff4299327
@@ -76,7 +76,7 @@ S0 §10.4 中的**全部量词——GO 的存在量词、STOP 的全称量词、
 - DLL：Sensitivity 变体使用 platform_params 的完整状态机（平仓＋撤单＋禁新仓至
   次日 17:00 CT＋临时违规阻断 payout；账户存活）；Primary 无 DLL。
 - 失败-复活：XFA 首次 payout 前死亡 → Back2Funded（**每账户最多 2 次**、30 天窗口、
-  $599、全部清零重来）；payout 后死亡 → 只能新 Combine；评估死亡 → Reset（$49）。
+  $599、全部清零重来）；payout 后死亡 → 只能新 Combine；评估死亡 → 调用 subscription/reset engine（credit 优先，无则付费）。
 - 违规判定恒用 adverse-path；XFA → LFA 非确定事件，见 §2.6。
 - 多账户约束（v1.1 用）：同时最多 5 个活跃 XFA。
 
@@ -213,7 +213,7 @@ MC 不再扣交易费）执行，实现不得另行解释。
 strategy_account_EV      = 平台内交易净损益（分成前；交易费已在 S0 逐笔扣除，此层禁止再扣）
 prop_operating_EV        = payout 流入 × 分成 − 评估/重置/重购（经订阅引擎与 Reset Credit
                            状态机计算，30 天 rebill 非自然月）− activation/reactivation
-                           − payout 通道费（Primary: Wise $0）
+                           − payout 通道费（Topstep Primary = Wise $0；Lucid Primary = $30 保守代理）
                            − required_execution_costs（API $29/30天、必需实时数据/软件）
                            + terminal_value
 net_business_EV_after_RD = prop_operating_EV − research_costs
