@@ -2,14 +2,14 @@
 
 ```yaml
 id: MC1
-version: 0.4   # v0.3 → v0.4：GPT 第三轮 4 封口项（证据 bundle 冻结、订阅状态机、
-               # 成本数值化＋API 归类、DLL/buffer/量词公式化）＋ G1 关闭＋AI-bot 证据定级
-status: DRAFT — 待最终机械封口检查（证据哈希、状态机、会计闭环）
+version: 0.5   # v0.4 → v0.5：GPT 第四轮 9 项全采纳（G8 官方关闭＋NFA 费率纠正＋G1 重购
+               # 保守化＋gross/net 会计＋S0 费用交接＋计费日历分拆＋证据措辞与引用收口）
+status: DRAFT — 待最终机械封口检查（四文件解析、占位符清零、哈希闭环、状态翻转）
 date: 2026-07-28
 references:
   charter_sha256: 5176320fb54a30e5e5dcc7f1ee96b828e7d38f727a573e8bd152ca3ff4299327
   s0_prereg_sha256: 6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132
-  gate1_snapshot_manifest_v4_sha256: 2e0bd62bdfa0f261a97bca250cb2f1467eb46a6ef9a555744936a6804b25643b
+  gate1_snapshot_manifest_v5_sha256: e789070b1ac19507057821696b10f4916f9b12ae1ace9f93bb2af0b378f5bfc0
   evidence_registry_sha256: SET_AT_FREEZE   # registry 与本文件同一 Freeze Commit，冻结时填最终哈希
   lucid_breach_reply_png_sha256: 620dee3911e616fafeacf9c399da054dfda4cf1414a0d0a24fd46d2a0358925a
   lucid_breach_resolution_md_sha256: SET_AT_FREEZE   # RESOLUTION.md 本轮仍在更新（AI-bot 定级）
@@ -41,16 +41,25 @@ S0 §10.4 中的**全部量词——GO 的存在量词、STOP 的全称量词、
 
 ### 2.2 LucidFlex 50K 生命周期（评估 → sim funded；live 见 §2.6 排除）
 
-状态机要点（参数与公式见 platform_params.yaml v0.3）：
+状态机要点（参数与公式一律以 platform_params.yaml 当前冻结版为准）：
 - 评估：无 scaling（首日满仓 4/40）、严格 50% consistency（cushion 不进 Primary）、
-  MLL 引擎按机器公式；评估价格/重置价 = 缺口 G1（Aaron 截图后填入，冻结前硬阻断）。
+  MLL 引擎按机器公式；费用已冻结——首购 $98、重购 Primary $140（coupon 复用未证明，
+  防虚假 GO）、reset $95。
 - Funded：**首日容量仅 2 手/20 micro**（分层 [0,1000)→2、[1000,2000)→3、[2000,∞)→4，
   EOD 更新、双向浮动、payout 扣减可降档）；负模拟盈利档位 UNRESOLVED（G7），
   确认前保守取最低档 2/20 并在输出中标注该假设；payout 后 MLL = $50,100。
 - Payout 处理期：**halt**（官方明示处理前交易可致拒付）。
-- **违规判定（已由 Level 2 证据关闭）**：阈值按日终余额更新（EOD trailing），
-  违规监控为盘中实时、含未实现盈亏，触及即违规
-  （gate1/lucid_inquiry_reply/RESOLUTION.md，哈希见头部）→ **恒用 adverse-path**。
+- **违规判定（v0.5：冻结的保守建模假设，非已确认事实）**：
+
+  ```yaml
+  lucid_intraday_breach:
+    evidence_status: unresolved_human_confirmation
+    available_evidence: [official_page_ambiguous, lucid_ai_support_reply]
+    primary_model_rule: realtime_equity_including_unrealized
+    model_role: conservative_assumption   # 相对 EOD-only 只会加速死亡、压低 EV：
+    path: adverse_path                    # 不会经 Lucid 制造虚假 GO，可能产生假 STOP
+  ```
+
   违规 = 账户即时死亡；损失按触发价 ± adverse slippage。
 - 评估目标 / 50% consistency（申请时刻）/ funded 无 DLL 无 consistency /
   payout 周期 5 个达标盈利日、≤50% 利润、金额上限、payout 对 MLL 与 scaling 的影响：
@@ -85,7 +94,7 @@ decision_roles:
     - topstep_50k_stdpurchase_xfaconsistency_nodll × P2
     - topstep 购买路径与 DLL 变体 × P2
     - payout_policy_sensitivity（见 §4.2）
-    - live 迁移上界情景（见 §2.6）
+    # live 迁移情景已整体移入 excluded（§2.6：状态机未冻结禁止运行）
   excluded_from_checkpoint_0:   # 只展示
     - 其他账户规模、LucidPro/Direct/Daily、R&D 备选一切组合
 ```
@@ -108,7 +117,8 @@ live_transition:
 
 ## 3. 账户模拟器
 
-- 时间步 1 分钟；违规检查两平台**均用 adverse-path**（含浮亏实时判定，Level 2 证据）；
+- 时间步 1 分钟；违规检查两平台**均用 adverse-path**（Topstep：官方确认实时含浮亏；
+  Lucid：冻结的保守建模假设，见 §2.2）；
   close-path 用于日终结算、payout 与 P&L 会计。ambiguous 日按 S0 §10.1 双场景。
 - **Sizing 锚点（v0.2 修正）**：
   E1：`sizing_anchor = 实际计划止损距离（含成本）`；
@@ -132,9 +142,18 @@ live_transition:
 ### 4.1 Synthetic 日历（v0.2 新增）
 固定 24 个月模板日历 `2026-08-01 → 2028-07-31`：CME 交易日、周末、假日、半日市
 按真实交易所日历生成；**bootstrap 只决定放置在模板交易日上的交易结果序列，
-不决定日历本身**。月费/订阅在模板日历的自然月扣取；payout processing 按模板
-business days 计算；达标盈利日按模板月/周期归属。模板起始日期可在冻结前调整，
-算法不可。
+不决定日历本身**。**计费日历（v0.5 分拆，消除自然月矛盾）**：
+
+```yaml
+billing_calendars:
+  topstep_combine:  {cadence: every_30_days_from_current_rebill_anchor}   # reset 将锚点重设为 reset 日
+  topstep_api:      {cadence: every_30_days_from_activation}
+  nfa_fee_step:     {change_date: "2027-07-01", per_side: "0.01 → 0.02"}  # 期界中段费率跳升
+  true_calendar_month_services: {cadence: calendar_month}                  # 仅适用真日历月计费项
+```
+
+payout processing 按模板 business days 计算；达标盈利日按模板周期归属。
+模板起始日期可在冻结前调整，算法不可。
 
 ### 4.2 Payout 政策（v0.2 新增，冻结）
 
@@ -159,19 +178,25 @@ payout_policy_sensitivity:
 ```yaml
 failure_policy:                # Primary；R0（完全不重购）为敏感性
   evaluation_failure:
-    topstep: {action: reset, fee_usd: 49, max_total_attempts: 6}
-    lucid:   {action: reset_or_repurchase, fee_usd: PENDING_G1, max_total_attempts: 6}
+    topstep: {action: invoke_subscription_reset_engine, max_total_attempts: 6}
+             # 引擎决定用 Reset Credit（先到期先用、同规格同路径）还是付费 $49；
+             # rebill 锚点重设为 reset 日 + 30 天
+    lucid:   {action: reset, fee_usd: 95, max_total_attempts: 6}
   funded_pre_first_payout_failure:
     topstep: {action: back2funded, fee_usd: 599, max_per_xfa: 2, window_days: 30,
               after_exhausted: new_combine}
-    lucid:   {action: new_evaluation}   # Lucid 无同类复活机制（以 platform_params 为准）
+    lucid:   {action: new_evaluation, purchase_cost_policy: subsequent_repurchase_primary_140}
   funded_post_payout_failure:
     topstep: {action: new_combine}      # B2F 对已 payout 账户不可用（官方）
-    lucid:   {action: new_evaluation}
+    lucid:   {action: new_evaluation, purchase_cost_policy: subsequent_repurchase_primary_140}
   live_failure: {action: not_applicable} # Live 已整体排除（§2.6）
 ```
 
-各动作费用以 platform_params.yaml 为准；Lucid 侧待 G1 截图填入。
+各动作费用以 platform_params.yaml（当前冻结版）为准。
+**Payout 会计与 S0 费用交接**：按 platform_params 的 `payout_accounting`
+（gross 扣减余额、trader 现金 = gross×分成−通道费、terminal 同口径）与
+`execution_costs.s0_cost_handoff`（单一保守平台费 $1.74 RT PROVISIONAL 烘入 S0 路径、
+MC 不再扣交易费）执行，实现不得另行解释。
 
 ### 4.4 会计（v0.4：API 归类修正＋订阅引擎＋EV 单位）
 
@@ -259,7 +284,7 @@ MC1.x evidence-resolution commit → FREEZE_LOG 登记；状态机语义变化�
 7. DLL 引用 platform_params 完整状态机；多账户 5-XFA 上限记入 v1.1 约束。
 
 ### v0.1 → v0.2 修订记录（GPT 评审 10 项阻断全部采纳＋证据关闭）
-1. Lucid 违规判定开放项以 Level 2 证据关闭为 V-A（实时含浮亏）；双变体删除，
+1. Lucid 违规判定采用 V-A（实时含浮亏）——后经 AI-bot 披露降级为冻结的保守建模假设；双变体删除，
    两平台统一 adverse-path。
 2. 平台参数单位改为完整生命周期变体（firm×product×path×size×dll×phase）。
 3. 新增 §2.5 决策角色：Primary（2 生命周期 × P2）/ Sensitivity（不得翻转判决）/

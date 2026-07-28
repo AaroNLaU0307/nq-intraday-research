@@ -1,6 +1,14 @@
-# evidence_registry.yaml — 自动生成自 snapshot_manifest_v3.json，勿手改
+# evidence_registry.yaml — 自动生成自 snapshot_manifest_v5.json，勿手改
 # 参数表以页面键引用本注册表；完整64位哈希在此，不在参数表内重复。
 evidence_registry:
+  cme_clearing_fees:
+    file: snapshots/2026-07-28/cme_clearing_fees.html
+    url: "https://www.cmegroup.com/company/clearing-fees.html"
+    final_url: "https://www.cmegroup.com/company/clearing-fees.html"
+    http_status: 403
+    raw_sha256: "eecde3fafbde4090c30e610a7ed4b8d877f8351c0490e4189574890e8a5a4f7e"
+    extracted_text_sha256: "eecde3fafbde4090c30e610a7ed4b8d877f8351c0490e4189574890e8a5a4f7e"
+    retrieved_at_utc: "2026-07-28T01:28:25.487784+00:00"
   lucid_consistency:
     file: snapshots/2026-07-28/lucid_consistency.html
     url: "https://support.lucidtrading.com/en/articles/12945805-lucidflex-consistency-percentage"
@@ -85,6 +93,14 @@ evidence_registry:
     raw_sha256: "1feea6a4098d288a88505eecb7b94999164ab4e55f8f10031f3760df1154a19e"
     extracted_text_sha256: "6144e5028f0c39c130dca7b344d4c9015987ce9e46412082ae02335f43c9c974"
     retrieved_at_utc: "2026-07-28T00:29:14.418567+00:00"
+  nfa_assessment_fees:
+    file: snapshots/2026-07-28/nfa_assessment_fees.html
+    url: "https://www.nfa.futures.org/faqs/members/nfa-assessment-fees.html"
+    final_url: "https://www.nfa.futures.org/faqs/members/nfa-assessment-fees.html"
+    http_status: 200
+    raw_sha256: "ffac784ef21a7bb4730bacf5aff1d7bcb7bc306e378d6e39bbcbdd1bf4d56c12"
+    extracted_text_sha256: "ac94858ab7f89272828519242567363ad26ff8f76adaa5a616d7c257918e1f9a"
+    retrieved_at_utc: "2026-07-28T01:28:24.276526+00:00"
   topstep_api:
     file: snapshots/2026-07-28/topstep_api.html
     url: "https://help.topstep.com/en/articles/11187768-topstepx-api-access"
@@ -186,6 +202,14 @@ evidence_registry:
     raw_sha256: "8525af0e7e43d4194506f9bf6d01dd5393734ecb0c8f62f9784905920e53d0fc"
     extracted_text_sha256: "3d46b9d6ce39db44ee22f0580e81fc57ee580123c7ce48fad7831a5437b8959a"
     retrieved_at_utc: "2026-07-28T01:13:08.659234+00:00"
+  topstep_what_is_reset:
+    file: snapshots/2026-07-28/topstep_what_is_reset.html
+    url: "https://help.topstep.com/en/articles/8284128-what-is-a-reset"
+    final_url: "https://help.topstep.com/en/articles/8284128-what-is-a-reset"
+    http_status: 200
+    raw_sha256: "0737210f2b4c0c04cfd18c5ff1f56efd4531745884750a322e1c7bf8ab56d3df"
+    extracted_text_sha256: "c187fff7faec3a40f49c163c34855d52010ec4cf3f767579140250dbd5bf3bf2"
+    retrieved_at_utc: "2026-07-28T01:28:21.202652+00:00"
   topstep_xfa_params:
     file: snapshots/2026-07-28/topstep_xfa_params.html
     url: "https://help.topstep.com/en/articles/8284215-express-funded-account-parameters"

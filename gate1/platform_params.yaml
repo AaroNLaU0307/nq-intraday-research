@@ -1,11 +1,11 @@
-# platform_params.yaml v0.2 — 平台规则参数转录（与 MC_METHOD_SPEC 一同冻结）
-# 证据：所有 evidence 键指向 gate1/evidence_registry.yaml（完整64位哈希在彼处）。
-# v0.1 → v0.2：GPT 评审 3 项纠错＋5 项遗漏全部落实；其引用的全部新数字均已
-# 由本机新快照独立验证（Lucid scaling/consistency、Back2Funded、XFA params、分层表图片）。
+﻿# platform_params.yaml v0.2 â€” å¹³å°è§„åˆ™å‚æ•°è½¬å½•ï¼ˆä¸Ž MC_METHOD_SPEC ä¸€åŒå†»ç»“ï¼‰
+# è¯æ®ï¼šæ‰€æœ‰ evidence é”®æŒ‡å‘ gate1/evidence_registry.yamlï¼ˆå®Œæ•´64ä½å“ˆå¸Œåœ¨å½¼å¤„ï¼‰ã€‚
+# v0.1 â†’ v0.2ï¼šGPT è¯„å®¡ 3 é¡¹çº é”™ï¼‹5 é¡¹é—æ¼å…¨éƒ¨è½å®žï¼›å…¶å¼•ç”¨çš„å…¨éƒ¨æ–°æ•°å­—å‡å·²
+# ç”±æœ¬æœºæ–°å¿«ç…§ç‹¬ç«‹éªŒè¯ï¼ˆLucid scaling/consistencyã€Back2Fundedã€XFA paramsã€åˆ†å±‚è¡¨å›¾ç‰‡ï¼‰ã€‚
 
 meta:
-  version: 0.4   # v0.3 → v0.4：G1 关闭（截图 $98/$95）、订阅/Reset Credit 状态机、
-                 # execution_costs 数值化、DLL 基准公式、payout rail、AI-bot 证据定级
+  version: 0.5   # v0.4 → v0.5：G8 官方关闭、NFA 纠正与分段、重购保守化、payout 会计、S0 费用交接、机器证据引用
+                 # execution_costs æ•°å€¼åŒ–ã€DLL åŸºå‡†å…¬å¼ã€payout railã€AI-bot è¯æ®å®šçº§
   transcribed_at: "2026-07-28"
   evidence_registry: gate1/evidence_registry.yaml
   status: draft_pending_final_seal_check
@@ -15,13 +15,17 @@ lucidflex_50k:
   evaluation:
     evidence: [lucid_flex_evaluation]
     fee_model: one_time_no_rebilling
-    fees:                                # G1 关闭（evidence: lucid_50k_flex_eval_png，2026-07-28 截图）
-      purchase_fee_usd: 98.00            # 标价 $140，"w/ coupon at checkout"
+    fees:                                # v0.5ï¼šé‡è´­æŒ‰ä¿å®ˆæ ‡ä»·ï¼ˆcoupon å¯å¤ç”¨æ€§æœªè¯æ˜Žï¼‰
+      evidence: [lucid_50k_flex_eval_png]
+      first_purchase_usd: 98.00          # æ ‡ä»· $140ï¼Œ"w/ coupon at checkout"ï¼ˆæˆªå›¾å½“æ—¥çŽ°ä»·ï¼‰
       list_price_usd: 140.00
+      subsequent_repurchase_primary_usd: 140.00   # coupon å¤ç”¨/é‡è´­é€‚ç”¨æ€§æœªéªŒè¯ â†’ é˜²è™šå‡ GO
+      subsequent_repurchase_sensitivity_usd: 98.00
       reset_fee_usd: 95.00
-      sales_tax_or_checkout_fee: NOT_VERIFIED   # 截图未含 checkout 税费行（子缺口，非阻断：MC 加 0/8% 敏感性）
-      discount_policy: "coupon 于 checkout 生效；持续性未验证——Primary 用 $98 现价，Sensitivity 用 $140 标价"
-    reference_products:                  # 同日截图归档（非 Primary，供未来 entry_mode 研究）
+      tax_primary: {treatment: screenshot_price_is_final, rate: 0}   # æˆªå›¾ä»·ä¸º One Time Payment å…¨ä»·
+      tax_sensitivity: {rate: 0.10}
+      discount_policy: "coupon äºŽ checkout ç”Ÿæ•ˆï¼›æŒç»­æ€§/å¤ç”¨æ€§æœªéªŒè¯ï¼ˆå·²ä½“çŽ°åœ¨é‡è´­ Primary å–æ ‡ä»·ï¼‰"
+    reference_products:                  # åŒæ—¥æˆªå›¾å½’æ¡£ï¼ˆéž Primaryï¼Œä¾›æœªæ¥ entry_mode ç ”ç©¶ï¼‰
       lucid_50k_pro_eval:  {price_usd: 129.50, reset_usd: 110.40, dll_usd: 1200, evidence: lucid_50k_pro_eval_png}
       lucid_50k_direct_instant_funded: {price_usd: 364.00, consistency_pct: 20, dll_below_trail_usd: 1200, evidence: lucid_50k_direct_png}
     time_limit: none
@@ -32,13 +36,13 @@ lucidflex_50k:
       cushion:
         exists: true
         example_50k: {nominal_usd: 1500, cushion_usd: 1560}   # evidence: lucid_consistency
-        formula: UNKNOWN   # 缺口 G6：官方明示为随实际盈利浮动的百分比，非固定金额
-        decision_role: "Primary 按严格 50%；cushion 仅作敏感性，不进 Primary 判决"
+        formula: UNKNOWN   # ç¼ºå£ G6ï¼šå®˜æ–¹æ˜Žç¤ºä¸ºéšå®žé™…ç›ˆåˆ©æµ®åŠ¨çš„ç™¾åˆ†æ¯”ï¼Œéžå›ºå®šé‡‘é¢
+        decision_role: "Primary æŒ‰ä¸¥æ ¼ 50%ï¼›cushion ä»…ä½œæ•æ„Ÿæ€§ï¼Œä¸è¿› Primary åˆ¤å†³"
     dll: none
-    scaling_in_evaluation: none          # 评估期无 scaling，第一天即满仓（lucid_scaling）
+    scaling_in_evaluation: none          # è¯„ä¼°æœŸæ—  scalingï¼Œç¬¬ä¸€å¤©å³æ»¡ä»“ï¼ˆlucid_scalingï¼‰
     max_position: {minis: 4, micros: 40}
-    upgrade: {activation_fee_usd: 0, delay: "5-30 分钟"}
-  mll_engine:                            # 机器公式（GPT 建议格式；数值经快照验证）
+    upgrade: {activation_fee_usd: 0, delay: "5-30 åˆ†é’Ÿ"}
+  mll_engine:                            # æœºå™¨å…¬å¼ï¼ˆGPT å»ºè®®æ ¼å¼ï¼›æ•°å€¼ç»å¿«ç…§éªŒè¯ï¼‰
     evidence: [lucid_flex_drawdown, lucid_breach_reply_png]
     starting_balance_usd: 50000
     initial_mll_usd: 48000
@@ -47,12 +51,12 @@ lucidflex_50k:
     locked_mll_usd: 50100
     eod_update: "mll_next = min(50100, max(mll_current, eod_closing_balance - 2000))"
     payout_effect: "mll_next = 50100"
-    intraday_breach: "realtime_equity_including_unrealized <= current_mll → 即时违规"
-    breach_scope: "评估与 funded 相同"
-    breach_evidence_grade: "Level 2-AI：Lucid support 两轮回复均为 AI bot 生成（Aaron
-      2026-07-28 披露），非人工确认。V-A 维持 Primary：(a) 与官方页 'If your account
-      balance reached the MLL, your account will be breached' 一致；(b) V-A 为保守方向，
-      若 bot 有误则偏差只低估生存率导向 STOP，不产生虚假 GO。可选跟进：人工客服复确认。"
+    intraday_breach: "realtime_equity_including_unrealized <= current_mll â†’ å³æ—¶è¿è§„"
+    breach_scope: "è¯„ä¼°ä¸Ž funded ç›¸åŒ"
+    breach_evidence_grade: "Level 2-AIï¼šLucid support ä¸¤è½®å›žå¤å‡ä¸º AI bot ç”Ÿæˆï¼ˆAaron
+      2026-07-28 æŠ«éœ²ï¼‰ï¼Œéžäººå·¥ç¡®è®¤ã€‚V-A ç»´æŒ Primaryï¼š(a) ä¸Žå®˜æ–¹é¡µ 'If your account
+      balance reached the MLL, your account will be breached' ä¸€è‡´ï¼›(b) V-A ä¸ºä¿å®ˆæ–¹å‘ï¼Œ
+      è‹¥ bot æœ‰è¯¯åˆ™åå·®åªä½Žä¼°ç”Ÿå­˜çŽ‡å¯¼å‘ STOPï¼Œä¸äº§ç”Ÿè™šå‡ GOã€‚å¯é€‰è·Ÿè¿›ï¼šäººå·¥å®¢æœå¤ç¡®è®¤ã€‚"
   funded:
     evidence: [lucid_flex_funded, lucid_scaling]
     dll: none
@@ -60,28 +64,28 @@ lucidflex_50k:
     payout_buffer: none
     profit_split_trader_pct: 90
     absolute_max_position: {minis: 4, micros: 40}
-    scaling_tiers:                       # 按模拟盈利，双向浮动，session 结束后更新
+    scaling_tiers:                       # æŒ‰æ¨¡æ‹Ÿç›ˆåˆ©ï¼ŒåŒå‘æµ®åŠ¨ï¼Œsession ç»“æŸåŽæ›´æ–°
       update_time: end_of_session
-      bidirectional: true                # payout 扣减余额可导致降档
-      tiers_50k:                         # 机器区间（官方表格式 "$0-$999" 的标准读法）
+      bidirectional: true                # payout æ‰£å‡ä½™é¢å¯å¯¼è‡´é™æ¡£
+      tiers_50k:                         # æœºå™¨åŒºé—´ï¼ˆå®˜æ–¹è¡¨æ ¼å¼ "$0-$999" çš„æ ‡å‡†è¯»æ³•ï¼‰
         - {lower_inclusive: 0,    upper_exclusive: 1000, minis: 2, micros: 20}
         - {lower_inclusive: 1000, upper_exclusive: 2000, minis: 3, micros: 30}
         - {lower_inclusive: 2000,                        minis: 4, micros: 40}
-      negative_simulated_profit_tier: UNRESOLVED   # 官方表自 $0 起；负盈利档位待 support
-                                                   # 书面确认（lucid_inquiry_2.md 问题 1）；
-                                                   # 确认前 MC 保守取最低档 2/20 并标注假设
-      circumvention: "反复规避限额可致当日利润清零/账户审查"
+      negative_simulated_profit_tier: UNRESOLVED   # å®˜æ–¹è¡¨è‡ª $0 èµ·ï¼›è´Ÿç›ˆåˆ©æ¡£ä½å¾… support
+                                                   # ä¹¦é¢ç¡®è®¤ï¼ˆlucid_inquiry_2.md é—®é¢˜ 1ï¼‰ï¼›
+                                                   # ç¡®è®¤å‰ MC ä¿å®ˆå–æœ€ä½Žæ¡£ 2/20 å¹¶æ ‡æ³¨å‡è®¾
+      circumvention: "åå¤è§„é¿é™é¢å¯è‡´å½“æ—¥åˆ©æ¶¦æ¸…é›¶/è´¦æˆ·å®¡æŸ¥"
   payouts:
     evidence: [lucid_flex_payouts]
     qualifying_days_required: 5
-    qualifying_day_min_profit_usd: 150   # 每次批准 payout 后重置重计
+    qualifying_day_min_profit_usd: 150   # æ¯æ¬¡æ‰¹å‡† payout åŽé‡ç½®é‡è®¡
     cycle_net_profit: {comparator: ">", threshold_usd: 0, evidence_example_usd: 1}
     min_request_usd: 500
-    max_request: "50% of profit, cap $2,000（50K）；上限不随次数增长"
+    max_request: "50% of profit, cap $2,000ï¼ˆ50Kï¼‰ï¼›ä¸Šé™ä¸éšæ¬¡æ•°å¢žé•¿"
     max_payouts_before_live_review: 5
     fixed_payout_window: none
-    processing: "批准后数分钟扣账；2 个工作日到账"
-    trading_during_processing_risk: "处理前交易致余额低于要求 → 申请可能被拒"
+    processing: "æ‰¹å‡†åŽæ•°åˆ†é’Ÿæ‰£è´¦ï¼›2 ä¸ªå·¥ä½œæ—¥åˆ°è´¦"
+    trading_during_processing_risk: "å¤„ç†å‰äº¤æ˜“è‡´ä½™é¢ä½ŽäºŽè¦æ±‚ â†’ ç”³è¯·å¯èƒ½è¢«æ‹’"
   commissions_per_side_usd:
     evidence: [lucid_products_comms]
     NQ: 1.75
@@ -90,33 +94,61 @@ lucidflex_50k:
     MES: 0.50
     GC: 2.30
     MGC: 0.80
-    note: "AI bot 确认帮助页未写明全含性（lucid_reply2）→ 保守 Primary 见 execution_costs"
+    note: "AI bot ç¡®è®¤å¸®åŠ©é¡µæœªå†™æ˜Žå…¨å«æ€§ï¼ˆlucid_reply2ï¼‰â†’ ä¿å®ˆ Primary è§ execution_costs"
 
-# 统一执行成本表（v0.4；机器参数——S0 逐笔 P&L 已扣费，MC 严禁重复扣除）
+# ç»Ÿä¸€æ‰§è¡Œæˆæœ¬è¡¨ï¼ˆv0.5ï¼›æœºå™¨å‚æ•°â€”â€”S0 é€ç¬” P&L å·²æ‰£è´¹ï¼ŒMC ä¸¥ç¦é‡å¤æ‰£é™¤ï¼‰
 execution_costs:
   topstepx_mnq:
-    total_round_turn_usd: 1.22           # evidence: topstepx_commissions（全含：commission+exchange+NFA）
+    evidence: [topstepx_commissions]
+    total_round_turn_usd: 1.22           # å…¨å«ï¼ˆcommission+exchange+NFAï¼‰ï¼›å¹³å°ä»·æ ¼å˜åŠ¨å±ž Gate 4 é£Žé™©
   lucidflex_mnq:
-    quoted_commission_per_side_usd: 0.50
-    conservative_primary:
-      exchange_clearing_fee_per_side_usd: 0.35   # PROVISIONAL —— G9：首次 S0 计算前须以
-      nfa_fee_per_side_usd: 0.02                 # CME/NFA 官方费表快照确认后转正
-      total_round_turn_usd: 1.74
-    sensitivity_all_in:
-      total_round_turn_usd: 1.00
-  double_counting_guard: "交易费只在 S0 成交模拟中扣除一次；MC 商业层不得再扣"
+    evidence: [lucid_products_comms, nfa_assessment_fees]
+    lucid_commission_per_side_usd: 0.50
+    cme_exchange_clearing_fee_per_side_usd: 0.35   # PROVISIONAL â€”â€” G9 å‰©ä½™ï¼šCME é¡µ 403ï¼Œ
+                                                   # é¦–æ¬¡ S0 è®¡ç®—å‰ä»¥å®˜æ–¹è´¹è¡¨ï¼ˆæµè§ˆå™¨æ¸²æŸ“ï¼‰ç¡®è®¤
+    nfa_fee_per_side_usd:                # å®˜æ–¹ NFA FAQï¼ˆ2026-07-28 å¿«ç…§ï¼‰
+      until_2027_06_30: 0.01
+      from_2027_07_01: 0.02
+    conservative_total_round_turn_usd:
+      until_2027_06_30: 1.72             # 2Ã—(0.50+0.35+0.01)
+      from_2027_07_01: 1.74              # 2Ã—(0.50+0.35+0.02)ï¼›synthetic æ—¥åŽ†æŒ‰æ—¥æœŸåˆ†æ®µè®¡
+    sensitivity_all_in_round_turn_usd: 1.00
+  s0_cost_handoff:                       # v0.5ï¼šS0 è·¯å¾„çš„å¹³å°è´¹å”¯ä¸€åŒ–
+    method: single_conservative_platform_fee
+    round_turn_platform_fee_usd: 1.74    # = max(ä¸¤å¹³å°, å…¨æœŸç•Œ)ï¼›PROVISIONAL éš G9 è”åŠ¨
+    rationale: "S0 æŒ‰å¼•æ“ŽÃ—æˆæœ¬åœºæ™¯ç”Ÿæˆè·¯å¾„ã€ä¸åˆ†å¹³å°ï¼›å–å…¨æœŸç•Œæœ€é«˜è´¹ä¿å®ˆçƒ˜å…¥ï¼Œ
+      Topstep ä¾§ EV å› æ­¤è¢«è½»å¾®ä½Žä¼°ï¼ˆæ–¹å‘å®‰å…¨ï¼‰ï¼Œå·²æŠ«éœ²"
+    mc_reapply_transaction_fee: false
+  double_counting_guard: "äº¤æ˜“è´¹åªåœ¨ S0 æˆäº¤æ¨¡æ‹Ÿä¸­æ‰£é™¤ä¸€æ¬¡ï¼›MC å•†ä¸šå±‚ä¸å¾—å†æ‰£"
+
+payout_accounting:                       # v0.5ï¼šgross/net å”¯ä¸€åŒ–ï¼ˆevidence: topstep_payout ç¤ºä¾‹
+  gross_request_definition: amount_removed_from_sim_account_balance   # "$6,000 â†’ å– $3,000 â†’ ä½™é¢ $3,000"ï¼‰
+  account_balance_effect: "balance_after = balance_before âˆ’ gross_request_usd"
+  trader_cash_received: "gross_request_usd Ã— trader_split âˆ’ payout_rail_fee_usd"
+  terminal_withdrawable_value: "eligible_gross Ã— trader_split âˆ’ payout_rail_fee_usd"
+  scaling_and_mll_use: gross_deducted_balance   # é™æ¡£ä¸Ž buffer è®¡ç®—åŸºäºŽæ‰£é™¤ gross åŽçš„ä½™é¢
   platforms_automation:
     evidence: [lucid_platforms, lucid_permitted, lucid_prohibited_hft]
     automation: allowed_with_conditions
+
+automation_compliance:                   # v0.5ï¼šåˆè§„è¯æ®æœºå™¨å¼•ç”¨ï¼ˆG5 å·²å¿«ç…§éƒ¨åˆ†ï¼‰
+  topstep:
+    evidence: [topstep_prohibited_conduct, topstep_prohibited_strategies, topstep_api]
+    notes: "ç¦ VPS/VPNã€è´¦æˆ·å †å ã€è·¨è´¦æˆ·å¯¹å†²ã€ä¸å…¬å¹³æŠ€æœ¯ï¼›æ¯æ—¥ä¸€ç¬”çš„ opening-drive
+      ç­–ç•¥ä¸æŽ¥è¿‘ä»»ä½•ç¦æ­¢å½¢æ€ï¼›å®Œæ•´ Terms of Use å…¨æ–‡ = é¦–æ¬¡å®žç›˜æ‰§è¡Œå‰ç¡¬é˜»æ–­ï¼ˆGate 2ï¼‰"
+  lucid:
+    evidence: [lucid_permitted, lucid_prohibited_hft]
+    notes: "å…è®¸è‡ªåŠ¨åŒ–/copierï¼›ç¦ HFTã€microscalpingã€æ¨¡æ‹Ÿæˆäº¤åˆ©ç”¨ï¼›
+      å®Œæ•´ T&C å…¨æ–‡ = é¦–æ¬¡å®žç›˜æ‰§è¡Œå‰ç¡¬é˜»æ–­ï¼ˆGate 2ï¼‰"
   live_transition:
     evidence: [lucid_live_structure]
-    trigger: "5 次 payout 后进入 live review pool；非保证、时点由风险团队决定"
+    trigger: "5 æ¬¡ payout åŽè¿›å…¥ live review poolï¼›éžä¿è¯ã€æ—¶ç‚¹ç”±é£Žé™©å›¢é˜Ÿå†³å®š"
 
 # =============================================================================
 topstep_50k:
   trading_day:
     evidence: [topstep_combine_params]
-    session: "5:00 PM CT → 次日 3:10 PM CT；此后强平至 5:00 PM CT"
+    session: "5:00 PM CT â†’ æ¬¡æ—¥ 3:10 PM CTï¼›æ­¤åŽå¼ºå¹³è‡³ 5:00 PM CT"
   combine:
     evidence: [topstep_combine_params, topstep_pricing, topstep_consistency, topstep_mll]
     subscription_usd_per_month: {standard_path: 49, no_activation_path: 95}
@@ -126,23 +158,23 @@ topstep_50k:
       starting_balance_usd: 50000
       initial_mll_usd: 48000
       trail_distance_usd: 2000
-      locked_mll_usd: 50000              # MLL 达到起始余额时锁定（≈日终余额达 $52,000）
+      locked_mll_usd: 50000              # MLL è¾¾åˆ°èµ·å§‹ä½™é¢æ—¶é”å®šï¼ˆâ‰ˆæ—¥ç»ˆä½™é¢è¾¾ $52,000ï¼‰
       eod_update: "mll_next = min(50000, max(mll_current, eod_balance - 2000))"
-      intraday_breach: "realtime_net_pnl_including_unrealized 触及 → 当日强平；Reset 后恢复资格"
+      intraday_breach: "realtime_net_pnl_including_unrealized è§¦åŠ â†’ å½“æ—¥å¼ºå¹³ï¼›Reset åŽæ¢å¤èµ„æ ¼"
     consistency_target:
       type: soft_target_increase
-      rule: "best_day > 0.5 × profit_target → 新目标 = best_day ÷ 0.50"
+      rule: "best_day > 0.5 Ã— profit_target â†’ æ–°ç›®æ ‡ = best_day Ã· 0.50"
       best_day_lock_time: "15:10 America/Chicago"
     max_position: {minis: 5, micros: 50, ratio: "10:1"}
-  dll:                                   # 完整状态机；同时适用 Combine 与 XFA（checkout 版固定）
+  dll:                                   # å®Œæ•´çŠ¶æ€æœºï¼›åŒæ—¶é€‚ç”¨ Combine ä¸Ž XFAï¼ˆcheckout ç‰ˆå›ºå®šï¼‰
     evidence: [topstep_dll_optional, topstep_payout, topstep_mll]
     optional: true
     threshold_usd_50k: 1000
-    reference_equity: session_start_equity          # v0.4：基准唯一化
+    reference_equity: session_start_equity          # v0.4ï¼šåŸºå‡†å”¯ä¸€åŒ–
     reference_reset_time: "17:00 America/Chicago"
     net_pnl_formula: "dll_net_pnl = realtime_equity - session_start_equity"
     trigger_condition: "dll_net_pnl <= -1000"
-    breach_path: adverse_path            # 实时 Net P&L 含未实现（topstep_mll："Same logic applies"）
+    breach_path: adverse_path            # å®žæ—¶ Net P&L å«æœªå®žçŽ°ï¼ˆtopstep_mllï¼š"Same logic applies"ï¼‰
     on_trigger:
       flatten_positions: true
       cancel_orders: true
@@ -152,22 +184,33 @@ topstep_50k:
       payout_request_blocked_until_violation_lifts: true
     set_at_checkout_fixed: true
     carries_to_xfa: true
-    distinct_from_pdll: "手动 PDLL 可随时调整/移除，属个人风控层，不进平台状态机"
-  subscription_engine:                   # v0.4 新增（evidence: topstep_subscriptions，2026-06-18）
+    distinct_from_pdll: "æ‰‹åŠ¨ PDLL å¯éšæ—¶è°ƒæ•´/ç§»é™¤ï¼Œå±žä¸ªäººé£ŽæŽ§å±‚ï¼Œä¸è¿›å¹³å°çŠ¶æ€æœº"
+  subscription_engine:                   # v0.4 æ–°å¢ž
+    evidence: [topstep_subscriptions]
     charged_at_purchase: true
-    rebill_interval_days: 30             # 自原始注册日起，非自然月
-    rebill_credit_granted: 1             # 每次 rebill 送 1 个 Reset Credit（存于 profile，
-                                         # 可用于未来同规格 Combine；取消订阅后该账户不可再 reset）
+    rebill_interval_days: 30             # è‡ªåŽŸå§‹æ³¨å†Œæ—¥èµ·ï¼Œéžè‡ªç„¶æœˆ
+    rebill_credit_granted: 1             # æ¯æ¬¡ rebill é€ 1 ä¸ª Reset Creditï¼ˆå­˜äºŽ profileï¼Œ
+                                         # å¯ç”¨äºŽæœªæ¥åŒè§„æ ¼ Combineï¼›å–æ¶ˆè®¢é˜…åŽè¯¥è´¦æˆ·ä¸å¯å† resetï¼‰
     auto_cancel_on_pass: true
-    continues_after_mll_breach: true     # 爆仓后订阅继续扣费、账户练习模式直至 reset
+    continues_after_mll_breach: true     # çˆ†ä»“åŽè®¢é˜…ç»§ç»­æ‰£è´¹ã€è´¦æˆ·ç»ƒä¹ æ¨¡å¼ç›´è‡³ reset
     no_pause: true
-    pass_deadline_vs_rebill: "rebill 日前一交易日收盘前 dashboard 显示通过才免扣"
+    pass_deadline_vs_rebill: "rebill æ—¥å‰ä¸€äº¤æ˜“æ—¥æ”¶ç›˜å‰ dashboard æ˜¾ç¤ºé€šè¿‡æ‰å…æ‰£"
   reset_policy:
-    use_available_reset_credit_first: true
+    evidence: [topstep_what_is_reset]    # G8 å…³é—­ï¼ˆå®˜æ–¹é¡µ 2026-07-28 å¿«ç…§ï¼‰
+    use_available_reset_credit_first: true   # å†»ç»“çš„æˆ‘æ–¹æ”¿ç­–ï¼ˆé…å¯¹è§„åˆ™è§ä¸‹ï¼‰
+    credit_matching: use_oldest_matching_credit_first   # æˆ‘æ–¹æ”¿ç­–é€‰æ‹©ï¼Œéžå®˜æ–¹è§„åˆ™
     paid_reset_fee_usd: {standard_path: 49, no_activation_path: 95}
-    reset_effect_on_rebill_date: NOT_FOUND_IN_SNAPSHOT   # 子缺口 G8："What is the Reset?" 页待抓
-    primary_policy: "失败即刻 reset（有 credit 用 credit，无则付费）——24 月期界内时间成本高于费差"
-    sensitivity_policy: "等待下一次 rebill 的免费 credit"
+    reset_effect_on_rebill_date: set_to_reset_date_plus_30_days   # ä»˜è´¹ä¸Ž credit å®Œå…¨ä¸€è‡´
+    reset_credit:
+      granted_per_rebill: 1
+      rebill_date_effect: identical_to_paid_reset
+      expires_after_days: 365            # 2025-12-11 èµ·å‘æ”¾è€…ï¼›æ­¤å‰å‘æ”¾çš„æ— æœŸé™
+      tied_to_account_size_and_type: true   # Standard / No-Activation / DLL äº’ä¸é€šç”¨
+      no_transfer_no_combine: true
+      survives_subscription_cancellation: true   # ä½†å·²å–æ¶ˆçš„è®¢é˜…æœ¬èº«ä¸å¯å† reset
+    max_resets_per_account_per_day: 2
+    primary_policy: "å¤±è´¥å³åˆ» resetï¼ˆæœ‰åŒ¹é… credit ç”¨ creditï¼Œæ— åˆ™ä»˜è´¹ï¼‰"
+    sensitivity_policy: "ç­‰å¾…ä¸‹ä¸€æ¬¡ rebill çš„å…è´¹ credit"
     stats_reset_on_reset: true
   activation:
     evidence: [topstep_pricing]
@@ -175,40 +218,41 @@ topstep_50k:
     no_activation_path_usd: 0
   xfa:
     evidence: [topstep_xfa_params, topstep_mll, topstep_payout, topstep_consistency]
-    balance_start_usd: 0                 # "50K" 为购买力标签
+    balance_start_usd: 0                 # "50K" ä¸ºè´­ä¹°åŠ›æ ‡ç­¾
     max_active_xfa: 5
-    payout_path_chosen_at_activation: true   # Standard / Consistency 二选一
+    payout_path_chosen_at_activation: true   # Standard / Consistency äºŒé€‰ä¸€
     mll_engine:
       starting_balance_usd: 0
       initial_mll_usd: -2000
       locked_mll_usd: 0
       eod_update: "mll_next = min(0, max(mll_current, eod_balance - 2000))"
-      payout_effect: "mll_next = 0（永久）"
-      intraday_breach: "realtime_net_pnl_including_unrealized 触及 → 永久关户"
-    scaling_tiers:                       # evidence: topstep_xfa_scaling_table_png
+      payout_effect: "mll_next = 0ï¼ˆæ°¸ä¹…ï¼‰"
+      intraday_breach: "realtime_net_pnl_including_unrealized è§¦åŠ â†’ æ°¸ä¹…å…³æˆ·"
+    scaling_tiers:
+      evidence: [topstep_scaling, topstep_xfa_scaling_table_png]
       basis: current_account_balance
-      update: next_session_only          # 盘中不上调
-      tiers_50k:                         # 图表原文 Below/–/Above 的机器编码
+      update: next_session_only          # ç›˜ä¸­ä¸ä¸Šè°ƒ
+      tiers_50k:                         # å›¾è¡¨åŽŸæ–‡ Below/â€“/Above çš„æœºå™¨ç¼–ç 
         - {upper_exclusive: 1500,                        lots: 2, micros: 20}
         - {lower_inclusive: 1500, upper_inclusive: 2000, lots: 3, micros: 30}
         - {lower_exclusive: 2000,                        lots: 5, micros: 50}
-      payout_effect: "payout 降低余额至低档 → 上限相应下调"
+      payout_effect: "payout é™ä½Žä½™é¢è‡³ä½Žæ¡£ â†’ ä¸Šé™ç›¸åº”ä¸‹è°ƒ"
     payout_paths:
       standard:
-        qualifying: "5 个盈利日，每日净利 ≥ $150（不需连续）"
-        payout_day_lock_time: "16:00 America/Chicago"   # 与 Combine 的 15:10 属不同阶段参数
-        cycle_net_profit: ">= $0.01（首次豁免）"
-        max_request: "余额 50%，cap $2,000"
-        after_payout: "MLL 永久 = $0；5 日计数重启；申请当日不计入下轮"
+        qualifying: "5 ä¸ªç›ˆåˆ©æ—¥ï¼Œæ¯æ—¥å‡€åˆ© â‰¥ $150ï¼ˆä¸éœ€è¿žç»­ï¼‰"
+        payout_day_lock_time: "16:00 America/Chicago"   # ä¸Ž Combine çš„ 15:10 å±žä¸åŒé˜¶æ®µå‚æ•°
+        cycle_net_profit: ">= $0.01ï¼ˆé¦–æ¬¡è±å…ï¼‰"
+        max_request: "ä½™é¢ 50%ï¼Œcap $2,000"
+        after_payout: "MLL æ°¸ä¹… = $0ï¼›5 æ—¥è®¡æ•°é‡å¯ï¼›ç”³è¯·å½“æ—¥ä¸è®¡å…¥ä¸‹è½®"
       consistency:
-        qualifying: "≥3 交易日（每日≥1笔）＋ largest_winning_day/total_net_profit ≤ 0.40（不取整）"
-        max_request: "余额 50%，cap $3,000"
-        after_payout: "MLL = $0；consistency 与 3 日计数重启（新窗口自次一交易日）"
-    payout_cap_promotion:                # 限时促销，非稳定制度
-      rule: "购买 Combine 时加 DLL → cap 翻倍（$4,000 / $6,000）"
+        qualifying: "â‰¥3 äº¤æ˜“æ—¥ï¼ˆæ¯æ—¥â‰¥1ç¬”ï¼‰ï¼‹ largest_winning_day/total_net_profit â‰¤ 0.40ï¼ˆä¸å–æ•´ï¼‰"
+        max_request: "ä½™é¢ 50%ï¼Œcap $3,000"
+        after_payout: "MLL = $0ï¼›consistency ä¸Ž 3 æ—¥è®¡æ•°é‡å¯ï¼ˆæ–°çª—å£è‡ªæ¬¡ä¸€äº¤æ˜“æ—¥ï¼‰"
+    payout_cap_promotion:                # é™æ—¶ä¿ƒé”€ï¼Œéžç¨³å®šåˆ¶åº¦
+      rule: "è´­ä¹° Combine æ—¶åŠ  DLL â†’ cap ç¿»å€ï¼ˆ$4,000 / $6,000ï¼‰"
       status: limited_time_offering
       offer_expiry: unknown
-      decision_role: "Primary: dll=false, promotion=false；Sensitivity: dll=true, cap×2"
+      decision_role: "Primary: dll=false, promotion=falseï¼›Sensitivity: dll=true, capÃ—2"
     payout_min_usd: 125
     profit_split:
       default_trader_pct: 90
@@ -216,12 +260,12 @@ topstep_50k:
         condition: "joined_new_dashboard_before_2026-01-12"
         first_lifetime_profit_usd: 10000
         trader_pct_on_first_lifetime_profit: 100
-      decision_role: "Primary = 现在新开账户 = 90/10；不得事后选用旧 cohort"
-    payout_processing: "XFA 资金即时扣账、可立即交易"
-    payout_rail:                         # v0.4：Primary 通道冻结（马来西亚 = 国际用户）
-      primary: {method: Wise, topstep_fee_usd: 0, processing: "1-3 工作日", note: "Wise 自身汇兑费不计入平台费"}
+      decision_role: "Primary = çŽ°åœ¨æ–°å¼€è´¦æˆ· = 90/10ï¼›ä¸å¾—äº‹åŽé€‰ç”¨æ—§ cohort"
+    payout_processing: "XFA èµ„é‡‘å³æ—¶æ‰£è´¦ã€å¯ç«‹å³äº¤æ˜“"
+    payout_rail:                         # v0.4ï¼šPrimary é€šé“å†»ç»“ï¼ˆé©¬æ¥è¥¿äºš = å›½é™…ç”¨æˆ·ï¼‰
+      primary: {method: Wise, topstep_fee_usd: 0, processing: "1-3 å·¥ä½œæ—¥", note: "Wise è‡ªèº«æ±‡å…‘è´¹ä¸è®¡å…¥å¹³å°è´¹"}
       alternatives: {ACH_usd: 30, Wire_usd: 30, Aeropay_usd: 0, Prop_to_brokerage: US_only}
-    lucid_payout_rail: {method_fee_usd: NOT_FOUND, assumption: "Primary 按 $0 建模并披露；到账 2 工作日"}
+    lucid_payout_rail: {method_fee_usd: NOT_FOUND, assumption: "Primary æŒ‰ $0 å»ºæ¨¡å¹¶æŠ«éœ²ï¼›åˆ°è´¦ 2 å·¥ä½œæ—¥"}
     back2funded:
       evidence: [topstep_back2funded, topstep_pricing, topstep_mll]
       max_reactivations_per_xfa: 2
@@ -232,20 +276,20 @@ topstep_50k:
       retains: [account_size, payout_path, dll_selection]
       fee_50k_usd: 599
       dll_discount_usd: 50
-      effect: "余额 $0、统计清零、MLL 回 -$2,000（同全新 XFA）；次一 session 可交易"
+      effect: "ä½™é¢ $0ã€ç»Ÿè®¡æ¸…é›¶ã€MLL å›ž -$2,000ï¼ˆåŒå…¨æ–° XFAï¼‰ï¼›æ¬¡ä¸€ session å¯äº¤æ˜“"
       not_counted_toward_5_limit_until_paid: true
   lfa:
     evidence: [topstep_payout, topstep_live_funded, topstep_api]
-    payout: "每周期 5 个 ≥$150 盈利日；50% 余额无上限；30 盈利日后解锁每日提款"
+    payout: "æ¯å‘¨æœŸ 5 ä¸ª â‰¥$150 ç›ˆåˆ©æ—¥ï¼›50% ä½™é¢æ— ä¸Šé™ï¼›30 ç›ˆåˆ©æ—¥åŽè§£é”æ¯æ—¥ææ¬¾"
     dll: automatic
-    automation: "允许自动化，但禁止经 ProjectX API 自动交易"
-    payout_processing_conduct: "申请后应暂停交易至处理完成"
+    automation: "å…è®¸è‡ªåŠ¨åŒ–ï¼Œä½†ç¦æ­¢ç» ProjectX API è‡ªåŠ¨äº¤æ˜“"
+    payout_processing_conduct: "ç”³è¯·åŽåº”æš‚åœäº¤æ˜“è‡³å¤„ç†å®Œæˆ"
   api:
     evidence: [topstep_api]
     list_price_usd_per_month: 29
-    recurring_code_price_usd_per_month: 14.50   # code "topstep"，官方称长期有效
+    recurring_code_price_usd_per_month: 14.50   # code "topstep"ï¼Œå®˜æ–¹ç§°é•¿æœŸæœ‰æ•ˆ
     discount_dependency: "promo code"
-    decision_role: "Primary（保守）$29；current-policy 敏感性 $14.50"
+    decision_role: "Primaryï¼ˆä¿å®ˆï¼‰$29ï¼›current-policy æ•æ„Ÿæ€§ $14.50"
     vps_vpn_remote: prohibited
     allowed_phases: {combine: true, xfa: true, lfa_projectx_api: false}
   data_fees:
@@ -255,27 +299,25 @@ topstep_50k:
 
 # =============================================================================
 gaps:
-  G3: "已定性关闭：AI bot 确认帮助页未写明全含性 → Primary 保守叠加（见 execution_costs）；数值确认归入 G9"
-  G5: "部分关闭：Topstep Prohibited Conduct + Prohibited Trading Strategies 已快照；
-       双方 Terms of Use / Account Agreement 全文仍缺（多为 checkout/登录后文档）——
-       处理：作为冻结披露项而非阻断，首次实盘执行（非 S0 研究）前必须补齐"
-  G6: "cushion 公式 UNKNOWN（AI bot 确认无固定公式）——Primary 严格 50%，Sensitivity 不运行"
-  G7: "负盈利 scaling 档（AI bot 确认文档未定义）——Primary 保守取 2/20 并强制披露"
-  G8: "Reset 对下一次 rebill 日期的影响——'What is the Reset?' 页待抓（影响订阅时序精度，小）"
-  G9: "Lucid 保守费用组件（exchange 0.35/NFA 0.02 per side）为 PROVISIONAL——
-       首次 S0 计算前以 CME/NFA 官方费表快照确认"
-  # 已关闭：G1（截图三张，Flex $98/reset $95）、G2、G4
-  # 子项：Lucid checkout 税费行未见——MC 以 0% 为 Primary、8% 敏感性并披露
+  G5: "éƒ¨åˆ†å…³é—­ï¼šTopstep Prohibited Conduct + Strategies å·²å¿«ç…§å¹¶è¢« automation_compliance
+       æœºå™¨å¼•ç”¨ï¼›åŒæ–¹ Terms/Agreement å…¨æ–‡ = é¦–æ¬¡å®žç›˜æ‰§è¡Œå‰ç¡¬é˜»æ–­ï¼ˆGate 2ï¼‰ï¼Œ
+       Gate 1 ä¸å¾—å£°ç§° Terms å·²å®Œæ•´"
+  G6: "cushion å…¬å¼ UNKNOWNâ€”â€”Primary ä¸¥æ ¼ 50%ï¼ŒSensitivity ä¸è¿è¡Œï¼ˆæŠ«éœ²é¡¹ï¼‰"
+  G7: "è´Ÿç›ˆåˆ© scaling æ¡£æœªå®šä¹‰â€”â€”Primary ä¿å®ˆå– 2/20 å¹¶å¼ºåˆ¶æŠ«éœ²ï¼ˆæŠ«éœ²é¡¹ï¼‰"
+  G9: "å‰©ä½™ï¼šCME exchange/clearing è´¹ï¼ˆ0.35/sideï¼‰PROVISIONALâ€”â€”CME é¡µ 403ï¼Œ
+       é¦–æ¬¡ S0 è®¡ç®—å‰ä»¥æµè§ˆå™¨æ¸²æŸ“å¿«ç…§æˆ–å…¶ä»–å®˜æ–¹æ¥æºç¡®è®¤ï¼›NFA éƒ¨åˆ†å·²å®˜æ–¹å…³é—­ï¼ˆ0.01â†’0.02ï¼‰"
+  # å·²å…³é—­ï¼šG1ï¼ˆé‡è´­ Primary å–æ ‡ä»· $140 é˜²è™šå‡ GOï¼‰ã€G2ã€G3ï¼ˆä¿å®ˆ Primaryï¼‹æ•°å€¼å½’ G9ï¼‰ã€
+  #          G4ã€G8ï¼ˆWhat-is-a-Reset å®˜æ–¹é¡µï¼š+30 å¤©æŽ¨ç§»ã€credit åŒæ•ˆã€365 å¤©åˆ°æœŸã€æ—¥é™ 2 æ¬¡ï¼‰
 
-evidence_grade_note: "Lucid support 两轮回复均为 AI bot 生成（Aaron 披露）；所有引用该来源的
-  参数标记 Level 2-AI。本表中 bot 回答仅用于确认'官方文档未定义'类事实（G3/G6/G7），
-  未有任何数字参数以 bot 回答为唯一来源。"
+evidence_grade_note: "Lucid support ä¸¤è½®å›žå¤å‡ä¸º AI bot ç”Ÿæˆï¼ˆAaron æŠ«éœ²ï¼‰ï¼›æ‰€æœ‰å¼•ç”¨è¯¥æ¥æºçš„
+  å‚æ•°æ ‡è®° Level 2-AIã€‚æœ¬è¡¨ä¸­ bot å›žç­”ä»…ç”¨äºŽç¡®è®¤'å®˜æ–¹æ–‡æ¡£æœªå®šä¹‰'ç±»äº‹å®žï¼ˆG3/G6/G7ï¼‰ï¼Œ
+  æœªæœ‰ä»»ä½•æ•°å­—å‚æ•°ä»¥ bot å›žç­”ä¸ºå”¯ä¸€æ¥æºã€‚"
 
 transcription_notes:
-  N1: "已撤回——4:00 PM CT（XFA payout day 锁定）与 3:10 PM CT（Combine best day 锁定）属不同阶段的独立参数，无矛盾"
-  N2: "XFA 余额从 $0 起步——MC_METHOD_SPEC §2.3 需按此修订（v0.3）"
-  N3: "Topstep XFA payout 后可立即交易；Lucid 处理期交易有拒付风险——payout halt 条款分平台"
-  N4: "Combine consistency 为软规则（抬目标），不得建模为硬失败"
-  N5: "Lucid payout 后 MLL 直接跳至锁定位 $50,100"
-  N6: "Lucid funded 首日仅 2 手/20 micro（分层起步），非 absolute max 4/40——初期容量比 v0.1 假设低一半"
-  N7: "Topstep 同时最多 5 个活跃 XFA——多账户阶段（MC v1.1）的硬约束"
+  N1: "å·²æ’¤å›žâ€”â€”4:00 PM CTï¼ˆXFA payout day é”å®šï¼‰ä¸Ž 3:10 PM CTï¼ˆCombine best day é”å®šï¼‰å±žä¸åŒé˜¶æ®µçš„ç‹¬ç«‹å‚æ•°ï¼Œæ— çŸ›ç›¾"
+  N2: "XFA ä½™é¢ä»Ž $0 èµ·æ­¥â€”â€”MC_METHOD_SPEC Â§2.3 éœ€æŒ‰æ­¤ä¿®è®¢ï¼ˆv0.3ï¼‰"
+  N3: "Topstep XFA payout åŽå¯ç«‹å³äº¤æ˜“ï¼›Lucid å¤„ç†æœŸäº¤æ˜“æœ‰æ‹’ä»˜é£Žé™©â€”â€”payout halt æ¡æ¬¾åˆ†å¹³å°"
+  N4: "Combine consistency ä¸ºè½¯è§„åˆ™ï¼ˆæŠ¬ç›®æ ‡ï¼‰ï¼Œä¸å¾—å»ºæ¨¡ä¸ºç¡¬å¤±è´¥"
+  N5: "Lucid payout åŽ MLL ç›´æŽ¥è·³è‡³é”å®šä½ $50,100"
+  N6: "Lucid funded é¦–æ—¥ä»… 2 æ‰‹/20 microï¼ˆåˆ†å±‚èµ·æ­¥ï¼‰ï¼Œéž absolute max 4/40â€”â€”åˆæœŸå®¹é‡æ¯” v0.1 å‡è®¾ä½Žä¸€åŠ"
+  N7: "Topstep åŒæ—¶æœ€å¤š 5 ä¸ªæ´»è·ƒ XFAâ€”â€”å¤šè´¦æˆ·é˜¶æ®µï¼ˆMC v1.1ï¼‰çš„ç¡¬çº¦æŸ"

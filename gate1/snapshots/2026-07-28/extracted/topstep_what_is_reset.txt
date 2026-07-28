@@ -1,0 +1,131 @@
+What is a Reset? | Topstep Help Center Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Skip to main content 
+
+ Discord Topstep TopstepTV 
+
+ Discord Topstep TopstepTV 
+
+ Search for articles... 
+
+ All Collections 
+
+ Topstep Program 
+
+ Trading Combine® 
+
+ What is a Reset?
+
+ What is a Reset?
+ Hit the limit? That&#x27;s okay. Here&#x27;s your fresh start.
+
+ June 18, 2026 
+
+ Table of contents
+
+ The Basics
+
+ A Reset returns your Trading Combine® to its original starting balance — Account Balance, Maximum Loss Limit (MLL) , Consistency Target , and trading days all go back to day one.
+
+ When to Reset
+
+ Hit the Maximum Loss Limit? Account becomes ineligible for funding. Reset it now — or wait for a Reset Credit at your next Rebill.
+
+ ✌️ Reset your active Trading Combine subscription any time. Limit : 2 Resets per account each day.
+
+ Resets and Your Rebill Date
+
+ Resetting your account pushes your Rebill date out 30 days from the date of purchase.
+
+ 👉 Example: Rebill Aug 30 → Reset purchased (or Reset Credit applied) Aug 25 → new Rebill date Sep 25.
+
+ Reset Credits
+
+ Every monthly Rebill adds 1 Reset Credit to your Reset Bank. Works exactly like a purchased Reset — including the 30-day Rebill push.
+
+ Reset Credits stay on your profile, even if you cancel the associated subscription. Available for a new Trading Combine you buy in the future.
+
+ Rules: 
+
+ Tied to a specific account size AND type (Standard, No Activation Fee, or DLL)
+
+ Credits issued before 12/11/2025 — no expiration
+
+ Credits issued on or after 12/11/2025 — expire 1 year after added
+
+ Can&#x27;t transfer between types or sizes
+
+ Can&#x27;t combine (two 50K credits can&#x27;t Reset a 100K)
+
+ Can&#x27;t use credits to buy a new Trading Combine — only on an existing active subscription
+
+ Oldest matching credit will be used first
+
+ Reset FAQs
+
+ What does a Reset cost?
+
+ Topstep Pricing and Payment Questions 
+
+ Can I Reset an Express Funded Account (XFA) or Live Funded Account (LFA)?
+
+ No. Resets only work on active Trading Combine subscriptions. For Express Funded Accounts, use Back2Funded. Learn more → 
+
+ Does a Reset change my Rebill date?
+
+ Yes. Applying a Reset pushes your Rebill date out 30 days from the purchase date.
+
+ Can I get a refund for a purchased Reset, or reverse an applied Reset Credit?
+
+ No. Once Reset, it&#x27;s done. Always double-check the account number before confirming. If your account was in profit before the Reset and no trades were placed after, Support may adjust your new profit target.
+
+ How do I apply a Reset?
+
+ Dashboard → select the active Trading Combine → click Reset → confirm. Eligible credits show automatically. No matching credit? Purchase one directly.
+
+ Is a Reset the same as Back2Funded?
+
+ No. Resets are for active Trading Combine subscriptions. Back2Funded reactivates a lost Express Funded Account for a fee. Learn more → 
+
+ How do I get a free Reset?
+
+ Topstep sometimes offers free Resets on TopstepTV and through the newsletter. Subscribe to stay in the loop.
+
+ Related Articles
+ Topstep® Refund Policies 
+
+ Trading Combine Subscriptions 
+
+ Getting Started with the Topstep Dashboard 
+
+ Back2Funded: Rules, Guidelines, and How It Works 
+
+ Topstep Labs 
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Your Privacy Choices
