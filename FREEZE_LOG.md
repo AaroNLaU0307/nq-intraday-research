@@ -19,6 +19,10 @@
 | 2026-07-27 | PROJECT_CHARTER.md | v1.2-r2 | 5176320fb54a30e5e5dcc7f1ee96b828e7d38f727a573e8bd152ca3ff4299327 | 89e2505928342d131c8f6eff93369bcc46f909b4 | FROZEN（tag s0-freeze-v1） |
 | 2026-07-27 | STUDY_0_PREREGISTRATION.md | v0.6 | 6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132 | 89e2505928342d131c8f6eff93369bcc46f909b4 | FROZEN（tag s0-freeze-v1） |
 | 2026-07-27 | purchase_plan.yaml | PP-2026-07-27-A rev4 | 02edbc2cb8481089ecf7b30156fd86eb3cf524112e3f97d253f94acc60c39e6c | 89e2505928342d131c8f6eff93369bcc46f909b4 | FROZEN（tag s0-freeze-v1）；批准记录另见 purchase_approval.yaml |
+| 2026-07-28 | MC_METHOD_SPEC.md | v0.6 | a6de4a286eaff5ab7487298593f590cbee845afa1939ad4ea675ec219cf29608 | 5d1ec10 (tag mc-freeze-v1) | FROZEN；GPT 最终机械确认后批准 |
+| 2026-07-28 | gate1/platform_params.yaml | v0.6 | 65bfdd9e90ba891fac9cde0389387255ea0a10225b23f8a5aead75d5b8a19740 | 5d1ec10 (tag mc-freeze-v1) | FROZEN |
+| 2026-07-28 | gate1/evidence_registry.yaml | — | c14d576ba2076f8f08cb4f8bef16fc5a99c881071baed303f9d8a73964a6b35c | 5d1ec10 (tag mc-freeze-v1) | FROZEN（证据 bundle） |
+| 2026-07-28 | gate1/snapshots/2026-07-28/snapshot_manifest_v5.json | v5 | 5b6083b5ee61db9c44b119fae3bfdb2c0c039b9c53f5d7c67a74c69f6d4e0434 | 5d1ec10 (tag mc-freeze-v1) | FROZEN（证据 bundle） |
 | — | purchase_approval.yaml | — | （Commit C 时填写） | 不适用 | Aaron 批准时提交 |
 
 哈希计算方法：对 Commit A（89e2505）的 git blob 做字节级 SHA-256（python hashlib，
