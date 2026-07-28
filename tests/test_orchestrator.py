@@ -300,6 +300,44 @@ def test_max_favourable_is_diagnostic_only_static():           # IR-2 marker
     assert hits == []      # the mc/verdict layer never consumes the field
 
 
+def test_ir1_invariance_settlement_value_cannot_move_ev():     # IR-1 批复条件
+    # Two breach runs differing ONLY in adverse depth (=> different diagnostic
+    # settlement balances) must produce IDENTICAL prop_operating_EV/verdict
+    # inputs; only the diagnostic strategy_account ledger may differ.
+    days = tdays(6)
+    r_a = run_lifecycle(lucid_cfg(), days,
+                        {"d0000": day_path("d0000", -100.0, adverse_extra=60_000.0)})
+    r_b = run_lifecycle(lucid_cfg(), days,
+                        {"d0000": day_path("d0000", -100.0, adverse_extra=90_000.0)})
+    assert any(e.breached for e in r_a.events) and any(e.breached for e in r_b.events)
+    ka = {k: v for k, v in r_a.ledger_report.items() if k != "strategy_account_ev_total"}
+    kb = {k: v for k, v in r_b.ledger_report.items() if k != "strategy_account_ev_total"}
+    assert ka == kb                                  # EV chain invariant
+    assert (r_a.ledger_report["strategy_account_ev_total"]
+            != r_b.ledger_report["strategy_account_ev_total"])  # diagnostic moved
+
+
+def test_ir10_sensitivity_b2f_consumes_counter():              # IR-10 批复
+    days = tdays(60)
+    finals = [1000.0, 1000.0, 1000.0]
+    paths = paths_for(days, finals + [None] * (len(days) - 3))
+    for d in ("d0003", "d0004", "d0005"):
+        paths[d] = day_path(d, -100.0, adverse_extra=BREACH)
+    sens = run_lifecycle(ts_cfg(decision_role="sensitivity",
+                                b2f_consumes_attempt=True), days, paths)
+    # sensitivity: two B2Fs each consume an attempt -> attempts 1+2(b2f)+1(new
+    # combine)=4 vs primary's 2
+    assert sens.b2f_used_total == 2
+    assert sens.attempts_used == 4
+    prim = run_lifecycle(ts_cfg(), days, paths)
+    assert prim.attempts_used == 2                   # separate counters (Primary)
+
+
+def test_ir10_consuming_variant_forbidden_in_primary():        # IR-10 隔离强制
+    with pytest.raises(ValueError):
+        run_lifecycle(ts_cfg(b2f_consumes_attempt=True), tdays(3), {})
+
+
 def test_empty_horizon_boundary():
     res = run_lifecycle(lucid_cfg(), [], {})
     assert res.events == [] and res.attempts_used == 1

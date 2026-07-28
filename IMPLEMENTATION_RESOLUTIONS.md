@@ -22,3 +22,17 @@
 
 处置：以上全部为保守方向或仅描述性。批复方式：Aaron 逐条 accept/modify；
 modify 项按两阶段流程形成正式 Addendum 并更新实现与测试。
+
+## 批复定案（APPROVED_BY_AARON 2026-07-28，详见 IR_APPROVAL_PACKET.md）
+
+- **A 类（纯实现解释）**：IR-2（diagnostic_only 标记＋静态测试）、IR-11。
+- **diagnostic_only 附加条款**：IR-1（清算值不进任何判决输入；不变性测试固化——
+  改变诊断清算值不得移动 prop_operating_EV 与 verdict）。
+- **正式 Implementation Resolution Addendum（B 类）**：IR-1、IR-3、IR-4、IR-5、
+  IR-6、IR-7（成本锁定硬条件维持）、IR-8、IR-9——冻结 tag 未动、历史未重写；
+  影响 EV 的项在最终报告按方向披露（全部保守向）。
+- **IR-10 = separate counters**：Primary 行为定案（B2F 不耗全局 6 次计数、每 XFA ≤2）；
+  保守 sensitivity `b2f_consumes_attempt=True` 已实现并被机器强制限定为
+  sensitivity-only（orchestrator 对 primary+consume 组合直接抛错）。
+- 编号勘误：Aaron 批复第 3 条原文 "IR-4"，描述对应 IR-2；已按合理读法归位并明示。
+本文件自此为已批复状态；后续新增 IR 以新条目追加。

@@ -1,10 +1,26 @@
 # IR_APPROVAL_PACKET — 11 项 Implementation Resolution 批复包
 
 ```yaml
-status: PENDING_AARON_APPROVAL
-date: 2026-07-28
-reviewer: main agent（Phase 1 逐项重审，非沿用上轮结论）
-批复方式: 每卡选 A/B/C/D；C/D 项列出受影响文件
+status: APPROVED_BY_AARON
+approved_date: 2026-07-28
+approval_implementation_commit: 见 FREEZE_LOG（IR 批复收口 commit）
+dispositions:
+  A类批准: [IR-2, IR-11]
+  IR-1: approved_diagnostic_only   # breach detection 仍走 adverse-path；
+                                   # 清算值不进 verdict/prop_operating/feasibility；
+                                   # 不变性测试 test_ir1_invariance 通过
+  IR-2: approved_diagnostic_only   # schema 显式标记＋静态测试（Aaron 批复第 3 条
+                                   # 原文写"IR-4"，但描述逐字对应 IR-2/MFE——
+                                   # 主 agent 按合理读法归位并在此明示，待纠正即改）
+  B类Addendum批准: [IR-1, IR-3, IR-4, IR-5, IR-6, IR-7, IR-8, IR-9]
+                                   # 影响 EV 的项按方向披露；保守假设 vs 描述性口径已分列
+  IR-10: separate_counters         # Primary：6 次评估起点（含首次）；B2F 不耗全局计数、
+                                   # 每 XFA ≤2；funded 死后 new Combine/new evaluation 耗计数；
+                                   # 用尽永久终止。保守 sensitivity（B2F 也耗计数）已实现，
+                                   # 且被机器强制禁止用于 Primary（不可翻转判决）
+constraints_confirmed:
+  - 未修改任何冻结 tag / 未重写冻结历史
+  - second_physical_copy_verified: false（未自行翻转；无真实 DBN 读取；无研究数字）
 ```
 
 **重审中的关键新发现**：IR-1 的结算值经溯源确认**不进入任何判决输入**

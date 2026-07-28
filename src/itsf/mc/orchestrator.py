@@ -75,6 +75,11 @@ class LifecycleConfig:
     sizing_policy: str = acct.PRIMARY_POLICY   # frozen: MC SS2.5 Primary = P2
     research_costs_usd: float = 0.0      # net_business_EV_after_RD input
     decision_role: str = "primary"       # 'primary' | 'sensitivity' (isolation)
+    # IR-10 (APPROVED_BY_AARON 2026-07-28): Primary = separate counters —
+    # B2F does NOT consume the global evaluation-start counter. The
+    # conservative variant (B2F consumes) is SENSITIVITY-ONLY and can never
+    # flip the Primary Checkpoint-0 verdict (enforced in run_lifecycle).
+    b2f_consumes_attempt: bool = False
 
 
 @dataclass
@@ -163,6 +168,10 @@ def run_lifecycle(cfg: LifecycleConfig, days: list[TemplateDay],
     randomness source (1) = start-phase offset)."""
     if cfg.platform not in ("lucid", "topstep"):
         raise ValueError(f"unknown platform {cfg.platform!r}")
+    if cfg.b2f_consumes_attempt and cfg.decision_role == "primary":
+        # IR-10: the consuming variant is a conservative SENSITIVITY only.
+        raise ValueError("b2f_consumes_attempt=True is sensitivity-only "
+                         "(IR-10 APPROVED_BY_AARON: Primary = separate counters)")
     run = (_run_lucid if cfg.platform == "lucid" else _run_topstep)
     result = run(cfg, days[start_offset:], paths_by_day)
     for ev in result.events:
@@ -284,7 +293,13 @@ def _run_topstep(cfg: LifecycleConfig, days: list[TemplateDay],
                 can_b2f = (xfa.b2f_eligible and b2f_used < B2F_MAX_PER_XFA
                            and xfa_death_cal is not None
                            and td.cal_offset - xfa_death_cal <= B2F_WINDOW_DAYS)
+                if can_b2f and cfg.b2f_consumes_attempt:
+                    # IR-10 conservative SENSITIVITY: B2F also draws on the
+                    # global evaluation-start counter.
+                    can_b2f = attempts < MAX_EVALUATION_STARTS
                 if can_b2f:
+                    if cfg.b2f_consumes_attempt:
+                        attempts += 1
                     b2f_used += 1
                     b2f_total += 1
                     led.book_fee("topstep_b2f", ts.B2F_FEE_USD)
