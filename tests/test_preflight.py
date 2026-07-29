@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -316,7 +317,12 @@ def test_json_fixed_top_level_fields():
     assert d["stage"] == "INPUT_PREFLIGHT_ONLY"
     assert d["real_s0"] == "NOT_RUN"
     assert d["approval"] == "AWAITING_AARON_APPROVAL"
-    assert d["integration_commit"] is None
+    # Lifecycle field (Aaron rule 2026-07-29): null at SA-3 delivery time,
+    # then the full integration hash once the main agent has integrated —
+    # both are legitimate states; vague placeholders are not.
+    ic = d["integration_commit"]
+    assert ic is None or (isinstance(ic, str)
+                          and re.fullmatch(r"[0-9a-f]{40}", ic))
     assert len(d["input_commit"]) == 40
     assert d["generated_at_utc"].endswith("+00:00")
 
