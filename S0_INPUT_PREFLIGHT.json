@@ -3,7 +3,7 @@
  "real_s0": "NOT_RUN",
  "approval": "AWAITING_AARON_APPROVAL",
  "input_commit": "d09ce4e4f0653a191ba035d5f90a7ec3316c864f",
- "integration_commit": null,
+ "integration_commit": "a8faf31593cad152dd83c9da236c3e236c47b47d",
  "generated_at_utc": "2026-07-29T07:30:52.620675+00:00",
  "development_window": {
   "start_inclusive": "2010-06-06",
