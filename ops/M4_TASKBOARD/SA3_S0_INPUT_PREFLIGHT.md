@@ -1,3 +1,9 @@
+DISPATCH: 建议模型 = Claude Opus 5（claude-opus-5），effort = high。
+理由：三个 subagent 中判断密度最高——资格漏斗、锚点语义、NA 分类都要
+对照冻结文本判定"是否唯一可推"，误把歧义当唯一解是主要失败模式；
+需要能主动 STOP 而非硬解的模型。不需要浏览器。不得与 SA-2 并行
+（前置：SA-2 已由 main agent 集成）。
+
 SUBAGENT TASK ID: M4-T4 / SA-3
 TASK NAME: S0_INPUT_PREFLIGHT — 无策略数字的输入资格终检
 ROLE: 结构性 QA 工程师（最后一道 pre-S0 输入闸口）

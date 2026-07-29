@@ -1,3 +1,8 @@
+DISPATCH: 建议模型 = Claude Opus 5（claude-opus-5），effort = high。
+理由：12 年跨度的官方档案浏览与交叉互证，判断"是否官方/是否冲突"的
+质量直接决定证据链成色；抽取本身由确定性脚本兜底，无需 Fable 级成本。
+需要带浏览器权限的会话。可与 SA-2 并行。
+
 SUBAGENT TASK ID: M4-T1 / SA-1
 TASK NAME: F10 官方事件日历证据采集与事件表（2010-06-06 → 2021-12-31）
 ROLE: 证据采集与结构化提取工程师（evidence-first，falsification 项目纪律）

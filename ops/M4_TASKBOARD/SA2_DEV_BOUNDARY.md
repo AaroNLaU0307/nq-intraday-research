@@ -1,3 +1,8 @@
+DISPATCH: 建议模型 = Claude Sonnet 5（claude-sonnet-5），effort = high。
+理由：接口已由 main agent 完全定稿、11 条测试逐条具名，歧义度低，属
+"照规格实现"型任务；guard 代码正确性由测试矩阵＋main agent 集成审查
+双重兜底。不需要浏览器。可与 SA-1 并行。
+
 SUBAGENT TASK ID: M4-T2 / SA-2
 TASK NAME: Development 数据硬边界修复＋数据角色强类型化
 ROLE: 数据治理工程师（fail-closed 纪律）

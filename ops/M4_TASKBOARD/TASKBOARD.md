@@ -156,6 +156,18 @@ structure assertions；frozen hash verification；git diff 审计；
 DATA_QA_ADDENDUM 勘误段（追加 commit，不改历史）；evidence_registry 合并；
 最终集成 commit；是否申请 Aaron 批准真实 S0。
 
+## 派工模型与 effort 建议
+
+| Subagent | 模型 | effort | 浏览器 | 并行 |
+|---|---|---|---|---|
+| SA-1 F10 日历 | Claude Opus 5 | high | 需要 | 可与 SA-2 并行 |
+| SA-2 Dev 边界 | Claude Sonnet 5 | high | 不需要 | 可与 SA-1 并行 |
+| SA-3 Preflight | Claude Opus 5 | high | 不需要 | 串行（等 SA-2 集成） |
+| （可选）只读审计 | Claude Opus 5 | xhigh（预算许可则 Fable 5 high） | 不需要 | 最后 |
+
+main agent（Fable 5，本会话）保留：M4-T3 symbology 决策包、接口终审、
+集成、全量校验、Addendum 勘误、里程碑 commit。
+
 ## 建议启动顺序（等 Aaron 指令）
 
 1. Aaron 启动 SA-1 与 SA-2（可并行），同时指示 main agent 执行 M4-T3；
