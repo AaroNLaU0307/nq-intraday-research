@@ -36,3 +36,21 @@ modify 项按两阶段流程形成正式 Addendum 并更新实现与测试。
   sensitivity-only（orchestrator 对 primary+consume 组合直接抛错）。
 - 编号勘误：Aaron 批复第 3 条原文 "IR-4"，描述对应 IR-2；已按合理读法归位并明示。
 本文件自此为已批复状态；后续新增 IR 以新条目追加。
+
+---
+
+## M4 批次（APPROVED_BY_AARON 2026-07-29，经 ChatGPT 评审；对应 DECISION_PACKETS_M4.md 与 SYMBOLOGY_DECISION_PACKET.md）
+
+| ID | 内容 | 冻结章节 | 可能影响的输出 | 批复定案 |
+|---|---|---|---|---|
+| IR-12 (=D1) | 同日多事件：冻结 F10 单类别记 **NA**；当日不整日删除，仍进 Oracle 总体统计；multi-hot bool 与完整 event_types 保留在 **diagnostic sidecar**（不进 Primary/Oracle/成本/Checkpoint 判决）；报告全部多事件日（当前 19 天）；**禁止**发明 FOMC>NFP>CPI 等主观优先级；不得见标签/收益后改映射 | S0 行 62 / 行 45 NA 政策 | F10 特征 NA 计数＋sidecar | Aaron 新增 Option C（非原 A/B） |
+| IR-13 (=D2+D2a) | F10=FOMC 只标**官方预定的 statement 发布日**（例会第二日，92 天）；两日会议第一天不标；非预定紧急行动（2019-10-11、2020-03-03/15/23）记 `unscheduled_fomc_action`，**仅 diagnostic**，不进冻结 F10；不得使用 10:00 时不可知的事后信息；(cancelled) 2020-03-17/18 不入表（未召开，事实判断） | S0 行 62 | FOMC 事件日集合＝92 | Option A＋限制 |
+| IR-14 (=D3) | CPI/NFP 延期按**实际官方发布日**标注（as-released：2013-10-22 NFP、2013-10-30 CPI）；原定日期/延期公告/实际日期三者留在 source log；实际日期时间必须官方证据，不得第三方回填 | 无冻结解→本 IR 补 | 个别日期归类 | Option A |
+| IR-15 (=D6 修订) | 路径特征口径：**先**应用冻结整日剔除（半日市/RTH 无成交/缺失>10%——vendor-degraded 超限日先排除，不计入保留数）；过资格日内部缺分钟按**时间排序实际存在 close 序列**差分；不造合成 bar、不 forward fill、不插值、不以邻 bar 替代精确锚点；精确锚点缺失→对应特征/标签记 NA，整日不删；opening path 与 PM path 受影响日分别报告 | S0 行 96 / 行 44-45 | F3/F8/path 类 NA 计数 | 修订版 Option A |
+| IR-16 (=D5) | symbology Option A：main agent 亲自执行一次官方 `symbology.resolve`（USD 0.00 元数据端点；临时 key 仅经环境变量，禁入代码/日志/commit/报告；归档请求参数＋原始 JSON＋UTC 时间＋SHA-256；取 2010-06-06→2022-01-01(excl) NQ.v.0→instrument_id→raw_symbol；47 次 transition 逐一验证＋无同 RTH 内切换；任一不符 STOP 出新决策包；mapping 仅验证与披露，不得改 Primary；完成后撤销 key；Option B 仅在官方端点无法完整返回历史映射时经 Aaron 批准后回退） | S0 行 30-32 | F11/F5 roll 识别的独立官方确认 | Option A；**执行状态：2026-07-29 首跑 401（环境变量为已撤销旧 key，撤销纪律有效）；等待 Aaron 注入新临时 key 后重跑，验证结果将追加于 gate1/symbology/** |
+
+- D4/D7 维持条件触发（SA-1 已另出 D4a：FOMC 2010-2015 发布时刻无官方记载，
+  45 行哨兵值 NOT_ATTESTED_IN_OFFICIAL_SOURCE——待 Aaron/ChatGPT 批复，
+  不阻塞事件日期本身）。
+- SA-2 硬边界 commit a6bd012 经 Aaron 原则批准（Development [2010-06-06,
+  2022-01-01)、IV fail-closed、整文件拒绝、边界不可参数化）。

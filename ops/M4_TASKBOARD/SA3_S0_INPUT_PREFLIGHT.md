@@ -14,9 +14,21 @@ S0_INPUT_PREFLIGHT_REPORT.md 与 S0_INPUT_PREFLIGHT.json。
 启动前置（缺一即 STOP，不得开工）：
 - main agent 已集成 M4-T2（src/itsf/data/roles.py 存在且
   DEV_END_EXCLUSIVE == 2022-01-01）——用代码断言确认；
-- gate1/f10_event_calendar/f10_events.csv 存在且 D1-D4 已批复
-  （若 F10 编码决议尚未回流，F10 段只报 csv 原始覆盖计数并标注
-  ENCODING_PENDING，不得自行编码映射）。
+- gate1/f10_event_calendar/f10_events.csv 存在（sha256 3c3401f6…7afcb00）。
+
+已批复决策（IMPLEMENTATION_RESOLUTIONS.md M4 批次，2026-07-29——照此执行，
+不得重新解释）：
+- IR-12（D1，Option C）：同日多事件 → 冻结 F10 单类别记 **NA**；该日不删，
+  仍进总体统计；multi-hot 保留在 diagnostic sidecar（不进任何判决输入）；
+  报告全部多事件日期与数量；禁止发明事件优先级。
+- IR-13（D2）：F10=FOMC 仅取**官方预定 statement 发布日**（92 天）；会议
+  第一天不标；2019-10-11、2020-03-03/15/23 四个非预定声明记
+  `unscheduled_fomc_action`（仅 diagnostic）；(cancelled) 2020-03-17/18
+  不存在于表中。
+- IR-14（D3）：延期发布按实际官方发布日（csv 已如此记录）。
+- IR-15（D6 修订版）：见下文 C 段（已定稿口径，不再是决策点）。
+- D4a 未决（FOMC 2010-2015 发布时刻哨兵值）：不影响日期级计数；F10 编码
+  不依赖该列；在报告中如实披露 45 行哨兵即可。
 
 项目背景（自包含）：
 - 仓库：C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework\
@@ -78,20 +90,25 @@ B. 精确锚点逐日检查（对资格漏斗过线的每一日）：
    整日排除（只依据冻结行 44-45 判定；判定不唯一时写 DECISION_PACKET）。
    硬禁止：前值填充、下一根 bar 替代、插值、最近成交替代、任何隐式补齐。
 
-C. 非关键缺失分钟（≤10% 缺失的正常完整交易日）：
-   - 不得整日删除；
-   - 路径类特征（F3/F8 及行 96 path_pm 公式）在缺分钟时用"实际存在 bar
-     差分"还是"完整分钟网格"——冻结行 96 未唯一确定，这是 D6：若 main
-     agent 尚未给你批复结论，此段只输出受影响日期数与两种口径下的 NA/
-     可算计数对比表（不选择、不实现任何一种作为默认），并写
-     DECISION_PACKET_PREFLIGHT_D6.md 后继续其余部分；
+C. 非关键缺失分钟（IR-15 已定稿口径，照此实施）：
+   - **先**应用冻结整日剔除（半日市 / RTH 无成交 / RTH 缺失>10%）——
+     vendor-degraded 超 10% 的日期（如 2020-02-28、2020-06-30）在此层排除，
+     不得计入路径特征保留数量；
+   - 仅对通过日资格检查的日期：内部缺失分钟时，路径按**时间排序的实际
+     存在 close 序列**一次差分；不创建合成 bar、不 forward fill、不插值、
+     不用上/下一根 bar 替代精确锚点；
+   - 精确锚点缺失 → 对应特征/标签记 NA，整日不得因此删除；
+   - **分别报告** opening path（09:30-10:00）与 PM path（10:00-15:44）
+     受影响的日期与数量；
    - 所有 NA 显式计数。
 
 D. F1-F11 输入完整性（只查可构建性与 NA，不算特征值与任何 Alpha 关系）：
    每特征：非 NA 可构建日数 / NA 日数 / NA 原因分类（锚点缺失、ADR14
    warm-up、F4 前 60 日 warm-up、F5 roll 日记 NA、F10 日历缺口、其他）。
-   F10：报告日历覆盖（各 event_type 的日期数、与交易日的交集数、
-   development 窗内无匹配事件的年份）；不得报告事件与任何收益的关系。
+   F10：按 IR-12/13/14 编码后报告覆盖——四类 {CPI, NFP, FOMC(92 预定
+   statement 日), none} 各自日期数、与资格日的交集数、多事件 NA 日数
+   （19 天全列）、unscheduled_fomc_action diagnostic 计数、development
+   窗内无匹配事件的年份核对；不得报告事件与任何收益的关系。
    F11：47 次 transition 与 is_roll_window（前后各 2 RTH 日）覆盖计数；
    与 DATA_QA_ADDENDUM §8 的 47 次交叉核对。
    报告任何未识别类别与意外全常量字段。
