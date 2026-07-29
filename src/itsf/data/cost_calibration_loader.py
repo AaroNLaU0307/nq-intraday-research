@@ -15,10 +15,13 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from itsf.data import manifests, validation
+from itsf.data.roles import DataRole
 from itsf.guards import assert_real_run_allowed, G9_FLAG, SECOND_COPY_FLAG
 
 ET = ZoneInfo("America/New_York")
-ROLE_DIRNAME = "execution_cost_calibration"
+# frozen: purchase_plan A2 data_role / STUDY_0_PREREGISTRATION.md 行 26 —
+# sourced from the shared DataRole enum (itsf.data.roles), not a bare literal.
+ROLE_DIRNAME = DataRole.EXECUTION_COST_CALIBRATION.value
 EXPECTED_SYMBOL_ROOT = "MNQ"          # frozen: purchase_plan A2 MNQ.v.0
 
 SPREAD_TABLE_COLUMNS = ("minute_of_day_et", "spread_median_points",
@@ -158,10 +161,21 @@ class CostCalibrationLoader:
     # -- internals (raw BBO never escapes) ------------------------------------
 
     def _check_role(self) -> None:
-        if ROLE_DIRNAME not in str(self.job_dir):
+        path_str = str(self.job_dir)
+        if ROLE_DIRNAME not in path_str:
             raise RoleError(
                 f"cost-calibration loader pointed at non-cost path: "
                 f"{self.job_dir} (frozen data-role isolation)")
+        # Reject mixed-role paths too (own-role substring present is
+        # necessary but not sufficient — no OTHER role's marker may also
+        # appear in the path; frozen data-role isolation, fail closed).
+        foreign = [r.value for r in DataRole
+                   if r.value != ROLE_DIRNAME and r.value in path_str]
+        if foreign:
+            raise RoleError(
+                f"cost-calibration loader path also carries foreign "
+                f"data-role marker(s) {foreign}: {self.job_dir} (mixed-role "
+                "path rejected, frozen data-role isolation)")
 
     @staticmethod
     def _decode(path: Path, source_format: str) -> pd.DataFrame:

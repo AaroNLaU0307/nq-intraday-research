@@ -27,9 +27,14 @@ UTC = ZoneInfo("UTC")
 
 # --- fixture builders (fabricated; never production data) --------------------
 
-def fab_bars_utc(day: str = "2024-03-08", minutes: int = 30,
+def fab_bars_utc(day: str = "2021-06-15", minutes: int = 30,
                  start_hh: int = 14, start_mm: int = 30) -> pd.DataFrame:
-    """Fabricated 1-min UTC bars (14:30 UTC == 09:30 ET on an EST day)."""
+    """Fabricated 1-min UTC bars (14:30 UTC == 09:30 ET on an EST day).
+    Default day corrected to 2021-06-15 (M4-T2 / SA-2): it must sit inside
+    the frozen Development window [2010-06-06, 2022-01-01) now that the
+    boundary bug (previously 2025-07-01) is fixed — 2024-03-08 no longer
+    qualifies. Callers that specifically exercise the boundary/DST pass an
+    explicit `day=`."""
     t0 = datetime.fromisoformat(day).replace(hour=start_hh, minute=start_mm,
                                              tzinfo=UTC)
     rows = [{"ts": t0 + timedelta(minutes=i), "open": 100.0 + i,
@@ -258,13 +263,28 @@ def test_nat_timestamp_valid_spread_excluded_with_event():
     assert int(tbl["n_obs"].sum()) == 399      # excluded with event, not silently
 
 
-def test_development_window_boundary(tmp_path):
+def test_development_window_end_boundary_rejected(tmp_path):
+    # frozen dev-window end is 2022-01-01 (exclusive) — STUDY_0_PREREGISTRATION
+    # .md 行 24 + purchase_plan A1 end. (Corrected M4-T2 / SA-2: this test
+    # previously used "2025-07-01", which mis-tested the Internal-Validation
+    # end date instead of the actual Development boundary.)
     g, c = flags(tmp_path, True, True)
-    df = fab_bars_utc(day="2025-07-01")                       # >= dev end
+    df = fab_bars_utc(day="2022-01-01")                       # >= dev end
     job = make_job_dir(tmp_path, "development_signal", "bars.csv", df)
     ldr = DevelopmentSignalLoader(job, g9_flag=g, second_copy_flag=c)
     with pytest.raises(ValidationError):
         ldr.load_real("bars.csv", source_format="synthetic_csv")
+
+
+def test_development_window_last_allowed_day(tmp_path):
+    # 2021-12-31 is the last day inside the frozen Development window and
+    # must load cleanly (other boundary direction of the fix above).
+    g, c = flags(tmp_path, True, True)
+    df = fab_bars_utc(day="2021-12-31")
+    job = make_job_dir(tmp_path, "development_signal", "bars.csv", df)
+    ldr = DevelopmentSignalLoader(job, g9_flag=g, second_copy_flag=c)
+    out, _ = ldr.load_real("bars.csv", source_format="synthetic_csv")
+    assert len(out) == 30
 
 
 def test_symbol_mismatch_fails(tmp_path):
@@ -278,12 +298,15 @@ def test_symbol_mismatch_fails(tmp_path):
 
 
 def test_dst_conversion_spring_and_fall():
-    # 2024-03-08 is EST (UTC-5): 14:30 UTC -> 09:30 ET
-    est = DevelopmentSignalLoader.load_synthetic(fab_bars_utc("2024-03-08"))[0]
+    # Dates moved inside the frozen Development window [2010-06-06,
+    # 2022-01-01) (M4-T2 / SA-2 boundary fix); 2021 spring-forward was
+    # 2021-03-14, same Fri-before/Mon-after shape as the original 2024 dates.
+    # 2021-03-12 is EST (UTC-5): 14:30 UTC -> 09:30 ET
+    est = DevelopmentSignalLoader.load_synthetic(fab_bars_utc("2021-03-12"))[0]
     assert est["ts"].iloc[0].hour == 9 and est["ts"].iloc[0].minute == 30
-    # 2024-03-11 is EDT (UTC-4): 13:30 UTC -> 09:30 ET
+    # 2021-03-15 is EDT (UTC-4): 13:30 UTC -> 09:30 ET
     edt = DevelopmentSignalLoader.load_synthetic(
-        fab_bars_utc("2024-03-11", start_hh=13))[0]
+        fab_bars_utc("2021-03-15", start_hh=13))[0]
     assert edt["ts"].iloc[0].hour == 9 and edt["ts"].iloc[0].minute == 30
 
 

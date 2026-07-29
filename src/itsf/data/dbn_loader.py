@@ -19,14 +19,22 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from itsf.data import manifests, validation
+from itsf.data.roles import DataRole, ROLE_WINDOWS
 from itsf.guards import assert_real_run_allowed, G9_FLAG, SECOND_COPY_FLAG
 
 ET = ZoneInfo("America/New_York")
-ROLE_DIRNAME = "development_signal"
+ROLE_DIRNAME = DataRole.DEVELOPMENT_SIGNAL.value
 EXPECTED_SYMBOL_ROOT = "NQ"           # frozen: purchase_plan A1 NQ.v.0
-# frozen: purchase_plan A1 window (dev end exclusive)
-DEV_START = "2010-06-06"
-DEV_END_EXCLUSIVE = "2025-07-01"
+# frozen: STUDY_0_PREREGISTRATION.md 行 24 (Development row) + purchase_plan
+# A1 (end: "2022-01-01", exclusive). CORRECTED 2026-07-29 (M4-T2 / SA-2): this
+# constant previously read "2025-07-01", mis-citing purchase_plan A1 — that
+# date is actually the Internal-Validation end (purchase_plan A3 /
+# prereg IV row), which this loader must NEVER accept. Local A1 archive only
+# ever held 2010-06..2021-12 files, so the bug had not caused an actual
+# out-of-window read; boundary is hardened here regardless. Sourced from the
+# frozen module-level roles.ROLE_WINDOWS mapping — single source of truth
+# shared with cost_calibration_loader.py, not overridable at runtime.
+DEV_START, DEV_END_EXCLUSIVE = ROLE_WINDOWS[DataRole.DEVELOPMENT_SIGNAL]
 
 
 class RoleError(RuntimeError):
@@ -68,10 +76,22 @@ class DevelopmentSignalLoader:
     # -- internals ------------------------------------------------------------
 
     def _check_role(self) -> None:
-        if ROLE_DIRNAME not in str(self.job_dir):
+        path_str = str(self.job_dir)
+        if ROLE_DIRNAME not in path_str:
             raise RoleError(
                 f"development loader pointed at non-development path: "
                 f"{self.job_dir} (frozen data-role isolation)")
+        # Reject mixed-role paths too, e.g. "development_signal/../
+        # internal_validation_signal/JOB" — own-role substring present is
+        # necessary but not sufficient; no OTHER role's marker may also be
+        # present (frozen data-role isolation, fail closed).
+        foreign = [r.value for r in DataRole
+                   if r.value != ROLE_DIRNAME and r.value in path_str]
+        if foreign:
+            raise RoleError(
+                f"development loader path also carries foreign data-role "
+                f"marker(s) {foreign}: {self.job_dir} (mixed-role path "
+                "rejected, frozen data-role isolation)")
 
     @staticmethod
     def _decode(path: Path, source_format: str) -> pd.DataFrame:

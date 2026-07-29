@@ -442,3 +442,24 @@ platform_params.yaml structural parse OK, 10 top-level keys
 ```
 
 -- end of addendum; awaiting Aaron's review. Real S0 stays locked. --
+
+## ERRATA (2026-07-29, appended post-approval via new commit — history not rewritten)
+
+E1. The "QA thresholds and versions" bullet above states "Development window
+[2010-06-06, 2025-07-01) fail-closed". That upper bound was WRONG — it
+reflected a loader bug (dbn_loader.py DEV_END_EXCLUSIVE mis-set to the
+Internal-Validation end date, mis-citing purchase_plan A1). The frozen
+boundary is **[2010-06-06, 2022-01-01)** (STUDY_0_PREREGISTRATION.md 行 24;
+purchase_plan A1 end 2022-01-01 exclusive); IV = 2022-01-01 → 2025-07-01
+(excl) is never loadable by S0.
+
+Impact on this report's numbers: NONE. Every QA read enumerated above used
+the 139 A1 files (2010-06..2021-12 only — see the per-file table); no
+IV-era file exists on this machine, so no out-of-window read occurred.
+The bug was a latent boundary, not an exercised one.
+
+Fix: M4-T2 (SA-2 implementation, main-agent review) — DataRole enum +
+ROLE_WINDOWS single source of truth, whole-file rejection, non-widenable
+signatures, 13 boundary tests; suite 174 → 188 green. The render-script
+source of this text (scripts/render_qa_addendum.py) is corrected in the
+same commit as this erratum.
