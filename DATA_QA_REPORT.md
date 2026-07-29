@@ -14,5 +14,5 @@ blocked until Aaron approves this report.
 (cost-calibration facts, not strategy numbers)
 - minutes covered: 1380; RTH minutes: 390
 - RTH spread median (points): median 0.50, p90-of-medians 0.50
-- A2 QA event tallies: {'crossed_or_invalid_spread': 1091}
+- A2 QA event tallies: {'crossed_or_invalid_spread': 1091, 'nat_timestamp_excluded': 84}
 - table written: spread_cost_table.csv

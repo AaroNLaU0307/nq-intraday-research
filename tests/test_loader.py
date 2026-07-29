@@ -221,6 +221,25 @@ def test_mnq_launch_boundary_fails_closed():
     assert MNQ_LAUNCH_DATE.isoformat() == "2019-05-06"
 
 
+def test_crossed_forensics_summary_is_bounded_and_structural():
+    bbo = fab_bbo_utc(rows=60)
+    bbo.loc[7, "ask_px"] = bbo.loc[7, "bid_px"] - 0.25     # 1-tick crossed
+    bbo.loc[20, "ask_px"] = bbo.loc[20, "bid_px"]          # locked (ask==bid)
+    bbo.loc[33, "ask_px"] = float("nan")                   # NaN spread
+    out = CostCalibrationLoader._forensics_from_frame(
+        bbo, "fab.dbn.zst", seed=20260729, k=5)
+    assert out["n_rows"] == 60
+    assert out["n_crossed_ask_lt_bid"] == 1
+    assert out["n_locked_ask_eq_bid"] == 1
+    assert out["n_nan_spread"] == 1
+    assert len(out["samples"]) == 1
+    s = out["samples"][0]
+    assert s["abs_crossed_ticks"] == pytest.approx(1.0)
+    assert s["mid_over_neighbor_mid"] == pytest.approx(1.0, abs=1e-4)
+    # bounded structural dict only — no DataFrame may escape
+    assert not any(isinstance(v, pd.DataFrame) for v in out.values())
+
+
 def test_tiny_crossed_fraction_excluded_with_event():
     bbo = fab_bbo_utc(rows=400)
     bbo.loc[0, "ask_px"] = bbo.loc[0, "bid_px"] - 1.0         # 1/400 = 0.25%
@@ -228,6 +247,15 @@ def test_tiny_crossed_fraction_excluded_with_event():
     kinds = [e.kind for e in events]
     assert kinds == ["crossed_or_invalid_spread"] and events[0].count == 1
     assert int(tbl["n_obs"].sum()) == 399                     # excluded, counted
+
+
+def test_nat_timestamp_valid_spread_excluded_with_event():
+    bbo = fab_bbo_utc(rows=400)
+    bbo.loc[5, "ts"] = pd.NaT                  # undefined ts_event, spread OK
+    tbl, events = CostCalibrationLoader.build_spread_table_synthetic(bbo)
+    kinds = [e.kind for e in events]
+    assert kinds == ["nat_timestamp_excluded"] and events[0].count == 1
+    assert int(tbl["n_obs"].sum()) == 399      # excluded with event, not silently
 
 
 def test_development_window_boundary(tmp_path):

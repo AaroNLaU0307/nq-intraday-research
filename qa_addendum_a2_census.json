@@ -1,0 +1,8 @@
+{
+ "note": "ts-phase census via CostCalibrationLoader._qa_ts_phase_census; phases by ET wall-clock minute of ts_event: rth_0930_1600=[570,960), maintenance_1700_1800=[1020,1080), nat_ts=undefined ts_event, other_open=rest (incl. overnight and closed-period rows carrying stale last-update ts_event)",
+ "files": [
+  {"file": "glbx-mdp3-20250101-20250131.bbo-1s.dbn.zst", "n_rows": 1700017, "n_nat_ts": 64, "n_nat_ts_valid_spread": 9, "crossed_by_phase": {"other_open": 178, "rth_0930_1600": 104, "nat_ts": 55}, "rth_crossed_magnitude": {"n": 104, "ticks_median": 38.0, "ticks_p95": 507.35, "ticks_max": 532.0}},
+  {"file": "glbx-mdp3-20250201-20250228.bbo-1s.dbn.zst", "n_rows": 1567255, "n_nat_ts": 98, "n_nat_ts_valid_spread": 13, "crossed_by_phase": {"other_open": 203, "rth_0930_1600": 152, "nat_ts": 85}, "rth_crossed_magnitude": {"n": 152, "ticks_median": 31.5, "ticks_p95": 232.0, "ticks_max": 376.0}},
+  {"file": "glbx-mdp3-20250301-20250331.bbo-1s.dbn.zst", "n_rows": 1680120, "n_nat_ts": 137, "n_nat_ts_valid_spread": 62, "crossed_by_phase": {"other_open": 226, "nat_ts": 75, "rth_0930_1600": 13}, "rth_crossed_magnitude": {"n": 13, "ticks_median": 260.0, "ticks_p95": 435.6, "ticks_max": 555.0}}
+ ]
+}
