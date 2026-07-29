@@ -80,11 +80,17 @@ INPUT_PREFLIGHT_ONLY / REAL_S0_NOT_RUN / AWAITING_AARON_APPROVAL
 
 IMPLEMENTATION REQUIREMENTS:
 
-A. 日期资格漏斗（逐级计数，json 中逐级列日期集合大小与差集去向）：
-   scheduled trading days → observed RTH days → 完整 RTH days →
-   减 early-close 剔除 → 减 zero-bar 剔除 → 减 >10% missing 剔除 →
-   减 ADR14 warm-up（前 14 个完整 RTH 日不足）→ 最终进入特征构建的日期数。
-   剔除日只允许冻结的三类＋warm-up；任何日期不得因其他理由消失。
+A. 日期资格漏斗（Aaron 2026-07-29 勘误后定稿顺序，逐级计数，json 中
+   逐级列集合大小与差集去向）：
+   scheduled trading days
+   → 减 zero-bar days → observed RTH days
+   → 减 scheduled early-close days → regular full-session candidates
+   → 减 RTH missing >10% days → structurally eligible days
+   → 减 ADR14 warm-up → final feature-construction dates
+   硬性要求：每级集合守恒（上级 = 下级 + 被减集合）；所有排除集合互斥，
+   不得重复计数；`complete_390_bar_rth_days` 仅作为**旁路诊断集合**输出
+   （并作为 ADR14 warm-up 判定的 lookback 基础），不作为漏斗扣减阶段；
+   剔除只允许上述各级＋冻结三类语义，任何日期不得因其他理由消失。
 
 B. 精确锚点逐日检查（对资格漏斗过线的每一日）：
    O09:30（09:30 bar open）、C09:59（09:59 bar close）、O10:00（10:00 bar
@@ -108,15 +114,30 @@ C. 非关键缺失分钟（IR-15 已定稿口径，照此实施）：
      受影响的日期与数量；
    - 所有 NA 显式计数。
 
-D. F1-F11 输入完整性（只查可构建性与 NA，不算特征值与任何 Alpha 关系）：
+D. F1-F11 输入完整性（计算权限边界，Aaron 2026-07-29 勘误明确）：
+   **允许**在内存中实际计算 F1-F11，但仅用于判定：可构建性、NA 状态、
+   NA 原因、is_constant 布尔检查。
+   **禁止输出**：实际特征值；均值/分位数/分布；与标签或未来价格的任何
+   关系；任何策略、Oracle、收益或判决数字。报告与 json 中只出现计数、
+   布尔与原因分类。
    每特征：非 NA 可构建日数 / NA 日数 / NA 原因分类（锚点缺失、ADR14
    warm-up、F4 前 60 日 warm-up、F5 roll 日记 NA、F10 日历缺口、其他）。
    F10：按 IR-12/13/14 编码后报告覆盖——四类 {CPI, NFP, FOMC(92 预定
    statement 日), none} 各自日期数、与资格日的交集数、多事件 NA 日数
    （19 天全列）、unscheduled_fomc_action diagnostic 计数、development
    窗内无匹配事件的年份核对；不得报告事件与任何收益的关系。
-   F11：47 次 transition 与 is_roll_window（前后各 2 RTH 日）覆盖计数；
-   与 DATA_QA_ADDENDUM §8 的 47 次交叉核对。
+   F11 / F5 roll session-date 语义（Aaron 2026-07-29 勘误，硬性）：
+   transition 瞬间在 00:00 UTC（= 周日/前夜 19:00/20:00 ET，属于次一
+   CME session 的盘前时段）。is_roll_transition 与 F5 的 roll-day NA
+   必须映射到**新 mapping 生效后对应的 CME RTH session date**（= 官方
+   mapping 区间 d0 起第一个有效 RTH 交易日），不得用 Sunday ET 日历日，
+   也不得仅截取 UTC 或 ET 日历日期。必须断言：
+   - 47 个 transition 全部映射到有效 RTH 交易日；
+   - 不存在周末 is_roll_transition；
+   - 与 gate1/symbology/nq_v0_mapping.csv 官方有效区间逐一一致；
+   - is_roll_window 按冻结定义（前后各 2 个 RTH 交易日）围绕 RTH
+     transition date 生成。
+   并与 DATA_QA_ADDENDUM §8 的 47 次交叉核对。
    报告任何未识别类别与意外全常量字段。
 
 E. 标签输入（只查锚点存在性）：
@@ -125,8 +146,12 @@ E. 标签输入（只查锚点存在性）：
    未来收益统计。
 
 F. 输出与守卫：
-   - json 顶层必须含 status 三行、生成时间、代码版本（git rev-parse HEAD
-     由 main agent 集成时填，你留占位）、全部计数结构；
+   - json 顶层固定字段（Aaron 2026-07-29 勘误，不得用模糊占位）：
+     `stage = "INPUT_PREFLIGHT_ONLY"`、`real_s0 = "NOT_RUN"`、
+     `approval = "AWAITING_AARON_APPROVAL"`、
+     `input_commit = <SA-3 启动时实际 git HEAD（git rev-parse HEAD 实测值）>`、
+     `integration_commit = null`（由 main agent 集成后填写最终值）、
+     生成时间（UTC）、全部计数结构；
    - 报告与 json 禁用词守卫测试：不得出现 return/收益/pnl/ev/sharpe/
      hit/win_rate/edge/alpha_decay 等策略词（tests 中固化该断言）；
    - 与 DATA_QA_ADDENDUM 交叉核对表（scheduled 2989 / observed 2969 /
