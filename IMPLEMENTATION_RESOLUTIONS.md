@@ -47,10 +47,10 @@ modify 项按两阶段流程形成正式 Addendum 并更新实现与测试。
 | IR-13 (=D2+D2a) | F10=FOMC 只标**官方预定的 statement 发布日**（例会第二日，92 天）；两日会议第一天不标；非预定紧急行动（2019-10-11、2020-03-03/15/23）记 `unscheduled_fomc_action`，**仅 diagnostic**，不进冻结 F10；不得使用 10:00 时不可知的事后信息；(cancelled) 2020-03-17/18 不入表（未召开，事实判断） | S0 行 62 | FOMC 事件日集合＝92 | Option A＋限制 |
 | IR-14 (=D3) | CPI/NFP 延期按**实际官方发布日**标注（as-released：2013-10-22 NFP、2013-10-30 CPI）；原定日期/延期公告/实际日期三者留在 source log；实际日期时间必须官方证据，不得第三方回填 | 无冻结解→本 IR 补 | 个别日期归类 | Option A |
 | IR-15 (=D6 修订) | 路径特征口径：**先**应用冻结整日剔除（半日市/RTH 无成交/缺失>10%——vendor-degraded 超限日先排除，不计入保留数）；过资格日内部缺分钟按**时间排序实际存在 close 序列**差分；不造合成 bar、不 forward fill、不插值、不以邻 bar 替代精确锚点；精确锚点缺失→对应特征/标签记 NA，整日不删；opening path 与 PM path 受影响日分别报告 | S0 行 96 / 行 44-45 | F3/F8/path 类 NA 计数 | 修订版 Option A |
-| IR-16 (=D5) | symbology Option A：main agent 亲自执行一次官方 `symbology.resolve`（USD 0.00 元数据端点；临时 key 仅经环境变量，禁入代码/日志/commit/报告；归档请求参数＋原始 JSON＋UTC 时间＋SHA-256；取 2010-06-06→2022-01-01(excl) NQ.v.0→instrument_id→raw_symbol；47 次 transition 逐一验证＋无同 RTH 内切换；任一不符 STOP 出新决策包；mapping 仅验证与披露，不得改 Primary；完成后撤销 key；Option B 仅在官方端点无法完整返回历史映射时经 Aaron 批准后回退） | S0 行 30-32 | F11/F5 roll 识别的独立官方确认 | Option A；**执行状态：2026-07-29 首跑 401（环境变量为已撤销旧 key，撤销纪律有效）；等待 Aaron 注入新临时 key 后重跑，验证结果将追加于 gate1/symbology/** |
+| IR-16 (=D5) | symbology Option A：main agent 亲自执行一次官方 `symbology.resolve`（USD 0.00 元数据端点；临时 key 仅经环境变量，禁入代码/日志/commit/报告；归档请求参数＋原始 JSON＋UTC 时间＋SHA-256；取 2010-06-06→2022-01-01(excl) NQ.v.0→instrument_id→raw_symbol；47 次 transition 逐一验证＋无同 RTH 内切换；任一不符 STOP 出新决策包；mapping 仅验证与披露，不得改 Primary；完成后撤销 key；Option B 仅在官方端点无法完整返回历史映射时经 Aaron 批准后回退） | S0 行 30-32 | F11/F5 roll 识别的独立官方确认 | Option A；**执行完成（2026-07-29）**：首跑 401 记录为 AUTH_FAILED_NOT_RESOLVED（Aaron 勘误：401 仅证明未获授权，不能唯一归因）；新 key 注入后两跳执行成功（API 事实：GLBX.MDP3 上 continuous→raw_symbol 不受支持=HTTP 422，改为受支持的 continuous→instrument_id→raw_symbol 两跳，批复语义不变）；48 区间、47/47 transition 全符、同 RTH 切换数 0、季月链 NQM0→NQZ1 无断点；发现并正确处理 CME instrument_id 跨年复用（id 10016 曾载 22 个产品→时间感知联接）；证据归档 gate1/symbology/（原始 JSON×2＋SHA-256＋验证报告＋mapping csv）；密钥模式扫描零命中 |
 
-- D4/D7 维持条件触发（SA-1 已另出 D4a：FOMC 2010-2015 发布时刻无官方记载，
-  45 行哨兵值 NOT_ATTESTED_IN_OFFICIAL_SOURCE——待 Aaron/ChatGPT 批复，
-  不阻塞事件日期本身）。
+| IR-17 (=D4a) | FOMC 2010-2015 共 45 行官方存档无精确发布时刻：日期继续用官方证据；`official_release_time_et` 记 NA（空）；新增列 `release_time_status = official_time_unavailable_in_archived_source`；**禁止**以 00:00/12:30/14:00/14:15 或任何"典型时间"替代；禁止新闻/第三方日历/历史惯例回填；日期级 F10 仍编码为 FOMC；时间级诊断不得使用这些行（除非显式标记未知）；不因时间未知而整日删除或 F10 变 NA；每行保留官方 source ID＋hash。其余行的 status 取值（main agent 机械补全，纯披露）：`official_time_recorded`（有官方时刻）/`not_applicable_no_statement`（无声明的 FOMC 条目行）。**Primary effect = none；sample effect = none；diagnostic time coverage reduced**。已实施：f10_extraction.py＋csv 重生成（sha256 5e92ad00…bb5e8c，468 行 9 列）＋专项测试（205 全绿） | 任务书证据条款 | 仅诊断时刻覆盖 | APPROVED_BY_AARON 2026-07-29 |
+
+- D4/D7 维持条件触发（D4a 已批并落档为 IR-17，见上）。
 - SA-2 硬边界 commit a6bd012 经 Aaron 原则批准（Development [2010-06-06,
   2022-01-01)、IV fail-closed、整文件拒绝、边界不可参数化）。

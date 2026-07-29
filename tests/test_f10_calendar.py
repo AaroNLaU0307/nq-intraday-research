@@ -29,10 +29,17 @@ EXPECTED_FIELDS = [
     "source_id",
     "source_sha256",
     "official_release_time_et",
+    "release_time_status",     # D4a / IR-17 (approved 2026-07-29)
     "is_fomc_statement_day",
     "is_cpi_release_day",
     "is_nfp_release_day",
 ]
+
+RELEASE_TIME_STATUSES = {
+    "official_time_recorded",
+    "official_time_unavailable_in_archived_source",
+    "not_applicable_no_statement",
+}
 
 WINDOW_START = dt.date(2010, 6, 6)
 WINDOW_END = dt.date(2021, 12, 31)
@@ -101,8 +108,32 @@ def test_value_domains(rows):
             assert r[flag] in {"true", "false"}, f"{flag}={r[flag]!r}"
         assert re.fullmatch(r"[0-9a-f]{64}", r["source_sha256"])
         time_field = r["official_release_time_et"]
-        assert time_field == "" or time_field == NOT_ATTESTED or \
+        # D4a / IR-17: the in-band sentinel is GONE — time is either a clock
+        # value or NA (empty), with the gap carried by release_time_status.
+        assert time_field == "" or \
             re.fullmatch(r"[0-2][0-9]:[0-5][0-9]", time_field), time_field
+        status = r["release_time_status"]
+        assert status in RELEASE_TIME_STATUSES, status
+        if status == "official_time_recorded":
+            assert time_field != ""
+        else:
+            assert time_field == ""
+
+
+def test_d4a_unavailable_time_rows(rows):
+    """IR-17: exactly the 45 FOMC 2010-2015 statement rows carry the
+    official_time_unavailable status; they all keep source id + hash, and
+    none of them loses its date-level FOMC identity."""
+    unav = [r for r in rows
+            if r["release_time_status"] ==
+            "official_time_unavailable_in_archived_source"]
+    assert len(unav) == 45
+    for r in unav:
+        assert r["event_type"] == "FOMC"
+        assert r["is_fomc_statement_day"] == "true"
+        assert "2010" <= r["date_et"][:4] <= "2015"
+        assert r["source_id"] and re.fullmatch(r"[0-9a-f]{64}",
+                                               r["source_sha256"])
 
 
 def test_flags_agree_with_event_type(rows):

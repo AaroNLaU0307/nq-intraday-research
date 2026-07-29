@@ -51,6 +51,7 @@ FIELDNAMES = [
     "source_id",
     "source_sha256",
     "official_release_time_et",
+    "release_time_status",
     "is_fomc_statement_day",
     "is_cpi_release_day",
     "is_nfp_release_day",
@@ -414,11 +415,34 @@ def build_rows():
     return rows, notes
 
 
+# D4a (IR-17, APPROVED_BY_AARON 2026-07-29): when the archived official source
+# records a release but not its clock time, official_release_time_et is NA
+# (empty) — never an in-band sentinel string and never a "typical time" guess —
+# and the gap is machine-readable in release_time_status. Date-level F10
+# encoding is unaffected; these rows never cause day deletion or F10 NA.
+STATUS_RECORDED = "official_time_recorded"
+STATUS_UNAVAILABLE = "official_time_unavailable_in_archived_source"
+STATUS_NO_STATEMENT = "not_applicable_no_statement"
+
+
+def _apply_d4a(row):
+    out = dict(row)
+    t = out["official_release_time_et"]
+    if t == NOT_ATTESTED:
+        out["official_release_time_et"] = ""
+        out["release_time_status"] = STATUS_UNAVAILABLE
+    elif t:
+        out["release_time_status"] = STATUS_RECORDED
+    else:
+        out["release_time_status"] = STATUS_NO_STATEMENT
+    return out
+
+
 def write_csv(rows, path=OUT_CSV):
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         writer = csv.DictWriter(fh, fieldnames=FIELDNAMES, lineterminator="\n")
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(_apply_d4a(r) for r in rows)
 
 
 def main():

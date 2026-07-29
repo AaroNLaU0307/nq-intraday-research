@@ -14,7 +14,8 @@ S0_INPUT_PREFLIGHT_REPORT.md 与 S0_INPUT_PREFLIGHT.json。
 启动前置（缺一即 STOP，不得开工）：
 - main agent 已集成 M4-T2（src/itsf/data/roles.py 存在且
   DEV_END_EXCLUSIVE == 2022-01-01）——用代码断言确认；
-- gate1/f10_event_calendar/f10_events.csv 存在（sha256 3c3401f6…7afcb00）。
+- gate1/f10_event_calendar/f10_events.csv 存在（IR-17 后版本，9 列，
+  sha256 5e92ad00737339c392ed2c0927736e196e076e185897c146c884d5f515bb5e8c）。
 
 已批复决策（IMPLEMENTATION_RESOLUTIONS.md M4 批次，2026-07-29——照此执行，
 不得重新解释）：
@@ -27,8 +28,13 @@ S0_INPUT_PREFLIGHT_REPORT.md 与 S0_INPUT_PREFLIGHT.json。
   不存在于表中。
 - IR-14（D3）：延期发布按实际官方发布日（csv 已如此记录）。
 - IR-15（D6 修订版）：见下文 C 段（已定稿口径，不再是决策点）。
-- D4a 未决（FOMC 2010-2015 发布时刻哨兵值）：不影响日期级计数；F10 编码
-  不依赖该列；在报告中如实披露 45 行哨兵即可。
+- IR-17（D4a，已批）：45 行 FOMC 2010-2015 无官方时刻——
+  `official_release_time_et` 为 NA、`release_time_status =
+  official_time_unavailable_in_archived_source`；日期级 F10 照常编码为
+  FOMC，这些行不得导致整日删除或 F10 记 NA；报告中披露 45 行计数即可。
+- IR-16（D5，已完成）：官方 symbology 映射在 gate1/symbology/
+  nq_v0_mapping.csv（48 区间，47/47 验证通过）——F11/roll 覆盖段与其
+  交叉核对（仅验证与披露，不改任何输入语义）。
 
 项目背景（自包含）：
 - 仓库：C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework\
