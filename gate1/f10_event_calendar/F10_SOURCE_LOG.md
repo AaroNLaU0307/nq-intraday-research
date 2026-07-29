@@ -417,3 +417,13 @@ HTTP 状态全部 200。没有任何年份用低级来源顶替。
 
 D1（同日多事件编码）与 D4（缺失年份 fail-closed）不阻塞本表：
 前者由"每事件独立一行"保留全部信息；后者未触发（无缺失年份）。
+
+---
+
+## 集成注记（main agent，2026-07-29，IR-17 之后）
+
+§5.5 所述带内哨兵 `NOT_ATTESTED_IN_OFFICIAL_SOURCE` 为 IR-17 批复前的
+原始处理。批复后 csv 已重生成：该 45 行 `official_release_time_et` 为
+NA（空），缺口以 `release_time_status = official_time_unavailable_in_
+archived_source` 机器可读承载（csv sha256 5e92ad00…bb5e8c，9 列）。
+本节历史描述保留不改，以维持证据链的时间顺序。

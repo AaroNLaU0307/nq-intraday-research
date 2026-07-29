@@ -1,0 +1,1537 @@
+{
+ "stage": "INPUT_PREFLIGHT_ONLY",
+ "real_s0": "NOT_RUN",
+ "approval": "AWAITING_AARON_APPROVAL",
+ "input_commit": "d09ce4e4f0653a191ba035d5f90a7ec3316c864f",
+ "integration_commit": null,
+ "generated_at_utc": "2026-07-29T07:30:52.620675+00:00",
+ "development_window": {
+  "start_inclusive": "2010-06-06",
+  "end_exclusive": "2022-01-01"
+ },
+ "source": {
+  "a1_job_dir": "C:\\Users\\Aaron\\quant-data\\databento-archive\\intraday-trend\\development_signal\\GLBX-20260727-DL3BEBCHJA",
+  "n_files": 139,
+  "read_path": "DevelopmentSignalLoader.load_real",
+  "loader_qa_events": {}
+ },
+ "funnel": {
+  "L0_scheduled_trading_days": 2989,
+  "minus_zero_bar_days": 20,
+  "L1_observed_rth_days": 2969,
+  "minus_scheduled_early_close_days": 85,
+  "L2_regular_full_session_candidates": 2884,
+  "minus_rth_missing_gt_10pct_days": 2,
+  "L3_structurally_eligible_days": 2882,
+  "minus_adr14_warmup_days": 14,
+  "L4_final_feature_construction_dates": 2868,
+  "removed_sets": {
+   "zero_bar_days": [
+    "2012-04-06",
+    "2012-10-29",
+    "2012-10-30",
+    "2012-11-22",
+    "2013-01-21",
+    "2013-02-18",
+    "2013-05-27",
+    "2013-07-04",
+    "2013-09-02",
+    "2013-11-28",
+    "2014-01-20",
+    "2014-02-17",
+    "2014-06-12",
+    "2014-06-13",
+    "2014-09-23",
+    "2014-09-24",
+    "2014-09-25",
+    "2014-12-31",
+    "2015-04-03",
+    "2021-04-02"
+   ],
+   "scheduled_early_close_days": [
+    "2010-07-05",
+    "2010-09-06",
+    "2010-11-25",
+    "2010-11-26",
+    "2011-01-17",
+    "2011-02-21",
+    "2011-05-30",
+    "2011-07-04",
+    "2011-09-05",
+    "2011-11-24",
+    "2011-11-25",
+    "2012-01-16",
+    "2012-02-20",
+    "2012-05-28",
+    "2012-07-03",
+    "2012-07-04",
+    "2012-09-03",
+    "2012-11-23",
+    "2012-12-24",
+    "2013-07-03",
+    "2013-11-29",
+    "2013-12-24",
+    "2014-05-26",
+    "2014-07-03",
+    "2014-07-04",
+    "2014-09-01",
+    "2014-11-27",
+    "2014-11-28",
+    "2014-12-24",
+    "2015-01-19",
+    "2015-02-16",
+    "2015-05-25",
+    "2015-07-03",
+    "2015-09-07",
+    "2015-11-26",
+    "2015-11-27",
+    "2015-12-24",
+    "2016-01-18",
+    "2016-02-15",
+    "2016-05-30",
+    "2016-07-04",
+    "2016-09-05",
+    "2016-11-24",
+    "2016-11-25",
+    "2017-01-16",
+    "2017-02-20",
+    "2017-05-29",
+    "2017-07-03",
+    "2017-07-04",
+    "2017-09-04",
+    "2017-11-23",
+    "2017-11-24",
+    "2018-01-15",
+    "2018-02-19",
+    "2018-05-28",
+    "2018-07-03",
+    "2018-07-04",
+    "2018-09-03",
+    "2018-11-22",
+    "2018-11-23",
+    "2018-12-24",
+    "2019-01-21",
+    "2019-02-18",
+    "2019-05-27",
+    "2019-07-03",
+    "2019-07-04",
+    "2019-09-02",
+    "2019-11-28",
+    "2019-11-29",
+    "2019-12-24",
+    "2020-01-20",
+    "2020-02-17",
+    "2020-05-25",
+    "2020-07-03",
+    "2020-09-07",
+    "2020-11-26",
+    "2020-11-27",
+    "2020-12-24",
+    "2021-01-18",
+    "2021-02-15",
+    "2021-05-31",
+    "2021-07-05",
+    "2021-09-06",
+    "2021-11-25",
+    "2021-11-26"
+   ],
+   "rth_missing_gt_10pct_days": [
+    "2020-02-28",
+    "2020-06-30"
+   ],
+   "adr14_warmup_days": [
+    "2010-06-07",
+    "2010-06-08",
+    "2010-06-09",
+    "2010-06-10",
+    "2010-06-11",
+    "2010-06-14",
+    "2010-06-15",
+    "2010-06-16",
+    "2010-06-17",
+    "2010-06-18",
+    "2010-06-21",
+    "2010-06-22",
+    "2010-06-23",
+    "2010-06-24"
+   ]
+  },
+  "conservation_checks": {
+   "L0_minus_zero_bar_equals_L1": true,
+   "L1_minus_early_close_equals_L2": true,
+   "L2_minus_missing_gt_10pct_equals_L3": true,
+   "L3_minus_adr14_warmup_equals_L4": true,
+   "removed_sets_mutually_disjoint": true,
+   "no_date_vanishes_unaccounted": true,
+   "no_rth_bars_on_unscheduled_days": true
+  },
+  "side_diagnostic_complete_390_bar_rth_days": 2870,
+  "first_final_date": "2010-06-25",
+  "last_final_date": "2021-12-31"
+ },
+ "anchors": {
+  "O0930": {
+   "population": "L3_structurally_eligible_days",
+   "available": 2882,
+   "missing": 0,
+   "missing_dates": [],
+   "missing_detail": [],
+   "missing_reasons": {},
+   "downstream": "field_na_day_retained"
+  },
+  "C0959": {
+   "population": "L3_structurally_eligible_days",
+   "available": 2882,
+   "missing": 0,
+   "missing_dates": [],
+   "missing_detail": [],
+   "missing_reasons": {},
+   "downstream": "field_na_day_retained"
+  },
+  "O1000": {
+   "population": "L3_structurally_eligible_days",
+   "available": 2882,
+   "missing": 0,
+   "missing_dates": [],
+   "missing_detail": [],
+   "missing_reasons": {},
+   "downstream": "field_na_day_retained"
+  },
+  "C1544": {
+   "population": "L3_structurally_eligible_days",
+   "available": 2882,
+   "missing": 0,
+   "missing_dates": [],
+   "missing_detail": [],
+   "missing_reasons": {},
+   "downstream": "field_na_day_retained"
+  },
+  "prev_rth_close": {
+   "population": "L3_structurally_eligible_days",
+   "available": 2809,
+   "missing": 73,
+   "missing_dates": [
+    "2010-06-07",
+    "2010-07-06",
+    "2010-09-07",
+    "2010-11-29",
+    "2011-01-18",
+    "2011-02-22",
+    "2011-05-31",
+    "2011-07-05",
+    "2011-09-06",
+    "2011-11-28",
+    "2012-01-17",
+    "2012-02-21",
+    "2012-05-29",
+    "2012-07-05",
+    "2012-09-04",
+    "2012-11-26",
+    "2012-12-26",
+    "2013-07-05",
+    "2013-12-02",
+    "2013-12-26",
+    "2014-05-27",
+    "2014-07-07",
+    "2014-09-02",
+    "2014-12-01",
+    "2014-12-26",
+    "2015-01-20",
+    "2015-02-17",
+    "2015-05-26",
+    "2015-07-06",
+    "2015-09-08",
+    "2015-11-30",
+    "2015-12-28",
+    "2016-01-19",
+    "2016-02-16",
+    "2016-05-31",
+    "2016-07-05",
+    "2016-09-06",
+    "2016-11-28",
+    "2017-01-17",
+    "2017-02-21",
+    "2017-05-30",
+    "2017-07-05",
+    "2017-09-05",
+    "2017-11-27",
+    "2018-01-16",
+    "2018-02-20",
+    "2018-05-29",
+    "2018-07-05",
+    "2018-09-04",
+    "2018-11-26",
+    "2018-12-26",
+    "2019-01-22",
+    "2019-02-19",
+    "2019-05-28",
+    "2019-07-05",
+    "2019-09-03",
+    "2019-12-02",
+    "2019-12-26",
+    "2020-01-21",
+    "2020-02-18",
+    "2020-03-02",
+    "2020-05-26",
+    "2020-07-01",
+    "2020-07-06",
+    "2020-09-08",
+    "2020-11-30",
+    "2020-12-28",
+    "2021-01-19",
+    "2021-02-16",
+    "2021-06-01",
+    "2021-07-06",
+    "2021-09-07",
+    "2021-11-29"
+   ],
+   "missing_detail": [
+    {
+     "date": "2010-06-07",
+     "prev_rth_day": null,
+     "reason": "no_prior_rth_day_in_sample"
+    },
+    {
+     "date": "2010-07-06",
+     "prev_rth_day": "2010-07-05",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2010-09-07",
+     "prev_rth_day": "2010-09-06",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2010-11-29",
+     "prev_rth_day": "2010-11-26",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2011-01-18",
+     "prev_rth_day": "2011-01-17",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2011-02-22",
+     "prev_rth_day": "2011-02-21",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2011-05-31",
+     "prev_rth_day": "2011-05-30",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2011-07-05",
+     "prev_rth_day": "2011-07-04",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2011-09-06",
+     "prev_rth_day": "2011-09-05",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2011-11-28",
+     "prev_rth_day": "2011-11-25",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2012-01-17",
+     "prev_rth_day": "2012-01-16",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2012-02-21",
+     "prev_rth_day": "2012-02-20",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2012-05-29",
+     "prev_rth_day": "2012-05-28",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2012-07-05",
+     "prev_rth_day": "2012-07-04",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2012-09-04",
+     "prev_rth_day": "2012-09-03",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2012-11-26",
+     "prev_rth_day": "2012-11-23",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2012-12-26",
+     "prev_rth_day": "2012-12-24",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2013-07-05",
+     "prev_rth_day": "2013-07-03",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2013-12-02",
+     "prev_rth_day": "2013-11-29",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2013-12-26",
+     "prev_rth_day": "2013-12-24",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2014-05-27",
+     "prev_rth_day": "2014-05-26",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2014-07-07",
+     "prev_rth_day": "2014-07-04",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2014-09-02",
+     "prev_rth_day": "2014-09-01",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2014-12-01",
+     "prev_rth_day": "2014-11-28",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2014-12-26",
+     "prev_rth_day": "2014-12-24",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2015-01-20",
+     "prev_rth_day": "2015-01-19",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2015-02-17",
+     "prev_rth_day": "2015-02-16",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2015-05-26",
+     "prev_rth_day": "2015-05-25",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2015-07-06",
+     "prev_rth_day": "2015-07-03",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2015-09-08",
+     "prev_rth_day": "2015-09-07",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2015-11-30",
+     "prev_rth_day": "2015-11-27",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2015-12-28",
+     "prev_rth_day": "2015-12-24",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2016-01-19",
+     "prev_rth_day": "2016-01-18",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2016-02-16",
+     "prev_rth_day": "2016-02-15",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2016-05-31",
+     "prev_rth_day": "2016-05-30",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2016-07-05",
+     "prev_rth_day": "2016-07-04",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2016-09-06",
+     "prev_rth_day": "2016-09-05",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2016-11-28",
+     "prev_rth_day": "2016-11-25",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2017-01-17",
+     "prev_rth_day": "2017-01-16",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2017-02-21",
+     "prev_rth_day": "2017-02-20",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2017-05-30",
+     "prev_rth_day": "2017-05-29",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2017-07-05",
+     "prev_rth_day": "2017-07-04",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2017-09-05",
+     "prev_rth_day": "2017-09-04",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2017-11-27",
+     "prev_rth_day": "2017-11-24",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2018-01-16",
+     "prev_rth_day": "2018-01-15",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2018-02-20",
+     "prev_rth_day": "2018-02-19",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2018-05-29",
+     "prev_rth_day": "2018-05-28",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2018-07-05",
+     "prev_rth_day": "2018-07-04",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2018-09-04",
+     "prev_rth_day": "2018-09-03",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2018-11-26",
+     "prev_rth_day": "2018-11-23",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2018-12-26",
+     "prev_rth_day": "2018-12-24",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2019-01-22",
+     "prev_rth_day": "2019-01-21",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2019-02-19",
+     "prev_rth_day": "2019-02-18",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2019-05-28",
+     "prev_rth_day": "2019-05-27",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2019-07-05",
+     "prev_rth_day": "2019-07-04",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2019-09-03",
+     "prev_rth_day": "2019-09-02",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2019-12-02",
+     "prev_rth_day": "2019-11-29",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2019-12-26",
+     "prev_rth_day": "2019-12-24",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2020-01-21",
+     "prev_rth_day": "2020-01-20",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2020-02-18",
+     "prev_rth_day": "2020-02-17",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2020-03-02",
+     "prev_rth_day": "2020-02-28",
+     "reason": "prev_day_1559_bar_absent"
+    },
+    {
+     "date": "2020-05-26",
+     "prev_rth_day": "2020-05-25",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2020-07-01",
+     "prev_rth_day": "2020-06-30",
+     "reason": "prev_day_1559_bar_absent"
+    },
+    {
+     "date": "2020-07-06",
+     "prev_rth_day": "2020-07-03",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2020-09-08",
+     "prev_rth_day": "2020-09-07",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2020-11-30",
+     "prev_rth_day": "2020-11-27",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2020-12-28",
+     "prev_rth_day": "2020-12-24",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2021-01-19",
+     "prev_rth_day": "2021-01-18",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2021-02-16",
+     "prev_rth_day": "2021-02-15",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2021-06-01",
+     "prev_rth_day": "2021-05-31",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2021-07-06",
+     "prev_rth_day": "2021-07-05",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2021-09-07",
+     "prev_rth_day": "2021-09-06",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    },
+    {
+     "date": "2021-11-29",
+     "prev_rth_day": "2021-11-26",
+     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+    }
+   ],
+   "missing_reasons": {
+    "no_prior_rth_day_in_sample": 1,
+    "prev_day_scheduled_early_close_no_1559_bar": 70,
+    "prev_day_1559_bar_absent": 2
+   },
+   "downstream": "field_na_day_retained_pending_D7"
+  }
+ },
+ "zero_direction_days_frozen_L82": {
+  "count": 26,
+  "dates": [
+   "2011-02-18",
+   "2011-05-16",
+   "2011-05-19",
+   "2011-06-16",
+   "2011-07-05",
+   "2012-02-24",
+   "2012-03-09",
+   "2012-04-02",
+   "2012-09-21",
+   "2012-10-05",
+   "2012-10-08",
+   "2012-12-26",
+   "2013-04-12",
+   "2013-06-26",
+   "2013-09-11",
+   "2013-11-01",
+   "2014-01-03",
+   "2014-04-28",
+   "2014-06-23",
+   "2014-07-23",
+   "2015-02-23",
+   "2015-11-03",
+   "2016-03-31",
+   "2017-05-12",
+   "2020-10-06",
+   "2021-07-15"
+  ],
+  "note": "ret_open30 == 0 exactly: frozen L82 requires these be counted and reported separately as no-direction, non-tradeable days. The day is NOT deleted."
+ },
+ "na_reason_precedence": [
+  "reasons are assigned by FIRST match in the documented order per feature; a day can satisfy several (e.g. an ADR14 warm-up day that is also a roll transition is counted once, under the earlier test), so reason counts sum to the NA total exactly",
+  "F5 order: roll_transition_day_na, anchor_missing, prev_rth_close_anchor_missing, adr14_warmup"
+ ],
+ "path_features_ir15": {
+  "opening_path_affected_days": 3,
+  "opening_path_affected_dates": [
+   "2020-03-09",
+   "2020-03-12",
+   "2020-03-16"
+  ],
+  "pm_path_affected_days": 9,
+  "pm_path_affected_dates": [
+   "2010-09-10",
+   "2010-12-23",
+   "2010-12-28",
+   "2010-12-29",
+   "2010-12-30",
+   "2012-03-09",
+   "2012-03-12",
+   "2013-12-13",
+   "2020-03-18"
+  ],
+  "excluded_before_this_layer_gt10pct": [
+   "2020-02-28",
+   "2020-06-30"
+  ]
+ },
+ "features": {
+  "F1": {
+   "constructible": 2868,
+   "na": 14,
+   "reasons": {
+    "adr14_warmup": 14
+   },
+   "is_constant": false
+  },
+  "F2": {
+   "constructible": 2868,
+   "na": 14,
+   "reasons": {
+    "adr14_warmup": 14
+   },
+   "is_constant": false
+  },
+  "F3": {
+   "constructible": 2882,
+   "na": 0,
+   "reasons": {},
+   "is_constant": false
+  },
+  "F4": {
+   "constructible": 2823,
+   "na": 59,
+   "reasons": {
+    "f4_lookback_warmup": 59
+   },
+   "is_constant": false
+  },
+  "F5": {
+   "constructible": 2750,
+   "na": 132,
+   "reasons": {
+    "prev_rth_close_anchor_missing": 73,
+    "adr14_warmup": 12,
+    "roll_transition_day_na": 47
+   },
+   "is_constant": false
+  },
+  "F6": {
+   "constructible": 2881,
+   "na": 1,
+   "reasons": {
+    "overnight_window_empty": 1
+   },
+   "is_constant": false
+  },
+  "F7": {
+   "constructible": 2868,
+   "na": 14,
+   "reasons": {
+    "overnight_window_empty": 1,
+    "adr14_warmup": 13
+   },
+   "is_constant": false
+  },
+  "F8": {
+   "constructible": 2856,
+   "na": 26,
+   "reasons": {
+    "zero_denominator_no_direction": 26
+   },
+   "is_constant": false
+  },
+  "F9": {
+   "constructible": 2882,
+   "na": 0,
+   "reasons": {},
+   "is_constant": false
+  },
+  "F10": {
+   "constructible": 2873,
+   "na": 9,
+   "reasons": {
+    "multi_event_day_single_category_undetermined": 9
+   },
+   "is_constant": false
+  },
+  "F11": {
+   "constructible": 2882,
+   "na": 0,
+   "reasons": {},
+   "is_constant": false
+  }
+ },
+ "f4_lookback_rule_disclosure": {
+  "rule_used": "prior 60 OBSERVED RTH trading days that have a complete 30-bar 09:30-10:00 window, strictly preceding the day, scheduled early-close days included (their morning window is a normal one)",
+  "frozen_text_fixes": "the LENGTH (60 trading days) and the window",
+  "frozen_text_does_not_fix": "which day-set counts as the 60",
+  "na_days_under_this_rule": 59,
+  "OPEN_ITEM": "affects only the F4 NA count at the start of the sample; no day is deleted. See DECISION_PACKET_PREFLIGHT_F4_LOOKBACK_BASIS.md"
+ },
+ "startup_preconditions": {
+  "roles_dev_end_exclusive_is_2022_01_01": true,
+  "roles_module_constant_name": "ROLE_WINDOWS[DataRole.DEVELOPMENT_SIGNAL] \u2014 the task spec called it DEV_END_EXCLUSIVE; that name lives in dbn_loader.py which derives it from this map",
+  "f10_events_csv_sha256": "5e92ad00737339c392ed2c0927736e196e076e185897c146c884d5f515bb5e8c",
+  "f10_events_csv_sha256_matches_ir17": true,
+  "f10_events_csv_rows": 468
+ },
+ "f10": {
+  "encoding": "IR-13 category membership, then IR-12 multi-event -> NA",
+  "category_day_counts": {
+   "CPI": 139,
+   "NFP": 138,
+   "FOMC_scheduled_statement_days": 92
+  },
+  "fomc_statement_rows_in_table": 96,
+  "unscheduled_fomc_action_diagnostic": [
+   "2019-10-11",
+   "2020-03-03",
+   "2020-03-15",
+   "2020-03-23"
+  ],
+  "intersection_with_eligible_days": {
+   "CPI": 137,
+   "NFP": 134,
+   "FOMC": 92,
+   "none": 2528
+  },
+  "multi_event_na_days_post_ir13": {
+   "count": 9,
+   "dates": [
+    "2013-10-30",
+    "2014-09-17",
+    "2014-12-17",
+    "2016-03-16",
+    "2017-03-15",
+    "2017-06-14",
+    "2017-12-13",
+    "2019-12-11",
+    "2020-06-10"
+   ],
+   "count_intersecting_eligible": 9
+  },
+  "raw_multi_event_days_pre_ir13_sidecar": {
+   "count": 19,
+   "dates": [
+    "2010-10-15",
+    "2013-06-18",
+    "2013-09-17",
+    "2013-10-30",
+    "2013-12-17",
+    "2014-03-18",
+    "2014-06-17",
+    "2014-09-17",
+    "2014-12-17",
+    "2015-09-16",
+    "2015-12-15",
+    "2016-03-16",
+    "2017-03-15",
+    "2017-06-14",
+    "2017-12-13",
+    "2018-06-12",
+    "2019-10-04",
+    "2019-12-11",
+    "2020-06-10"
+   ]
+  },
+  "OPEN_ITEM": "IR-12 cites 19 multi-event days (raw table); after IR-13 narrows FOMC to scheduled statement days only 9 remain multi-category. See DECISION_PACKET_PREFLIGHT_F10_MULTIEVENT_SCOPE.md",
+  "per_year_counts": {
+   "2010": {
+    "CPI": 7,
+    "FOMC": 8,
+    "NFP": 6
+   },
+   "2011": {
+    "CPI": 12,
+    "FOMC": 15,
+    "NFP": 12
+   },
+   "2012": {
+    "CPI": 12,
+    "FOMC": 15,
+    "NFP": 12
+   },
+   "2013": {
+    "CPI": 12,
+    "FOMC": 17,
+    "NFP": 12
+   },
+   "2014": {
+    "CPI": 12,
+    "FOMC": 17,
+    "NFP": 12
+   },
+   "2015": {
+    "CPI": 12,
+    "FOMC": 16,
+    "NFP": 12
+   },
+   "2016": {
+    "CPI": 12,
+    "FOMC": 16,
+    "NFP": 12
+   },
+   "2017": {
+    "CPI": 12,
+    "FOMC": 16,
+    "NFP": 12
+   },
+   "2018": {
+    "CPI": 12,
+    "FOMC": 16,
+    "NFP": 12
+   },
+   "2019": {
+    "CPI": 12,
+    "FOMC": 18,
+    "NFP": 12
+   },
+   "2020": {
+    "CPI": 12,
+    "FOMC": 21,
+    "NFP": 12
+   },
+   "2021": {
+    "CPI": 12,
+    "FOMC": 16,
+    "NFP": 12
+   }
+  },
+  "per_year_fomc_scheduled_statement_days": {
+   "2010": 5,
+   "2011": 8,
+   "2012": 8,
+   "2013": 8,
+   "2014": 8,
+   "2015": 8,
+   "2016": 8,
+   "2017": 8,
+   "2018": 8,
+   "2019": 8,
+   "2020": 7,
+   "2021": 8
+  },
+  "years_with_no_events": [],
+  "ir17_rows_without_official_time": 45
+ },
+ "f11_roll": {
+  "source": "gate1/symbology/nq_v0_mapping.csv (IR-16, 48 intervals)",
+  "semantics": "transition instant 00:00 UTC = prior-evening ET pre-open; mapped to the first valid RTH session date on/after the official interval start",
+  "n_transitions": 47,
+  "assertions": {
+   "n_transitions_is_47": true,
+   "all_map_to_valid_rth_trading_day": true,
+   "no_weekend_transition": true,
+   "all_inside_official_interval": true,
+   "distinct_transition_dates": true
+  },
+  "all_assertions_pass": true,
+  "addendum_section8_cross_check_47": true,
+  "is_roll_transition_days_in_eligible": 47,
+  "is_roll_window_days": 235,
+  "is_roll_window_days_in_eligible": 235,
+  "transitions": [
+   {
+    "interval_start_utc": "2010-06-14",
+    "interval_end_utc_excl": "2010-09-13",
+    "raw_symbol": "NQU0",
+    "instrument_id": 26715,
+    "rth_session_date": "2010-06-14",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2010-09-13",
+    "interval_end_utc_excl": "2010-12-13",
+    "raw_symbol": "NQZ0",
+    "instrument_id": 3088,
+    "rth_session_date": "2010-09-13",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2010-12-13",
+    "interval_end_utc_excl": "2011-03-14",
+    "raw_symbol": "NQH1",
+    "instrument_id": 93735,
+    "rth_session_date": "2010-12-13",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2011-03-14",
+    "interval_end_utc_excl": "2011-06-13",
+    "raw_symbol": "NQM1",
+    "instrument_id": 30668,
+    "rth_session_date": "2011-03-14",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2011-06-13",
+    "interval_end_utc_excl": "2011-09-12",
+    "raw_symbol": "NQU1",
+    "instrument_id": 56972,
+    "rth_session_date": "2011-06-13",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2011-09-12",
+    "interval_end_utc_excl": "2011-12-12",
+    "raw_symbol": "NQZ1",
+    "instrument_id": 12038,
+    "rth_session_date": "2011-09-12",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2011-12-12",
+    "interval_end_utc_excl": "2012-03-13",
+    "raw_symbol": "NQH2",
+    "instrument_id": 8870,
+    "rth_session_date": "2011-12-12",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2012-03-13",
+    "interval_end_utc_excl": "2012-06-11",
+    "raw_symbol": "NQM2",
+    "instrument_id": 20924,
+    "rth_session_date": "2012-03-13",
+    "weekday": "Tuesday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2012-06-11",
+    "interval_end_utc_excl": "2012-09-17",
+    "raw_symbol": "NQU2",
+    "instrument_id": 57494,
+    "rth_session_date": "2012-06-11",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2012-09-17",
+    "interval_end_utc_excl": "2012-12-17",
+    "raw_symbol": "NQZ2",
+    "instrument_id": 10016,
+    "rth_session_date": "2012-09-17",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2012-12-17",
+    "interval_end_utc_excl": "2013-03-12",
+    "raw_symbol": "NQH3",
+    "instrument_id": 36931,
+    "rth_session_date": "2012-12-17",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2013-03-12",
+    "interval_end_utc_excl": "2013-06-17",
+    "raw_symbol": "NQM3",
+    "instrument_id": 11518,
+    "rth_session_date": "2013-03-12",
+    "weekday": "Tuesday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2013-06-17",
+    "interval_end_utc_excl": "2013-09-16",
+    "raw_symbol": "NQU3",
+    "instrument_id": 17591,
+    "rth_session_date": "2013-06-17",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2013-09-16",
+    "interval_end_utc_excl": "2013-12-16",
+    "raw_symbol": "NQZ3",
+    "instrument_id": 28499,
+    "rth_session_date": "2013-09-16",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2013-12-16",
+    "interval_end_utc_excl": "2014-03-17",
+    "raw_symbol": "NQH4",
+    "instrument_id": 382251,
+    "rth_session_date": "2013-12-16",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2014-03-17",
+    "interval_end_utc_excl": "2014-06-16",
+    "raw_symbol": "NQM4",
+    "instrument_id": 8223,
+    "rth_session_date": "2014-03-17",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2014-06-16",
+    "interval_end_utc_excl": "2014-09-15",
+    "raw_symbol": "NQU4",
+    "instrument_id": 83745,
+    "rth_session_date": "2014-06-16",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2014-09-15",
+    "interval_end_utc_excl": "2014-12-15",
+    "raw_symbol": "NQZ4",
+    "instrument_id": 28097,
+    "rth_session_date": "2014-09-15",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2014-12-15",
+    "interval_end_utc_excl": "2015-03-16",
+    "raw_symbol": "NQH5",
+    "instrument_id": 50207,
+    "rth_session_date": "2014-12-15",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2015-03-16",
+    "interval_end_utc_excl": "2015-06-15",
+    "raw_symbol": "NQM5",
+    "instrument_id": 58385,
+    "rth_session_date": "2015-03-16",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2015-06-15",
+    "interval_end_utc_excl": "2015-09-14",
+    "raw_symbol": "NQU5",
+    "instrument_id": 2913,
+    "rth_session_date": "2015-06-15",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2015-09-14",
+    "interval_end_utc_excl": "2015-12-14",
+    "raw_symbol": "NQZ5",
+    "instrument_id": 12809,
+    "rth_session_date": "2015-09-14",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2015-12-14",
+    "interval_end_utc_excl": "2016-03-14",
+    "raw_symbol": "NQH6",
+    "instrument_id": 49734,
+    "rth_session_date": "2015-12-14",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2016-03-14",
+    "interval_end_utc_excl": "2016-06-13",
+    "raw_symbol": "NQM6",
+    "instrument_id": 765,
+    "rth_session_date": "2016-03-14",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2016-06-13",
+    "interval_end_utc_excl": "2016-09-12",
+    "raw_symbol": "NQU6",
+    "instrument_id": 2563,
+    "rth_session_date": "2016-06-13",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2016-09-12",
+    "interval_end_utc_excl": "2016-12-13",
+    "raw_symbol": "NQZ6",
+    "instrument_id": 2887,
+    "rth_session_date": "2016-09-12",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2016-12-13",
+    "interval_end_utc_excl": "2017-03-13",
+    "raw_symbol": "NQH7",
+    "instrument_id": 35888,
+    "rth_session_date": "2016-12-13",
+    "weekday": "Tuesday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2017-03-13",
+    "interval_end_utc_excl": "2017-06-12",
+    "raw_symbol": "NQM7",
+    "instrument_id": 6398,
+    "rth_session_date": "2017-03-13",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2017-06-12",
+    "interval_end_utc_excl": "2017-09-11",
+    "raw_symbol": "NQU7",
+    "instrument_id": 26054,
+    "rth_session_date": "2017-06-12",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2017-09-11",
+    "interval_end_utc_excl": "2017-12-11",
+    "raw_symbol": "NQZ7",
+    "instrument_id": 15466,
+    "rth_session_date": "2017-09-11",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2017-12-11",
+    "interval_end_utc_excl": "2018-03-12",
+    "raw_symbol": "NQH8",
+    "instrument_id": 16210,
+    "rth_session_date": "2017-12-11",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2018-03-12",
+    "interval_end_utc_excl": "2018-06-11",
+    "raw_symbol": "NQM8",
+    "instrument_id": 23520,
+    "rth_session_date": "2018-03-12",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2018-06-11",
+    "interval_end_utc_excl": "2018-09-17",
+    "raw_symbol": "NQU8",
+    "instrument_id": 47511,
+    "rth_session_date": "2018-06-11",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2018-09-17",
+    "interval_end_utc_excl": "2018-12-17",
+    "raw_symbol": "NQZ8",
+    "instrument_id": 16041,
+    "rth_session_date": "2018-09-17",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2018-12-17",
+    "interval_end_utc_excl": "2019-03-11",
+    "raw_symbol": "NQH9",
+    "instrument_id": 15657,
+    "rth_session_date": "2018-12-17",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2019-03-11",
+    "interval_end_utc_excl": "2019-06-19",
+    "raw_symbol": "NQM9",
+    "instrument_id": 9166,
+    "rth_session_date": "2019-03-11",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2019-06-19",
+    "interval_end_utc_excl": "2019-09-16",
+    "raw_symbol": "NQU9",
+    "instrument_id": 36742,
+    "rth_session_date": "2019-06-19",
+    "weekday": "Wednesday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2019-09-16",
+    "interval_end_utc_excl": "2019-12-16",
+    "raw_symbol": "NQZ9",
+    "instrument_id": 15907,
+    "rth_session_date": "2019-09-16",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2019-12-16",
+    "interval_end_utc_excl": "2020-03-18",
+    "raw_symbol": "NQH0",
+    "instrument_id": 10204,
+    "rth_session_date": "2019-12-16",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2020-03-18",
+    "interval_end_utc_excl": "2020-06-17",
+    "raw_symbol": "NQM0",
+    "instrument_id": 16908,
+    "rth_session_date": "2020-03-18",
+    "weekday": "Wednesday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2020-06-17",
+    "interval_end_utc_excl": "2020-09-16",
+    "raw_symbol": "NQU0",
+    "instrument_id": 14028,
+    "rth_session_date": "2020-06-17",
+    "weekday": "Wednesday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2020-09-16",
+    "interval_end_utc_excl": "2020-12-16",
+    "raw_symbol": "NQZ0",
+    "instrument_id": 16337,
+    "rth_session_date": "2020-09-16",
+    "weekday": "Wednesday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2020-12-16",
+    "interval_end_utc_excl": "2021-03-17",
+    "raw_symbol": "NQH1",
+    "instrument_id": 4378,
+    "rth_session_date": "2020-12-16",
+    "weekday": "Wednesday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2021-03-17",
+    "interval_end_utc_excl": "2021-06-16",
+    "raw_symbol": "NQM1",
+    "instrument_id": 2786,
+    "rth_session_date": "2021-03-17",
+    "weekday": "Wednesday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2021-06-16",
+    "interval_end_utc_excl": "2021-09-15",
+    "raw_symbol": "NQU1",
+    "instrument_id": 828,
+    "rth_session_date": "2021-06-16",
+    "weekday": "Wednesday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2021-09-15",
+    "interval_end_utc_excl": "2021-12-13",
+    "raw_symbol": "NQZ1",
+    "instrument_id": 2770,
+    "rth_session_date": "2021-09-15",
+    "weekday": "Wednesday",
+    "inside_official_interval": true
+   },
+   {
+    "interval_start_utc": "2021-12-13",
+    "interval_end_utc_excl": "2022-01-01",
+    "raw_symbol": "NQH2",
+    "instrument_id": 3541,
+    "rth_session_date": "2021-12-13",
+    "weekday": "Monday",
+    "inside_official_interval": true
+   }
+  ]
+ },
+ "labels": {
+  "Y_cont": {
+   "required_anchors": [
+    "O1000",
+    "C1544",
+    "ADR14",
+    "d_open(O0930,C0959)"
+   ],
+   "available_days": 2842,
+   "unavailable_days": 40,
+   "note": "anchor existence only; ADR14 availability is reported by the funnel warm-up stage"
+  },
+  "Y1": {
+   "required_anchors": [
+    "O1000",
+    "C1544",
+    "ADR14"
+   ],
+   "available_days": 2868,
+   "unavailable_days": 14,
+   "note": "anchor existence only; ADR14 availability is reported by the funnel warm-up stage"
+  },
+  "Y2": {
+   "required_anchors": [
+    "O1000",
+    "C1544",
+    "PM close path"
+   ],
+   "available_days": 2882,
+   "unavailable_days": 0,
+   "note": "anchor existence only; ADR14 availability is reported by the funnel warm-up stage"
+  },
+  "Y3": {
+   "required_anchors": [
+    "C1544",
+    "PM high",
+    "PM low"
+   ],
+   "available_days": 2882,
+   "unavailable_days": 0,
+   "note": "anchor existence only; ADR14 availability is reported by the funnel warm-up stage"
+  },
+  "Y4": {
+   "required_anchors": [
+    "O1000",
+    "PM high",
+    "PM low",
+    "ADR14",
+    "d_open(O0930,C0959)"
+   ],
+   "available_days": 2842,
+   "unavailable_days": 40,
+   "note": "anchor existence only; ADR14 availability is reported by the funnel warm-up stage"
+  },
+  "Y5": {
+   "required_anchors": [
+    "O1000",
+    "PM high",
+    "PM low",
+    "ADR14",
+    "d_open(O0930,C0959)"
+   ],
+   "available_days": 2842,
+   "unavailable_days": 40,
+   "note": "anchor existence only; ADR14 availability is reported by the funnel warm-up stage"
+  }
+ },
+ "cross_check_vs_data_qa_addendum": {
+  "all_match": true,
+  "rows": [
+   {
+    "item": "scheduled trading days",
+    "preflight": 2989,
+    "addendum": 2989,
+    "match": true
+   },
+   {
+    "item": "scheduled early closes",
+    "preflight": 97,
+    "addendum": 97,
+    "match": true
+   },
+   {
+    "item": "observed RTH days",
+    "preflight": 2969,
+    "addendum": 2969,
+    "match": true
+   },
+   {
+    "item": "zero-bar scheduled days",
+    "preflight": 20,
+    "addendum": 20,
+    "match": true
+   },
+   {
+    "item": "0930-1000 complete days",
+    "preflight": 2960,
+    "addendum": 2960,
+    "match": true
+   },
+   {
+    "item": "1000-1544 complete days",
+    "preflight": 2873,
+    "addendum": 2873,
+    "match": true
+   },
+   {
+    "item": "1000-1544 early-close excluded",
+    "preflight": 85,
+    "addendum": 85,
+    "match": true
+   },
+   {
+    "item": "complete 390-bar RTH days",
+    "preflight": 2870,
+    "addendum": 2870,
+    "match": true
+   },
+   {
+    "item": "ADR14 warm-up days",
+    "preflight": 14,
+    "addendum": 14,
+    "match": true
+   },
+   {
+    "item": "roll transitions",
+    "preflight": 47,
+    "addendum": 47,
+    "match": true
+   }
+  ]
+ }
+}
