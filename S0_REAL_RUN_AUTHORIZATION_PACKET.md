@@ -10,6 +10,27 @@ drafted_by: main agent (solo; no subagent, no workflow, no real data read)
 本包只授权**首次真实 S0**。批准本包 ≠ 运行授权；运行只能由 §10 的精确
 授权语句触发。
 
+## 0. Trial 治理状态机（Aaron 2026-07-31 修订批复）
+
+```
+PACKET_DRAFTED → PACKET_APPROVED → RUNNER_IMPLEMENTED
+→ READY_FOR_RUN_AUTHORIZATION → RUN_AUTHORIZED → RUNNING
+→ COMPLETED / FAILED
+```
+
+- 当前位置：**PACKET_DRAFTED**（治理框架已获 Aaron 批准，最终包待
+  runner 落地后重渲染再批）。
+- `PACKET_APPROVED` 与 `RUN_AUTHORIZED` 是**不同状态**，前者绝不自动
+  推进为后者；每次状态变化以事件追加进 ops/TRIAL_REGISTRY.md
+  （UTC 时间＋commit＋actor＋原因），既有记录永不修改。
+- **最终包重渲染要求**：runner 实现并完成审计后，本包必须重新渲染并
+  额外锁定——`authorized_commit` 完整 hash、`runner_entrypoint`、
+  runner 及关键模块 SHA-256、requirements/lockfile SHA-256、Python
+  版本、pandas/databento/pandas-market-calendars/tzdata 等版本、
+  操作系统与时区、runner 零配置覆盖检查结果。重渲染后的状态上限为
+  `READY_FOR_RUN_AUTHORIZATION`，仍须 Aaron 发 §10 精确语句才进入
+  `RUN_AUTHORIZED`。
+
 ## 1. 运行代码版本
 
 - 起草时 Git HEAD（全 hash）：`541571f4c0f55eadf19f9edfda1688e98f5deffd`
@@ -49,6 +70,18 @@ leave-one-year-out 分组；proxy/actual-micro 两时代轴分列；频率输出
 **不暴露**：MC、EV、GO/STOP、Checkpoint 0（另行授权）。
 trial 开始后不得重置、删除或重新编号；失败运行同样入册永久保留。
 
+**trial 正式开始与 exposure 边界（Aaron 2026-07-31 修订批复）**：
+- Stage A 或 Stage B 失败：记录 `PRE_RUN_ATTEMPT_FAILURE` 事件，保留
+  失败日志与 artifact；**不消耗** researcher exposure ledger；**不**强制
+  改用 S0-T002；再次尝试前须 Aaron 重新确认机械问题已关闭。
+  （理由：A/B 阶段未计算、未暴露任何 Oracle 结果。）
+- Stage A/B 全部通过、即将进入 Stage C 的瞬间：原子追加 `RUN_STARTED`
+  事件，S0-T001 进入 RUNNING，exposure ledger 序号 1 **正式消耗**。
+- Stage C 及以后失败：S0-T001 永久占用，记录 RUN_FAILURE_REPORT，
+  修复后必须申请 S0-T002。
+- **任何中间结果一旦被读取或展示，一律视为 Stage C exposure 已发生**，
+  无论程序处于哪个阶段。
+
 ## 4. 输入数据锁定（运行时逐项重验，不符即 STOP）
 
 | 输入 | 锁定值 |
@@ -60,6 +93,7 @@ trial 开始后不得重置、删除或重新编号；失败运行同样入册�
 | symbology mapping SHA-256 | `85a32d44994b51e004e0c322510527aae18b70e1fadc70437e754253a2ac1850`（48 区间，47/47 验证） |
 | spread_cost_table.csv SHA-256 | `b6d6984ff7c364f9a57514d7583685956f6b080ec02027ee8401f38f6d9509bf`（唯一允许的成本侧输入） |
 | physical-copy attestation SHA-256 | `51ce415c6e2c06eb363d8061b9543c13d1b9ff11dfecbd9ec2312e3c66212813` |
+| **raw_file_set_sha256**（集合摘要） | `08fca11b7a9aea1f96f740409c099696e48907a408f409dfbadd82c5ac584298` = SHA256(sorted(relative_path\|size\|file_sha256))，覆盖全部 139 个 A1 dbn.zst；总文件数 139，总字节 58,711,328。一次性验证集合无缺失/新增/改名/替换（成员 hash 取自三方核对过的官方 manifest） |
 | Data QA / Preflight 对应 commit | QA `4ab40c5`＋Addendum `ac2979f`；Preflight 重跑 `d036837`（json SHA-256 `5c0ae2d7bc007cd8196d2bca796c1bf2f36e0d2c35ef4ac354d0f1d187614bbf`） |
 
 **硬禁止**：访问 IV（2022-01-01 起任何 NQ 数据，roles.py 机器强制）；
@@ -74,11 +108,14 @@ trial 开始后不得重置、删除或重新编号；失败运行同样入册�
   场景（proxy 假设按预注册 §7 分时代披露）；场景 adverse slip 按 IR-7。
 - Oracle：双路径定义（theoretical / executable）照预注册 §5-6；方向恒
   = d_open；E1（OR 对侧止损/15:45 退出）、E2（无止损 15:45 定时退出）。
-- 日期资格：Preflight 定稿漏斗（2989→2969→2884→2882→2868）＋冻结三类
-  剔除；NA 政策 = 行 45（非剔除日不删，特征 NA 计数）。
-- F10：IR-12/13/14/17/18（互斥分区 128/134/83/2528/9）；F4：IR-20；
-  F5：IR-19（前一实际 session；半日市取排期收盘 bar）；F11：IR-16 映射
-  仅验证披露。
+- 日期资格：按冻结规则（三类剔除＋批准漏斗顺序）由 runner **独立重新
+  计算**；NA 政策 = 行 45。F10：IR-12/13/14/17/18；F4：IR-20；F5：IR-19；
+  F11：IR-16 映射仅验证披露。
+- **expected_preflight_assertions（只作运行断言，禁作算法配置——Aaron
+  2026-07-31 修订批复）**：漏斗 2989→2969→2884→2882→2868；F10 最终互斥
+  128/134/83/2528/9；其余 Preflight 结构计数。runner 必须按冻结原始规则
+  独立计算后与这些观测值**比对**（不符即 STOP）；禁止把这些数字用作
+  样本选择、事件归类或特征取值的输入常数。
 - random seed：`20260731`（仅用于预注册规定的 bootstrap CI；S0 主计算
   确定性，无其他随机源）。
 - **runner 必须零命令行参数**：不接受任何可覆盖冻结 Primary 配置的
@@ -89,8 +126,15 @@ trial 开始后不得重置、删除或重新编号；失败运行同样入册�
 - 模板：`runs/S0-T001_<UTCyyyymmddTHHMMSSZ>/`——运行时创建，**此前必须
   不存在**（存在即 STOP）；本包不创建任何目录。
 - 禁止覆盖任何既有输出；临时文件、日志、结构结果、最终报告全部归入
-  该目录；目录创建后立即登记内容 hash manifest 并随阶段追加；
-  失败或中止时目录整体保留，禁止删除。
+  该目录；失败或中止时目录整体保留，禁止删除。
+- **hash manifest 非自引用设计（Aaron 2026-07-31 修订批复）**：
+  ```
+  manifest_format: jsonl_hash_chain（append-only）
+  manifest_self_excluded: true          # manifest 不对自身求 hash
+  each_record: {stage, relative_path, file_sha256, previous_record_hash}
+  ```
+  临时未关闭文件不得进入 final manifest；每阶段结束写入 stage seal
+  记录；失败目录同样保留完整 hash chain。
 
 ## 7. 运行阶段与信息释放顺序
 
@@ -98,8 +142,18 @@ trial 开始后不得重置、删除或重新编号；失败运行同样入册�
 |---|---|---|
 | A | 运行前机械检查（§9 全部硬门） | 仅 pass/fail |
 | B | 数据加载与结构验证（对 Preflight 计数逐项一致） | 仅结构计数 |
-| C | S0 计算（Oracle/标签/引擎） | **零释放** |
-| D | 结果完整性验证（行数、NA 守恒、无 NaN 泄漏） | 仅 pass/fail |
+| C | S0 计算（Oracle/标签/引擎） | **零释放**（含日志，见下） |
+| D | 结果完整性验证（行数＋**NA 守恒**） | 仅 pass/fail |
+
+- **Stage C 日志防泄漏（机器强制）**：控制台与日志只允许阶段状态、
+  心跳、文件 hash、非研究性的完成/失败状态；机器禁止输出 Oracle、
+  标签、E1/E2、年度结果、频率、分布或任何局部研究数字——以日志词汇
+  与 schema 守卫测试固化。
+- **NA 完整性（取代"无 NaN"粗判——Aaron 2026-07-31 修订批复）**：
+  预期 NA 必须与批准的 feature/label/anchor NA 原因表**逐项守恒**
+  （允许原因显式枚举：F5 roll 日/IR-19 锚点缺失、F10 多事件、ADR14 与
+  F4 warm-up、L82 零方向、锚点缺失等）；任何未登记原因产生的 NA/NaN
+  立即 STOP；不得以 dropna、填充或隐式类型转换消除异常。
 | E | 生成正式 S0 报告（封存入 trial 目录，含哈希） | 报告整体交付 |
 | F | S0 报告封存后，MC 才可另行申请授权 | — |
 
@@ -121,9 +175,10 @@ hash 不符 / schema 不符 / 日期计数与 Preflight 不符 / 配置漂移 /
 4. seal_check 通过；5. structure assertions 通过；6. guards 七项冻结哈希
 通过；7. M4_KEY_CLOSURE_ATTESTATION.md 存在；8. gate1/G9_RESOLVED.flag
 存在；9. ops/SECOND_COPY_ATTESTED.flag 存在；10. §4 全部输入 hash 逐项
-一致；11. 输出目录此前不存在；12. S0-T001 已在 TRIAL_REGISTRY 登记且
-状态为 APPROVED（由 Aaron 批准动作翻转）；13. Aaron 已给出 §10 精确
-授权语句。全链以机器退出码为闸。
+一致；11. 输出目录此前不存在；12. TRIAL_REGISTRY 事件链
+显示 S0-T001 处于 **RUN_AUTHORIZED** 状态（§0 状态机；由 Aaron 的 §10
+精确语句触发追加，PACKET_APPROVED 不构成此门）；13. Aaron 已给出 §10
+精确授权语句。全链以机器退出码为闸。
 
 ## 10. 唯一有效授权语句
 

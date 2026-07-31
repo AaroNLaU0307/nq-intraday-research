@@ -1,10 +1,19 @@
-# TRIAL REGISTRY（append-only；不得重置、删除或重新编号；失败 trial 永久保留）
+# TRIAL REGISTRY（append-only 事件链）
 
-| trial_id | type | exposure_seq | status | authorized_commit | opened_utc | closed_utc | outcome |
-|---|---|---|---|---|---|---|---|
-| S0-T001 | FIRST_REAL_S0_FULL_DEVELOPMENT_RUN | 1 | **PENDING_AARON_APPROVAL** | （待 Aaron 授权语句指名） | — | — | — |
+规则（Aaron 2026-07-31 修订批复）：既有事件记录**永不修改**；每次状态
+变化以新事件行追加（UTC 时间＋commit＋actor＋原因）；勘误以新事件追加
+并引用被勘误事件；trial 不得重置、删除或重新编号；失败 trial 永久保留。
+状态机见 S0_REAL_RUN_AUTHORIZATION_PACKET.md §0：
+PACKET_DRAFTED → PACKET_APPROVED → RUNNER_IMPLEMENTED →
+READY_FOR_RUN_AUTHORIZATION → RUN_AUTHORIZED → RUNNING → COMPLETED/FAILED。
+Stage A/B 失败记 PRE_RUN_ATTEMPT_FAILURE（不消耗 exposure、不换编号）；
+RUN_STARTED 事件 = 进入 Stage C = exposure 正式消耗。
 
-规则：状态只能由 Aaron 的批准动作从 PENDING_AARON_APPROVAL 翻转为
-APPROVED（授权语句见 S0_REAL_RUN_AUTHORIZATION_PACKET.md §10）；运行
-开始时填 opened_utc；无论成功失败均填 closed_utc 与 outcome；任何行
-一经写入不得修改语义（勘误以新行追加并互相引用）。
+## S0-T001（FIRST_REAL_S0_FULL_DEVELOPMENT_RUN，exposure_seq 1）
+
+| # | utc | event | commit | actor | 原因/备注 |
+|---|---|---|---|---|---|
+| 1 | 2026-07-31 | TRIAL_REGISTERED | 79d7ca3 | main agent | 授权包起草，登记 S0-T001，状态 PACKET_DRAFTED |
+| 2 | 2026-07-31 | GOVERNANCE_FRAMEWORK_APPROVED | （本次修订 commit） | Aaron（main agent 代录） | Aaron 批准治理框架＋八条修订；包状态保持 PACKET_DRAFTED，待 runner 落地后重渲染最终包 |
+
+<!-- 只允许在此表之下追加新事件行；上方内容一经提交不得改动。 -->
