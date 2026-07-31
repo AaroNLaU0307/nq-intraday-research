@@ -317,14 +317,39 @@ def test_json_fixed_top_level_fields():
     assert d["stage"] == "INPUT_PREFLIGHT_ONLY"
     assert d["real_s0"] == "NOT_RUN"
     assert d["approval"] == "AWAITING_AARON_APPROVAL"
-    # Lifecycle field (Aaron rule 2026-07-29): null at SA-3 delivery time,
-    # then the full integration hash once the main agent has integrated —
-    # both are legitimate states; vague placeholders are not.
-    ic = d["integration_commit"]
-    assert ic is None or (isinstance(ic, str)
-                          and re.fullmatch(r"[0-9a-f]{40}", ic))
-    assert len(d["input_commit"]) == 40
+    # Commit-metadata scheme (Aaron 2026-07-29 closure ruling): historical
+    # facts + render-time head; NO self-referential final-commit field.
+    for key in ("input_commit", "subagent_integration_commit",
+                "post_integration_fix_commit", "report_rendered_from_head"):
+        assert re.fullmatch(r"[0-9a-f]{40}", d[key]), key
+    assert d["subagent_integration_commit"].startswith("a8faf31")
+    assert d["post_integration_fix_commit"].startswith("c557c3b")
     assert d["generated_at_utc"].endswith("+00:00")
+
+
+def test_json_f10_exclusive_partition_sums_to_population():
+    p = REPO / "S0_INPUT_PREFLIGHT.json"
+    if not p.exists():
+        pytest.skip("json not generated yet")
+    d = json.loads(p.read_text(encoding="utf-8"))
+    s = d["f10"]
+    excl = s["final_mutually_exclusive_F10_counts_eligible"]
+    assert set(excl) == {"CPI", "NFP", "FOMC", "none", "NA_multi_event"}
+    assert s["partition_assertion_sum_equals_population"] is True
+    assert sum(excl.values()) == d["funnel"]["L3_structurally_eligible_days"]
+
+
+def test_json_ir19_sidecar_present():
+    p = REPO / "S0_INPUT_PREFLIGHT.json"
+    if not p.exists():
+        pytest.skip("json not generated yet")
+    d = json.loads(p.read_text(encoding="utf-8"))
+    sc = d["prev_close_from_early_close_day_sidecar"]
+    assert sc["count"] == len(sc["dates"])
+    # IR-19: vendor-degraded reference days are never skipped — the two
+    # known successors must be anchor-NA, not silently valued.
+    md = d["anchors"]["prev_rth_close"]["missing_reasons"]
+    assert md.get("prev_day_vendor_degraded_zero_bar", 0) >= 2
 
 
 def test_json_funnel_conservation_holds_on_the_real_run():

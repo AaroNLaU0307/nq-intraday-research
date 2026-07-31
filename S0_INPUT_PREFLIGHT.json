@@ -2,9 +2,11 @@
  "stage": "INPUT_PREFLIGHT_ONLY",
  "real_s0": "NOT_RUN",
  "approval": "AWAITING_AARON_APPROVAL",
- "input_commit": "d09ce4e4f0653a191ba035d5f90a7ec3316c864f",
- "integration_commit": "a8faf31593cad152dd83c9da236c3e236c47b47d",
- "generated_at_utc": "2026-07-29T07:30:52.620675+00:00",
+ "input_commit": "c557c3b4a84ef41890fbc2a1689623eac8ae0ed9",
+ "subagent_integration_commit": "a8faf31593cad152dd83c9da236c3e236c47b47d",
+ "post_integration_fix_commit": "c557c3b4a84ef41890fbc2a1689623eac8ae0ed9",
+ "report_rendered_from_head": "c557c3b4a84ef41890fbc2a1689623eac8ae0ed9",
+ "generated_at_utc": "2026-07-31T07:03:35.550233+00:00",
  "development_window": {
   "start_inclusive": "2010-06-06",
   "end_exclusive": "2022-01-01"
@@ -208,457 +210,192 @@
   },
   "prev_rth_close": {
    "population": "L3_structurally_eligible_days",
-   "available": 2809,
-   "missing": 73,
+   "available": 2864,
+   "missing": 18,
    "missing_dates": [
     "2010-06-07",
     "2010-07-06",
     "2010-09-07",
-    "2010-11-29",
     "2011-01-18",
     "2011-02-22",
     "2011-05-31",
     "2011-07-05",
     "2011-09-06",
-    "2011-11-28",
     "2012-01-17",
     "2012-02-21",
     "2012-05-29",
     "2012-07-05",
     "2012-09-04",
-    "2012-11-26",
-    "2012-12-26",
-    "2013-07-05",
-    "2013-12-02",
-    "2013-12-26",
-    "2014-05-27",
-    "2014-07-07",
-    "2014-09-02",
-    "2014-12-01",
-    "2014-12-26",
-    "2015-01-20",
-    "2015-02-17",
-    "2015-05-26",
-    "2015-07-06",
-    "2015-09-08",
-    "2015-11-30",
-    "2015-12-28",
-    "2016-01-19",
-    "2016-02-16",
-    "2016-05-31",
-    "2016-07-05",
-    "2016-09-06",
-    "2016-11-28",
-    "2017-01-17",
-    "2017-02-21",
-    "2017-05-30",
-    "2017-07-05",
-    "2017-09-05",
-    "2017-11-27",
-    "2018-01-16",
-    "2018-02-20",
-    "2018-05-29",
-    "2018-07-05",
-    "2018-09-04",
-    "2018-11-26",
-    "2018-12-26",
-    "2019-01-22",
-    "2019-02-19",
-    "2019-05-28",
-    "2019-07-05",
-    "2019-09-03",
-    "2019-12-02",
-    "2019-12-26",
-    "2020-01-21",
-    "2020-02-18",
+    "2014-06-16",
+    "2014-09-26",
+    "2015-01-02",
     "2020-03-02",
-    "2020-05-26",
-    "2020-07-01",
-    "2020-07-06",
-    "2020-09-08",
-    "2020-11-30",
-    "2020-12-28",
-    "2021-01-19",
-    "2021-02-16",
-    "2021-06-01",
-    "2021-07-06",
-    "2021-09-07",
-    "2021-11-29"
+    "2020-07-01"
    ],
    "missing_detail": [
     {
      "date": "2010-06-07",
-     "prev_rth_day": null,
-     "reason": "no_prior_rth_day_in_sample"
+     "prev_rth_session": null,
+     "reason": "no_prior_rth_session_in_sample"
     },
     {
      "date": "2010-07-06",
-     "prev_rth_day": "2010-07-05",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+     "prev_rth_session": "2010-07-05",
+     "reason": "prev_day_early_close_final_scheduled_bar_absent"
     },
     {
      "date": "2010-09-07",
-     "prev_rth_day": "2010-09-06",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2010-11-29",
-     "prev_rth_day": "2010-11-26",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+     "prev_rth_session": "2010-09-06",
+     "reason": "prev_day_early_close_final_scheduled_bar_absent"
     },
     {
      "date": "2011-01-18",
-     "prev_rth_day": "2011-01-17",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+     "prev_rth_session": "2011-01-17",
+     "reason": "prev_day_early_close_final_scheduled_bar_absent"
     },
     {
      "date": "2011-02-22",
-     "prev_rth_day": "2011-02-21",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+     "prev_rth_session": "2011-02-21",
+     "reason": "prev_day_early_close_final_scheduled_bar_absent"
     },
     {
      "date": "2011-05-31",
-     "prev_rth_day": "2011-05-30",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+     "prev_rth_session": "2011-05-30",
+     "reason": "prev_day_early_close_final_scheduled_bar_absent"
     },
     {
      "date": "2011-07-05",
-     "prev_rth_day": "2011-07-04",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+     "prev_rth_session": "2011-07-04",
+     "reason": "prev_day_early_close_final_scheduled_bar_absent"
     },
     {
      "date": "2011-09-06",
-     "prev_rth_day": "2011-09-05",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2011-11-28",
-     "prev_rth_day": "2011-11-25",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+     "prev_rth_session": "2011-09-05",
+     "reason": "prev_day_early_close_final_scheduled_bar_absent"
     },
     {
      "date": "2012-01-17",
-     "prev_rth_day": "2012-01-16",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+     "prev_rth_session": "2012-01-16",
+     "reason": "prev_day_early_close_final_scheduled_bar_absent"
     },
     {
      "date": "2012-02-21",
-     "prev_rth_day": "2012-02-20",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+     "prev_rth_session": "2012-02-20",
+     "reason": "prev_day_early_close_final_scheduled_bar_absent"
     },
     {
      "date": "2012-05-29",
-     "prev_rth_day": "2012-05-28",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+     "prev_rth_session": "2012-05-28",
+     "reason": "prev_day_early_close_final_scheduled_bar_absent"
     },
     {
      "date": "2012-07-05",
-     "prev_rth_day": "2012-07-04",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+     "prev_rth_session": "2012-07-04",
+     "reason": "prev_day_early_close_final_scheduled_bar_absent"
     },
     {
      "date": "2012-09-04",
-     "prev_rth_day": "2012-09-03",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+     "prev_rth_session": "2012-09-03",
+     "reason": "prev_day_early_close_final_scheduled_bar_absent"
     },
     {
-     "date": "2012-11-26",
-     "prev_rth_day": "2012-11-23",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+     "date": "2014-06-16",
+     "prev_rth_session": "2014-06-13",
+     "reason": "prev_day_vendor_degraded_zero_bar"
     },
     {
-     "date": "2012-12-26",
-     "prev_rth_day": "2012-12-24",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+     "date": "2014-09-26",
+     "prev_rth_session": "2014-09-25",
+     "reason": "prev_day_vendor_degraded_zero_bar"
     },
     {
-     "date": "2013-07-05",
-     "prev_rth_day": "2013-07-03",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2013-12-02",
-     "prev_rth_day": "2013-11-29",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2013-12-26",
-     "prev_rth_day": "2013-12-24",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2014-05-27",
-     "prev_rth_day": "2014-05-26",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2014-07-07",
-     "prev_rth_day": "2014-07-04",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2014-09-02",
-     "prev_rth_day": "2014-09-01",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2014-12-01",
-     "prev_rth_day": "2014-11-28",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2014-12-26",
-     "prev_rth_day": "2014-12-24",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2015-01-20",
-     "prev_rth_day": "2015-01-19",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2015-02-17",
-     "prev_rth_day": "2015-02-16",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2015-05-26",
-     "prev_rth_day": "2015-05-25",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2015-07-06",
-     "prev_rth_day": "2015-07-03",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2015-09-08",
-     "prev_rth_day": "2015-09-07",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2015-11-30",
-     "prev_rth_day": "2015-11-27",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2015-12-28",
-     "prev_rth_day": "2015-12-24",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2016-01-19",
-     "prev_rth_day": "2016-01-18",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2016-02-16",
-     "prev_rth_day": "2016-02-15",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2016-05-31",
-     "prev_rth_day": "2016-05-30",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2016-07-05",
-     "prev_rth_day": "2016-07-04",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2016-09-06",
-     "prev_rth_day": "2016-09-05",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2016-11-28",
-     "prev_rth_day": "2016-11-25",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2017-01-17",
-     "prev_rth_day": "2017-01-16",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2017-02-21",
-     "prev_rth_day": "2017-02-20",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2017-05-30",
-     "prev_rth_day": "2017-05-29",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2017-07-05",
-     "prev_rth_day": "2017-07-04",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2017-09-05",
-     "prev_rth_day": "2017-09-04",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2017-11-27",
-     "prev_rth_day": "2017-11-24",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2018-01-16",
-     "prev_rth_day": "2018-01-15",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2018-02-20",
-     "prev_rth_day": "2018-02-19",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2018-05-29",
-     "prev_rth_day": "2018-05-28",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2018-07-05",
-     "prev_rth_day": "2018-07-04",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2018-09-04",
-     "prev_rth_day": "2018-09-03",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2018-11-26",
-     "prev_rth_day": "2018-11-23",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2018-12-26",
-     "prev_rth_day": "2018-12-24",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2019-01-22",
-     "prev_rth_day": "2019-01-21",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2019-02-19",
-     "prev_rth_day": "2019-02-18",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2019-05-28",
-     "prev_rth_day": "2019-05-27",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2019-07-05",
-     "prev_rth_day": "2019-07-04",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2019-09-03",
-     "prev_rth_day": "2019-09-02",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2019-12-02",
-     "prev_rth_day": "2019-11-29",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2019-12-26",
-     "prev_rth_day": "2019-12-24",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2020-01-21",
-     "prev_rth_day": "2020-01-20",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2020-02-18",
-     "prev_rth_day": "2020-02-17",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
+     "date": "2015-01-02",
+     "prev_rth_session": "2014-12-31",
+     "reason": "prev_day_vendor_degraded_zero_bar"
     },
     {
      "date": "2020-03-02",
-     "prev_rth_day": "2020-02-28",
+     "prev_rth_session": "2020-02-28",
      "reason": "prev_day_1559_bar_absent"
-    },
-    {
-     "date": "2020-05-26",
-     "prev_rth_day": "2020-05-25",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
     },
     {
      "date": "2020-07-01",
-     "prev_rth_day": "2020-06-30",
+     "prev_rth_session": "2020-06-30",
      "reason": "prev_day_1559_bar_absent"
-    },
-    {
-     "date": "2020-07-06",
-     "prev_rth_day": "2020-07-03",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2020-09-08",
-     "prev_rth_day": "2020-09-07",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2020-11-30",
-     "prev_rth_day": "2020-11-27",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2020-12-28",
-     "prev_rth_day": "2020-12-24",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2021-01-19",
-     "prev_rth_day": "2021-01-18",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2021-02-16",
-     "prev_rth_day": "2021-02-15",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2021-06-01",
-     "prev_rth_day": "2021-05-31",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2021-07-06",
-     "prev_rth_day": "2021-07-05",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2021-09-07",
-     "prev_rth_day": "2021-09-06",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
-    },
-    {
-     "date": "2021-11-29",
-     "prev_rth_day": "2021-11-26",
-     "reason": "prev_day_scheduled_early_close_no_1559_bar"
     }
    ],
    "missing_reasons": {
-    "no_prior_rth_day_in_sample": 1,
-    "prev_day_scheduled_early_close_no_1559_bar": 70,
+    "no_prior_rth_session_in_sample": 1,
+    "prev_day_early_close_final_scheduled_bar_absent": 12,
+    "prev_day_vendor_degraded_zero_bar": 3,
     "prev_day_1559_bar_absent": 2
    },
-   "downstream": "field_na_day_retained_pending_D7"
+   "downstream": "field_na_day_retained"
   }
+ },
+ "prev_close_from_early_close_day_sidecar": {
+  "count": 58,
+  "dates": [
+   "2010-11-29",
+   "2011-11-28",
+   "2012-11-26",
+   "2012-12-26",
+   "2013-07-05",
+   "2013-12-02",
+   "2013-12-26",
+   "2014-05-27",
+   "2014-07-07",
+   "2014-09-02",
+   "2014-12-01",
+   "2014-12-26",
+   "2015-01-20",
+   "2015-02-17",
+   "2015-05-26",
+   "2015-07-06",
+   "2015-09-08",
+   "2015-11-30",
+   "2015-12-28",
+   "2016-01-19",
+   "2016-02-16",
+   "2016-05-31",
+   "2016-07-05",
+   "2016-09-06",
+   "2016-11-28",
+   "2017-01-17",
+   "2017-02-21",
+   "2017-05-30",
+   "2017-07-05",
+   "2017-09-05",
+   "2017-11-27",
+   "2018-01-16",
+   "2018-02-20",
+   "2018-05-29",
+   "2018-07-05",
+   "2018-09-04",
+   "2018-11-26",
+   "2018-12-26",
+   "2019-01-22",
+   "2019-02-19",
+   "2019-05-28",
+   "2019-07-05",
+   "2019-09-03",
+   "2019-12-02",
+   "2019-12-26",
+   "2020-01-21",
+   "2020-02-18",
+   "2020-05-26",
+   "2020-07-06",
+   "2020-09-08",
+   "2020-11-30",
+   "2020-12-28",
+   "2021-01-19",
+   "2021-02-16",
+   "2021-06-01",
+   "2021-07-06",
+   "2021-09-07",
+   "2021-11-29"
+  ],
+  "rule": "IR-19 revised Option B: reference day = immediately previous actual CME RTH session; early-close reference day anchors at its final SCHEDULED RTH bar close; vendor-degraded reference days are never skipped"
  },
  "zero_direction_days_frozen_L82": {
   "count": 26,
@@ -752,10 +489,10 @@
    "is_constant": false
   },
   "F5": {
-   "constructible": 2750,
-   "na": 132,
+   "constructible": 2806,
+   "na": 76,
    "reasons": {
-    "prev_rth_close_anchor_missing": 73,
+    "prev_rth_close_anchor_missing": 17,
     "adr14_warmup": 12,
     "roll_transition_day_na": 47
    },
@@ -880,7 +617,20 @@
     "2020-06-10"
    ]
   },
-  "OPEN_ITEM": "IR-12 cites 19 multi-event days (raw table); after IR-13 narrows FOMC to scheduled statement days only 9 remain multi-category. See DECISION_PACKET_PREFLIGHT_F10_MULTIEVENT_SCOPE.md",
+  "ir18_resolution": "APPROVED 2026-07-29: primary conflict detection runs AFTER IR-13 eligibility; 19 = raw diagnostic sidecar count, 9 = primary F10 NA days; the 10 single-remaining-category days encode as their unique CPI/NFP category.",
+  "raw_category_membership_counts_eligible": {
+   "CPI": 137,
+   "NFP": 134,
+   "FOMC": 92
+  },
+  "final_mutually_exclusive_F10_counts_eligible": {
+   "CPI": 128,
+   "NFP": 134,
+   "FOMC": 83,
+   "none": 2528,
+   "NA_multi_event": 9
+  },
+  "partition_assertion_sum_equals_population": true,
   "per_year_counts": {
    "2010": {
     "CPI": 7,

@@ -380,6 +380,7 @@ def build_funnel(days: dict, close_min: dict) -> dict:
         "removed_missing": removed_missing, "eligible": eligible,
         "complete_390": complete_390, "prior_complete": prior_complete,
         "removed_warmup": removed_warmup, "final": final, "checks": checks,
+        "close_min": close_min,          # IR-19: scheduled close minute per day
     }
 
 
@@ -438,11 +439,33 @@ def main() -> int:
     obs_order = sorted(observed_rth)
     obs_index = {d: i for i, d in enumerate(obs_order)}
 
-    def prev_rth_day(d: str) -> str | None:
-        i = obs_index.get(d)
-        if i is None or i == 0:
-            return None
-        return obs_order[i - 1]
+    # ---- IR-19 reference-session machinery -------------------------------
+    # Reference day = the immediately previous ACTUAL CME RTH session,
+    # independent of downstream sample eligibility. Distinguish two kinds of
+    # zero-bar scheduled days: true market closures (no session existed —
+    # walked THROUGH) vs vendor-degraded days (a session existed, data is
+    # missing — they ARE the reference day and the anchor is NA; skipping
+    # past them is prohibited).
+    cond = json.loads((A1_DIR / "condition.json").read_text(encoding="utf-8"))
+    degraded_dates = {r["date"] for r in cond if r["condition"] != "available"}
+    vendor_zero_bar = set(zero_bar) & degraded_dates
+    true_closures = set(zero_bar) - vendor_zero_bar
+    sched_order = sorted(scheduled)
+    sched_index = {d: i for i, d in enumerate(sched_order)}
+    close_min = fn["close_min"]
+
+    def prev_actual_session(d: str) -> str | None:
+        """Walk back through the schedule; skip only TRUE closures."""
+        i = sched_index.get(d)
+        if i is None:
+            i = bisect.bisect_left(sched_order, d)
+        while i > 0:
+            i -= 1
+            p = sched_order[i]
+            if p in true_closures:
+                continue                    # no session ever happened
+            return p                        # observed OR vendor-degraded
+        return None
 
     anchors = {k: {"available": 0, "missing": 0, "missing_dates": [],
                    "missing_detail": [], "missing_reasons": Counter()}
@@ -462,6 +485,7 @@ def main() -> int:
         return "missing_minute_unclassified"
 
     prev_close_val: dict[str, float] = {}
+    prev_close_from_early_close: list[str] = []      # IR-19 sidecar flag
     for d in structurally_eligible:
         db = days[d]
         for key, minute, getter in (("O0930", M_0930, anchor_open),
@@ -478,29 +502,41 @@ def main() -> int:
             else:
                 anchors[key]["available"] += 1
 
-        p = prev_rth_day(d)
+        # IR-19 (revised Option B, APPROVED 2026-07-29): regular reference
+        # day -> 15:59 bar close; scheduled early-close reference day -> the
+        # final SCHEDULED RTH bar's close (that day's real official session
+        # close — the anchor itself, not a substitute) + sidecar flag;
+        # scheduled close bar itself absent -> NA; vendor-degraded reference
+        # day -> NA (never skipped); first sample day -> NA. Never "last
+        # available bar", never forward fill, never nearest-bar.
+        p = prev_actual_session(d)
         pv = np.nan
+        from_early_close = False
         if p is None:
-            reason = "no_prior_rth_day_in_sample"
+            reason = "no_prior_rth_session_in_sample"
+        elif p in vendor_zero_bar or p not in days or days[p].n_rth == 0:
+            reason = "prev_day_vendor_degraded_zero_bar"
         else:
-            pv = anchor_close(days[p], M_1559)
+            sched_close_bar = (close_min[p] - 1 if p in early_close
+                               else M_1559)
+            pv = anchor_close(days[p], sched_close_bar)
             reason = ""
+            from_early_close = p in early_close and not np.isnan(pv)
             if np.isnan(pv):
-                if p in early_close:
-                    reason = "prev_day_scheduled_early_close_no_1559_bar"
-                elif days[p].n_rth == 0:
-                    reason = "prev_day_zero_rth_bars"
-                else:
-                    reason = "prev_day_1559_bar_absent"
+                reason = ("prev_day_early_close_final_scheduled_bar_absent"
+                          if p in early_close
+                          else "prev_day_1559_bar_absent")
         if np.isnan(pv):
             anchors["prev_rth_close"]["missing"] += 1
             anchors["prev_rth_close"]["missing_dates"].append(d)
             anchors["prev_rth_close"]["missing_detail"].append(
-                {"date": d, "prev_rth_day": p, "reason": reason})
+                {"date": d, "prev_rth_session": p, "reason": reason})
             anchors["prev_rth_close"]["missing_reasons"][reason] += 1
         else:
             anchors["prev_rth_close"]["available"] += 1
             prev_close_val[d] = pv
+            if from_early_close:
+                prev_close_from_early_close.append(d)
 
     # ================= C. NON-CRITICAL MISSING MINUTES (IR-15) ============
     # Frozen whole-day exclusions were applied ABOVE; the vendor-degraded
@@ -616,8 +652,10 @@ def main() -> int:
         else:
             rec("F5", True, "", (o930 - prev_close_val[d]) / a)
 
-        # F6 / F7 overnight
-        p_day = prev_rth_day(d)
+        # F6 / F7 overnight — span starts at the previous ACTUAL session's
+        # 18:00 (IR-19 session semantics); overnight_range itself tolerates
+        # data-less reference days (n==0 -> NA, never substituted).
+        p_day = prev_actual_session(d)
         on_h, on_l, on_n = (overnight_range(days, all_et_dates, p_day, d)
                             if p_day else (np.nan, np.nan, 0))
         if on_n == 0 or np.isnan(on_h):
@@ -705,8 +743,14 @@ def main() -> int:
         "stage": STAGE,
         "real_s0": REAL_S0,
         "approval": APPROVAL,
+        # Commit metadata scheme (Aaron 2026-07-29): historical facts +
+        # render-time head; NO self-referential final-commit field.
         "input_commit": git_head(),
-        "integration_commit": None,
+        "subagent_integration_commit":
+            "a8faf31593cad152dd83c9da236c3e236c47b47d",
+        "post_integration_fix_commit":
+            "c557c3b4a84ef41890fbc2a1689623eac8ae0ed9",
+        "report_rendered_from_head": git_head(),
         "generated_at_utc": started.isoformat(),
         "development_window": {"start_inclusive": dev_start,
                                "end_exclusive": dev_end_excl},
@@ -739,10 +783,15 @@ def main() -> int:
                         "missing_dates": v["missing_dates"],
                         "missing_detail": v["missing_detail"],
                         "missing_reasons": dict(v["missing_reasons"]),
-                        "downstream": ("field_na_day_retained"
-                                       if k != "prev_rth_close"
-                                       else "field_na_day_retained_pending_D7")}
+                        "downstream": "field_na_day_retained"}
                     for k, v in anchors.items()},
+        "prev_close_from_early_close_day_sidecar": {   # IR-19 diagnostic flag
+            "count": len(prev_close_from_early_close),
+            "dates": prev_close_from_early_close,
+            "rule": ("IR-19 revised Option B: reference day = immediately "
+                     "previous actual CME RTH session; early-close reference "
+                     "day anchors at its final SCHEDULED RTH bar close; "
+                     "vendor-degraded reference days are never skipped")},
         "zero_direction_days_frozen_L82": {
             "count": len(zero_direction_days),
             "dates": zero_direction_days,
@@ -829,6 +878,19 @@ def load_f10(eligible: list[str]) -> dict:
     raw_multi = sorted(df.groupby("date_et")["event_type"].nunique()
                        .pipe(lambda s: s[s > 1]).index)
 
+    # Mutually-exclusive partition of the eligible population (Aaron report
+    # fix 2026-07-29): single-category days by their category, multi ->
+    # NA_multi_event, rest none; MUST sum exactly to the population.
+    excl = {"CPI": len((cpi - nfp - fomc) & elig),
+            "NFP": len((nfp - cpi - fomc) & elig),
+            "FOMC": len((fomc - cpi - nfp) & elig),
+            "none": len(elig - (cpi | nfp | fomc)),
+            "NA_multi_event": len(set(multi) & elig)}
+    excl_ok = sum(excl.values()) == len(elig)
+    if not excl_ok:
+        raise RuntimeError(f"F10 exclusive partition {excl} does not sum to "
+                           f"population {len(elig)} — STOP")
+
     per_year = (df.assign(y=df.date_et.str[:4])
                   .groupby(["y", "event_type"]).size().unstack(fill_value=0))
     years_missing = [y for y in per_year.index
@@ -855,10 +917,19 @@ def load_f10(eligible: list[str]) -> dict:
             "count_intersecting_eligible": len(set(multi) & elig)},
         "raw_multi_event_days_pre_ir13_sidecar": {
             "count": len(raw_multi), "dates": list(raw_multi)},
-        "OPEN_ITEM": ("IR-12 cites 19 multi-event days (raw table); after "
-                      "IR-13 narrows FOMC to scheduled statement days only "
-                      "9 remain multi-category. See "
-                      "DECISION_PACKET_PREFLIGHT_F10_MULTIEVENT_SCOPE.md"),
+        "ir18_resolution": ("APPROVED 2026-07-29: primary conflict detection "
+                            "runs AFTER IR-13 eligibility; 19 = raw "
+                            "diagnostic sidecar count, 9 = primary F10 NA "
+                            "days; the 10 single-remaining-category days "
+                            "encode as their unique CPI/NFP category."),
+        # Aaron report-governance fix (2026-07-29): membership counts are
+        # OVERLAPPING; the frozen single-category F10 field needs the
+        # mutually-exclusive partition, asserted to sum to the population.
+        "raw_category_membership_counts_eligible": {
+            "CPI": len(cpi & elig), "NFP": len(nfp & elig),
+            "FOMC": len(fomc & elig)},
+        "final_mutually_exclusive_F10_counts_eligible": excl,
+        "partition_assertion_sum_equals_population": excl_ok,
         "per_year_counts": json.loads(per_year.to_json(orient="index")),
         "per_year_fomc_scheduled_statement_days": dict(sorted(
             stmt_per_year.items())),
@@ -1000,8 +1071,9 @@ def render_report(p: dict) -> str:
     A(f"- real_s0: `{p['real_s0']}`")
     A(f"- approval: `{p['approval']}`")
     A(f"- input_commit: `{p['input_commit']}`")
-    A(f"- integration_commit: `{p['integration_commit'] or 'null'}` "
-      "(filled by the main agent at integration)")
+    A(f"- subagent_integration_commit: `{p['subagent_integration_commit']}`")
+    A(f"- post_integration_fix_commit: `{p['post_integration_fix_commit']}`")
+    A(f"- report_rendered_from_head: `{p['report_rendered_from_head']}`")
     A(f"- generated_at_utc: `{p['generated_at_utc']}`")
     A("")
     A("Input-eligibility verification only. This document contains counts, "
@@ -1086,9 +1158,15 @@ def render_report(p: dict) -> str:
     A("")
     A("Downstream handling follows frozen L44-L45 only: a missing exact anchor "
       "makes the dependent field NA and the day is retained. The prior-day "
-      "close anchor is flagged `pending_D7` because L45 does not sub-classify "
-      "anchor-NA days; no substitute bar was selected and no degradation rule "
-      "was invented. See DECISION_PACKET_PREFLIGHT_D7_PREV_RTH_CLOSE.md.")
+      "close anchor follows IR-19 (revised Option B, APPROVED 2026-07-29): "
+      "reference day = immediately previous ACTUAL CME RTH session "
+      "(independent of sample eligibility); early-close reference days anchor "
+      "at their final SCHEDULED RTH bar close (their real official session "
+      "close, flagged in the sidecar); vendor-degraded reference days are "
+      "never skipped and yield NA; no substitute bar, no forward fill.")
+    sc = p["prev_close_from_early_close_day_sidecar"]
+    A("")
+    A(f"IR-19 sidecar `prev_close_from_early_close_day`: {sc['count']} days.")
     A("")
     z = p["zero_direction_days_frozen_L82"]
     A(f"### Frozen L82 no-direction days: {z['count']}")
@@ -1141,7 +1219,15 @@ def render_report(p: dict) -> str:
     s = p["f10"]
     A(f"- encoding: {s['encoding']}")
     A(f"- category day counts: {s['category_day_counts']}")
-    A(f"- intersection with eligible days: {s['intersection_with_eligible_days']}")
+    A("- raw category MEMBERSHIP counts on eligible days (overlapping — "
+      "multi-event days appear in every category they belong to): "
+      f"{s['raw_category_membership_counts_eligible']}")
+    ex = s["final_mutually_exclusive_F10_counts_eligible"]
+    A(f"- **final mutually-exclusive F10 counts** (frozen single-category "
+      f"field): {ex}")
+    A(f"- partition assertion CPI+NFP+FOMC+none+NA_multi_event == population: "
+      f"**{s['partition_assertion_sum_equals_population']}** "
+      f"(sum = {sum(ex.values())})")
     A(f"- FOMC statement rows in the frozen table: "
       f"{s['fomc_statement_rows_in_table']}; minus the four IR-13 "
       f"`unscheduled_fomc_action` diagnostic dates "
@@ -1154,7 +1240,7 @@ def render_report(p: dict) -> str:
     A(f"- diagnostic sidecar, raw multi-event days before IR-13: "
       f"{s['raw_multi_event_days_pre_ir13_sidecar']['count']} — "
       f"{', '.join(s['raw_multi_event_days_pre_ir13_sidecar']['dates'])}")
-    A(f"- **OPEN ITEM**: {s['OPEN_ITEM']}")
+    A(f"- IR-18 resolution: {s['ir18_resolution']}")
     A(f"- IR-17 rows carrying no official release time: "
       f"{s['ir17_rows_without_official_time']} (date-level encoding unaffected; "
       "no day deleted, F10 not made NA by this)")

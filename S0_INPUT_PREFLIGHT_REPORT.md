@@ -3,9 +3,11 @@
 - stage: `INPUT_PREFLIGHT_ONLY`
 - real_s0: `NOT_RUN`
 - approval: `AWAITING_AARON_APPROVAL`
-- input_commit: `d09ce4e4f0653a191ba035d5f90a7ec3316c864f`
-- integration_commit: `null` (filled by the main agent at integration)
-- generated_at_utc: `2026-07-29T07:30:52.620675+00:00`
+- input_commit: `c557c3b4a84ef41890fbc2a1689623eac8ae0ed9`
+- subagent_integration_commit: `a8faf31593cad152dd83c9da236c3e236c47b47d`
+- post_integration_fix_commit: `c557c3b4a84ef41890fbc2a1689623eac8ae0ed9`
+- report_rendered_from_head: `c557c3b4a84ef41890fbc2a1689623eac8ae0ed9`
+- generated_at_utc: `2026-07-31T07:03:35.550233+00:00`
 
 Input-eligibility verification only. This document contains counts, booleans, reason classifications and status fields exclusively. No feature value, no distribution, no label value, no cost figure, no simulation output and no judgment appears anywhere in it, by construction and by machine-checked guard (tests/test_preflight.py).
 
@@ -60,11 +62,13 @@ Population = L3 structurally eligible days. No forward fill, no next-bar substit
 | C0959 | 2882 | 0 | - | `field_na_day_retained` |
 | O1000 | 2882 | 0 | - | `field_na_day_retained` |
 | C1544 | 2882 | 0 | - | `field_na_day_retained` |
-| prev_rth_close | 2809 | 73 | no_prior_rth_day_in_sample=1, prev_day_scheduled_early_close_no_1559_bar=70, prev_day_1559_bar_absent=2 | `field_na_day_retained_pending_D7` |
+| prev_rth_close | 2864 | 18 | no_prior_rth_session_in_sample=1, prev_day_early_close_final_scheduled_bar_absent=12, prev_day_vendor_degraded_zero_bar=3, prev_day_1559_bar_absent=2 | `field_na_day_retained` |
 
-- prev_rth_close missing on: 2010-06-07, 2010-07-06, 2010-09-07, 2010-11-29, 2011-01-18, 2011-02-22, 2011-05-31, 2011-07-05, 2011-09-06, 2011-11-28, 2012-01-17, 2012-02-21, 2012-05-29, 2012-07-05, 2012-09-04, 2012-11-26, 2012-12-26, 2013-07-05, 2013-12-02, 2013-12-26, 2014-05-27, 2014-07-07, 2014-09-02, 2014-12-01, 2014-12-26, 2015-01-20, 2015-02-17, 2015-05-26, 2015-07-06, 2015-09-08, 2015-11-30, 2015-12-28, 2016-01-19, 2016-02-16, 2016-05-31, 2016-07-05, 2016-09-06, 2016-11-28, 2017-01-17, 2017-02-21, 2017-05-30, 2017-07-05, 2017-09-05, 2017-11-27, 2018-01-16, 2018-02-20, 2018-05-29, 2018-07-05, 2018-09-04, 2018-11-26, 2018-12-26, 2019-01-22, 2019-02-19, 2019-05-28, 2019-07-05, 2019-09-03, 2019-12-02, 2019-12-26, 2020-01-21, 2020-02-18, 2020-03-02, 2020-05-26, 2020-07-01, 2020-07-06, 2020-09-08, 2020-11-30, 2020-12-28, 2021-01-19, 2021-02-16, 2021-06-01, 2021-07-06, 2021-09-07, 2021-11-29
+- prev_rth_close missing on: 2010-06-07, 2010-07-06, 2010-09-07, 2011-01-18, 2011-02-22, 2011-05-31, 2011-07-05, 2011-09-06, 2012-01-17, 2012-02-21, 2012-05-29, 2012-07-05, 2012-09-04, 2014-06-16, 2014-09-26, 2015-01-02, 2020-03-02, 2020-07-01
 
-Downstream handling follows frozen L44-L45 only: a missing exact anchor makes the dependent field NA and the day is retained. The prior-day close anchor is flagged `pending_D7` because L45 does not sub-classify anchor-NA days; no substitute bar was selected and no degradation rule was invented. See DECISION_PACKET_PREFLIGHT_D7_PREV_RTH_CLOSE.md.
+Downstream handling follows frozen L44-L45 only: a missing exact anchor makes the dependent field NA and the day is retained. The prior-day close anchor follows IR-19 (revised Option B, APPROVED 2026-07-29): reference day = immediately previous ACTUAL CME RTH session (independent of sample eligibility); early-close reference days anchor at their final SCHEDULED RTH bar close (their real official session close, flagged in the sidecar); vendor-degraded reference days are never skipped and yield NA; no substitute bar, no forward fill.
+
+IR-19 sidecar `prev_close_from_early_close_day`: 58 days.
 
 ### Frozen L82 no-direction days: 26
 
@@ -93,7 +97,7 @@ Features were computed in memory solely to classify constructibility, NA status,
 | F2 | 2868 | 14 | False | adr14_warmup=14 |
 | F3 | 2882 | 0 | False | - |
 | F4 | 2823 | 59 | False | f4_lookback_warmup=59 |
-| F5 | 2750 | 132 | False | prev_rth_close_anchor_missing=73, adr14_warmup=12, roll_transition_day_na=47 |
+| F5 | 2806 | 76 | False | prev_rth_close_anchor_missing=17, adr14_warmup=12, roll_transition_day_na=47 |
 | F6 | 2881 | 1 | False | overnight_window_empty=1 |
 | F7 | 2868 | 14 | False | overnight_window_empty=1, adr14_warmup=13 |
 | F8 | 2856 | 26 | False | zero_denominator_no_direction=26 |
@@ -113,11 +117,13 @@ Features were computed in memory solely to classify constructibility, NA status,
 
 - encoding: IR-13 category membership, then IR-12 multi-event -> NA
 - category day counts: {'CPI': 139, 'NFP': 138, 'FOMC_scheduled_statement_days': 92}
-- intersection with eligible days: {'CPI': 137, 'NFP': 134, 'FOMC': 92, 'none': 2528}
+- raw category MEMBERSHIP counts on eligible days (overlapping — multi-event days appear in every category they belong to): {'CPI': 137, 'NFP': 134, 'FOMC': 92}
+- **final mutually-exclusive F10 counts** (frozen single-category field): {'CPI': 128, 'NFP': 134, 'FOMC': 83, 'none': 2528, 'NA_multi_event': 9}
+- partition assertion CPI+NFP+FOMC+none+NA_multi_event == population: **True** (sum = 2882)
 - FOMC statement rows in the frozen table: 96; minus the four IR-13 `unscheduled_fomc_action` diagnostic dates (2019-10-11, 2020-03-03, 2020-03-15, 2020-03-23) = 92 scheduled statement days
 - multi-event NA days after IR-13: 9 — 2013-10-30, 2014-09-17, 2014-12-17, 2016-03-16, 2017-03-15, 2017-06-14, 2017-12-13, 2019-12-11, 2020-06-10
 - diagnostic sidecar, raw multi-event days before IR-13: 19 — 2010-10-15, 2013-06-18, 2013-09-17, 2013-10-30, 2013-12-17, 2014-03-18, 2014-06-17, 2014-09-17, 2014-12-17, 2015-09-16, 2015-12-15, 2016-03-16, 2017-03-15, 2017-06-14, 2017-12-13, 2018-06-12, 2019-10-04, 2019-12-11, 2020-06-10
-- **OPEN ITEM**: IR-12 cites 19 multi-event days (raw table); after IR-13 narrows FOMC to scheduled statement days only 9 remain multi-category. See DECISION_PACKET_PREFLIGHT_F10_MULTIEVENT_SCOPE.md
+- IR-18 resolution: APPROVED 2026-07-29: primary conflict detection runs AFTER IR-13 eligibility; 19 = raw diagnostic sidecar count, 9 = primary F10 NA days; the 10 single-remaining-category days encode as their unique CPI/NFP category.
 - IR-17 rows carrying no official release time: 45 (date-level encoding unaffected; no day deleted, F10 not made NA by this)
 - years with no matching event in the Development window: none
 

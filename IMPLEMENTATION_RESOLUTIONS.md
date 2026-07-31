@@ -52,5 +52,20 @@ modify 项按两阶段流程形成正式 Addendum 并更新实现与测试。
 | IR-17 (=D4a) | FOMC 2010-2015 共 45 行官方存档无精确发布时刻：日期继续用官方证据；`official_release_time_et` 记 NA（空）；新增列 `release_time_status = official_time_unavailable_in_archived_source`；**禁止**以 00:00/12:30/14:00/14:15 或任何"典型时间"替代；禁止新闻/第三方日历/历史惯例回填；日期级 F10 仍编码为 FOMC；时间级诊断不得使用这些行（除非显式标记未知）；不因时间未知而整日删除或 F10 变 NA；每行保留官方 source ID＋hash。其余行的 status 取值（main agent 机械补全，纯披露）：`official_time_recorded`（有官方时刻）/`not_applicable_no_statement`（无声明的 FOMC 条目行）。**Primary effect = none；sample effect = none；diagnostic time coverage reduced**。已实施：f10_extraction.py＋csv 重生成（sha256 5e92ad00…bb5e8c，468 行 9 列）＋专项测试（205 全绿） | 任务书证据条款 | 仅诊断时刻覆盖 | APPROVED_BY_AARON 2026-07-29 |
 
 - D4/D7 维持条件触发（D4a 已批并落档为 IR-17，见上）。
+
+### Preflight 批次（APPROVED_BY_AARON 2026-07-29，经 ChatGPT 评审；对应三个 DECISION_PACKET_PREFLIGHT_*）
+
+| ID | 内容 | 冻结章节 | 可能影响的输出 | 批复定案 |
+|---|---|---|---|---|
+| IR-18 (=F10 多事件作用域) | 先应用 IR-13 事件资格过滤 → 映射冻结 F10 类别 → 再判多类别冲突。**Primary F10 多事件 NA = 9 天**；原表 19 个多事件日完整保留 diagnostic sidecar（raw_multi_event_sidecar_days=19）；被 IR-13 排除 FOMC 身份的 10 天按剩余唯一类别编码 CPI/NFP；禁止发明优先级。**IR-12 表述修订**：其"当前 19 天"指 raw diagnostic multi-event count，非最终 Primary 冲突集（后者=9） | 行 62 / IR-12×IR-13 | F10 NA 集合 | Option A |
+| IR-19 (=D7 前日 RTH 收盘) | 前日 = 紧邻上一个**实际 CME RTH session**，不依赖资格漏斗；常规日锚点=15:59 bar close；scheduled early-close 日=最后一根官方排期 RTH bar close（是锚点本身非替代）＋sidecar `prev_close_from_early_close_day=true`；**禁止**泛化为"最后一根存在 bar"；排期收盘 bar 本身缺失→NA；vendor-degraded 前日（2 天）→NA；样本首日→NA；禁止跳过不合格前日向前找 eligible day；禁止 forward fill/插值/邻 bar 替代 | 行 57 / 行 41-45 | F5 覆盖（NA 由重跑机械生成，不手写） | 修订版 Option B |
+| IR-20 (=F4 参照集) | 参照集 = 严格早于当日的最近 60 个**实际 CME RTH 交易日**，每个参照日须有完整 30 根 09:30-09:59 bar；**含** scheduled early-close 日、早盘完整的下午缺口日、ADR14 warm-up 日；**不要求**整体 S0 资格或 ADR14 资格；**排除** zero-bar 日与早盘窗口不完整日 | 行 56 / 行 44-45 | F4 覆盖 | Option A（精确化） |
+
+**报告治理修正（同批 Aaron 批复）**：(1) F10 必须双报 raw category membership counts 与
+final mutually-exclusive F10 counts，并断言 CPI+NFP+FOMC+none+NA_multi_event == 结构合格日数；
+(2) commit 元数据统一为 input_commit / subagent_integration_commit / post_integration_fix_commit /
+report_rendered_from_head 四字段（报告与 JSON 同源，禁自引用最终 commit）；
+(3) 里程碑提交一律以机器退出码为硬闸（pytest/seal 红则 commit 物理不可达）——
+ae9b19c 红测试提交事故如实留档于 M4_FINAL_CLOSURE_REPORT。
 - SA-2 硬边界 commit a6bd012 经 Aaron 原则批准（Development [2010-06-06,
   2022-01-01)、IV fail-closed、整文件拒绝、边界不可参数化）。
