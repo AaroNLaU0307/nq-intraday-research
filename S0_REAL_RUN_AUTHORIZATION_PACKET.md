@@ -123,8 +123,16 @@ trial 开始后不得重置、删除或重新编号；失败运行同样入册�
 
 ## 6. 输出目录
 
-- 模板：`runs/S0-T001_<UTCyyyymmddTHHMMSSZ>/`——运行时创建，**此前必须
-  不存在**（存在即 STOP）；本包不创建任何目录。
+- **双目录语义（Aaron 2026-07-31 修订批复）**：
+  - Stage A/B 使用独立 pre-run attempt 目录
+    `attempts/S0-T001-A<sequence>_<UTC>/`——只含机械日志与
+    PRE_RUN_ATTEMPT_FAILURE 报告，**不含任何研究结果**；机械失败保留
+    该目录，不消耗 exposure，不换 trial 编号；
+  - Stage A/B 全部通过后才**原子创建**正式目录
+    `runs/S0-T001_<UTCyyyymmddTHHMMSSZ>/`——创建正式目录与追加
+    `RUN_STARTED` 事件必须属于同一受控转换，随后进入 Stage C 并消耗
+    exposure ledger 序号 1；
+  - 正式目录运行前**必须不存在**（存在即 STOP）；本包不创建任何目录。
 - 禁止覆盖任何既有输出；临时文件、日志、结构结果、最终报告全部归入
   该目录；失败或中止时目录整体保留，禁止删除。
 - **hash manifest 非自引用设计（Aaron 2026-07-31 修订批复）**：

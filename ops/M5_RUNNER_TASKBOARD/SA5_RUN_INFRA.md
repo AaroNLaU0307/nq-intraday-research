@@ -17,7 +17,10 @@ REQUIRED READING:
 - S0_REAL_RUN_AUTHORIZATION_PACKET.md 全文（§0 状态机、§6 manifest 链、
   §7 阶段与日志守卫/NA 守恒、§8 失败处理、§9 硬门清单）
 - ops/TRIAL_REGISTRY.md（事件链格式）
-- src/itsf/s0/contracts.py（main agent 定稿接口——照用不改）
+- src/itsf/contracts.py（包顶层，main agent 定稿接口——照用不改；
+  你依赖的：RunStage/TrialState/APPROVED_NA_REASONS/RunConfig/
+  RunGateError/NAConservationError/AssertionMismatchError/LogLeakError）
+- ops/M5_RUNNER_TASKBOARD/M5_T0_INTERFACE_AUDIT.md（所有权边界权威）
 - S0_INPUT_PREFLIGHT.json（断言目标的真实形状，只读）
 - ops/M5_RUNNER_TASKBOARD/TASKBOARD.md
 

@@ -58,7 +58,14 @@ class TradePathRecord:
 
 @dataclass
 class DayFeatures:
-    """S0 §4. None == NA (day stays in sample; per-table NA counts mandatory)."""
+    """S0 §4. None == NA (day stays in sample; per-table NA counts mandatory).
+
+    is_event_day (F10): frozen categories {CPI, NFP, FOMC, none}; ``None``
+    == NA for multi-event days per IR-12 + IR-18 (primary conflict detected
+    AFTER IR-13 eligibility; the multi-hot detail lives only in the
+    diagnostic sidecar, never here). Added 2026-07-31 (M5-T0): the previous
+    4-string closed set could not express the approved NA state.
+    """
     trade_date: str
     ret_open30: float | None = None            # F1  (C0959-O0930)/ADR14
     or_width: float | None = None              # F2
@@ -69,7 +76,7 @@ class DayFeatures:
     on_range: float | None = None              # F7
     retrace_open30: float | None = None        # F8  directional running-max
     close_pos_open30: float | None = None      # F9
-    is_event_day: str = "none"                 # F10 CPI|NFP|FOMC|none
+    is_event_day: str | None = "none"          # F10 CPI|NFP|FOMC|none|None=NA(IR-12/18)
     is_roll_transition: bool = False           # F11
     is_roll_window: bool = False
     adr14: float | None = None
@@ -89,6 +96,88 @@ class DayLabels:
     y4_mfe: float | None = None                # relative to d_open from O1000
     y5_mae: float | None = None
     y6_cont_decile: int | None = None
+
+
+# --- M5 runner shared contracts (MAIN-AGENT OWNED, added 2026-07-31) --------
+# SA-4 / SA-5 depend on these EXACT names; interface change requests go to
+# `unresolved`, never edited in place by a subagent.
+
+from enum import Enum
+
+
+class RunStage(str, Enum):
+    """Authorization-packet §7 stages. Transition order is strict."""
+    A_PRECHECK = "A_PRECHECK"                # mechanical gates (packet §9)
+    B_LOAD_VALIDATE = "B_LOAD_VALIDATE"      # structural checks vs assertions
+    C_COMPUTE = "C_COMPUTE"                  # exposure begins at entry (atomic)
+    D_INTEGRITY = "D_INTEGRITY"              # NA conservation etc.
+    E_REPORT = "E_REPORT"
+    F_SEALED = "F_SEALED"
+
+
+class TrialState(str, Enum):
+    """Packet §0 state machine; transitions appended to ops/TRIAL_REGISTRY.md
+    by the MAIN AGENT ONLY (append-only event chain)."""
+    PACKET_DRAFTED = "PACKET_DRAFTED"
+    PACKET_APPROVED = "PACKET_APPROVED"
+    RUNNER_IMPLEMENTED = "RUNNER_IMPLEMENTED"
+    READY_FOR_RUN_AUTHORIZATION = "READY_FOR_RUN_AUTHORIZATION"
+    RUN_AUTHORIZED = "RUN_AUTHORIZED"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+# Approved NA reasons (frozen L44-45 + IR-12/15/17/18/19/20 + preflight
+# taxonomy). Stage D conserves produced NA counts against EXACTLY this set;
+# any NA/NaN with an unlisted reason is a hard failure (packet §7).
+APPROVED_NA_REASONS = (
+    "adr14_warmup",                      # F1/F2/F5/F7 normalisation warm-up
+    "f4_lookback_warmup",                # IR-20 60-day basis warm-up
+    "roll_transition_day_na",            # F5 on is_roll_transition (frozen L57)
+    "prev_rth_close_anchor_missing",     # IR-19 (incl. early-close-bar-absent,
+                                         #   vendor-degraded, first sample day)
+    "anchor_missing",                    # exact anchor absent (frozen L44-45)
+    "multi_event_day_f10_na",            # IR-12 + IR-18 (9 days)
+    "zero_direction_day_l82",            # ret_open30 == 0 (frozen L82)
+    "direction_undeterminable_na",       # ret_open30 NA -> d_open 0 (labels.py)
+    "overnight_window_empty",            # F6/F7 no bars in span
+    "overnight_range_zero",              # F6 0/0 (ruling R3)
+    "path_zero",                         # F3 denominator (frozen L77 analogue)
+    "degenerate_window",                 # F9 H == L
+    "official_time_unavailable_in_archived_source",  # IR-17 (diagnostic col)
+)
+
+
+class RunGateError(RuntimeError):
+    """A packet-§9 hard gate failed in Stage A/B (pre-exposure)."""
+
+
+class NAConservationError(RuntimeError):
+    """Stage D: produced NA does not conserve against APPROVED_NA_REASONS."""
+
+
+class AssertionMismatchError(RuntimeError):
+    """Independently computed value != expected_preflight_assertions entry.
+    Assertions are compare-only; they must NEVER feed computation."""
+
+
+class LogLeakError(RuntimeError):
+    """Stage-C log guard: research vocabulary or non-whitelisted numeric."""
+
+
+@dataclass(frozen=True)
+class RunConfig:
+    """Injected by the MAIN-AGENT entrypoint from approved artifacts at run
+    time. Frozen dataclass: no runtime mutation; NO preflight observation
+    numbers may be embedded here (they live in the assertions FILE and are
+    compare-only)."""
+    trial_id: str                         # e.g. S0-T001
+    authorized_commit: str                # full 40-hex from Aaron's sentence
+    seed: int                             # packet §5: 20260731 (bootstrap only)
+    attempts_dir: str                     # attempts/<trial>-A<seq>_<UTC>/
+    runs_dir: str                         # runs/<trial>_<UTC>/ (Stage C entry)
+    assertions_path: str                  # expected_preflight_assertions json
 
 
 @dataclass
