@@ -81,6 +81,15 @@ D. 无前视：日 d 的 context/特征只用 ≤ d 数据；机器化扰动断�
    排除在断言外）。
 E. 合成 golden 测试：手算可验迷你 fixture 断言到具体数值（构造过程
    写在测试注释）。
+F. **方向语义分离硬测试（Aaron 2026-07-31 补充，必做）**：
+   - Case A：O09:30 与 C09:59 均存在且**相等** → d_open = 0，
+     reason = `zero_direction_day_l82`，non_tradeable_no_direction=true；
+   - Case B：O09:30 或 C09:59 **缺失** →
+     reason = `direction_undeterminable_na`，**不得**归类为 L82 零方向，
+     **不得**进入任何可交易日或 Oracle 候选集合；
+   - 两类在 NA 表、频率结构与下游 eligibility 中**不得合并**
+     （contracts.APPROVED_NA_REASONS 已分设两个原因）。
+   这是防止"缺失数据被误当成市场无方向"的关键保护。
 
 STOP CONDITIONS（写 DECISION_PACKET_S0CORE_<主题>.md，推荐栏留空）:
 - 冻结文本不能唯一推出的口径（预登记候选 D-EXEC/D-BOOT/D-E1FILL/

@@ -21,7 +21,8 @@ REQUIRED READING:
   你依赖的：RunStage/TrialState/APPROVED_NA_REASONS/RunConfig/
   RunGateError/NAConservationError/AssertionMismatchError/LogLeakError）
 - ops/M5_RUNNER_TASKBOARD/M5_T0_INTERFACE_AUDIT.md（所有权边界权威）
-- S0_INPUT_PREFLIGHT.json（断言目标的真实形状，只读）
+- S0_INPUT_PREFLIGHT.json（**仅**用于阅读 schema 形状以设计合成测试；
+  runinfra.py 运行时不得读取它——断言值永远由调用者传入）
 - ops/M5_RUNNER_TASKBOARD/TASKBOARD.md
 
 ALLOWED FILES（全部新建）:
@@ -31,11 +32,30 @@ ALLOWED FILES（全部新建）:
 FORBIDDEN FILES: 冻结文件；src/itsf/data/**；guards.py；src/itsf/mc/**；
 scripts/**；ops/**（registry 只读）；授权包；SA-4 的全部文件；tag/历史。
 
+ARCHITECTURE（Aaron 2026-07-31 勘误——两层分离，不得混写）:
+```
+纯逻辑层（零 I/O、零全局态，全部可合成单测）:
+  canonicalize_manifest_record / compute_record_hash /
+  verify_chain_records / validate_log_event / check_na_conservation /
+  compare_preflight_assertions / render_failure_report
+窄 I/O 适配层（仅两个函数）:
+  append_manifest_record(path, record) / write_failure_report(dir, rendered)
+```
+I/O 层只能写**调用者提供的**目录（测试用合成临时目录）；不得创建
+attempt 或 run 根目录（目录生命周期归 main runner）；不得读取真实数据；
+不得访问网络。
+
 IMPLEMENTATION REQUIREMENTS:
-1. **JSONL hash-chain manifest writer**：append-only；每条
-   {stage, relative_path, file_sha256, previous_record_hash}；manifest
-   不对自身求 hash（manifest_self_excluded）；stage seal 记录；提供
-   verify_chain() 重放校验；临时未关闭文件不得入 final manifest。
+1. **JSONL hash-chain manifest**（链规则冻结，Aaron 2026-07-31）：
+   - canonical JSON：UTF-8、sort_keys=True、紧凑序列化（无多余空格）；
+   - genesis 记录的 previous_record_hash = 64 个 "0"；
+   - record_type ∈ {file, stage_seal}，每行显式保存 record_hash；
+   - relative_path 必须是 POSIX 相对路径；禁止绝对路径、".." 穿越、
+     manifest 自身路径（manifest_self_excluded）；
+   - stage_seal 必须引用该阶段最后一条 record_hash；
+   - verify_chain_records() 检查：顺序、previous 链接、record_hash
+     重算、文件 hash（由调用者提供字节或 hash 回调）；
+   - 只有调用者显式声明 finalized 的文件才允许入链。
 2. **Stage-C 日志守卫**：logger 包装器，只放行白名单消息 schema
    （阶段状态/心跳/文件 hash/非研究性完成状态）；数字白名单只允许
    计数与 hash；检测到 Oracle/标签/E1/E2/年度/频率/分布类词汇或
@@ -44,13 +64,25 @@ IMPLEMENTATION REQUIREMENTS:
 3. **NA 守恒检查器**：输入产出 NA 表＋批准原因枚举（contracts.py），
    逐项守恒断言；未登记原因的 NA/NaN → 结构化失败对象；禁止内部用
    dropna/填充。
-4. **expected_preflight_assertions 比对器**：从 contracts 载入断言表，
-   与 runner 独立计算值逐项比对，输出逐项 pass/fail；**比对器不得把
-   断言值回写或提供给计算路径**（单向只读）。
-5. **RUN_FAILURE_REPORT / PRE_RUN_ATTEMPT_FAILURE 生成器**：结构化
-   markdown＋json 双写入 trial 目录（目录路径由调用者传入；你不创建
-   目录）；含失败点、已释放信息清单、chain 状态。
-6. 全部函数纯参数化；无全局状态；无网络；不读真实数据。
+4. **expected_preflight_assertions 比对器**（Aaron 2026-07-31 勘误——
+   断言值绝不来自 contracts）：
+   ```
+   compare_preflight_assertions(
+       expected: Mapping[str, object],
+       actual: Mapping[str, object],
+   ) -> AssertionComparisonResult      # 纯函数，逐项 pass/fail
+   ```
+   - contracts.py 只允许定义类型，不含任何 Preflight 观测数字；
+   - expected 与 actual 均由调用者（main runner）显式传入；
+   - **runinfra.py 不得自行读取 S0_INPUT_PREFLIGHT.json**，不得从
+     contracts 或 RunConfig 取得具体断言值；
+   - expected 只用于单向比对，绝不能暴露给计算路径或用于生成 actual。
+5. **RUN_FAILURE_REPORT / PRE_RUN_ATTEMPT_FAILURE**：纯逻辑层
+   render_failure_report() 产出结构化 markdown＋json 内容；I/O 层
+   write_failure_report() 写入调用者传入的目录；含失败点、已释放
+   信息清单、chain 状态。
+6. 纯逻辑层零 I/O 零全局态；I/O 层窄接口（仅上列两函数）；无网络；
+   不读真实数据。
 
 REQUIRED TESTS（合成 fixture）:
 - chain：追加/重放/篡改检测（改一条记录 verify 必败）；自引用排除；
