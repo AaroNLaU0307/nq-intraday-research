@@ -11,6 +11,7 @@ direction".
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from test_s0_context import (
@@ -26,8 +27,12 @@ from itsf.s0.context import (
     NA_ANCHOR_MISSING,
     NA_DIRECTION_UNDETERMINABLE,
     NA_ZERO_DIRECTION,
+    EventCalendar,
+    RollInterval,
 )
 from itsf.s0.dataset import (
+    DEV_END_EXCL,
+    DEV_START,
     DIRECTION_DIRECTIONAL,
     Y6_RULE,
     build_s0_dataset,
@@ -121,13 +126,70 @@ def test_assembly_population_and_assertion_counts_shape():
     dates = weekdays("2020-01-02", 30)
     ds = dataset_of(dates)
     ac = ds.assertion_counts()
-    assert set(ac) == {"funnel", "f10_final_mutually_exclusive", "n_records"}
+    assert set(ac) == {"funnel", "f10_raw_category_membership",
+                       "f10_final_mutually_exclusive", "n_records"}
     assert ac["n_records"] == len(ds.records) == ds.na_table["population"]
     # the mutually-exclusive F10 partition must sum to the record population
     assert sum(ac["f10_final_mutually_exclusive"].values()) == len(ds.records)
     # compare-only outputs: plain ints, json-serialisable
-    assert all(isinstance(v, int)
-               for v in ac["f10_final_mutually_exclusive"].values())
+    for key in ("f10_final_mutually_exclusive", "f10_raw_category_membership"):
+        assert all(isinstance(v, int) for v in ac[key].values())
+
+
+def test_f10_is_double_reported_raw_membership_and_exclusive_partition():
+    """Approved report governance (1) / SA-6 F-12: the mutually-exclusive
+    partition alone hides how many days a category actually touched, because a
+    two-category day leaves CPI and NFP and reappears as NA_multi_event. Both
+    reports must be produced, and they must reconcile."""
+    dates = weekdays("2020-01-02", 30)
+    cpi_only, both, nfp_only = dates[10], dates[12], dates[14]
+    unscheduled = dates[16]
+    events = EventCalendar(
+        cpi_dates=frozenset({cpi_only, both}),
+        nfp_dates=frozenset({both, nfp_only}),
+        fomc_statement_dates=frozenset({unscheduled}),
+        unscheduled_fomc_dates=frozenset({unscheduled}),
+        raw_multi_event_dates=frozenset({both}))
+    ds = dataset_of(dates, events=events)
+    raw, exclusive = ds.f10_raw_membership_counts, ds.f10_counts
+
+    # multi-hot: the two-category day is counted under BOTH categories ...
+    assert raw["CPI"] == 2 and raw["NFP"] == 2
+    # ... while the partition drops it into its own NA class
+    assert exclusive["CPI"] == 1 and exclusive["NFP"] == 1
+    assert exclusive["NA_multi_event"] == 1
+    # IR-13 first: an unscheduled FOMC action is not an F10 FOMC day anywhere
+    assert raw["FOMC"] == 0 and exclusive["FOMC"] == 0
+    # the reconciliation identities of the double report
+    for category in ("CPI", "NFP", "FOMC", "none"):
+        assert raw[category] >= exclusive[category], category
+    assert raw["multi_category"] == exclusive["NA_multi_event"]
+    assert raw["none"] == exclusive["none"] == 30 - 3
+    assert sum(exclusive.values()) == len(ds.records)
+    # raw membership does NOT partition the population, by construction
+    assert raw["CPI"] + raw["NFP"] + raw["FOMC"] + raw["none"] > len(ds.records)
+    assert ds.assertion_counts()["f10_raw_category_membership"] == raw
+
+
+def test_records_outside_the_development_window_fail_closed():
+    """SA-6 F-18: DEV_START/DEV_END_EXCL were imported and never read, so the
+    module advertised a boundary it never checked. Real range assertion now
+    (frozen L24 data-role window, charter clause 14 role isolation)."""
+    assert (DEV_START, DEV_END_EXCL) == ("2010-06-06", "2022-01-01")
+    inside = weekdays("2021-11-01", 30)
+    assert all(DEV_START <= d < DEV_END_EXCL for d in inside)
+    assert len(dataset_of(inside).records) == 30           # in-window: fine
+
+    outside = weekdays("2022-01-03", 30)                   # IV era dates
+    bars, uni = universe_of(outside)
+    assert len(uni.funnel.structurally_eligible) == 30     # the days exist ...
+    with pytest.raises(ValueError, match="Development window"):
+        build_s0_dataset(bars, uni)                        # ... and are refused
+
+    straddling = weekdays("2021-12-20", 20)                # crosses 2022-01-01
+    bars2, uni2 = universe_of(straddling)
+    with pytest.raises(ValueError, match=r"record date\(s\) outside"):
+        build_s0_dataset(bars2, uni2)
 
 
 def test_features_and_labels_tables_align_with_records():
@@ -219,6 +281,28 @@ def test_y6_na_propagates_and_inherits_the_underlying_reason():
             assert r.labels.y6_cont_decile is not None
 
 
+def test_labels_table_keeps_y6_a_nullable_integer_decile():
+    """SA-6 F-28: pandas infers float64 for an int column holding NA, so the
+    frozen L91 decile arrived downstream as 3.0 with NaN for NA — an ordinal
+    bin reading as a continuous score, and an NA merged into the float NaN
+    family instead of the reported NA population."""
+    dates = weekdays("2020-01-02", 30)
+    bars, uni = _y6_universe(
+        dates, {dates[IDX_A]: {"closes": zero_open30_closes(20000.0)}})
+    ds = build_s0_dataset(bars, uni)
+    col = ds.labels_table["y6_cont_decile"]
+    assert str(col.dtype) == "Int64"                 # nullable INT, not float
+    assert col.isna().any()                          # the fixture holds NAs
+    values = col.dropna().tolist()
+    assert values
+    assert all(isinstance(v, (int, np.integer)) and not isinstance(v, bool)
+               for v in values)
+    assert all(1 <= v <= 10 for v in values)
+    # the table agrees with the records it is built from
+    from_records = [r.labels.y6_cont_decile for r in ds.records]
+    assert [None if v is pd.NA else int(v) for v in col.tolist()] == from_records
+
+
 def test_y6_partial_calendar_year_ranks_on_its_own_days():
     """An incomplete year (like 2010 starting 2010-06-06) still ranks over
     whatever Development days it has."""
@@ -253,14 +337,139 @@ def test_y6_cannot_enter_oracle_or_candidate_paths():
 
 
 def test_y6_no_date_or_index_tiebreak_in_source():
+    """IR-21 forbids breaking a Y_cont tie by date, row order or index.
+
+    SA-6 test-effectiveness finding: the second assertion used to end in
+    `or True`, so it could not fail whatever the source said. Real check now —
+    the function is parsed and the RANKING pass must not mention a date or an
+    index at all, while the year-GROUPING pass legitimately may (the year key
+    comes from the trade date). Behaviour stays pinned by the two tests above.
+    """
+    import ast
     import inspect
+    import textwrap
     from itsf.s0 import dataset as ds_mod
     src = inspect.getsource(ds_mod.assign_y6_deciles)
     assert 'method="first"' not in src and "method='first'" not in src
-    assert "trade_date" not in src.split("by_year")[1].split("return")[0] or \
-        True  # ranking body must not key on dates — enforced by the two
-    # behavioural tests above (equal-shares-decile + row-order invariance);
-    # this source check pins the obvious pandas shortcut.
+
+    fn = ast.parse(textwrap.dedent(src)).body[0]
+    loops = [n for n in fn.body if isinstance(n, ast.For)]
+    assert len(loops) == 2, "expected one grouping pass and one ranking pass"
+    grouping, ranking = loops
+    assert "trade_date" in ast.dump(grouping)     # the year key, legitimately
+    dumped = ast.dump(ranking)
+    for banned in ("trade_date", "date", "index", "sort_values", "sort_index"):
+        assert banned not in dumped, f"ranking pass reads {banned!r}"
+    # the ordering is derived from the VALUES and from nothing else
+    sorts = [n for n in ast.walk(ranking)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+             and "sort" in n.func.attr]
+    assert len(sorts) == 1, "exactly one ordering call expected"
+    assert [a.id for a in sorts[0].args if isinstance(a, ast.Name)] == ["vals"]
+
+
+def _s0_module_sources(exclude: tuple[str, ...] = ("dataset",)) -> dict:
+    """{module stem: source} for every module under itsf.s0 except `exclude`.
+
+    Read from disk, never imported: the check must cover every module in the
+    package — including ones owned by other agents — without executing them.
+    """
+    from pathlib import Path
+    import itsf.s0
+    pkg_dir = Path(itsf.s0.__file__).resolve().parent
+    return {p.stem: p.read_text(encoding="utf-8")
+            for p in sorted(pkg_dir.glob("*.py"))
+            if p.stem != "__init__" and p.stem not in exclude}
+
+
+Y6_NAMES = {"y6", "y6_cont_decile"}
+
+
+def test_y6_is_never_read_by_any_other_module_under_itsf_s0():
+    """IR-21 use_restriction over the WHOLE package (SA-6 F-22).
+
+    The original isolation test named four modules by hand, so every other
+    module of the package — context, labels, runner, runinfra and anything
+    added later — was a blind spot. Y6 is descriptive-only: outside dataset.py
+    no module may READ a y6 value, as a parameter, an attribute, a bare name
+    or a table key. labels.py may only WRITE the literal None (the field
+    exists there; a value never does).
+    """
+    import ast
+    sources = _s0_module_sources()
+    assert {"context", "labels", "features", "oracle", "costs",
+            "paths"} <= set(sources), sorted(sources)
+    for name, src in sources.items():
+        try:
+            tree = ast.parse(src, filename=f"{name}.py")
+        except (SyntaxError, ValueError):
+            # A module that cannot be parsed is NEVER skipped (that would
+            # recreate the blind spot this test exists to close): it falls
+            # back to the strictly stronger text rule instead.
+            assert "y6" not in src.lower(), name
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                args = node.args
+                params = [*args.posonlyargs, *args.args, *args.kwonlyargs]
+                params += [a for a in (args.vararg, args.kwarg) if a]
+                assert not {p.arg.lower() for p in params} & Y6_NAMES, (
+                    name, node.name)
+            elif isinstance(node, ast.Attribute) and isinstance(node.ctx,
+                                                                ast.Load):
+                assert node.attr.lower() not in Y6_NAMES, (name, node.attr)
+            elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+                assert node.id.lower() not in Y6_NAMES, (name, node.id)
+            elif (isinstance(node, ast.Subscript)
+                  and isinstance(node.slice, ast.Constant)
+                  and isinstance(node.slice.value, str)):
+                assert "y6" not in node.slice.value.lower(), (name,
+                                                              node.slice.value)
+            elif isinstance(node, ast.keyword) and node.arg in Y6_NAMES:
+                assert (isinstance(node.value, ast.Constant)
+                        and node.value.value is None), (name, node.arg)
+
+
+ROLL_NAMES = {"is_roll_window", "is_roll_transition", "roll_window",
+              "roll_transition", "roll_intervals", "roll_transitions", "roll"}
+
+
+def test_roll_window_cannot_enter_oracle_paths():
+    """F11 roll flags are DESCRIPTIVE calendar facts (frozen L30-32): the
+    Oracle / cost / path layers must never read them and no eligibility set
+    may be gated on them. Counterpart of the Y6 isolation test (SA-6 F-21).
+    features.py is deliberately absent from the module list — F11 IS a feature.
+    """
+    import inspect
+    from itsf.s0 import costs, oracle, paths
+    for mod in (oracle, costs, paths):
+        for name, fn in inspect.getmembers(mod, inspect.isfunction):
+            params = {p.lower() for p in inspect.signature(fn).parameters}
+            assert not params & ROLL_NAMES, (mod.__name__, name)
+        src = inspect.getsource(mod)
+        for token in ("roll_window", "roll_transition", "is_roll"):
+            assert token not in src, (mod.__name__, token)
+
+    # behavioural: a roll TRANSITION day loses F5 (frozen L57) and nothing
+    # else — it stays in the sample (frozen L45) and stays an oracle candidate.
+    dates = weekdays("2020-01-02", 40)
+    switch = dates[20]
+    intervals = (RollInterval("2019-12-01", switch, "NQZ9", 1),
+                 RollInterval(switch, "2020-06-01", "NQH0", 2))
+    bars, uni = universe_of(dates, roll_intervals=intervals)
+    ds = build_s0_dataset(bars, uni)
+    window_days = set(uni.roll_window_dates)
+    assert switch in window_days and len(window_days) == 5     # +-2 RTH days
+    assert window_days <= {r.trade_date for r in ds.records}
+    r = record_for(ds, switch)
+    assert r.features.is_roll_transition is True
+    assert r.features.gap is None
+    assert r.feature_na_reasons["gap"] == "roll_transition_day_na"
+    assert r.labels.y_cont is not None
+    assert r.oracle_candidate is True
+    for rec in ds.records:
+        assert rec.oracle_candidate == (rec.labels.d_open != 0
+                                        and rec.labels.y_cont is not None)
 
 
 # ---------------------------------------------------------------------------

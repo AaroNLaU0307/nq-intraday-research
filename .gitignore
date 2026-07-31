@@ -1,3 +1,12 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# S0 run governance (packet §6 double-directory semantics, SA-6 F-03).
+# Stage A/B pre-run attempt directories and Stage C+ run directories are
+# created BY the run itself. They are retained on disk forever (never
+# deleted) but must not dirty the working tree, otherwise the git-clean hard
+# gate makes the authorization procedure unsatisfiable: a first attempt would
+# permanently block every later attempt at the same authorized commit.
+attempts/
+runs/

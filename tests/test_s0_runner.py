@@ -3,35 +3,67 @@
 No real data, no research computation: `compute` returns a sentinel object.
 Covers packet §3 exposure boundary, §6 atomic run-start, §7 stage order,
 §8 failure semantics and the append-only registry writer.
+
+SA-7 additions (2026-08-01) close the SA-6 audit findings: the guarded
+logger is asserted to be ON THE WIRE (F-04), failure text degradation
+(F-05), the four runinfra mechanisms are asserted to have real non-test
+callers (F-06), and the scripts/s0_real_run.py gate LOGIC is exercised
+against synthetic fixtures — never against the real archive (F-01/03/07/
+08/09/11/34).
 """
 from __future__ import annotations
 
+import importlib.util
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
-from itsf.contracts import RunConfig, RunStage, TrialState
+from itsf.contracts import (NAConservationError, RunConfig, RunGateError,
+                            RunStage, TrialState)
+from itsf.s0 import runinfra
 from itsf.s0.runner import (
     GateCheck,
     RunnerDeps,
     S0Runner,
     append_registry_event_line,
+    classify_exception,
 )
 
 CLOCK = "2026-07-31T12:00:00+00:00"
+REPO = Path(__file__).resolve().parents[1]
+
+_SCRIPT_CACHE: dict[str, object] = {}
+
+
+def real_run_module():
+    """Import scripts/s0_real_run.py once. Import MUST stay inert."""
+    if "mod" not in _SCRIPT_CACHE:
+        script = REPO / "scripts" / "s0_real_run.py"
+        spec = importlib.util.spec_from_file_location("s0_real_run", script)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _SCRIPT_CACHE["mod"] = mod
+    return _SCRIPT_CACHE["mod"]
 
 
 def make_deps(tmp_path: Path, *, gates=(), b_checks=(),
               compute=None, integrity=(), renderer=None,
-              registry_events=None):
+              registry_events=None, log=None, append_event=None,
+              runs_dir=None):
     cfg = RunConfig(trial_id="S0-T001",
                     authorized_commit="a" * 40,
                     seed=20260731,
                     attempts_dir=str(tmp_path / "attempts" / "A001"),
-                    runs_dir=str(tmp_path / "runs" / "S0-T001"),
+                    runs_dir=str(runs_dir or (tmp_path / "runs" / "S0-T001")),
                     assertions_path=str(tmp_path / "assertions.json"))
     events = registry_events if registry_events is not None else []
+
+    def default_append(ev, note):
+        events.append((ev, note))
+
     logs: list[str] = []
     deps = RunnerDeps(
         config=cfg,
@@ -41,10 +73,18 @@ def make_deps(tmp_path: Path, *, gates=(), b_checks=(),
         compute=compute or (lambda: {"sentinel": True}),
         integrity_checks=tuple(integrity),
         render_report=renderer or (lambda r: {"S0_REPORT.md": "sealed"}),
-        append_registry_event=lambda ev, note: events.append((ev, note)),
+        append_registry_event=append_event or default_append,
         clock_utc=lambda: CLOCK,
-        log=logs.append)
+        log=log if log is not None else logs.append)
     return deps, events, logs
+
+
+def guarded_logger(sink: list[str]):
+    """Exactly the wrapper scripts/s0_real_run.py injects (F-04)."""
+    def _log(message: str) -> None:
+        runinfra.validate_log_event(message)
+        sink.append(message)
+    return _log
 
 
 def ok_gate(name="g"):
@@ -150,8 +190,9 @@ def test_full_run_stage_order_and_sealed_report(tmp_path):
     assert events == [("RUN_STARTED",
                        "Stage C entry; researcher exposure seq consumed"),
                       ("COMPLETED", "S0 report sealed")]
-    # Stage C log lines are stage/heartbeat text only (guarded upstream)
-    assert any("C_COMPUTE begin" in ln for ln in logs)
+    # Stage C log lines are schema-shaped only (F-04)
+    assert "stage=C_COMPUTE status=start" in logs
+    assert "stage=C_COMPUTE status=end" in logs
 
 
 # --- registry append-only writer --------------------------------------------
@@ -169,13 +210,705 @@ def test_registry_append_never_rewrites_existing_bytes(tmp_path):
 
 def test_zero_cli_argument_entrypoint():
     """Packet §5: the real entrypoint must accept no arguments at all."""
-    import importlib.util
-    from pathlib import Path as _P
-    script = (_P(__file__).resolve().parents[1] / "scripts"
-              / "s0_real_run.py")
-    spec = importlib.util.spec_from_file_location("s0_real_run", script)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)                     # import must be inert
+    mod = real_run_module()                          # import must be inert
     import inspect
     assert inspect.signature(mod.main).parameters == {}
     assert getattr(mod, "USES_ARGPARSE", False) is False
+
+
+# ===========================================================================
+# F-04 — the Stage-C log guard is actually ON THE WIRE
+# ===========================================================================
+
+
+def test_every_runner_message_passes_the_log_guard_happy_path(tmp_path):
+    sink: list[str] = []
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()],
+                           b_checks=[GateCheck("b1", lambda: (True, "ok"))],
+                           integrity=[lambda r: (True, "ok")],
+                           log=guarded_logger(sink))
+    out = S0Runner(deps).run()
+    assert out.ok is True, "a guarded logger must not break the happy path"
+    assert sink, "the runner must actually log through the guard"
+    for message in sink:                             # re-assert independently
+        runinfra.validate_log_event(message)
+
+
+@pytest.mark.parametrize("scenario", ["gate_fail", "compute_fail"])
+def test_every_runner_message_passes_the_log_guard_on_failure(tmp_path,
+                                                              scenario):
+    sink: list[str] = []
+    kwargs = {"log": guarded_logger(sink)}
+    if scenario == "gate_fail":
+        kwargs["gates"] = [bad_gate("g1")]
+    else:
+        def boom():
+            raise ValueError("synthetic crash 0.4213 oracle label")
+        kwargs["gates"] = [ok_gate()]
+        kwargs["compute"] = boom
+    deps, _, _ = make_deps(tmp_path, **kwargs)
+    out = S0Runner(deps).run()
+    assert out.ok is False
+    assert sink
+    for message in sink:
+        runinfra.validate_log_event(message)
+
+
+def test_logger_rejection_escalates_to_a_stage_failure(tmp_path):
+    """A guard rejection must stop the run, never be swallowed."""
+    def hostile_log(message: str) -> None:
+        raise runinfra.LogLeakError("synthetic guard rejection")
+
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()], log=hostile_log)
+    out = S0Runner(deps).run()
+    assert out.ok is False
+    assert out.failed_gate == "log_guard"
+    assert out.exposure_consumed is False
+    assert [e for e, _ in events] == ["PRE_RUN_ATTEMPT_FAILURE"]
+
+
+# ===========================================================================
+# F-05 — failure-text degradation (error class + opaque incident id)
+# ===========================================================================
+
+
+def test_raw_failure_text_never_reaches_registry_or_report(tmp_path):
+    secret = "trading day 2013-05-27 y_cont 0.7314"
+
+    def broken():
+        raise ValueError(secret)
+
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()], compute=broken)
+    out = S0Runner(deps).run()
+
+    assert out.incident_id.startswith("INC-")
+    note = dict(events)["FAILED"]
+    assert secret not in note and "ValueError" not in note
+    assert out.incident_id in note
+
+    report = (out.runs_dir / "RUN_FAILURE_REPORT.md").read_text("utf-8")
+    payload = json.loads((out.runs_dir / "RUN_FAILURE_REPORT.json")
+                         .read_text("utf-8"))
+    assert secret not in report
+    assert secret not in json.dumps(payload)
+    assert out.incident_id in payload["failure_reason"]
+
+    sealed = (out.runs_dir / f"INCIDENT_{out.incident_id}.md").read_text("utf-8")
+    assert secret in sealed                          # raw detail is retained
+    assert "SEALED FAILURE DETAIL" in sealed
+
+
+def test_pre_run_failure_also_seals_detail_in_attempt_dir(tmp_path):
+    secret = "porcelain shows M features_private_notes.txt"
+    deps, events, _ = make_deps(
+        tmp_path, gates=[GateCheck("git_clean", lambda: (False, secret))])
+    out = S0Runner(deps).run()
+    note = dict(events)["PRE_RUN_ATTEMPT_FAILURE"]
+    assert secret not in note
+    assert out.incident_id in note
+    assert secret in (out.attempts_dir
+                      / f"INCIDENT_{out.incident_id}.md").read_text("utf-8")
+
+
+# ===========================================================================
+# F-27 — exception_type comes from isinstance, not from parsing text
+# ===========================================================================
+
+
+def test_exception_type_cannot_be_spoofed_by_message_text(tmp_path):
+    def liar():
+        raise ValueError("LogLeakError: pretend this was a governance abort")
+
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()], compute=liar)
+    out = S0Runner(deps).run()
+    payload = json.loads((out.runs_dir / "RUN_FAILURE_REPORT.json")
+                         .read_text("utf-8"))
+    assert payload["exception_type"] == "Unknown"
+
+
+def test_check_return_value_cannot_dress_itself_as_a_contract_error(tmp_path):
+    """The pre-fix runner read exception_type off the head of the DETAIL
+    STRING — and a check that merely RETURNS (False, "LogLeakError: ...")
+    controls that string completely."""
+    deps, _, _ = make_deps(
+        tmp_path, gates=[ok_gate()],
+        integrity=[lambda r: (False, "LogLeakError: fabricated by the check")])
+    out = S0Runner(deps).run()
+    payload = json.loads((out.runs_dir / "RUN_FAILURE_REPORT.json")
+                         .read_text("utf-8"))
+    assert payload["exception_type"] == "Unknown"
+    assert out.terminal_stage == RunStage.D_INTEGRITY
+
+
+def test_real_contract_error_is_classified_by_isinstance(tmp_path):
+    def na_broken(result):
+        raise NAConservationError("unregistered reason in F5")
+
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()], integrity=[na_broken])
+    out = S0Runner(deps).run()
+    payload = json.loads((out.runs_dir / "RUN_FAILURE_REPORT.json")
+                         .read_text("utf-8"))
+    assert payload["exception_type"] == "NAConservationError"
+    assert out.terminal_stage == RunStage.D_INTEGRITY
+
+
+def test_classify_exception_unit():
+    assert classify_exception(RunGateError("x")) == "RunGateError"
+    assert classify_exception(NAConservationError("x")) == "NAConservationError"
+    assert classify_exception(ValueError("RunGateError: nope")) == "Unknown"
+    assert classify_exception(None) == "Unknown"
+
+
+# ===========================================================================
+# F-06 — Stage E manifest chain + Stage F verification are wired
+# ===========================================================================
+
+
+def test_stage_e_writes_hash_chain_and_stage_f_verifies_it(tmp_path):
+    deps, _, sink_logs = make_deps(
+        tmp_path, gates=[ok_gate()],
+        renderer=lambda r: {"S0_REPORT.md": "sealed", "counts.md": "n=1"})
+    out = S0Runner(deps).run()
+    assert out.ok is True
+
+    manifest = out.runs_dir / "manifest.jsonl"
+    records = [json.loads(ln) for ln in
+               manifest.read_text("utf-8").splitlines() if ln.strip()]
+    kinds = [r["record_type"] for r in records]
+    assert kinds.count("file") == 2
+    assert kinds[-1] == "stage_seal"
+    verdict = runinfra.verify_chain_records(
+        records, file_hash_provider=lambda rel:
+        runinfra.hashlib.sha256((out.runs_dir / rel).read_bytes()).hexdigest())
+    assert verdict.valid, verdict.errors
+    assert verdict.sealed_stages == ("E_REPORT",)
+
+
+def test_stage_f_fails_when_a_sealed_artifact_is_altered(tmp_path, monkeypatch):
+    """Stage F must actually re-verify: tamper with an artifact between the
+    manifest append and the verification and the run must fail."""
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()])
+    original = S0Runner._record_artifacts
+
+    def tampering_record(self, rdir, stage, written):
+        original(self, rdir, stage, written)
+        (rdir / "S0_REPORT.md").write_text("TAMPERED", encoding="utf-8")
+
+    monkeypatch.setattr(S0Runner, "_record_artifacts", tampering_record)
+    out = S0Runner(deps).run()
+
+    assert out.ok is False
+    assert out.terminal_stage == RunStage.F_SEALED
+    assert out.failed_gate == "verify_chain"
+    assert out.exposure_consumed is True
+
+
+def test_stage_e_requires_at_least_one_artifact(tmp_path):
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()], renderer=lambda r: {})
+    out = S0Runner(deps).run()
+    assert out.ok is False
+    assert out.terminal_stage == RunStage.E_REPORT
+
+
+# ===========================================================================
+# F-08 / F-10 — orphan disclosure, prefix scan, gate exceptions
+# ===========================================================================
+
+
+def test_prior_run_directory_for_same_trial_blocks_even_with_new_stamp(tmp_path):
+    runs_root = tmp_path / "runs"
+    (runs_root / "S0-T001_20260731T090000Z").mkdir(parents=True)
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()],
+        runs_dir=runs_root / "S0-T001_20260731T120000Z")
+    out = S0Runner(deps).run()
+    assert out.failure_kind == "pre_run_attempt"
+    assert out.exposure_consumed is False
+    assert "RUN_STARTED" not in [e for e, _ in events]
+
+
+def test_failed_run_started_append_leaves_half_transition_marker(tmp_path):
+    calls: list[str] = []
+
+    def flaky_append(event, note):
+        calls.append(event)
+        if event == "RUN_STARTED":
+            raise OSError("registry locked by another process")
+
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()],
+                           append_event=flaky_append)
+    out = S0Runner(deps).run()
+    marker = Path(deps.config.runs_dir) / "HALF_TRANSITION.md"
+    assert marker.exists()
+    text = marker.read_text("utf-8")
+    assert "ORPHAN" in text and "S0-T001" in text
+    assert out.failure_kind == "pre_run_attempt"
+    assert "PRE_RUN_ATTEMPT_FAILURE" in calls
+
+
+def test_gate_that_raises_becomes_a_pre_run_failure_not_a_traceback(tmp_path):
+    def exploding():
+        raise KeyError("gate blew up")
+
+    deps, events, _ = make_deps(
+        tmp_path, gates=[GateCheck("locked_input_hashes", exploding)])
+    out = S0Runner(deps).run()
+    assert out.failure_kind == "pre_run_attempt"
+    assert out.failed_gate == "locked_input_hashes"
+    assert out.exposure_consumed is False
+    assert [e for e, _ in events] == ["PRE_RUN_ATTEMPT_FAILURE"]
+    assert (out.attempts_dir / "PRE_RUN_ATTEMPT_FAILURE.md").exists()
+
+
+def test_structural_check_that_raises_is_also_pre_run(tmp_path):
+    def exploding():
+        raise RuntimeError("structural check blew up")
+
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()],
+                           b_checks=[GateCheck("b1", exploding)])
+    out = S0Runner(deps).run()
+    assert out.failure_kind == "pre_run_attempt"
+    assert out.terminal_stage == RunStage.B_LOAD_VALIDATE
+    assert not Path(deps.config.runs_dir).exists()
+
+
+# ===========================================================================
+# scripts/s0_real_run.py — registry parsing / authorization (F-01, F-11)
+# ===========================================================================
+
+
+HEADER = ("| # | utc | event | commit | actor | 原因/备注 |\n"
+          "|---|---|---|---|---|---|\n")
+
+
+def _sentence(commit: str, trial_id: str = "S0-T001") -> str:
+    mod = real_run_module()
+    return mod.AUTHORIZATION_SENTENCE_TEMPLATE.format(trial_id=trial_id,
+                                                      commit=commit)
+
+
+def test_prose_mentioning_run_authorized_is_not_an_event_row():
+    mod = real_run_module()
+    text = ("状态机见 packet §0: ... RUN_AUTHORIZED → RUNNING → COMPLETED。\n"
+            + HEADER
+            + "| 1 | 2026-07-31 | TRIAL_REGISTERED | 79d7ca3 | main | 登记 |\n")
+    rows = mod.parse_registry_events(text)
+    assert [r["event"] for r in rows] == ["TRIAL_REGISTERED"]
+    row, commit, detail = mod.find_authorization_event(text)
+    assert row is None and commit == ""
+    assert "no RUN_AUTHORIZED row" in detail
+
+
+def test_live_registry_today_has_no_authorization_event():
+    """The real trial registry at this commit must NOT authorize a run."""
+    mod = real_run_module()
+    row, commit, _ = mod.find_authorization_event(
+        mod.REGISTRY.read_text(encoding="utf-8"))
+    assert row is None
+    assert commit == ""
+
+
+def test_exact_sentence_with_full_hash_is_accepted():
+    mod = real_run_module()
+    commit = "b" * 40
+    text = HEADER + (f"| 4 | 2026-08-01 | RUN_AUTHORIZED | b62016a | Aaron | "
+                     f"{_sentence(commit)} |\n")
+    row, parsed, detail = mod.find_authorization_event(text)
+    assert row is not None
+    assert parsed == commit, detail
+
+
+@pytest.mark.parametrize("note", [
+    "开始跑吧",
+    "可以跑，授权 S0-T001",
+    "启动第一次真实S0，授权trial_id: S0-T001，使用commit: b62016a",
+    "启动第一次真实S0, 授权trial_id: S0-T001, 使用commit: " + "b" * 40,
+    "启动第一次真实S0，授权trial_id: S0-T002，使用commit: " + "b" * 40,
+    "启动第一次真实S0，授权trial_id: S0-T001，使用commit: " + "B" * 40,
+])
+def test_near_miss_authorization_notes_are_rejected(note):
+    mod = real_run_module()
+    text = HEADER + f"| 4 | 2026-08-01 | RUN_AUTHORIZED | b62016a | Aaron | {note} |\n"
+    _, commit, _ = mod.find_authorization_event(text)
+    assert commit == ""
+
+
+def test_sentence_in_a_non_run_authorized_row_is_rejected():
+    mod = real_run_module()
+    text = HEADER + (f"| 4 | 2026-08-01 | NOTE | b62016a | Aaron | "
+                     f"{_sentence('c' * 40)} |\n")
+    _, commit, _ = mod.find_authorization_event(text)
+    assert commit == ""
+
+
+def test_two_authorization_rows_are_rejected():
+    mod = real_run_module()
+    row = (f"| 4 | 2026-08-01 | RUN_AUTHORIZED | b62016a | Aaron | "
+           f"{_sentence('c' * 40)} |\n")
+    _, commit, detail = mod.find_authorization_event(HEADER + row + row)
+    assert commit == ""
+    assert "2 RUN_AUTHORIZED rows" in detail
+
+
+def test_head_gate_compares_against_the_parsed_commit_not_head(tmp_path):
+    """F-11: authorized_commit is the value from Aaron's sentence; the gate
+    must fail when HEAD differs, and never compare HEAD with itself."""
+    mod = real_run_module()
+    registry = tmp_path / "TRIAL_REGISTRY.md"
+    registry.write_text(
+        HEADER + f"| 4 | x | RUN_AUTHORIZED | x | Aaron | {_sentence('d' * 40)} |\n",
+        encoding="utf-8")
+    gates = {g.name: g for g in mod.build_gates(registry=registry)}
+    ok, detail = gates["run_authorized_event"].check()
+    assert ok, detail
+    ok, detail = gates["head_matches_authorized_commit"].check()
+    assert not ok
+    assert "does not equal" in detail
+
+
+# ===========================================================================
+# scripts/s0_real_run.py — clean gate allowlist (F-03) and env hygiene (F-09)
+# ===========================================================================
+
+
+@pytest.mark.parametrize("line,exempt", [
+    (" M ops/TRIAL_REGISTRY.md", True),
+    ("?? attempts/S0-T001-A20260801T000000Z/", True),
+    ("?? runs/S0-T001_20260801T000000Z/manifest.jsonl", True),
+    (" M src/itsf/s0/labels.py", False),
+    ("?? scripts/sneaky_patch.py", False),
+    ("R  a.py -> src/itsf/s0/features.py", False),
+])
+def test_clean_gate_allowlist(line, exempt):
+    mod = real_run_module()
+    assert mod._clean_gate_exempt(line) is exempt
+
+
+def test_gitignore_covers_attempt_and_run_directories():
+    body = (REPO / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert "attempts/" in body
+    assert "runs/" in body
+
+
+def test_clean_env_drops_gate_weakening_variables(monkeypatch):
+    mod = real_run_module()
+    for var in ("PYTEST_ADDOPTS", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE",
+                "GIT_CONFIG_GLOBAL", "PYTHONPATH", "PYTHONSTARTUP"):
+        monkeypatch.setenv(var, "hostile")
+    env = mod.clean_env()
+    for var in ("PYTEST_ADDOPTS", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE",
+                "GIT_CONFIG_GLOBAL", "PYTHONPATH", "PYTHONSTARTUP"):
+        assert var not in env
+    assert "PATH" in env or "Path" in env or env  # allowlist survives
+
+
+def test_clean_env_keeps_windows_shell_folder_variables():
+    """Scrubbing too hard is its own failure mode: with SystemDrive absent a
+    child process materialises a literal '%SystemDrive%' directory in its
+    cwd (= the repo), which would then break the git-clean gate."""
+    mod = real_run_module()
+    import os
+    env = mod.clean_env()
+    for var in ("SYSTEMDRIVE", "SYSTEMROOT", "PROGRAMDATA", "TEMP"):
+        if var in os.environ:
+            assert env.get(var) == os.environ[var], var
+
+
+def test_subprocess_with_clean_env_leaves_no_stray_directory(tmp_path):
+    mod = real_run_module()
+    before = set(p.name for p in tmp_path.iterdir())
+    subprocess.run(
+        [sys.executable, "-c",
+         "import pathlib;pathlib.Path.home();"
+         "import tempfile;tempfile.gettempdir()"],
+        capture_output=True, text=True, cwd=str(tmp_path), env=mod.clean_env())
+    assert set(p.name for p in tmp_path.iterdir()) == before
+
+
+def test_subprocess_actually_receives_the_scrubbed_env(monkeypatch):
+    mod = real_run_module()
+    monkeypatch.setenv("PYTEST_ADDOPTS", "-k nothing_matches")
+    proc = subprocess.run(
+        [sys.executable, "-c",
+         "import os;print(os.environ.get('PYTEST_ADDOPTS','ABSENT'))"],
+        capture_output=True, text=True, env=mod.clean_env())
+    assert proc.stdout.strip() == "ABSENT"
+
+
+@pytest.mark.parametrize("output,expected", [
+    ("347 passed in 13.83s", 347),
+    ("340 passed, 7 skipped in 1.00s", 347),
+    ("1 failed, 346 passed in 2.00s", 347),
+    ("5 passed, 342 deselected in 0.30s", 347),
+    ("no summary here", None),
+])
+def test_parse_pytest_collected(output, expected):
+    mod = real_run_module()
+    assert mod.parse_pytest_collected(output) == expected
+
+
+def test_pytest_gate_floor_is_the_audit_baseline():
+    mod = real_run_module()
+    assert mod.MIN_COLLECTED_TESTS == 347
+
+
+# ===========================================================================
+# scripts/s0_real_run.py — the added hard gates (F-07, F-08, F-34)
+# ===========================================================================
+
+
+def test_gate_list_covers_every_packet_section_9_gate():
+    mod = real_run_module()
+    names = [g.name for g in mod.build_gates()]
+    assert names == [
+        "real_run_allowed",                      # §9.6/8/9 via guards (F-34)
+        "git_clean",                             # §9.1
+        "run_authorized_event",                  # §9.12
+        "head_matches_authorized_commit",        # §9.2 + §9.13
+        "key_closure_attestation_present",       # §9.7
+        "locked_input_hashes",                   # §9.10
+        "raw_file_set_digest",                   # §4 set digest
+        "seal_check",                            # §9.4
+        "structure_assertions",                  # §9.5
+        "runs_dir_absent_for_trial",             # §9.11
+        "full_pytest",                           # §9.3
+    ]
+    assert len(names) == len(set(names))
+
+
+def test_first_gate_delegates_to_guards_assert_real_run_allowed(monkeypatch):
+    """F-34: no second implementation of the frozen-hash/flag checks."""
+    mod = real_run_module()
+    from itsf import guards
+    calls: list[str] = []
+    monkeypatch.setattr(guards, "assert_real_run_allowed",
+                        lambda *a, **k: calls.append("called"))
+    gate = mod.build_gates()[0]
+    assert gate.name == "real_run_allowed"
+    ok, _ = gate.check()
+    assert ok and calls == ["called"]
+
+
+def test_locked_inputs_include_the_assertion_file_and_a1_manifest():
+    mod = real_run_module()
+    assert mod.LOCKED["preflight_json"][1].startswith("5c0ae2d7")
+    assert mod.LOCKED_EXTERNAL["a1_manifest"][1].startswith("d8d1edc7")
+    assert mod.RAW_FILE_SET_SHA256.startswith("08fca11b")
+
+
+def test_locked_preflight_hash_matches_the_repo_file():
+    """Compare-only: the assertion file's bytes at this commit."""
+    mod = real_run_module()
+    rel, want = mod.LOCKED["preflight_json"]
+    assert mod._sha(REPO / rel) == want
+
+
+def test_raw_file_set_digest_is_order_independent_and_content_sensitive():
+    mod = real_run_module()
+    a = [("x.dbn.zst", 10, "a" * 64), ("y.dbn.zst", 20, "b" * 64)]
+    assert mod.compute_raw_file_set_sha256(a) == \
+        mod.compute_raw_file_set_sha256(list(reversed(a)))
+    renamed = [("z.dbn.zst", 10, "a" * 64), ("y.dbn.zst", 20, "b" * 64)]
+    assert mod.compute_raw_file_set_sha256(renamed) != \
+        mod.compute_raw_file_set_sha256(a)
+    resized = [("x.dbn.zst", 11, "a" * 64), ("y.dbn.zst", 20, "b" * 64)]
+    assert mod.compute_raw_file_set_sha256(resized) != \
+        mod.compute_raw_file_set_sha256(a)
+
+
+def test_a1_manifest_entries_reads_metadata_only(tmp_path):
+    mod = real_run_module()
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"job_id": "J", "files": [
+        {"filename": "a.dbn.zst", "hash": "sha256:" + "a" * 64, "size": 7},
+        {"filename": "b.dbn.zst", "hash": "sha256:" + "b" * 64, "size": 9},
+    ]}), encoding="utf-8")
+    entries = mod.a1_manifest_entries(manifest)
+    assert entries == [("a.dbn.zst", 7, "a" * 64), ("b.dbn.zst", 9, "b" * 64)]
+
+
+def test_a1_manifest_entries_fails_closed_on_unknown_schema(tmp_path):
+    mod = real_run_module()
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"files": [{"name": "a.dbn.zst"}]}),
+                        encoding="utf-8")
+    with pytest.raises(ValueError):
+        mod.a1_manifest_entries(manifest)
+
+
+def test_raw_file_set_gate_fails_closed_on_wrong_count(tmp_path):
+    mod = real_run_module()
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"files": [
+        {"filename": "a.dbn.zst", "hash": "sha256:" + "a" * 64, "size": 7}]}),
+        encoding="utf-8")
+    gates = {g.name: g for g in mod.build_gates(a1_manifest=manifest)}
+    ok, detail = gates["raw_file_set_digest"].check()
+    assert not ok
+    assert "file count" in detail
+
+
+def test_seal_check_gate_uses_the_tool_exit_code(tmp_path):
+    """Synthetic stand-in for quant-data/tools/seal_check.py — the real tool
+    is never invoked from the test suite."""
+    mod = real_run_module()
+    passing = tmp_path / "seal_pass.py"
+    passing.write_text("print('SEAL_CHECK: PASS (ready)')\n", encoding="utf-8")
+    failing = tmp_path / "seal_fail.py"
+    failing.write_text("import sys;print('SEAL_CHECK: FAIL');sys.exit(1)\n",
+                       encoding="utf-8")
+    missing = tmp_path / "not_here.py"
+
+    def gate(tool):
+        return {g.name: g for g in
+                mod.build_gates(seal_check_tool=tool)}["seal_check"]
+
+    assert gate(passing).check()[0] is True
+    assert gate(failing).check()[0] is False
+    assert gate(missing).check()[0] is False
+
+
+def test_seal_check_gate_points_at_the_real_read_only_tool():
+    mod = real_run_module()
+    assert mod.SEAL_CHECK_TOOL.name == "seal_check.py"
+    assert "quant-data" in str(mod.SEAL_CHECK_TOOL).replace("\\", "/")
+
+
+def test_structure_assertion_gate_parses_yaml(tmp_path):
+    mod = real_run_module()
+    repo = tmp_path / "repo"
+    (repo / "gate1").mkdir(parents=True)
+    target = repo / mod.STRUCTURE_YAML
+
+    target.write_text("\n".join(f"k{i}: {i}" for i in range(10)) + "\n",
+                      encoding="utf-8")
+    gates = {g.name: g for g in mod.build_gates(repo=repo)}
+    ok, detail = gates["structure_assertions"].check()
+    assert ok and "10 top-level keys" in detail
+
+    target.write_text("k1: 1\n", encoding="utf-8")
+    ok, _ = {g.name: g for g in
+             mod.build_gates(repo=repo)}["structure_assertions"].check()
+    assert not ok
+
+    target.write_text("k1: [unclosed\n", encoding="utf-8")
+    ok, detail = {g.name: g for g in
+                  mod.build_gates(repo=repo)}["structure_assertions"].check()
+    assert not ok and "does not parse" in detail
+
+
+def test_structure_assertion_gate_on_the_real_frozen_params():
+    """gate1/platform_params.yaml is a frozen, hash-locked repo file."""
+    mod = real_run_module()
+    gates = {g.name: g for g in mod.build_gates()}
+    ok, detail = gates["structure_assertions"].check()
+    assert ok, detail
+
+
+def test_runs_dir_gate_scans_by_trial_prefix(tmp_path):
+    mod = real_run_module()
+    runs_root = tmp_path / "runs"
+    gates = {g.name: g for g in mod.build_gates(runs_root=runs_root)}
+    assert gates["runs_dir_absent_for_trial"].check()[0] is True
+    (runs_root / "S0-T001_20260801T000000Z").mkdir(parents=True)
+    gates = {g.name: g for g in mod.build_gates(runs_root=runs_root)}
+    ok, detail = gates["runs_dir_absent_for_trial"].check()
+    assert not ok and "S0-T001" in detail
+
+
+# ===========================================================================
+# scripts/s0_real_run.py — Stage B / Stage D wiring (F-02, F-06, F-14)
+# ===========================================================================
+
+
+def test_stage_b_holds_the_stage_c_wiring_gate_before_exposure():
+    mod = real_run_module()
+    checks = mod.build_structural_checks(REPO / "S0_INPUT_PREFLIGHT.json")
+    names = [c.name for c in checks]
+    assert "stage_c_wiring_activated" in names
+    gate = {c.name: c for c in checks}["stage_c_wiring_activated"]
+    ok, detail = gate.check()
+    assert ok is False
+    assert "not yet activated" in detail
+    # it must be the FIRST failing Stage-B check today, so the inert run
+    # terminates with this message (and always before the exposure boundary)
+    first_failure = next(c.name for c in checks
+                         if not _check_passes(c))
+    assert first_failure == "stage_c_wiring_activated"
+
+
+def _check_passes(check) -> bool:
+    try:
+        ok, _ = check.check()
+    except Exception:                                # noqa: BLE001
+        return False
+    return ok
+
+
+def test_stage_b_assertion_comparison_is_really_wired(tmp_path):
+    """F-06: compare_preflight_assertions must have a real caller — feed a
+    synthetic actuals provider and watch the verdict flip."""
+    mod = real_run_module()
+    expected = {"funnel.L0": 2989, "funnel.L4": 2868}
+
+    def checks(actuals):
+        return {c.name: c for c in mod.build_structural_checks(
+            tmp_path / "assertions.json",
+            expected_loader=lambda p: dict(expected),
+            actuals_provider=lambda: actuals)}
+
+    ok, detail = checks(dict(expected))["preflight_assertions_match"].check()
+    assert ok, detail
+    ok, detail = checks({"funnel.L0": 2989, "funnel.L4": 9999}
+                        )["preflight_assertions_match"].check()
+    assert not ok and "funnel.L4" in detail
+    ok, detail = checks({"funnel.L0": 2989})["preflight_assertions_match"].check()
+    assert not ok and "shape_ok=False" in detail
+
+
+def test_stage_b_translation_check_uses_the_real_locked_assertion_file():
+    mod = real_run_module()
+    checks = {c.name: c for c in mod.build_structural_checks(
+        REPO / "S0_INPUT_PREFLIGHT.json")}
+    ok, detail = checks["preflight_assertions_translatable"].check()
+    assert ok and "expected assertions translated" in detail
+
+
+def test_stage_b_actuals_provider_is_inert_today():
+    mod = real_run_module()
+    with pytest.raises(RunGateError):
+        mod.stage_c_actuals_unavailable()
+
+
+def test_stage_d_na_conservation_is_really_wired():
+    """F-06: check_na_conservation must have a real caller, and a violation
+    must raise the contract error (so F-27 classifies it correctly)."""
+    mod = real_run_module()
+    check = mod.build_integrity_checks()[0]
+
+    good = {"na_reason_counts": {"F5": {"roll_transition_day_na": 3}},
+            "reported_total_na": {"F5": 3}}
+    ok, detail = check(good)
+    assert ok, detail
+
+    bad = {"na_reason_counts": {"F5": {"roll_transition_day_na": 3}},
+           "reported_total_na": {"F5": 4}}
+    with pytest.raises(NAConservationError):
+        check(bad)
+
+    unregistered = {"na_reason_counts": {"F5": {"because_i_said_so": 1}},
+                    "reported_total_na": {"F5": 1}}
+    with pytest.raises(NAConservationError):
+        check(unregistered)
+
+    with pytest.raises(NAConservationError):
+        check({"sentinel": True})
+
+
+def test_entrypoint_compute_is_unreachable_and_fails_closed():
+    """F-02: the placeholder no longer lives behind the atomic transition."""
+    mod = real_run_module()
+    import inspect
+    source = inspect.getsource(mod.main)
+    assert "compute_unreachable" in source
+    assert "build_structural_checks" in source

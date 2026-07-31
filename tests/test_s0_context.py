@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import inspect
 import re
+from dataclasses import asdict
 from datetime import date as _date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -31,6 +32,7 @@ import pytest
 
 from itsf.contracts import APPROVED_NA_REASONS
 from itsf.s0 import context as ctx_mod
+from itsf.s0 import features as features_mod
 from itsf.s0.context import (
     EventCalendar,
     RollInterval,
@@ -190,6 +192,91 @@ def test_window_bars_never_invents_a_bar():
     obs = window_bars(df, 570, 599)
     assert len(obs) == 28                      # IR-15: absence stays absence
     assert 571 not in {t.hour * 60 + t.minute for t in obs["ts"]}
+
+
+# ---------------------------------------------------------------------------
+# timezone boundary (frozen L41-43; SA-6 F-16)
+# ---------------------------------------------------------------------------
+
+def _retz(bars: dict, tz: str | None) -> dict:
+    """Same bars, re-expressed in `tz` (None == drop the tz, keep ET wall
+    clock). tz_convert keeps the same instants, so a UTC frame differs from the
+    ET one ONLY by its labels — exactly the silent-shift case F-16 is about."""
+    out = {}
+    for d, df in bars.items():
+        g = df.copy()
+        g["ts"] = (g["ts"].dt.tz_localize(None) if tz is None
+                   else g["ts"].dt.tz_convert(tz))
+        out[d] = g
+    return out
+
+
+def test_utc_bars_fail_closed_at_the_context_boundary():
+    """A UTC frame would relabel the 09:30 ET bar as 14:30 and quietly move
+    every minute-of-day window; the boundary must refuse it, not convert it."""
+    dates = weekdays("2020-01-02", 20)
+    bars, schedule = make_market(dates)
+    build_universe(bars, schedule, NO_EVENTS, ())         # ET is accepted
+    with pytest.raises(ValueError, match="got UTC"):
+        build_universe(_retz(bars, "UTC"), schedule, NO_EVENTS, ())
+    # a NON-UTC but still non-ET zone is refused for the same reason
+    with pytest.raises(ValueError, match="America/New_York"):
+        build_universe(_retz(bars, "America/Chicago"), schedule, NO_EVENTS, ())
+
+
+def test_tz_naive_bars_fail_closed_at_the_context_boundary():
+    dates = weekdays("2020-01-02", 20)
+    bars, schedule = make_market(dates)
+    with pytest.raises(ValueError, match="tz-aware datetime column"):
+        build_universe(_retz(bars, None), schedule, NO_EVENTS, ())
+
+
+def test_window_bars_and_day_context_also_enforce_the_et_boundary():
+    dates = weekdays("2020-01-02", 20)
+    bars, schedule = make_market(dates)
+    uni = build_universe(bars, schedule, NO_EVENTS, ())    # built from ET bars
+    with pytest.raises(ValueError, match="got UTC"):
+        window_bars(_retz(bars, "UTC")[dates[10]], 570, 599)
+    # the per-day entry point is guarded too: a universe built from ET bars
+    # must not be able to slice a UTC frame afterwards
+    with pytest.raises(ValueError, match="got UTC"):
+        build_day_context(dates[10], _retz(bars, "UTC"), uni)
+
+
+# ---------------------------------------------------------------------------
+# duplicate minutes fail closed in EVERY block (frozen L29; SA-6 F-29)
+# ---------------------------------------------------------------------------
+
+def _duplicate_minute(df: pd.DataFrame, minute: int) -> pd.DataFrame:
+    row = df.loc[(df["ts"].dt.hour * 60 + df["ts"].dt.minute) == minute]
+    assert len(row) == 1, f"fixture has no single bar at minute {minute}"
+    return (pd.concat([df, row], ignore_index=True)
+            .sort_values("ts").reset_index(drop=True))
+
+
+@pytest.mark.parametrize("minute,block", [
+    (570 + 5, "RTH"),                       # 09:35, the pre-existing check
+    (4 * 60 + 2, "pre-open"),               # 04:02, overnight window input
+    (18 * 60 + 2, "evening"),               # 18:02, overnight window input
+])
+def test_duplicate_minute_fails_closed_in_every_block(minute, block):
+    """A duplicated minute doubles the block's volume and hides an extremum.
+    Before F-29 only the RTH window was checked, so the overnight blocks
+    (frozen L43) could carry duplicates into F6/F7 unnoticed."""
+    dates = weekdays("2020-01-02", 20)
+    bars, schedule = make_market(dates)
+    bars[dates[9]] = _duplicate_minute(bars[dates[9]], minute)
+    with pytest.raises(ValueError, match=f"duplicate {block} minute"):
+        build_universe(bars, schedule, NO_EVENTS, ())
+
+
+def test_duplicate_free_market_still_builds():
+    """Control for the parametrised test above: the untouched fixture, which
+    holds RTH + pre-open + evening blocks on every date, must NOT raise."""
+    dates = weekdays("2020-01-02", 20)
+    bars, schedule = make_market(dates)
+    assert len(build_universe(bars, schedule, NO_EVENTS, ())
+               .funnel.observed_rth) == 20
 
 
 # ---------------------------------------------------------------------------
@@ -410,9 +497,51 @@ def test_overnight_window_empty_is_na():
                                     d: {"preopen": None}})
     assert uni.overnight_bars[d] == 0
     assert uni.overnight_hl[d] is None
+    assert uni.overnight_nan_blocks[d] == 0        # genuinely empty, not NaN
     c = build_day_context(d, bars, uni)
     assert c.context_na_reasons["open_loc_on"] == "overnight_window_empty"
     assert c.context_na_reasons["on_range"] == "overnight_window_empty"
+
+
+def _blank_high_low(df: pd.DataFrame, minute_lo: int) -> pd.DataFrame:
+    """Bars stay present; their high/low become NaN (vendor-degraded block)."""
+    g = df.copy()
+    sel = (g["ts"].dt.hour * 60 + g["ts"].dt.minute) >= minute_lo
+    assert sel.any()
+    g.loc[sel, ["high", "low"]] = np.nan
+    return g
+
+
+def test_overnight_block_with_nan_high_low_is_na_not_silently_dropped():
+    """SA-6 F-30. A block with bars but no usable high/low used to be dropped
+    from the max/min, leaving a NARROWER range that still looked complete while
+    its bars kept counting in overnight_bars. It is now NA under the EXISTING
+    approved reason, with a sidecar count disclosing why (no invented reason).
+    """
+    dates = weekdays("2020-01-02", 20)
+    prev, d = dates[9], dates[10]
+    bars, schedule = make_market(dates)
+    bars[prev] = _blank_high_low(bars[prev], 18 * 60)    # evening block only
+    uni = build_universe(bars, schedule, NO_EVENTS, ())
+
+    assert uni.overnight_bars[d] == 5 + 5               # the bars ARE there
+    assert uni.overnight_nan_blocks[d] == 1             # one unusable block
+    assert uni.overnight_hl[d] is None                  # no partial range
+    c = build_day_context(d, bars, uni)
+    assert c.overnight_hl is None
+    assert c.context_na_reasons["open_loc_on"] == "overnight_window_empty"
+    assert c.context_na_reasons["on_range"] == "overnight_window_empty"
+    assert "overnight_window_empty" in APPROVED_NA_REASONS   # nothing invented
+    assert c.sidecar["overnight_nan_blocks"] == 1
+    assert c.sidecar["overnight_bars"] == 10            # empty vs corrupted
+
+    # control: the same market without the NaN block keeps a real range, and
+    # the surviving pre-open block alone would have produced a plausible but
+    # WRONG range (20080/20040) had the evening block been dropped silently.
+    bars_ok, schedule_ok = make_market(dates)
+    uni_ok = build_universe(bars_ok, schedule_ok, NO_EVENTS, ())
+    assert uni_ok.overnight_nan_blocks[d] == 0
+    assert uni_ok.overnight_hl[d] == (20100.0, 20040.0)
 
 
 # ---------------------------------------------------------------------------
@@ -512,6 +641,34 @@ def test_roll_transition_on_a_non_session_date_moves_to_the_next_session():
     assert uni.roll_transitions[0].inside_official_interval is True
 
 
+def test_roll_interval_with_no_session_at_all_fails_closed():
+    """SA-6 F-31 + preflight f11_roll.all_map_to_valid_rth_trading_day: an
+    interval whose start has no RTH session on/after it cannot be verified, so
+    it stops the assembly instead of vanishing from the flag sets."""
+    dates = weekdays("2020-01-02", 40)          # last session is in Feb 2020
+    intervals = (RollInterval("2019-12-01", "2021-01-04", "NQZ9", 1),
+                 RollInterval("2021-01-04", "2021-06-01", "NQH1", 2))
+    with pytest.raises(ValueError, match="not inside the official interval"):
+        universe_of(dates, roll_intervals=intervals)
+
+
+def test_roll_transition_resolved_past_the_interval_end_fails_closed():
+    """SA-6 F-31 + preflight f11_roll.all_inside_official_interval: the first
+    session on/after the interval start falls beyond the interval's own end,
+    so the booked date would contradict the official mapping."""
+    dates = weekdays("2020-01-02", 40)
+    friday = dates[16]
+    assert _date.fromisoformat(friday).weekday() == 4
+    saturday = (_date.fromisoformat(friday) + timedelta(days=1)).isoformat()
+    sunday = (_date.fromisoformat(friday) + timedelta(days=2)).isoformat()
+    # interval [Sat, Sun) contains no session; the next session is Monday,
+    # which is already outside it.
+    intervals = (RollInterval("2019-12-01", saturday, "NQZ9", 1),
+                 RollInterval(saturday, sunday, "NQH0", 2))
+    with pytest.raises(ValueError, match="not inside the official interval"):
+        universe_of(dates, roll_intervals=intervals)
+
+
 # ---------------------------------------------------------------------------
 # anchors / NA vocabulary
 # ---------------------------------------------------------------------------
@@ -606,6 +763,74 @@ def test_day_context_is_invariant_to_future_bars():
     assert not bars[dates[61]]["close"].equals(bars2[dates[61]]["close"])
     # NOTE: labels are excluded from this invariant BY DESIGN — they read the
     # same day's intraday future ([10:00, 15:45), frozen L86-91).
+
+
+def _features_of(ctx) -> dict:
+    """The frozen F1-F11 output of a context, as a plain dict."""
+    return asdict(features_mod.compute_day_features(**ctx.feature_kwargs()))
+
+
+def test_features_are_invariant_to_future_roll_and_event_information():
+    """SA-6 F-23. The bar perturbation above leaves the two NON-PRICE inputs
+    untested: a roll mapping and an event table dated AFTER the day must not
+    reach back into it (F5/F10/F11 are day-local by frozen L30-32 / L62)."""
+    dates = weekdays("2020-01-02", 40)
+    target = dates[20]
+    later = dates[25]                 # > 2 RTH days after target (frozen L30)
+    bars, uni = universe_of(dates)
+    base = build_day_context(target, bars, uni)
+
+    events = EventCalendar(cpi_dates=frozenset({later}),
+                           nfp_dates=frozenset({later}),
+                           fomc_statement_dates=frozenset({dates[30]}),
+                           raw_multi_event_dates=frozenset({later}))
+    intervals = (RollInterval("2019-12-01", later, "NQZ9", 1),
+                 RollInterval(later, "2020-12-01", "NQH0", 2))
+    bars2, uni2 = universe_of(dates, events=events, roll_intervals=intervals)
+    perturbed = build_day_context(target, bars2, uni2)
+
+    assert (perturbed.is_roll_transition, perturbed.is_roll_window) == (False,
+                                                                       False)
+    assert perturbed.event_flag == base.event_flag == "none"
+    assert dict(perturbed.context_na_reasons) == dict(base.context_na_reasons)
+    assert _features_of(perturbed) == _features_of(base)
+
+    # control: the future information IS live where it belongs
+    future_ctx = build_day_context(later, bars2, uni2)
+    assert future_ctx.is_roll_transition is True
+    assert future_ctx.event_flag is None            # IR-12 multi-event NA
+    assert build_day_context(dates[30], bars2, uni2).event_flag == "FOMC"
+
+
+def test_features_are_invariant_to_same_day_bars_after_0959():
+    """SA-6 F-23. The frozen observation window closes at 09:59 (L41): nothing
+    a day does after its own decision minute may change that day's features.
+    Labels are excluded BY DESIGN — they read [10:00, 15:45)."""
+    dates = weekdays("2020-01-02", 40)
+    target = dates[20]
+    bars, uni = universe_of(dates)
+
+    perturbed_bars = dict(bars)
+    g = bars[target].copy()
+    after = (g["ts"].dt.hour * 60 + g["ts"].dt.minute) > 599   # 10:00 onwards
+    assert after.sum() > 0
+    for col in ("open", "high", "low", "close"):
+        g.loc[after, col] = g.loc[after, col] * 3.0 + 7.0
+    g.loc[after, "volume"] = g.loc[after, "volume"] * 11.0
+    perturbed_bars[target] = g
+    uni2 = build_universe(perturbed_bars, uni.schedule, uni.events, ())
+
+    a = build_day_context(target, bars, uni)
+    b = build_day_context(target, perturbed_bars, uni2)
+    assert (a.o0930, a.c0959) == (b.o0930, b.c0959)
+    assert a.adr14 == b.adr14 and a.rvol_median60 == b.rvol_median60
+    assert a.prev_rth_close == b.prev_rth_close
+    assert a.overnight_hl == b.overnight_hl
+    assert dict(a.context_na_reasons) == dict(b.context_na_reasons)
+    pd.testing.assert_frame_equal(a.obs_bars, b.obs_bars)
+    assert _features_of(a) == _features_of(b)
+    # sanity: the same day's afternoon really did move (labels see it)
+    assert a.c1544 != b.c1544
 
 
 # ---------------------------------------------------------------------------

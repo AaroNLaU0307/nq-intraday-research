@@ -11,7 +11,7 @@ makes NO summary judgment. `features.py` / `labels.py` / `oracle.py` /
         .groups              (by year, leave-one-year-out, frozen L36 epochs)
         .eras                (proxy vs actual-micro axis, frozen L109-115)
         .frequency           (frozen L236 frequency output structure)
-        .assertion_counts()  (funnel + F10 partition, compare-only)
+        .assertion_counts()  (funnel + F10 double report, compare-only)
 
 Discipline (task spec section C): pure, zero I/O, zero global state, zero
 print, no randomness, and no parameter that can override a frozen constant
@@ -90,7 +90,10 @@ from itsf.s0.context import (
 THETA_PRIMARY = 0.5          # frozen L133 — continuation event Y_cont >= theta
 THETA_SECONDARY = 0.3        # frozen L133 — reported alongside, never promoted
 DECILE_COUNT = 10            # frozen L91 — Y6 within-year deciles
-DEV_START, DEV_END_EXCL = _ROLE_WINDOWS_IMPORT[DataRole.DEVELOPMENT_SIGNAL]  # frozen L24
+# frozen L24 data-role window; ENFORCED in build_s0_dataset (SA-6 F-18: these
+# two names used to be imported and never read, which made the module LOOK
+# range-guarded while any date could flow through).
+DEV_START, DEV_END_EXCL = _ROLE_WINDOWS_IMPORT[DataRole.DEVELOPMENT_SIGNAL]
 del _ROLE_WINDOWS_IMPORT     # keep module namespace free of mutable containers
 ERA_PROXY = "counterfactual_micro_execution"          # frozen L109-115
 ERA_ACTUAL = "actual_micro_available_era"             # frozen L109-115
@@ -392,6 +395,7 @@ class S0Dataset:
     frequency: Mapping[str, object]
     funnel_counts: Mapping[str, int]
     f10_counts: Mapping[str, int]
+    f10_raw_membership_counts: Mapping[str, int]
     sidecar_table: pd.DataFrame
     y6_rule: str                     # always Y6_RULE (IR-21; no options)
     pending_decisions: tuple[str, ...]
@@ -399,8 +403,16 @@ class S0Dataset:
     def assertion_counts(self) -> dict[str, object]:
         """Independently computed structural counts for the runner to COMPARE
         against expected_preflight_assertions. Compare-only: these numbers are
-        outputs, never inputs (authorization packet S5)."""
+        outputs, never inputs (authorization packet S5).
+
+        F10 is reported TWICE — raw category membership and the final
+        mutually-exclusive partition (approved report governance (1); SA-6
+        F-12). Both are preflight-comparable
+        (f10.raw_category_membership_counts_eligible and
+        f10.final_mutually_exclusive_F10_counts_eligible)."""
         return {"funnel": dict(self.funnel_counts),
+                "f10_raw_category_membership":
+                    dict(self.f10_raw_membership_counts),
                 "f10_final_mutually_exclusive": dict(self.f10_counts),
                 "n_records": len(self.records)}
 
@@ -417,6 +429,7 @@ def build_s0_dataset(bars_by_date: Mapping[str, pd.DataFrame],
     """
     records = [compute_day(ctx)
                for ctx in iter_day_contexts(bars_by_date, universe)]
+    _assert_development_window(records)
 
     pending: list[str] = []
     assigned = assign_y6_deciles([r.labels for r in records])
@@ -433,7 +446,7 @@ def build_s0_dataset(bars_by_date: Mapping[str, pd.DataFrame],
     records = post
 
     features_table = _table([asdict(r.features) for r in records])
-    labels_table = _table([asdict(r.labels) for r in records])
+    labels_table = _labels_table(records)
     day_status_table = _table([{
         "trade_date": r.trade_date, "year": r.year, "era": r.era,
         "d_open": r.labels.d_open, "direction_status": r.direction_status,
@@ -466,6 +479,7 @@ def build_s0_dataset(bars_by_date: Mapping[str, pd.DataFrame],
         frequency=build_frequency_structure(records),
         funnel_counts=funnel.counts(),
         f10_counts=universe.f10_exclusive_counts(),
+        f10_raw_membership_counts=universe.raw_category_membership_counts(),
         sidecar_table=sidecar_table,
         y6_rule=Y6_RULE,
         pending_decisions=tuple(pending))
@@ -473,6 +487,39 @@ def build_s0_dataset(bars_by_date: Mapping[str, pd.DataFrame],
 
 def _table(rows: Sequence[Mapping[str, object]]) -> pd.DataFrame:
     return pd.DataFrame(list(rows))
+
+
+def _labels_table(records: Sequence[DayRecord]) -> pd.DataFrame:
+    """Label table with Y6 kept an ORDINAL nullable integer (SA-6 F-28).
+
+    `pd.DataFrame` infers float64 for an int column holding NA, which turns
+    decile 3 into `3.0` and NA into `NaN`: a bin index then reads as a
+    continuous score in every downstream table, and NA silently joins the
+    float NaN family instead of the reported NA population. Int64 keeps the
+    frozen L91 decile an integer 1..10 with a distinct pd.NA.
+    """
+    table = _table([asdict(r.labels) for r in records])
+    if "y6_cont_decile" in table.columns:
+        table["y6_cont_decile"] = table["y6_cont_decile"].astype("Int64")
+    return table
+
+
+def _assert_development_window(records: Sequence[DayRecord]) -> None:
+    """Every record date must lie in [DEV_START, DEV_END_EXCL) — fail closed.
+
+    frozen L24 data-role window + PROJECT_CHARTER clause 14 (role isolation).
+    SA-6 F-18: the two constants were imported and never read, so the module
+    advertised a boundary it did not check; an Internal-Validation-era date
+    would have assembled into an S0 table without a word. Real check, on the
+    dates that actually became records.
+    """
+    outside = [r.trade_date for r in records
+               if not (DEV_START <= r.trade_date < DEV_END_EXCL)]
+    if outside:
+        raise ValueError(
+            f"{len(outside)} record date(s) outside the frozen Development "
+            f"window [{DEV_START}, {DEV_END_EXCL}): {outside[:5]} — fail "
+            "closed (frozen L24 data-role window, charter clause 14)")
 
 
 # --- NA table (frozen L45) --------------------------------------------------

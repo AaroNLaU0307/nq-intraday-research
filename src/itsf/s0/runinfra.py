@@ -16,6 +16,7 @@ Architecture (Aaron 2026-07-31 erratum, frozen for this task):
   Pure logic layer (zero I/O, zero global state, fully unit-testable):
       canonicalize_manifest_record, compute_record_hash,
       verify_chain_records, validate_log_event, check_na_conservation,
+      translate_na_reason, translate_preflight_assertions,
       compare_preflight_assertions, render_failure_report
   Narrow I/O adapter layer (exactly two functions):
       append_manifest_record(path, record)
@@ -227,10 +228,20 @@ def verify_chain_records(
     `sealed_record_hash` must equal its own `previous_record_hash` (which,
     by append-only construction, is exactly the last record of that stage),
     and (optionally) the file hash cross-check.
+
+    Seal discipline (SA-6 F-26, packet §6 "每阶段结束写入 stage seal 记录"):
+    every stage that appears in the chain must carry BOTH at least one
+    non-seal (`file`) record AND exactly one `stage_seal`. An unsealed stage
+    (records written, seal never appended — e.g. the process died mid-stage)
+    and an empty seal (a `stage_seal` for a stage that contributed no
+    records) are both chain-invalid, so a truncated tail can no longer read
+    as a complete chain.
     """
     errors: list[str] = []
     sealed_stage_idx: set[int] = set()
     sealed_stage_values: list[str] = []
+    file_records_per_stage: dict[str, int] = {}
+    stages_seen: list[str] = []
     last_stage_idx = -1
     prev_hash_expected = GENESIS_PREVIOUS_HASH
     last_hash: str | None = None
@@ -281,6 +292,8 @@ def verify_chain_records(
         if stage_idx is None:
             errors.append(f"[{i}] unknown stage: {stage!r}")
         else:
+            if stage not in stages_seen:
+                stages_seen.append(stage)
             if stage_idx < last_stage_idx:
                 errors.append(f"[{i}] stage out of order: {stage!r}")
             elif stage_idx in sealed_stage_idx:
@@ -294,28 +307,43 @@ def verify_chain_records(
             if stage_idx is not None and stage_idx not in sealed_stage_idx:
                 sealed_stage_idx.add(stage_idx)
                 sealed_stage_values.append(stage)
+            if isinstance(stage, str) and file_records_per_stage.get(stage, 0) == 0:
+                errors.append(
+                    f"[{i}] stage_seal for stage {stage!r} seals no records "
+                    f"(every sealed stage needs at least one file record)"
+                )
             sealed_ref = raw.get("sealed_record_hash")
             if sealed_ref != actual_prev:
                 errors.append(
                     f"[{i}] stage_seal.sealed_record_hash ({sealed_ref!r}) must equal "
                     f"this record's previous_record_hash ({actual_prev!r})"
                 )
-        elif record_type == "file" and file_hash_provider is not None:
-            rel = raw.get("relative_path")
-            try:
-                expected_hash = file_hash_provider(rel)  # type: ignore[arg-type]
-            except Exception as exc:  # caller-supplied lookup failure
-                errors.append(f"[{i}] file_hash_provider raised for {rel!r}: {exc}")
-            else:
-                if expected_hash != raw.get("file_sha256"):
-                    errors.append(
-                        f"[{i}] file_sha256 mismatch for {rel!r}: "
-                        f"recorded={raw.get('file_sha256')!r} actual={expected_hash!r}"
-                    )
+        elif record_type == "file":
+            if isinstance(stage, str):
+                file_records_per_stage[stage] = file_records_per_stage.get(stage, 0) + 1
+            if file_hash_provider is not None:
+                rel = raw.get("relative_path")
+                try:
+                    expected_hash = file_hash_provider(rel)  # type: ignore[arg-type]
+                except Exception as exc:  # caller-supplied lookup failure
+                    errors.append(f"[{i}] file_hash_provider raised for {rel!r}: {exc}")
+                else:
+                    if expected_hash != raw.get("file_sha256"):
+                        errors.append(
+                            f"[{i}] file_sha256 mismatch for {rel!r}: "
+                            f"recorded={raw.get('file_sha256')!r} actual={expected_hash!r}"
+                        )
 
         if isinstance(stored_hash, str):
             prev_hash_expected = stored_hash
             last_hash = stored_hash
+
+    for stage in stages_seen:
+        if stage not in sealed_stage_values:
+            errors.append(
+                f"stage {stage!r} has {file_records_per_stage.get(stage, 0)} record(s) "
+                f"but no stage_seal (unsealed/truncated chain)"
+            )
 
     return ChainVerificationResult(
         valid=not errors,
@@ -389,7 +417,30 @@ def append_manifest_record(path: str | Path, record: Mapping[str, object]) -> di
                 if line:
                     last_line = line
         if last_line is not None:
-            tail_hash = json.loads(last_line).get("record_hash", tail_hash)
+            # SA-6 F-26: a corrupt / truncated tail must be a hard integrity
+            # error. Previously a non-JSON tail raised a bare JSONDecodeError
+            # and a tail without `record_hash` silently fell back to the
+            # genesis hash — i.e. a damaged manifest could be re-forked from
+            # the start without anyone noticing.
+            try:
+                tail_record = json.loads(last_line)
+            except json.JSONDecodeError as exc:
+                raise ManifestIntegrityError(
+                    f"append_manifest_record: manifest tail line is not valid JSON "
+                    f"(corrupt/truncated chain, refusing to append): {exc}"
+                ) from exc
+            if not isinstance(tail_record, dict):
+                raise ManifestIntegrityError(
+                    "append_manifest_record: manifest tail line is not a JSON object "
+                    "(corrupt chain, refusing to append)"
+                )
+            tail_claim = tail_record.get("record_hash")
+            if not isinstance(tail_claim, str) or not _HEX64_RE.match(tail_claim):
+                raise ManifestIntegrityError(
+                    "append_manifest_record: manifest tail line carries no valid "
+                    "record_hash (corrupt chain, refusing to append)"
+                )
+            tail_hash = tail_claim
 
     if rec["previous_record_hash"] != tail_hash:
         raise ManifestIntegrityError(
@@ -443,6 +494,10 @@ _FORBIDDEN_VOCAB: tuple[str, ...] = (
     "frequency", "freq", "distribution", "decile", "percentile", "sharpe",
     "drawdown", "verdict", "expected_value", "mfe", "mae", "y_cont", "ycont",
     "pnl", "continuation", "ceiling",
+    # SA-6 F-20: the S0 feature/label vocabulary itself leaks *which*
+    # research quantity a line is about, even when the number is withheld.
+    "theta", "base_rate", "cont", "adr", "adr14", "rvol", "gap", "retrace",
+    "warmup", "warm_up", "funnel", "na",
 )
 _FORBIDDEN_VOCAB_RE = re.compile(
     r"(?<![A-Za-z0-9])(?:" + "|".join(re.escape(w) for w in _FORBIDDEN_VOCAB) + r")(?![A-Za-z0-9])",
@@ -456,6 +511,14 @@ _FORBIDDEN_VOCAB_RE = re.compile(
 # decimal float is a leak by definition.
 _FLOAT_LEAK_RE = re.compile(r"\d+\.\d+")
 
+# SA-6 F-20: `file=` paths are the one whitelisted place where free-form text
+# survives the schema, so a研究 number can be smuggled in with the decimal
+# point spelled as an underscore (`base_rate_0_63.log` == 0.63). Reject any
+# path token that splits digits across underscores (`_<digits>_<digits>`).
+# A single underscore-delimited numeric group stays legal so that legitimate
+# UTC run-directory stamps (`S0-T001_20260731T100000Z`) still pass.
+_SPLIT_NUMBER_IN_PATH_RE = re.compile(r"_\d+_\d+")
+
 
 def validate_log_event(message: str, *, schema: str | None = None) -> None:
     """Fail-closed Stage-C log guard. Raises LogLeakError unless `message`:
@@ -467,7 +530,10 @@ def validate_log_event(message: str, *, schema: str | None = None) -> None:
          message, even inside an otherwise-whitelisted field such as a file
          path;
       3. contains no bare (non-count, non-hash, non-timestamp) floating
-         point number anywhere in the message.
+         point number anywhere in the message;
+      4. (file-hash lines) carries no path token that splits digits across
+         underscores — the underscore-as-decimal-point smuggling channel
+         (SA-6 F-20).
 
     Returns None on success (pass). Pure: no I/O, no global state — a real
     logger wrapper calls this before emitting each line and aborts the run
@@ -496,6 +562,14 @@ def validate_log_event(message: str, *, schema: str | None = None) -> None:
             f"Stage-C log guard: non-whitelisted floating-point value detected: {message!r}"
         )
 
+    if message.startswith("file=") and _SPLIT_NUMBER_IN_PATH_RE.search(
+        message.split(" ", 1)[0]
+    ):
+        raise LogLeakError(
+            f"Stage-C log guard: file path splits digits across underscores "
+            f"(underscore-as-decimal-point leak channel): {message!r}"
+        )
+
 
 # =========================================================================
 # 3. NA-conservation checker — pure logic
@@ -520,26 +594,31 @@ class NAConservationResult:
 def check_na_conservation(
     na_reason_counts: Mapping[str, Mapping[str, int]],
     *,
-    reported_total_na: Mapping[str, int] | None = None,
-    approved_reasons: Sequence[str] = APPROVED_NA_REASONS,
+    reported_total_na: Mapping[str, int],
 ) -> NAConservationResult:
     """Item-wise NA conservation check.
 
     `na_reason_counts`: {column_or_feature_name: {approved_reason: count}}
     — the itemized breakdown the caller produced for each column/label.
-    `reported_total_na`: optional {column_or_feature_name: total_na_count}
-    independently observed (e.g. a raw NaN scan on the actual table); when
-    given for a column, the itemized reasons for that column must sum to
-    EXACTLY that total (catches both over- and under-counting). Any reason
-    key not in `approved_reasons` (default: contracts.APPROVED_NA_REASONS)
-    is a hard failure regardless of the sum check.
+    `reported_total_na`: REQUIRED {column_or_feature_name: total_na_count}
+    independently observed (e.g. a raw NaN scan on the actual table); the
+    itemized reasons for each column must sum to EXACTLY that total
+    (catches both over- and under-counting).
+
+    Hardened per SA-6 F-13: the approved-reason table is ALWAYS
+    contracts.APPROVED_NA_REASONS — it is deliberately not a parameter, so
+    a caller cannot widen the accepted reason set at the call site; and
+    `reported_total_na` is mandatory, so the check can never degrade into a
+    reasons-are-spelled-correctly formality with no conservation arithmetic.
+    Any reason key outside APPROVED_NA_REASONS is a hard failure regardless
+    of the sum check.
     """
     if not isinstance(na_reason_counts, Mapping):
         raise TypeError("na_reason_counts must be a mapping")
-    if reported_total_na is not None and not isinstance(reported_total_na, Mapping):
-        raise TypeError("reported_total_na must be a mapping or None")
+    if not isinstance(reported_total_na, Mapping):
+        raise TypeError("reported_total_na must be a mapping")
 
-    approved = set(approved_reasons)
+    approved = set(APPROVED_NA_REASONS)
     errors: list[str] = []
     unregistered: list[str] = []
     miscounted: list[str] = []
@@ -568,7 +647,7 @@ def check_na_conservation(
             else:
                 running_total += count
 
-        if reported_total_na is not None and column in reported_total_na:
+        if column in reported_total_na:
             want = reported_total_na[column]
             if running_total != want:
                 col_ok = False
@@ -577,18 +656,24 @@ def check_na_conservation(
                     f"{column}: itemized NA reasons sum to {running_total} but the "
                     f"independently observed total is {want} (conservation violated)"
                 )
+        else:
+            col_ok = False
+            miscounted.append(column)
+            errors.append(
+                f"{column}: no independently observed NA total was supplied for this "
+                f"column (F-13: every itemized column must be conserved against one)"
+            )
 
         per_column_ok[column] = col_ok
 
-    if reported_total_na is not None:
-        for column in reported_total_na:
-            if column not in na_reason_counts:
-                per_column_ok[column] = False
-                miscounted.append(column)
-                errors.append(
-                    f"{column}: an independently observed NA total was given but no "
-                    f"itemized reason breakdown exists for it"
-                )
+    for column in reported_total_na:
+        if column not in na_reason_counts:
+            per_column_ok[column] = False
+            miscounted.append(column)
+            errors.append(
+                f"{column}: an independently observed NA total was given but no "
+                f"itemized reason breakdown exists for it"
+            )
 
     return NAConservationResult(
         ok=not errors,
@@ -602,6 +687,177 @@ def check_na_conservation(
 # =========================================================================
 # 4. expected_preflight_assertions comparator — pure logic
 # =========================================================================
+
+# --- 4a. preflight -> contracts translation layer (SA-6 F-14) -------------
+#
+# S0_INPUT_PREFLIGHT.json and contracts.py do NOT share a vocabulary or a
+# shape, so feeding the raw preflight document to compare_preflight_assertions
+# produced a guaranteed shape mismatch (i.e. an unusable comparator). This
+# layer is a PURE, EXPLICIT, TOTAL renaming/reshaping map. It changes neither
+# side's semantics: no value is recomputed, rescaled, merged across different
+# quantities, or invented — only key names and nesting change, and the two
+# documented structural drops below are applied.
+#
+# Three transformations, exactly as scoped by the SA-7 fix direction:
+#   1. NA-reason vocabulary: preflight wording -> APPROVED_NA_REASONS wording
+#      (_PREFLIGHT_NA_REASON_TO_CONTRACTS below; every preflight word must be
+#      listed, an unknown word is a hard failure rather than a silent pass);
+#   2. funnel: the 10 scalar funnel keys collapse to the 5-number chain
+#      L0->L1->L2->L3->L4 — the four `minus_*` DELTA rows (including the
+#      `minus_adr14_warmup_days` row) and the `side_diagnostic_*` row are
+#      dropped, because a delta is not an independently computed quantity
+#      (it is L(n-1) - L(n)) and asserting it would double-count the chain;
+#   3. the adr14 ROW is dropped on both sides of the seam: the funnel's
+#      `minus_adr14_warmup_days` delta (see 2) and any `adr14` feature row —
+#      ADR14 is a normalisation series carried on DayFeatures, not one of the
+#      F1..F11 preflight feature rows, so it has no expected counterpart and
+#      must not appear in either key set. (The `adr14_warmup` NA REASON is a
+#      different thing and is preserved verbatim: it is an approved reason.)
+#
+# The result is a flat {str: int} mapping ready to be passed straight into
+# compare_preflight_assertions as `expected`. This module still never reads
+# S0_INPUT_PREFLIGHT.json: the caller parses the file and passes the object.
+
+_PREFLIGHT_NA_REASON_TO_CONTRACTS: Mapping[str, str] = {
+    # identical in both vocabularies (listed explicitly: the map is total)
+    "adr14_warmup": "adr14_warmup",
+    "f4_lookback_warmup": "f4_lookback_warmup",
+    "roll_transition_day_na": "roll_transition_day_na",
+    "prev_rth_close_anchor_missing": "prev_rth_close_anchor_missing",
+    "overnight_window_empty": "overnight_window_empty",
+    "anchor_missing": "anchor_missing",
+    # differing wording -> contracts.APPROVED_NA_REASONS member
+    "zero_denominator_no_direction": "zero_direction_day_l82",
+    "multi_event_day_single_category_undetermined": "multi_event_day_f10_na",
+    # the four IR-19 prev-RTH-close sub-reasons collapse onto the single
+    # approved reason whose contracts docstring already enumerates them
+    # ("incl. early-close-bar-absent, vendor-degraded, first sample day")
+    "no_prior_rth_session_in_sample": "prev_rth_close_anchor_missing",
+    "prev_day_early_close_final_scheduled_bar_absent": "prev_rth_close_anchor_missing",
+    "prev_day_vendor_degraded_zero_bar": "prev_rth_close_anchor_missing",
+    "prev_day_1559_bar_absent": "prev_rth_close_anchor_missing",
+}
+
+_FUNNEL_CHAIN_KEYS: tuple[str, ...] = (
+    "L0_scheduled_trading_days",
+    "L1_observed_rth_days",
+    "L2_regular_full_session_candidates",
+    "L3_structurally_eligible_days",
+    "L4_final_feature_construction_dates",
+)
+
+_F10_FINAL_CATEGORIES: tuple[str, ...] = ("CPI", "NFP", "FOMC", "none", "NA_multi_event")
+
+
+def translate_na_reason(preflight_reason: str) -> str:
+    """Map one preflight NA-reason word onto its APPROVED_NA_REASONS member.
+
+    Pure. Raises ValueError on any unlisted word — an unrecognised reason is
+    a translation failure (fail closed), never a pass-through.
+    """
+    try:
+        contracts_reason = _PREFLIGHT_NA_REASON_TO_CONTRACTS[preflight_reason]
+    except KeyError:
+        raise ValueError(
+            f"preflight NA reason {preflight_reason!r} has no entry in the "
+            f"preflight->contracts translation table; refusing to guess"
+        ) from None
+    if contracts_reason not in APPROVED_NA_REASONS:
+        raise ValueError(
+            f"translation target {contracts_reason!r} is not in APPROVED_NA_REASONS"
+        )
+    return contracts_reason
+
+
+def translate_preflight_assertions(preflight: Mapping[str, object]) -> dict[str, int]:
+    """Translate a parsed S0_INPUT_PREFLIGHT.json into the flat, contracts-
+    vocabulary `expected` mapping consumed by compare_preflight_assertions.
+
+    Pure function: no I/O, no clock, no global state, and no arithmetic
+    beyond summing sub-reason counts that translate onto the SAME approved
+    reason (the IR-19 prev-RTH-close family). Emitted key families:
+
+        funnel.<L0..L4>                      5 structural counts
+        f10.<CPI|NFP|FOMC|none|NA_multi_event>
+        feature.<F1..F11>.constructible / .na
+        na_reason.<F1..F11>.<approved_reason>
+        anchor.<name>.available / .missing
+        na_reason.anchor.<name>.<approved_reason>
+        label.<Y_cont|Y1..Y5>.available / .unavailable
+
+    Raises ValueError if a required section/key is absent or if any NA reason
+    word is untranslatable — a preflight document that cannot be translated
+    must stop the run, not silently produce a smaller assertion set.
+    """
+    if not isinstance(preflight, Mapping):
+        raise TypeError("preflight must be a mapping (already-parsed JSON object)")
+
+    out: dict[str, int] = {}
+
+    def _section(name: str) -> Mapping[str, object]:
+        sec = preflight.get(name)
+        if not isinstance(sec, Mapping):
+            raise ValueError(f"preflight document has no {name!r} section")
+        return sec
+
+    def _int(value: object, where: str) -> int:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(f"{where}: expected an int count, got {value!r}")
+        return value
+
+    funnel = _section("funnel")
+    for key in _FUNNEL_CHAIN_KEYS:
+        if key not in funnel:
+            raise ValueError(f"funnel section is missing {key!r}")
+        out[f"funnel.{key}"] = _int(funnel[key], f"funnel.{key}")
+
+    f10 = _section("f10")
+    final_counts = f10.get("final_mutually_exclusive_F10_counts_eligible")
+    if not isinstance(final_counts, Mapping):
+        raise ValueError("f10 section is missing final_mutually_exclusive_F10_counts_eligible")
+    for category in _F10_FINAL_CATEGORIES:
+        if category not in final_counts:
+            raise ValueError(f"f10 final counts missing category {category!r}")
+        out[f"f10.{category}"] = _int(final_counts[category], f"f10.{category}")
+
+    features = _section("features")
+    for name, row in features.items():
+        if name == "adr14":  # see transformation 3 in the section header
+            continue
+        if not isinstance(row, Mapping):
+            raise ValueError(f"feature row {name!r} is not a mapping")
+        out[f"feature.{name}.constructible"] = _int(
+            row.get("constructible"), f"feature.{name}.constructible")
+        out[f"feature.{name}.na"] = _int(row.get("na"), f"feature.{name}.na")
+        reasons = row.get("reasons") or {}
+        if not isinstance(reasons, Mapping):
+            raise ValueError(f"feature row {name!r} has a non-mapping 'reasons'")
+        for word, count in reasons.items():
+            key = f"na_reason.{name}.{translate_na_reason(word)}"
+            out[key] = out.get(key, 0) + _int(count, f"na_reason.{name}.{word}")
+
+    anchors = _section("anchors")
+    for name, row in anchors.items():
+        if not isinstance(row, Mapping):
+            raise ValueError(f"anchor row {name!r} is not a mapping")
+        out[f"anchor.{name}.available"] = _int(
+            row.get("available"), f"anchor.{name}.available")
+        out[f"anchor.{name}.missing"] = _int(row.get("missing"), f"anchor.{name}.missing")
+        for word, count in (row.get("missing_reasons") or {}).items():
+            key = f"na_reason.anchor.{name}.{translate_na_reason(word)}"
+            out[key] = out.get(key, 0) + _int(
+                count, f"na_reason.anchor.{name}.{word}")
+
+    labels = _section("labels")
+    for name, row in labels.items():
+        if not isinstance(row, Mapping):
+            raise ValueError(f"label row {name!r} is not a mapping")
+        out[f"label.{name}.available"] = _int(
+            row.get("available_days"), f"label.{name}.available")
+        out[f"label.{name}.unavailable"] = _int(
+            row.get("unavailable_days"), f"label.{name}.unavailable")
+
+    return out
 
 
 @dataclass(frozen=True)

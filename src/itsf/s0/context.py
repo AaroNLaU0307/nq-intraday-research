@@ -28,7 +28,11 @@ Frozen sources (STUDY_0_PREREGISTRATION.md, tag s0-freeze-v1):
   L41-43   America/New_York; RTH 09:30-16:00; observation window 09:30-09:59;
            decision 10:00; entry = 10:00 bar open; forced exit = 15:44 bar
            close; overnight range = prior 18:00 -> 09:30; calendar =
-           pandas-market-calendars CME_Equity.
+           pandas-market-calendars CME_Equity. Every injected `ts` column must
+           already be tz-aware America/New_York: this module NEVER converts a
+           timezone, it fails closed on anything else (SA-6 F-16), because a
+           UTC frame would silently shift every minute-of-day window and still
+           produce a fully formed dataset.
   L44      excluded days, ONLY three: scheduled half day / no RTH trades /
            RTH bars missing > 10%.
   L45      NA policy: no other whole-day deletion; an uncomputable feature is
@@ -82,6 +86,12 @@ from itsf.data.calendar import (
     REASON_ZERO_BARS,
     ROLL_WINDOW_TRADING_DAYS,
 )
+
+# --- frozen session timezone ------------------------------------------------
+# frozen L41-43. The ONLY accepted timezone of an injected bar timestamp; a
+# fixed UTC offset is rejected as well, since it cannot represent ET across a
+# DST boundary (SA-6 F-16, fail closed).
+ET_TZ_NAME = "America/New_York"
 
 # --- frozen minute-of-day grid (bar START minute, ET) -----------------------
 # frozen: S0 L29 (bar start convention) + L41-43 (session boundaries)
@@ -275,7 +285,38 @@ class DaySummary:
     all_low: float
 
 
+def require_et_timestamps(bars: pd.DataFrame) -> None:
+    """frozen L41-43 — the injected `ts` column must be tz-aware ET. Fail closed.
+
+    SA-6 F-16: every window in this module is a MINUTE-OF-DAY test, so a
+    tz-naive or non-ET column silently relabels the session (a UTC frame turns
+    the 09:30 ET bar into 14:30 and the whole observation window moves) while
+    every downstream count still looks well formed. Nothing is converted here:
+    the caller owns the archive and must hand over America/New_York
+    timestamps; a fixed UTC offset is refused too because it cannot follow ET
+    across DST.
+    """
+    if "ts" not in bars.columns:
+        raise ValueError("bars must carry a 'ts' column — fail closed")
+    dtype = bars["ts"].dtype
+    if not isinstance(dtype, pd.DatetimeTZDtype):
+        raise ValueError(
+            f"bars['ts'] must be a tz-aware datetime column in {ET_TZ_NAME} "
+            f"(frozen L41-43); got dtype {dtype} — fail closed")
+    if str(dtype.tz) != ET_TZ_NAME:
+        raise ValueError(
+            f"bars['ts'] must be in {ET_TZ_NAME} (frozen L41-43); got "
+            f"{dtype.tz} — fail closed (timestamps are never converted here)")
+
+
 def _minutes_of_day(bars: pd.DataFrame) -> np.ndarray:
+    """Minute-of-day of every bar START, ET (frozen L29).
+
+    The single choke point through which every window in this module reads the
+    clock, hence the single place the ET boundary assertion can never be
+    bypassed (SA-6 F-16).
+    """
+    require_et_timestamps(bars)
     ts = bars["ts"]
     return (ts.dt.hour * 60 + ts.dt.minute).to_numpy(dtype=int)
 
@@ -327,9 +368,27 @@ def summarise_day(date: str, bars: pd.DataFrame,
     v = bars["volume"].to_numpy(dtype=float)
 
     rth = (m >= RTH_LO_MINUTE) & (m <= RTH_HI_MINUTE)
-    rth_minutes = m[rth]
-    if len(np.unique(rth_minutes)) != len(rth_minutes):
-        raise ValueError(f"duplicate RTH minute on {date} — fail closed")
+    obs = (m >= OBS_LO_MINUTE) & (m <= OBS_HI_MINUTE)
+    pm = (m >= PM_LO_MINUTE) & (m <= PM_HI_MINUTE)
+    eve = m >= OVERNIGHT_START_MINUTE
+    pre = m < RTH_LO_MINUTE
+    post = (m > RTH_HI_MINUTE) & (m < OVERNIGHT_START_MINUTE)
+
+    # frozen L29 — one bar per minute. A duplicated minute doubles a volume
+    # sum, hides an extremum behind its twin and inflates the bar counts the
+    # funnel deducts on. SA-6 F-29: the check used to cover the RTH window
+    # ONLY; it now covers every block that feeds a summary field — the pre-open
+    # and evening blocks (overnight range, frozen L43) and the 16:00-17:59
+    # remainder that `all_*` aggregates for intermediate overnight ET dates.
+    # The four blocks are minute-disjoint and together cover the whole ET date,
+    # so this is a whole-day uniqueness check with per-block attribution.
+    for block, mask in (("RTH", rth), ("pre-open", pre), ("evening", eve),
+                        ("post-close", post)):
+        block_minutes = m[mask]
+        if len(np.unique(block_minutes)) != len(block_minutes):
+            raise ValueError(
+                f"duplicate {block} minute on {date} — fail closed")
+
     by_minute = {int(mm): i for i, mm in enumerate(m) if rth[i]}
 
     def _open_at(minute: int) -> float:
@@ -339,11 +398,6 @@ def summarise_day(date: str, bars: pd.DataFrame,
     def _close_at(minute: int) -> float:
         i = by_minute.get(minute)
         return float(c[i]) if i is not None else nan
-
-    obs = (m >= OBS_LO_MINUTE) & (m <= OBS_HI_MINUTE)
-    pm = (m >= PM_LO_MINUTE) & (m <= PM_HI_MINUTE)
-    eve = m >= OVERNIGHT_START_MINUTE
-    pre = m < RTH_LO_MINUTE
 
     close_bar = (schedule.last_scheduled_rth_bar_minute(date)
                  if date in schedule.close_minute else RTH_HI_MINUTE)
@@ -519,6 +573,7 @@ class S0Universe:
     prev_close_from_early_close: frozenset[str]
     overnight_hl: Mapping[str, tuple[float, float] | None]
     overnight_bars: Mapping[str, int]
+    overnight_nan_blocks: Mapping[str, int]
     roll_transitions: tuple[RollTransition, ...]
     roll_transition_dates: frozenset[str]
     roll_window_dates: frozenset[str]
@@ -538,6 +593,51 @@ class S0Universe:
         if total != len(self.funnel.structurally_eligible):
             raise ValueError(f"F10 partition {counts} does not sum to "
                              f"{len(self.funnel.structurally_eligible)}")
+        return counts
+
+    def raw_category_membership_counts(self) -> dict[str, int]:
+        """RAW (multi-hot) F10 category membership over the same population.
+
+        The other half of the approved F10 DOUBLE REPORT (IMPLEMENTATION_
+        RESOLUTIONS.md "报告治理修正" (1); SA-6 F-12). The mutually-exclusive
+        partition alone hides the disclosure that matters: a day belonging to
+        two categories leaves CPI/NFP and reappears as NA_multi_event, so the
+        exclusive count of a category understates how many days that category
+        actually touched. Here a multi-category day is counted in EVERY
+        category it belongs to, therefore these counts do NOT partition the
+        population and their sum may exceed it — by construction, never a
+        replacement for f10_exclusive_counts.
+
+        Membership is read AFTER the IR-13 eligibility narrowing (an
+        unscheduled FOMC action is not an F10 FOMC day at all), matching the
+        approved preflight's f10.raw_category_membership_counts_eligible.
+
+        Fail closed on the two reconciliation identities of the double report:
+        membership >= exclusive for every class, and the multi-category day
+        count == the exclusive NA_multi_event class.
+        """
+        counts = {c: 0 for c in F10_CATEGORIES}
+        counts["none"] = 0
+        counts["multi_category"] = 0
+        for d in self.funnel.structurally_eligible:
+            cats = self.events.categories(d)
+            for c in cats:
+                counts[c] += 1
+            if not cats:
+                counts["none"] += 1
+            elif len(cats) > 1:
+                counts["multi_category"] += 1
+        exclusive = self.f10_exclusive_counts()
+        for c in F10_CATEGORIES + ("none",):
+            if counts[c] < exclusive[c]:
+                raise ValueError(
+                    f"F10 double report inconsistent for {c}: raw membership "
+                    f"{counts[c]} < mutually-exclusive {exclusive[c]}")
+        if counts["multi_category"] != exclusive["NA_multi_event"]:
+            raise ValueError(
+                f"F10 double report inconsistent: {counts['multi_category']} "
+                f"multi-category days vs {exclusive['NA_multi_event']} "
+                "NA_multi_event days")
         return counts
 
 
@@ -645,42 +745,62 @@ def _overnight_map(summaries: Mapping[str, DaySummary],
                    prev_session: Mapping[str, str | None],
                    dates: Sequence[str],
                    ) -> tuple[dict[str, tuple[float, float] | None],
-                              dict[str, int]]:
+                              dict[str, int], dict[str, int]]:
     """frozen L43 — overnight range = previous ACTUAL session 18:00 -> d 09:30.
 
     The span crosses non-trading ET dates (a Monday's window holds the Sunday
     evening reopen), so every intermediate ET date's whole-day block counts.
+
+    SA-6 F-30 — a contributing block whose high or low is NaN (bars present but
+    no usable extremum) used to be dropped silently: the surviving blocks then
+    produced a NARROWER range that still looked complete, while the dropped
+    bars kept counting in `overnight_bars`. Such a day is now NA (the frozen
+    text has no class for a partial overnight window, and F6/F7 must not be
+    computed from a span that is missing part of its price range). No new NA
+    reason is invented: the day reaches the existing approved
+    `overnight_window_empty`, and the third return value carries the
+    disclosure count of NaN blocks per day for the sidecar, so an NA caused by
+    corrupted blocks is never confused with a genuinely empty window.
     """
     hl: dict[str, tuple[float, float] | None] = {}
     n_bars: dict[str, int] = {}
+    nan_blocks: dict[str, int] = {}
     for d in dates:
         p = prev_session.get(d)
         if p is None:
-            hl[d], n_bars[d] = None, 0
+            hl[d], n_bars[d], nan_blocks[d] = None, 0, 0
             continue
-        hi = lo = float("nan")
-        n = 0
+
+        # (high, low, bar count) of every block inside the frozen span
+        blocks: list[tuple[float, float, int]] = []
         ps = summaries.get(p)
         if ps is not None and ps.evening_n:
-            hi = _nan_minmax(hi, ps.evening_high, max)
-            lo = _nan_minmax(lo, ps.evening_low, min)
-            n += ps.evening_n
+            blocks.append((ps.evening_high, ps.evening_low, ps.evening_n))
         i0 = bisect.bisect_right(all_dates, p)
         i1 = bisect.bisect_left(all_dates, d)
         for mid in all_dates[i0:i1]:
             ms = summaries.get(mid)
             if ms is not None and ms.all_n:
-                hi = _nan_minmax(hi, ms.all_high, max)
-                lo = _nan_minmax(lo, ms.all_low, min)
-                n += ms.all_n
+                blocks.append((ms.all_high, ms.all_low, ms.all_n))
         cs = summaries.get(d)
         if cs is not None and cs.preopen_n:
-            hi = _nan_minmax(hi, cs.preopen_high, max)
-            lo = _nan_minmax(lo, cs.preopen_low, min)
-            n += cs.preopen_n
+            blocks.append((cs.preopen_high, cs.preopen_low, cs.preopen_n))
+
+        hi = lo = float("nan")
+        n = 0
+        bad = 0
+        for block_high, block_low, block_n in blocks:
+            n += block_n
+            if np.isnan(block_high) or np.isnan(block_low):
+                bad += 1                        # F-30: never a silent drop
+                continue
+            hi = _nan_minmax(hi, block_high, max)
+            lo = _nan_minmax(lo, block_low, min)
         n_bars[d] = n
-        hl[d] = None if (n == 0 or np.isnan(hi) or np.isnan(lo)) else (hi, lo)
-    return hl, n_bars
+        nan_blocks[d] = bad
+        hl[d] = (None if (bad or n == 0 or np.isnan(hi) or np.isnan(lo))
+                 else (hi, lo))
+    return hl, n_bars, nan_blocks
 
 
 def _roll_map(funnel: EligibilityFunnel,
@@ -693,20 +813,38 @@ def _roll_map(funnel: EligibilityFunnel,
     NEXT CME session, so a transition is booked on the first valid RTH session
     date on/after the official interval start — never a bare UTC/ET date cut,
     never a weekend date. is_roll_window = +-2 RTH trading days (frozen L30).
+
+    SA-6 F-31 — `inside_official_interval` used to be a passive flag: a
+    transition that resolved to no session at all, or to a session past the
+    interval's own end, was carried along (or silently absent from the flag
+    sets) and only a report reader could have noticed. The approved preflight
+    asserts f11_roll.all_map_to_valid_rth_trading_day AND
+    f11_roll.all_inside_official_interval, so the same condition now fails
+    closed here: an unverifiable mapping stops the assembly instead of
+    producing F11 flags nobody can reconcile.
     """
     observed = funnel.observed_rth
     transitions: list[RollTransition] = []
     for iv in list(intervals)[1:]:            # N intervals -> N-1 switches
         i = bisect.bisect_left(observed, iv.start_date_utc)
         session = observed[i] if i < len(observed) else None
-        transitions.append(RollTransition(
+        transition = RollTransition(
             interval_start_utc=iv.start_date_utc,
             interval_end_utc_excl=iv.end_date_utc_excl,
             raw_symbol=iv.raw_symbol, instrument_id=iv.instrument_id,
             rth_session_date=session,
             inside_official_interval=bool(
                 session is not None
-                and iv.start_date_utc <= session < iv.end_date_utc_excl)))
+                and iv.start_date_utc <= session < iv.end_date_utc_excl))
+        if not transition.inside_official_interval:
+            raise ValueError(
+                f"roll interval [{iv.start_date_utc}, {iv.end_date_utc_excl}) "
+                f"{iv.raw_symbol!r} resolved to RTH session "
+                f"{session!r}, which is not inside the official interval — "
+                "fail closed (preflight f11_roll assertions "
+                "all_map_to_valid_rth_trading_day / all_inside_official_"
+                "interval)")
+        transitions.append(transition)
 
     tdates = {t.rth_session_date for t in transitions
               if t.rth_session_date is not None}
@@ -745,7 +883,8 @@ def build_universe(bars_by_date: Mapping[str, pd.DataFrame],
     prev_session = _prev_session_map(funnel, summaries, schedule, dates)
     prev_close, prev_cause, from_early = _prev_close_map(
         summaries, schedule, prev_session, dates)
-    on_hl, on_bars = _overnight_map(summaries, all_dates, prev_session, dates)
+    on_hl, on_bars, on_nan = _overnight_map(summaries, all_dates,
+                                            prev_session, dates)
     transitions, tdates, window = _roll_map(funnel, roll_intervals)
 
     return S0Universe(
@@ -753,7 +892,8 @@ def build_universe(bars_by_date: Mapping[str, pd.DataFrame],
         rvol_median60=rvol, f4_basis_size=f4_size, prev_session=prev_session,
         prev_rth_close=prev_close, prev_rth_close_cause=prev_cause,
         prev_close_from_early_close=frozenset(from_early), overnight_hl=on_hl,
-        overnight_bars=on_bars, roll_transitions=transitions,
+        overnight_bars=on_bars, overnight_nan_blocks=on_nan,
+        roll_transitions=transitions,
         roll_transition_dates=tdates, roll_window_dates=window,
         schedule=schedule, events=events)
 
@@ -888,6 +1028,10 @@ def build_day_context(date: str, bars_by_date: Mapping[str, pd.DataFrame],
     elif adr14 is None:
         r["gap"] = NA_ADR14_WARMUP
     if on_hl is None:
+        # Covers both "no bar in the frozen span" and (SA-6 F-30) "a block of
+        # the span has no usable high/low": no approved reason distinguishes
+        # them and inventing one is prohibited, so the sidecar's
+        # overnight_bars / overnight_nan_blocks pair carries the disclosure.
         r["open_loc_on"] = NA_OVERNIGHT_EMPTY        # F6
         r["on_range"] = NA_OVERNIGHT_EMPTY           # F7
     else:
@@ -934,6 +1078,10 @@ def build_day_context(date: str, bars_by_date: Mapping[str, pd.DataFrame],
         "pm_bars_present": s.pm_present,
         "rth_bars_present": s.n_rth,
         "overnight_bars": universe.overnight_bars[date],
+        # SA-6 F-30 disclosure: blocks of the frozen overnight span that hold
+        # bars but no usable high/low. > 0 means the NA above is a corrupted
+        # window, not an empty one.
+        "overnight_nan_blocks": universe.overnight_nan_blocks[date],
         "f4_basis_size": universe.f4_basis_size[date],
         "prior_complete_rth_days":
             universe.funnel.prior_complete_count(date),
