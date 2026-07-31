@@ -61,6 +61,8 @@ modify 项按两阶段流程形成正式 Addendum 并更新实现与测试。
 | IR-19 (=D7 前日 RTH 收盘) | 前日 = 紧邻上一个**实际 CME RTH session**，不依赖资格漏斗；常规日锚点=15:59 bar close；scheduled early-close 日=最后一根官方排期 RTH bar close（是锚点本身非替代）＋sidecar `prev_close_from_early_close_day=true`；**禁止**泛化为"最后一根存在 bar"；排期收盘 bar 本身缺失→NA；vendor-degraded 前日（2 天）→NA；样本首日→NA；禁止跳过不合格前日向前找 eligible day；禁止 forward fill/插值/邻 bar 替代 | 行 57 / 行 41-45 | F5 覆盖（NA 由重跑机械生成，不手写） | 修订版 Option B |
 | IR-20 (=F4 参照集) | 参照集 = 严格早于当日的最近 60 个**实际 CME RTH 交易日**，每个参照日须有完整 30 根 09:30-09:59 bar；**含** scheduled early-close 日、早盘完整的下午缺口日、ADR14 warm-up 日；**不要求**整体 S0 资格或 ADR14 资格；**排除** zero-bar 日与早盘窗口不完整日 | 行 56 / 行 44-45 | F4 覆盖 | Option A（精确化） |
 
+| IR-21 (=Y6 装桶) | **修订版 Option A（APPROVED_BY_AARON 2026-07-31）**：按 calendar year 独立；排名总体=该年 Y_cont 非 NA 的 Development 日（L82 零方向/方向不可判/ADR warm-up 等一律 Y6=NA 且**继承** y_cont 底层 NA 原因，不造新原因）；ascending（decile 1=最低）；**ties 用 average rank，相同 Y_cont 必得相同 Y6，禁止日期/行序/index/rank(method="first") 拆并列**；percentile_rank=(average_rank−1)/(n_year−1)；decile=clip(1+floor(10·pr),1,10)；并列致箱不均或空箱允许并如实披露；机械边界：n_year=1 时按公式极限 pr=0→decile 1（披露）；**use_restriction 机器保证**：仅描述性，不进 feature/Oracle/Primary/样本资格/成本/候选筛选/trial 选择；convention 运行时参数整体移除（唯一规则，无可选项） | 行 91 / 行 45 | 仅描述性标签 | 修订版 Option A；8 项专项测试（跨年独立/min1 max10/ties 同箱/行序不变/NA 传播继承/不完整年/Oracle 路径隔离/无 tie-break 源扫描） |
+
 **报告治理修正（同批 Aaron 批复）**：(1) F10 必须双报 raw category membership counts 与
 final mutually-exclusive F10 counts，并断言 CPI+NFP+FOMC+none+NA_multi_event == 结构合格日数；
 (2) commit 元数据统一为 input_commit / subagent_integration_commit / post_integration_fix_commit /

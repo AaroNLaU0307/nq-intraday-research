@@ -55,6 +55,7 @@ here so the rule is deterministic rather than incidental.
 """
 from __future__ import annotations
 
+import math
 from collections import Counter
 from dataclasses import asdict, dataclass, replace
 from typing import Mapping, Sequence
@@ -99,15 +100,18 @@ STABILITY_EPOCHS = (("2010-2013", "2010", "2014"),    # frozen L36
 
 DIRECTION_DIRECTIONAL = "directional"
 
-# Y6 conventions. The frozen text names the statistic ("Y_cont 在 Development
-# 分年内十分位") but not the binning rule, so no convention is applied unless
-# the caller passes one — see DECISION_PACKET_S0CORE_Y6_DECILE.md (PENDING).
-Y6_RANK_EQUAL_COUNT = "rank_equal_count_1_10"
-Y6_QUANTILE_EDGES = "quantile_edges_1_10"
-Y6_CONVENTIONS = (Y6_RANK_EQUAL_COUNT, Y6_QUANTILE_EDGES)
-Y6_PENDING_NOTE = ("Y6 within-year decile binning is not uniquely determined "
-                   "by the frozen text; no convention applied "
-                   "(DECISION_PACKET_S0CORE_Y6_DECILE.md, PENDING)")
+# Y6 binning rule — IR-21 (APPROVED_BY_AARON 2026-07-31, resolves
+# DECISION_PACKET_S0CORE_Y6_DECILE.md). THE single rule; the former runtime
+# convention parameter is removed entirely (no override surface):
+#   per calendar year, over that year's non-NA Y_cont days only;
+#   average rank for ties (equal Y_cont ALWAYS shares a decile; splitting
+#   ties by date/row order/index is prohibited);
+#   percentile_rank = (average_rank - 1) / (n_year - 1);
+#   decile = clip(1 + floor(10 * percentile_rank), 1, 10);
+#   mechanical limit n_year == 1 -> percentile_rank = 0 -> decile 1
+#   (disclosed); Y_cont NA -> Y6 NA inheriting the underlying reason.
+# Descriptive-only: never enters features/Oracle/Primary/eligibility/costs.
+Y6_RULE = "IR21_per_year_average_rank_decile"
 
 # Feature fields that may be NA (frozen L45). Roll flags are structural
 # booleans and are never NA; trade_date/excluded_day/exclusion_reason are not
@@ -117,8 +121,10 @@ FEATURE_NA_FIELDS = (
     "open_loc_on", "on_range", "retrace_open30", "close_pos_open30",
     "is_event_day", "adr14",
 )
-LABEL_NA_FIELDS = ("y_cont", "y1", "y2_de_pm", "y3_close_pos_pm", "y4_mfe",
-                   "y5_mae")
+PRE_Y6_LABEL_NA_FIELDS = ("y_cont", "y1", "y2_de_pm", "y3_close_pos_pm",
+                          "y4_mfe", "y5_mae")
+LABEL_NA_FIELDS = PRE_Y6_LABEL_NA_FIELDS + (
+    "y6_cont_decile",)                           # y6: IR-21, inherits y_cont
 
 # Per-label frozen dependencies (L86-91), used for NA attribution and for the
 # preflight-comparable label ANCHOR-availability table. MappingProxyType:
@@ -302,7 +308,10 @@ def _attribute_label_na(lb: DayLabels, ctx: DayContext,
             out[name] = direction_status
         elif value_reason:
             out[name] = value_reason
-    _check_reason_coverage(lb, LABEL_NA_FIELDS, out, "labels")
+    # y6 is assigned AFTER the per-day pass (IR-21 within-year rank), so the
+    # record-time bijection check runs on the pre-Y6 fields; build_s0_dataset
+    # re-checks y6 coverage after the decile pass (fail-closed there too).
+    _check_reason_coverage(lb, PRE_Y6_LABEL_NA_FIELDS, out, "labels")
     return out
 
 
@@ -323,49 +332,43 @@ def _check_reason_coverage(row: object, na_fields: Sequence[str],
 
 
 # ===========================================================================
-# Y6 — within-year decile pass (frozen L91); PENDING decision packet
+# Y6 — within-year decile pass (frozen L91); rule fixed by IR-21
 # ===========================================================================
 
-def assign_y6_deciles(rows: Sequence[DayLabels],
-                      convention: str) -> tuple[DayLabels, ...]:
-    """frozen L91 — Y6 = decile of Y_cont within each Development YEAR.
+def assign_y6_deciles(rows: Sequence[DayLabels]) -> tuple[DayLabels, ...]:
+    """frozen L91 + IR-21 — Y6 = per-year average-rank decile of Y_cont.
 
-    labels.py leaves y6_cont_decile None by design (its module docstring: the
-    within-year cross-sectional rank can only exist once every day of the year
-    exists). The BINNING RULE is not fixed by the frozen text, so a convention
-    must be named explicitly; see DECISION_PACKET_S0CORE_Y6_DECILE.md.
-
-    rank_equal_count_1_10 : equal-count buckets over the year's non-NA Y_cont
-        days, ties broken by trade_date so the result is deterministic.
-    quantile_edges_1_10   : bucket by the year's 10%..90% quantile edges
-        (numpy linear interpolation); tied values share a bucket.
-    Both return deciles 1..DECILE_COUNT; days whose Y_cont is NA stay None.
+    labels.py leaves y6_cont_decile None by design (the within-year
+    cross-sectional rank can only exist once every day of the year exists).
+    IR-21 (APPROVED 2026-07-31) fixes the binning rule — see Y6_RULE above.
+    Value-only ranking: equal Y_cont always shares one decile; the input
+    order, trade_date and index play NO role in the result.
     """
-    if convention not in Y6_CONVENTIONS:
-        raise ValueError(f"unknown Y6 convention {convention!r}; "
-                         f"expected one of {Y6_CONVENTIONS}")
     by_year: dict[str, list[int]] = {}
     for i, r in enumerate(rows):
         if r.y_cont is not None:
             by_year.setdefault(_year(r.trade_date), []).append(i)
 
     deciles: dict[int, int] = {}
-    for year, idx in by_year.items():
-        vals = [float(rows[i].y_cont) for i in idx]
-        if convention == Y6_RANK_EQUAL_COUNT:
-            order = sorted(range(len(idx)),
-                           key=lambda k: (vals[k], rows[idx[k]].trade_date))
-            n = len(order)
-            for rank, k in enumerate(order):
-                deciles[idx[k]] = min(DECILE_COUNT,
-                                      (rank * DECILE_COUNT) // n + 1)
-        else:
-            edges = np.quantile(np.asarray(vals, dtype=float),
-                                [q / DECILE_COUNT
-                                 for q in range(1, DECILE_COUNT)])
-            for k, i in enumerate(idx):
-                deciles[i] = int(np.searchsorted(edges, vals[k],
-                                                 side="right")) + 1
+    for _year_key, idx in by_year.items():
+        vals = np.asarray([float(rows[i].y_cont) for i in idx], dtype=float)
+        n = len(vals)
+        order = np.argsort(vals, kind="stable")
+        # average rank (1-based) per tie-group of EQUAL values
+        avg_rank = np.empty(n, dtype=float)
+        pos = 0
+        while pos < n:
+            end = pos
+            while end + 1 < n and vals[order[end + 1]] == vals[order[pos]]:
+                end += 1
+            avg = (pos + 1 + end + 1) / 2.0
+            for j in range(pos, end + 1):
+                avg_rank[order[j]] = avg
+            pos = end + 1
+        for k, i in enumerate(idx):
+            pr = 0.0 if n == 1 else (avg_rank[k] - 1.0) / (n - 1.0)
+            deciles[i] = int(min(DECILE_COUNT,
+                                 max(1, 1 + math.floor(DECILE_COUNT * pr))))
     return tuple(replace(r, y6_cont_decile=deciles[i]) if i in deciles else r
                  for i, r in enumerate(rows))
 
@@ -390,7 +393,7 @@ class S0Dataset:
     funnel_counts: Mapping[str, int]
     f10_counts: Mapping[str, int]
     sidecar_table: pd.DataFrame
-    y6_convention: str | None
+    y6_rule: str                     # always Y6_RULE (IR-21; no options)
     pending_decisions: tuple[str, ...]
 
     def assertion_counts(self) -> dict[str, object]:
@@ -403,24 +406,31 @@ class S0Dataset:
 
 
 def build_s0_dataset(bars_by_date: Mapping[str, pd.DataFrame],
-                     universe: S0Universe,
-                     y6_convention: str | None = None) -> S0Dataset:
+                     universe: S0Universe) -> S0Dataset:
     """Assemble the S0 dataset. Pure; no I/O, no randomness, no judgment.
 
-    y6_convention: None (default) leaves Y6 unassigned pending
-    DECISION_PACKET_S0CORE_Y6_DECILE.md. It selects a binning rule for a
-    DESCRIPTIVE label only and can never override a frozen constant.
+    Y6 is ALWAYS assigned per IR-21 (the sole rule; the former runtime
+    convention parameter is deliberately removed — no override surface).
+    Y6 NA inherits the underlying y_cont NA reason (IR-21: no new reason
+    is ever invented), applied AFTER the decile pass so the attribution
+    reflects final labels.
     """
     records = [compute_day(ctx)
                for ctx in iter_day_contexts(bars_by_date, universe)]
 
     pending: list[str] = []
-    if y6_convention is None:
-        pending.append(Y6_PENDING_NOTE)
-    else:
-        assigned = assign_y6_deciles([r.labels for r in records],
-                                     y6_convention)
-        records = [replace(r, labels=lb) for r, lb in zip(records, assigned)]
+    assigned = assign_y6_deciles([r.labels for r in records])
+    post: list[DayRecord] = []
+    for r, lb in zip(records, assigned):
+        lna = dict(r.label_na_reasons)
+        if lb.y6_cont_decile is None:
+            reason = lna.get("y_cont")
+            if reason:                       # inherit; never invent (IR-21)
+                lna["y6_cont_decile"] = reason
+        # post-assignment fail-closed bijection check over ALL label fields
+        _check_reason_coverage(lb, LABEL_NA_FIELDS, lna, "labels")
+        post.append(replace(r, labels=lb, label_na_reasons=lna))
+    records = post
 
     features_table = _table([asdict(r.features) for r in records])
     labels_table = _table([asdict(r.labels) for r in records])
@@ -457,7 +467,7 @@ def build_s0_dataset(bars_by_date: Mapping[str, pd.DataFrame],
         funnel_counts=funnel.counts(),
         f10_counts=universe.f10_exclusive_counts(),
         sidecar_table=sidecar_table,
-        y6_convention=y6_convention,
+        y6_rule=Y6_RULE,
         pending_decisions=tuple(pending))
 
 
