@@ -37,7 +37,7 @@ def compute_day_features(
     adr14: float | None,
     prior_rth_close: float | None,
     rvol_median60: float | None,
-    event_flag: str,
+    event_flag: str | None,
     is_roll_transition: bool,
     is_roll_window: bool,
 ) -> DayFeatures:
@@ -46,8 +46,11 @@ def compute_day_features(
     Parameters are the pre-computed per-day context; ``obs_bars`` is the
     09:30..09:59 1-min OHLCV frame with a tz-aware ``ts`` column.
     """
-    if event_flag not in EVENT_FLAGS:
+    if event_flag is not None and event_flag not in EVENT_FLAGS:
         # frozen: S0 SS4 F10 - is_event_day must be one of {CPI, NFP, FOMC, none}
+        # None == NA on an IR-12/18 multi-event day (M5-T0: contracts already
+        # widened DayFeatures.is_event_day to `str | None`; this guard is the
+        # single sanctioned edit to this module).
         raise ValueError(f"event_flag {event_flag!r} not in {EVENT_FLAGS}")
     if obs_bars is None or len(obs_bars) == 0:
         raise ValueError(
