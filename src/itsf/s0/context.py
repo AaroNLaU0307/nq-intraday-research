@@ -55,8 +55,12 @@ Approved Implementation Resolutions applied verbatim:
   IR-19    prev_rth_close = the immediately previous ACTUAL CME RTH session
            (independent of downstream eligibility); regular day -> 15:59 bar
            close; scheduled early-close day -> the final SCHEDULED RTH bar's
-           close (+ sidecar flag); that bar absent -> NA; vendor-degraded
-           previous session -> NA (never skipped); first sample day -> NA.
+           close (+ sidecar flag); that bar absent -> NA; first day -> NA.
+  IR-26    availability decided ONLY by the exact scheduled close bar's
+           existence + finiteness on the reference day. A vendor-degraded
+           flag alone NEVER forces NA — it feeds a diagnostic sidecar; a
+           zero-bar reference (necessarily vendor-degraded, never skipped)
+           is NA. No last-available/nearest-bar/forward-skip/fill.
   IR-20    F4 reference set = the most recent 60 ACTUAL CME RTH trading days
            strictly before the day, each with a complete 30-bar 09:30-09:59
            window; scheduled early-close days included; downstream S0/ADR14
@@ -604,6 +608,7 @@ class S0Universe:
     prev_rth_close: Mapping[str, float | None]
     prev_rth_close_cause: Mapping[str, str]
     prev_close_from_early_close: frozenset[str]
+    prev_close_from_vendor_degraded: frozenset[str]
     overnight_hl: Mapping[str, tuple[float, float] | None]
     overnight_bars: Mapping[str, int]
     overnight_nan_blocks: Mapping[str, int]
@@ -719,9 +724,11 @@ def _prev_session_map(funnel: EligibilityFunnel,
 
     Walk back through the official schedule and skip ONLY true closures (a
     scheduled date with no session data that is NOT flagged vendor-degraded).
-    Vendor-degraded sessions ARE the reference day (their anchor is NA);
-    skipping past them, or past any day that merely fails downstream
-    eligibility, is prohibited.
+    Vendor-degraded sessions ARE the reference day (IR-26: their anchor is
+    then decided by the exact close bar's existence/finiteness — a zero-bar
+    degraded reference is NA, a degraded reference with the exact finite
+    close is USABLE + diagnostic); skipping past them, or past any day that
+    merely fails downstream eligibility, is prohibited.
     """
     scheduled = funnel.scheduled
     true_closures = {d for d in funnel.zero_bar
@@ -746,22 +753,34 @@ def _prev_close_map(summaries: Mapping[str, DaySummary],
                     prev_session: Mapping[str, str | None],
                     dates: Sequence[str],
                     ) -> tuple[dict[str, float | None], dict[str, str],
-                               set[str]]:
-    """IR-19 anchor value + fine-grained cause + early-close sidecar flag."""
+                               set[str], set[str]]:
+    """IR-19/IR-26 anchor value + fine-grained cause + two sidecar flags.
+
+    IR-26 (Aaron 2026-08-01): anchor availability is decided ONLY by the
+    exact scheduled close bar's existence and finiteness on the reference
+    day. A vendor-degraded flag on the reference day goes into the
+    `from_degraded` DIAGNOSTIC sidecar and never by itself forces NA.
+    NA cases (IR-26 rule 7): no prior session; zero-bar reference (the
+    walk-back guarantees such a reference is vendor-degraded — unflagged
+    zero-bar days are true closures and were skipped); exact scheduled
+    close bar absent; close non-finite. Never last-available, never
+    nearest-bar, never forward-skip, never fill (rule 8).
+    """
     value: dict[str, float | None] = {}
     cause: dict[str, str] = {}
     from_early: set[str] = set()
+    from_degraded: set[str] = set()
     for d in dates:
         p = prev_session.get(d)
         if p is None:
             value[d], cause[d] = None, "no_prior_rth_session_in_sample"
             continue
         s = summaries.get(p)
-        if (p in schedule.vendor_degraded_dates or s is None or s.n_rth == 0):
+        if s is None or s.n_rth == 0:
             value[d], cause[d] = None, "prev_day_vendor_degraded_zero_bar"
             continue
         anchor = s.official_close
-        if np.isnan(anchor):
+        if not np.isfinite(anchor):
             value[d] = None
             cause[d] = ("prev_day_early_close_final_scheduled_bar_absent"
                         if schedule.is_early_close(p)
@@ -770,7 +789,9 @@ def _prev_close_map(summaries: Mapping[str, DaySummary],
         value[d], cause[d] = float(anchor), ""
         if schedule.is_early_close(p):
             from_early.add(d)                  # IR-19 sidecar flag
-    return value, cause, from_early
+        if p in schedule.vendor_degraded_dates:
+            from_degraded.add(d)               # IR-26 diagnostic sidecar
+    return value, cause, from_early, from_degraded
 
 
 def _overnight_map(summaries: Mapping[str, DaySummary],
@@ -914,7 +935,7 @@ def build_universe(bars_by_date: Mapping[str, pd.DataFrame],
     adr14 = _adr14_map(funnel, summaries, dates)
     rvol, f4_size = _rvol_median_map(funnel, summaries, dates)
     prev_session = _prev_session_map(funnel, summaries, schedule, dates)
-    prev_close, prev_cause, from_early = _prev_close_map(
+    prev_close, prev_cause, from_early, from_degraded = _prev_close_map(
         summaries, schedule, prev_session, dates)
     on_hl, on_bars, on_nan = _overnight_map(summaries, all_dates,
                                             prev_session, dates)
@@ -924,7 +945,9 @@ def build_universe(bars_by_date: Mapping[str, pd.DataFrame],
         funnel=funnel, summaries=summaries, all_dates=all_dates, adr14=adr14,
         rvol_median60=rvol, f4_basis_size=f4_size, prev_session=prev_session,
         prev_rth_close=prev_close, prev_rth_close_cause=prev_cause,
-        prev_close_from_early_close=frozenset(from_early), overnight_hl=on_hl,
+        prev_close_from_early_close=frozenset(from_early),
+        prev_close_from_vendor_degraded=frozenset(from_degraded),
+        overnight_hl=on_hl,
         overnight_bars=on_bars, overnight_nan_blocks=on_nan,
         roll_transitions=transitions,
         roll_transition_dates=tdates, roll_window_dates=window,
@@ -1106,6 +1129,8 @@ def build_day_context(date: str, bars_by_date: Mapping[str, pd.DataFrame],
         "prev_rth_close_cause": universe.prev_rth_close_cause[date],
         "prev_close_from_early_close_day":
             date in universe.prev_close_from_early_close,
+        "prev_close_from_vendor_degraded_day":         # IR-26 rule 6
+            date in universe.prev_close_from_vendor_degraded,
         # structural diagnostics
         "obs_bars_present": s.obs_present,
         "pm_bars_present": s.pm_present,

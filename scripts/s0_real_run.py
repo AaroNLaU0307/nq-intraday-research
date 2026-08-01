@@ -41,7 +41,7 @@ ATTEMPTS_ROOT = REPO / "attempts"
 # Baseline collected-test count at the SA-6 audit commit. The pytest gate
 # requires the suite to still COLLECT at least this many tests, so a muted
 # or filtered run cannot satisfy the gate with a handful of tests (F-09).
-MIN_COLLECTED_TESTS = 519                  # IR-25: floor = current suite
+MIN_COLLECTED_TESTS = 524                  # IR-26: floor = current suite
 
 # External read-only tooling (packet §9 gate 4). Invoked as a subprocess;
 # the tool itself only reads repository files.
@@ -826,8 +826,11 @@ def structural_actuals_from(ds, universe) -> dict:
         out[f"anchor.{name}.missing"] = missing
         if missing:
             out[f"na_reason.anchor.{name}.anchor_missing"] = missing
+    # IR-26 rule A: the map holds an entry for EVERY eligible day (missing
+    # anchors are stored as None + cause) — membership alone can never
+    # detect a miss; `is None` is the missing test.
     prev_missing = [d for d in elig
-                    if d not in universe.prev_rth_close]
+                    if universe.prev_rth_close[d] is None]
     out["anchor.prev_rth_close.available"] = len(elig) - len(prev_missing)
     out["anchor.prev_rth_close.missing"] = len(prev_missing)
     for d in prev_missing:

@@ -119,3 +119,22 @@ registry（结构测试＋双状态测试），且双状态测试本身在授权
 SA-14 另留三条非阻塞观察（>40-hex 截断接受、supersede note 多字段组
 仅取首、非数字 seq 的 RUN_AUTHORIZED 行将永久不可 supersede）——
 记入 P3 backlog，不在授权前扩测试面。
+
+### IR-26 vendor-degraded 锚点语义（APPROVED_BY_AARON 2026-08-01，DECISION_PACKET_VENDOR_DEGRADED_ANCHOR）
+
+背景：第二次真实 S0 尝试（INC-fa9234e0e541）Stage A 13 门全过，Stage B
+`preflight_assertions_match` 失败——失配全部在 prev_rth_close/F5 家族。
+两层根因：actuals 镜像用 key-membership 判缺失（map 每日建条目恒假）；
+入口把全部 20 个 condition!=available 日传入 SessionSchedule，context 对
+任何标记参照日强制 NA（24/82/2800），而锁定 json 语义只因精确收盘缺失
+判 NA（18/76/2806），差 6 天=标记但有 bar 的参照日。exposure 未消耗。
+
+| 项 | 定案 |
+|---|---|
+| 方法语义（八条） | previous session=紧邻上一实际 CME RTH session（独立于漏斗）；vendor-degraded session 不得跳过；regular 取精确 15:59 bar close；scheduled early close 取精确最后排期 RTH bar close；**exact required close 存在且 finite 时，即使带 vendor-degraded 标记也可用**；标记只进 diagnostic 不自动 NA；zero-bar／精确排期收盘缺失／close 非 finite／无前日记 NA；禁 last available/nearest bar/向前跳日/填充/插值 |
+| 实施边界 | **不得**把 vendor_degraded_dates 字段静默收窄成 zero-bar 集合（我原 Option A 实现路径被否）；完整标记集保留供 diagnostic；可用性直接由精确排期收盘 bar 存在性＋finite 检查决定 |
+| 落点 | context.py `_prev_close_map`：NA 条件删标记子句、isnan→isfinite、新增 `prev_close_from_vendor_degraded` sidecar（S0Universe 新字段＋per-day sidecar 键）；入口 `structural_actuals_from`：`is None` 判缺失（聚合 reason 键经既有 F-14 词表映射自动正确、守恒）；`load_real_session_schedule` 不变（保留完整 20 日集） |
+| 等价性（B 条） | 合成逐日等价矩阵测试（七类案例逐日对 preflight 判定表）＋真实数据逐日等价：修复后 18 个 None 日与锁定 json missing_dates **逐日完全一致**；全 66 断言 all_pass=True 零失配 |
+| 结构结果（C 条） | 24→18、82→76、2800→2806、23→17；6 个"标记但有 bar"后继日恢复（sidecar=6）；1 首日＋12 排期收盘缺失＋5 零bar/部分缺失继续 NA；其余 58 断言逐位不变（机器验证） |
+| 测试（D 条） | 新增 5 测试（degraded+精确close→可用+diagnostic／degraded+close缺失→NA／非 finite→NA／逐日等价矩阵／actuals value-None 计缺失）；两判定性变异验收均红（重插标记子句 exit 1；回退 key-membership exit 1），恢复经哈希核对 |
+| 失败处置（E 条） | 行 9 授权、"+"失败行、attempts/S0-T001-A20260801T162047Z、incident 全保留；行 10 RUN_AUTHORIZATION_SUPERSEDED 精确引用行 9（reason_code=STAGE_B_ANCHOR_SEMANTICS_FIX）；地板 519→524；packet §0 context/入口两行哈希再渲染 |

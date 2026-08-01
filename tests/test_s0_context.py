@@ -1007,3 +1007,88 @@ def test_no_real_data_paths_referenced_in_this_test_file():
     # concatenated so the checker line itself cannot self-match
     assert ("databento-" + "archive") not in src
     assert not np.any([False])          # numpy import is used, keep linters calm
+
+
+# ---------------------------------------------------------------------------
+# IR-26 (Aaron 2026-08-01): vendor-degraded flag is DIAGNOSTIC-ONLY; anchor
+# availability is decided solely by the exact scheduled close bar's
+# existence + finiteness on the (never-skipped) reference day.
+# ---------------------------------------------------------------------------
+
+def test_ir26_degraded_reference_with_exact_close_is_usable_with_diagnostic():
+    """Rule 5+6: flagged reference day, exact 15:59 close present and finite
+    -> anchor USABLE, diagnostic sidecar set. Goes red under the pre-IR-26
+    'any degraded reference -> NA' mutation."""
+    dates = weekdays("2020-01-02", 20)
+    bars, uni = universe_of(dates, degraded=(dates[9],))
+    d = dates[10]
+    assert uni.prev_session[d] == dates[9]              # rule 2: not skipped
+    assert uni.prev_rth_close[d] == pytest.approx(20390.0)
+    assert uni.prev_rth_close_cause[d] == ""
+    assert d in uni.prev_close_from_vendor_degraded     # rule 6 diagnostic
+    assert dates[5] not in uni.prev_close_from_vendor_degraded
+    c = build_day_context(d, bars, uni)
+    assert c.sidecar["prev_close_from_vendor_degraded_day"] is True
+
+
+def test_ir26_degraded_reference_with_missing_close_bar_is_na():
+    """Rule 7+8: flagged reference WITH bars but the exact 15:59 bar absent
+    -> NA; the degraded flag neither rescues nor is the cause; no nearest
+    bar is substituted; the anchor-used diagnostic stays unset."""
+    dates = weekdays("2020-01-02", 20)
+    _, uni = universe_of(dates, {dates[9]: {"skip_minutes": (959,)}},
+                         degraded=(dates[9],))
+    d = dates[10]
+    assert uni.prev_rth_close[d] is None
+    assert uni.prev_rth_close_cause[d] == "prev_day_1559_bar_absent"
+    assert d not in uni.prev_close_from_vendor_degraded
+
+
+def test_ir26_non_finite_exact_close_is_na():
+    """Rule 7: an exact close that exists but is non-finite (inf) is NA —
+    np.isnan alone would wrongly accept it."""
+    from types import SimpleNamespace
+    sched = SessionSchedule(close_minute={"2020-01-13": 960,
+                                          "2020-01-14": 960})
+    summaries = {"2020-01-13": SimpleNamespace(
+        n_rth=390, official_close=float("inf"))}
+    value, cause, from_early, from_degraded = ctx_mod._prev_close_map(
+        summaries, sched, {"2020-01-14": "2020-01-13"}, ["2020-01-14"])
+    assert value["2020-01-14"] is None
+    assert cause["2020-01-14"] == "prev_day_1559_bar_absent"
+    assert from_degraded == set()
+
+
+def test_ir26_preflight_equivalence_matrix_per_day():
+    """IR-26 rule B (per-day equivalence): one market containing every case
+    class of the preflight resolver's verbatim decision table
+    (s0_input_preflight.py 'IR-19 reference-session machinery'); each day's
+    (value/NA, cause, reference) must equal that table. The real-data
+    counterpart (18 missing dates byte-identical to the locked json) is
+    enforced by the Stage-B gate."""
+    d = weekdays("2020-01-02", 16)
+    bars, uni = universe_of(
+        d,
+        {d[2]: {"close_minute": 810, "n_bars": 240},   # early close, final bar present
+         d[4]: {"no_bars": True},                      # unflagged zero-bar -> true closure
+         d[6]: {"no_bars": True},                      # flagged zero-bar
+         d[8]: {"skip_minutes": (959,)},               # regular, 15:59 absent
+         d[10]: {"close_minute": 810, "n_bars": 239}}, # early close, final bar absent
+        degraded=(d[6], d[12]))                        # d12: flagged, full bars
+    expect = {
+        d[0]:  ("NA", "no_prior_rth_session_in_sample", None),
+        d[3]:  ("OK", "", d[2]),
+        d[5]:  ("OK", "", d[3]),                       # walked THROUGH d4
+        d[7]:  ("NA", "prev_day_vendor_degraded_zero_bar", d[6]),
+        d[9]:  ("NA", "prev_day_1559_bar_absent", d[8]),
+        d[11]: ("NA", "prev_day_early_close_final_scheduled_bar_absent",
+                d[10]),
+        d[13]: ("OK", "", d[12]),                      # IR-26 recovered class
+    }
+    for day, (state, cause, ref) in expect.items():
+        if ref is not None:
+            assert uni.prev_session[day] == ref, day
+        assert (uni.prev_rth_close[day] is None) == (state == "NA"), day
+        assert uni.prev_rth_close_cause[day] == cause, day
+    assert uni.prev_close_from_vendor_degraded == {d[13]}
+    assert d[3] in uni.prev_close_from_early_close

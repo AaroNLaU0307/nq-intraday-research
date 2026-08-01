@@ -831,7 +831,7 @@ def test_pytest_gate_floor_is_the_audit_baseline():
     """SA-10 N3: the floor tracks the CURRENT suite, closing the
     silent-collection-drop headroom."""
     mod = real_run_module()
-    assert mod.MIN_COLLECTED_TESTS == 519
+    assert mod.MIN_COLLECTED_TESTS == 524
 
 
 # ===========================================================================
@@ -1434,3 +1434,40 @@ def test_ir24_gate_fails_closed_when_diagnostics_key_missing():
         chain._uni = object()
         ok, detail = chain.ir24_divergence_guard()
         assert ok is False and "fail closed" in detail, na_table
+
+
+def test_actuals_prev_close_missing_counted_by_value_none():
+    """IR-26 rule A: the prev-close map holds a key for EVERY eligible day
+    (missing anchors stored as None + cause) — a None VALUE must count as
+    missing and produce the conserved aggregate reason key. This test goes
+    red if the actuals revert to key-membership detection."""
+    mod = real_run_module()
+
+    def ns(**kw):
+        return type("NS", (), kw)()
+
+    days = ("2020-01-02", "2020-01-03")
+    summaries = {d: ns(o0930=1.0, c0959=1.0, o1000=1.0, c1544=1.0)
+                 for d in days}
+    uni = ns(summaries=summaries,
+             prev_rth_close={days[0]: None, days[1]: 100.0},
+             prev_rth_close_cause={days[0]: "no_prior_rth_session_in_sample",
+                                   days[1]: ""})
+    per = {f: {"not_na": 2, "na": 0, "reasons": {}}
+           for f in mod.FEATURE_FIELD_TO_F}
+    ds = ns(records=[ns(trade_date=days[0]), ns(trade_date=days[1])],
+            funnel_counts={k: 2 for k in (
+                "L0_scheduled_trading_days", "L1_observed_rth_days",
+                "L2_regular_full_session_candidates",
+                "L3_structurally_eligible_days",
+                "L4_final_feature_construction_dates")},
+            f10_counts={"none": 2},
+            na_table={"per_field": {"features": per}, "population": 2},
+            label_anchor_availability={
+                k: {"available_days": 2, "unavailable_days": 0}
+                for k in mod.LABEL_KEY_TO_NAME})
+    out = mod.structural_actuals_from(ds, uni)
+    assert out["anchor.prev_rth_close.missing"] == 1
+    assert out["anchor.prev_rth_close.available"] == 1
+    assert out["na_reason.anchor.prev_rth_close."
+               "prev_rth_close_anchor_missing"] == 1
