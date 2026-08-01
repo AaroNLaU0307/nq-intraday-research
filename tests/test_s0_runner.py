@@ -1185,25 +1185,52 @@ def test_authorization_snapshot_binds_the_exact_sentence(tmp_path, monkeypatch):
     assert hashes[1] == expected
 
 
-def test_snapshot_gate_and_recheck_detect_registry_change(tmp_path, monkeypatch):
-    """N-B: exercise the production snapshot state machine — Stage-A snapshot
-    written, recheck passes on an unchanged registry and fails after an
-    appended event."""
+def test_snapshot_control_production_closures(tmp_path, monkeypatch):
+    """SA-12 N-B: execute the PRODUCTION §三 closures from
+    make_snapshot_control — the same objects main() wires into RunnerDeps.
+
+    (i) the Stage-A gate writes AUTHORIZATION_SNAPSHOT.json AND populates
+    the shared state; (ii) the recheck fails closed with no snapshot,
+    passes on an unchanged registry, and FAILS after an appended event
+    (this assertion goes red if the comparison is mutated fail-open);
+    (iii) the post hook writes REGISTRY_AFTER_RUN_STARTED.json carrying
+    the post-append registry hash and the Stage-A snapshot."""
+    import hashlib as _h
     mod = real_run_module()
     commit = "c" * 40
     reg = _authorized_registry(tmp_path, commit)
     monkeypatch.setattr(mod, "REGISTRY", reg)
     chain = mod.RealChain()
-    snap1 = chain.authorization_snapshot()
-    snap2 = chain.authorization_snapshot()
-    assert snap1 == snap2                        # deterministic
-    # simulate the production recheck comparison
-    reg.write_text(reg.read_text("utf-8")
+    assert chain.authorization_snapshot() == chain.authorization_snapshot()
+    attempts = tmp_path / "attempts"
+    gate, recheck, hook = mod.make_snapshot_control(chain, attempts)
+
+    ok, why = recheck()                       # before the gate: fail closed
+    assert ok is False and "no Stage-A" in why
+
+    ok, _ = gate()                            # (i) gate side-effects
+    assert ok is True
+    snap = json.loads(
+        (attempts / "AUTHORIZATION_SNAPSHOT.json").read_text("utf-8"))
+    assert snap["authorized_commit"] == commit
+
+    ok, _ = recheck()                         # (ii) unchanged -> pass
+    assert ok is True
+
+    rdir = tmp_path / "runs"                  # (iii) hook side-effects
+    rdir.mkdir()
+    hook(rdir)
+    after = json.loads(
+        (rdir / "REGISTRY_AFTER_RUN_STARTED.json").read_text("utf-8"))
+    assert (after["registry_sha256_after_run_started"]
+            == _h.sha256(reg.read_bytes()).hexdigest())
+    assert after["snapshot_before"]["authorized_commit"] == commit
+
+    reg.write_text(reg.read_text("utf-8")     # (ii) appended event -> FAIL
                    + "| 3 | 2026-08-02 | X | y | z | inserted |\n",
                    encoding="utf-8")
-    snap3 = chain.authorization_snapshot()
-    assert snap3["registry_sha256"] != snap1["registry_sha256"]
-    assert snap3["event_sequence"] == snap1["event_sequence"] + 1
+    ok, why = recheck()
+    assert ok is False and "CHANGED" in why
 
 
 def test_main_wires_snapshot_control_and_appended_gates():
@@ -1212,6 +1239,7 @@ def test_main_wires_snapshot_control_and_appended_gates():
     import inspect
     mod = real_run_module()
     src = inspect.getsource(mod.main)
+    assert "make_snapshot_control" in src        # SA-12 N-B: factory wired
     assert "pre_exposure_recheck=pre_exposure_recheck" in src
     assert "post_run_started_hook=post_run_started_hook" in src
     assert "authorization_snapshot_recorded" in src
@@ -1219,10 +1247,14 @@ def test_main_wires_snapshot_control_and_appended_gates():
 
 
 def test_ir24_gate_fails_closed_when_diagnostics_key_missing():
-    """N-G: an absent diagnostics counter must FAIL the gate, not pass it."""
+    """N-G: an absent diagnostics counter must FAIL the gate, not pass it.
+    Covers BOTH branches (SA-12): the diagnostics dict entirely absent AND
+    the dict present with the counter key absent — the second goes red if
+    `or key not in diag` is deleted."""
     mod = real_run_module()
-    chain = mod.RealChain()
-    chain._ds = type("D", (), {"na_table": {}})()
-    chain._uni = object()
-    ok, detail = chain.ir24_divergence_guard()
-    assert ok is False and "fail closed" in detail
+    for na_table in ({}, {"diagnostics": {}}):
+        chain = mod.RealChain()
+        chain._ds = type("D", (), {"na_table": na_table})()
+        chain._uni = object()
+        ok, detail = chain.ir24_divergence_guard()
+        assert ok is False and "fail closed" in detail, na_table

@@ -11,8 +11,8 @@ finding-specific waiver:
       pattern requires a 12+ char token with no spaces. This is what makes
       the F-05 sealing-test fixtures (`secret = "trading day ..."`) a
       non-match: they are sentences, not credentials.
-  E2  S0_REAL_RUN_AUTHORIZATION_PACKET.md carries the literal
-      TO_BE_SUPPLIED_BY_AARON by DESIGN (anti-self-reference, packet §1).
+  E2  (removed after SA-12) — the packet's TO_BE_SUPPLIED_BY_AARON literal
+      never matched PH_PAT, so the packet is scanned like any other file.
   E3  ops/M4_TASKBOARD/, ops/M5_RUNNER_TASKBOARD/ and
       M5_T1_T2_INTEGRATION_REPORT.md are sealed historical audit records
       that quote scan patterns and findings verbatim.
@@ -40,7 +40,6 @@ import sys
 
 HISTORICAL = ("ops/M4_TASKBOARD/", "ops/M5_RUNNER_TASKBOARD/")          # E3
 HISTORICAL_FILES = {"M5_T1_T2_INTEGRATION_REPORT.md"}                   # E3
-PACKET = "S0_REAL_RUN_AUTHORIZATION_PACKET.md"                          # E2
 
 KEY_PAT = re.compile(r"db-[A-Za-z0-9]{20,}")
 ASSIGN_PAT = re.compile(                                                # E1
@@ -78,7 +77,7 @@ def main() -> int:
             fails.append(f"SECRET {f}: credential assignment: {line[:60]}")
 
         # --- placeholders ------------------------------------------------
-        if (name != PACKET and name not in HISTORICAL_FILES
+        if (name not in HISTORICAL_FILES
                 and not f.startswith(HISTORICAL)
                 and not f.startswith("src/itsf/mc/")                    # E4
                 and f != "scripts/final_candidate_scans.py"):           # E7

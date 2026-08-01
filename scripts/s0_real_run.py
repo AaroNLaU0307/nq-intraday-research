@@ -834,10 +834,12 @@ class RealChain:
         # SA-11 N-C: the parser's third return is a REASON string, not the
         # sentence. The verbatim §10 sentence is fully determined by
         # (trial_id, commit) — the parser only authorizes on an exact match —
-        # so reconstruct it and hash THAT (binds the snapshot to the sentence;
-        # distinct commits now yield distinct hashes).
-        sentence = (f"启动第一次真实S0，授权trial_id: {TRIAL_ID}，"
-                    f"使用commit: {commit}") if commit else ""
+        # so reconstruct it FROM THE TEMPLATE and hash that (binds the
+        # snapshot to the sentence; distinct commits yield distinct hashes;
+        # SA-12: deriving here keeps template/snapshot in lockstep while the
+        # regression test pins the exact bytes independently).
+        sentence = AUTHORIZATION_SENTENCE_TEMPLATE.format(
+            trial_id=TRIAL_ID, commit=commit) if commit else ""
         return {
             "registry_sha256": hashlib.sha256(raw).hexdigest(),
             "event_sequence": len(events),
@@ -869,6 +871,55 @@ class RealChain:
     def compute(self):
         ds, _uni = self._ensure()
         return stage_c_result(ds)
+
+
+# =========================================================================
+# Aaron 2026-08-02 §三: authorization snapshot control
+# =========================================================================
+
+def make_snapshot_control(chain: "RealChain", attempts_dir: Path):
+    """Build the three §三 mechanisms around one shared in-memory snapshot.
+
+    Module-level factory (SA-12 N-B): tests execute THESE closures — the
+    same objects main() wires into RunnerDeps — so the production
+    comparison and both side-effects are directly regression-tested. A
+    fail-open mutation of the recheck comparison turns the suite red.
+
+    Returns (stage_a_gate, pre_exposure_recheck, post_run_started_hook).
+    """
+    state: dict = {}
+
+    def g_authorization_snapshot():
+        snap = chain.authorization_snapshot()
+        if not snap["authorized_commit"]:
+            return (False, "no RUN_AUTHORIZED event to snapshot")
+        attempts_dir.mkdir(parents=True, exist_ok=True)
+        (attempts_dir / "AUTHORIZATION_SNAPSHOT.json").write_text(
+            json.dumps(snap, indent=1, sort_keys=True), encoding="utf-8")
+        state["snapshot"] = snap
+        return (True, "authorization snapshot recorded")
+
+    def pre_exposure_recheck():
+        before = state.get("snapshot")
+        if before is None:
+            return (False, "no Stage-A authorization snapshot in memory")
+        now = chain.authorization_snapshot()
+        same = (now["registry_sha256"] == before["registry_sha256"]
+                and now["event_sequence"] == before["event_sequence"]
+                and now["authorized_commit"] == before["authorized_commit"])
+        return (same, "registry unchanged since authorization snapshot"
+                if same else "registry CHANGED between authorization and "
+                             "run start — possible event insertion")
+
+    def post_run_started_hook(rdir: Path) -> None:
+        after = hashlib.sha256(REGISTRY.read_bytes()).hexdigest()
+        (rdir / "REGISTRY_AFTER_RUN_STARTED.json").write_text(
+            json.dumps({"registry_sha256_after_run_started": after,
+                        "snapshot_before": state.get("snapshot", {})},
+                       indent=1, sort_keys=True), encoding="utf-8")
+
+    return (g_authorization_snapshot, pre_exposure_recheck,
+            post_run_started_hook)
 
 
 # =========================================================================
@@ -918,38 +969,11 @@ def main() -> int:
     # integrity adapters -> sealed report. No placeholder anywhere.
     chain = RealChain()
 
-    # Aaron 2026-08-02 §三: authorization snapshot control ------------------
-    snap_state: dict = {}
-
-    def g_authorization_snapshot():
-        snap = chain.authorization_snapshot()
-        if not snap["authorized_commit"]:
-            return (False, "no RUN_AUTHORIZED event to snapshot")
-        adir = Path(cfg.attempts_dir)
-        adir.mkdir(parents=True, exist_ok=True)
-        (adir / "AUTHORIZATION_SNAPSHOT.json").write_text(
-            json.dumps(snap, indent=1, sort_keys=True), encoding="utf-8")
-        snap_state["snapshot"] = snap
-        return (True, "authorization snapshot recorded")
-
-    def pre_exposure_recheck():
-        before = snap_state.get("snapshot")
-        if before is None:
-            return (False, "no Stage-A authorization snapshot in memory")
-        now = chain.authorization_snapshot()
-        same = (now["registry_sha256"] == before["registry_sha256"]
-                and now["event_sequence"] == before["event_sequence"]
-                and now["authorized_commit"] == before["authorized_commit"])
-        return (same, "registry unchanged since authorization snapshot"
-                if same else "registry CHANGED between authorization and "
-                             "run start — possible event insertion")
-
-    def post_run_started_hook(rdir: Path) -> None:
-        after = hashlib.sha256(REGISTRY.read_bytes()).hexdigest()
-        (rdir / "REGISTRY_AFTER_RUN_STARTED.json").write_text(
-            json.dumps({"registry_sha256_after_run_started": after,
-                        "snapshot_before": snap_state.get("snapshot", {})},
-                       indent=1, sort_keys=True), encoding="utf-8")
+    # Aaron 2026-08-02 §三 — built by the module-level factory so the
+    # EXACT production closures are what tests execute (SA-12 N-B).
+    (g_authorization_snapshot, pre_exposure_recheck,
+     post_run_started_hook) = make_snapshot_control(
+        chain, Path(cfg.attempts_dir))
 
     deps = RunnerDeps(
         config=cfg,

@@ -18,8 +18,8 @@ PACKET_DRAFTED → PACKET_APPROVED → RUNNER_IMPLEMENTED
 → COMPLETED / FAILED
 ```
 
-- 当前位置：**PACKET_DRAFTED**（治理框架已获 Aaron 批准，最终包待
-  runner 落地后重渲染再批）。
+- 当前位置：**PACKET_APPROVED**（registry 事件 3；治理框架已获 Aaron
+  批准，仅许实现 runner——状态上限见下，真实运行仍需 §10 语句）。
 - `PACKET_APPROVED` 与 `RUN_AUTHORIZED` 是**不同状态**，前者绝不自动
   推进为后者；每次状态变化以事件追加进 ops/TRIAL_REGISTRY.md
   （UTC 时间＋commit＋actor＋原因），既有记录永不修改。
@@ -29,7 +29,7 @@ PACKET_DRAFTED → PACKET_APPROVED → RUNNER_IMPLEMENTED
   ```
   runner_entrypoint: scripts/s0_real_run.py  (zero CLI args; env-clean gate)
   runner_source_sha256:
-    scripts/s0_real_run.py:  2f0e2a1ad57099f10263ee18f7b0584d7661183b...
+    scripts/s0_real_run.py:  4f0d4b3ee1bfdf15b27f72bff637086731522d62...
     src/itsf/s0/runner.py:   772790cd9572446a...
     src/itsf/s0/runinfra.py: b6cd12d3158ba2a7...
     src/itsf/s0/context.py:  a20e959767191932...
