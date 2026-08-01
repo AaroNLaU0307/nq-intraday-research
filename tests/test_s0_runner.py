@@ -75,7 +75,11 @@ def make_deps(tmp_path: Path, *, gates=(), b_checks=(),
         render_report=renderer or (lambda r: {"S0_REPORT.md": "sealed"}),
         append_registry_event=append_event or default_append,
         clock_utc=lambda: CLOCK,
-        log=log if log is not None else logs.append)
+        log=log if log is not None else logs.append,
+        # SA-11 N-E: an unwired recheck is now FAIL-CLOSED in the runner, so
+        # the synthetic harness injects an explicit passing recheck.
+        pre_exposure_recheck=lambda: (True, "synthetic recheck"),
+        post_run_started_hook=None)
     return deps, events, logs
 
 
@@ -651,7 +655,7 @@ def test_pytest_gate_floor_is_the_audit_baseline():
     """SA-10 N3: the floor tracks the CURRENT suite, closing the
     silent-collection-drop headroom."""
     mod = real_run_module()
-    assert mod.MIN_COLLECTED_TESTS == 497
+    assert mod.MIN_COLLECTED_TESTS == 509
 
 
 # ===========================================================================
@@ -1090,3 +1094,135 @@ def test_ir24_divergence_guard_blocks_nonzero(tmp_path):
         "opening_numerator_zero_ret_open30_undefined": 0}}})()
     ok2, _ = chain.ir24_divergence_guard()
     assert ok2 is True
+
+
+# =========================================================================
+# SA-11 final-readiness fixes: Aaron section-3 snapshot control coverage
+# (N-B), sentence-hash binding (N-C), exposure classification of a post-
+# RUN_STARTED hook failure (N-D), fail-closed unwired recheck (N-E),
+# roster-membership pins for the appended gates (N-F), fail-closed missing
+# diagnostics key (N-G).
+# =========================================================================
+
+from dataclasses import replace as _dc_replace
+
+
+def test_unwired_pre_exposure_recheck_is_fail_closed(tmp_path):
+    """N-E: no recheck wired -> the atomic transition refuses, PRE-exposure."""
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()])
+    deps = _dc_replace(deps, pre_exposure_recheck=None)
+    out = S0Runner(deps).run()
+    assert out.failure_kind == "pre_run_attempt"
+    assert out.exposure_consumed is False
+    assert "RUN_STARTED" not in [e for e, _ in events]
+
+
+def test_failing_pre_exposure_recheck_blocks_before_exposure(tmp_path):
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()])
+    deps = _dc_replace(deps, pre_exposure_recheck=lambda: (
+        False, "registry changed"))
+    out = S0Runner(deps).run()
+    assert out.failure_kind == "pre_run_attempt"
+    assert out.exposure_consumed is False
+    assert not Path(deps.config.runs_dir).exists()
+
+
+def test_post_run_started_hook_failure_is_a_RUN_failure(tmp_path):
+    """N-D: RUN_STARTED appended -> exposure consumed; a hook crash must be
+    classified run_failure (trial burned, outputs retained), never pre-run."""
+    def boom(rdir):
+        raise OSError("disk hiccup")
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()])
+    deps = _dc_replace(deps, post_run_started_hook=boom)
+    out = S0Runner(deps).run()
+    assert out.failure_kind == "run_failure"
+    assert out.exposure_consumed is True
+    assert [e for e, _ in events] == ["RUN_STARTED", "FAILED"]
+    assert (out.runs_dir / "RUN_FAILURE_REPORT.md").exists()
+
+
+def test_post_run_started_hook_success_runs_and_seals(tmp_path):
+    seen: list[Path] = []
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()])
+    deps = _dc_replace(deps, post_run_started_hook=seen.append)
+    out = S0Runner(deps).run()
+    assert out.ok is True
+    assert seen == [Path(deps.config.runs_dir)]
+
+
+def _authorized_registry(tmp_path, commit: str) -> Path:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    reg = tmp_path / "TRIAL_REGISTRY.md"
+    sentence = f"启动第一次真实S0，授权trial_id: S0-T001，使用commit: {commit}"
+    reg.write_text(
+        "| # | utc | event | commit | actor | note |\n"
+        "|---|---|---|---|---|---|\n"
+        f"| 1 | 2026-08-02 | PACKET_APPROVED | x | Aaron | note |\n"
+        f"| 2 | 2026-08-02 | RUN_AUTHORIZED | {commit[:7]} | Aaron | "
+        f"[S0-T001] {sentence} |\n", encoding="utf-8")
+    return reg
+
+
+def test_authorization_snapshot_binds_the_exact_sentence(tmp_path, monkeypatch):
+    """N-C: two different authorized commits must yield two DIFFERENT
+    exact_authorization_text_sha256 values (it used to hash the parser's
+    'ok' reason — constant across commits)."""
+    mod = real_run_module()
+    hashes = []
+    for commit in ("a" * 40, "b" * 40):
+        reg = _authorized_registry(tmp_path / commit[:2], commit)
+        monkeypatch.setattr(mod, "REGISTRY", reg)
+        chain = mod.RealChain()
+        snap = chain.authorization_snapshot()
+        assert snap["authorized_commit"] == commit
+        assert snap["exact_authorization_text_sha256"]
+        hashes.append(snap["exact_authorization_text_sha256"])
+    assert hashes[0] != hashes[1]
+    import hashlib as _h
+    expected = _h.sha256(
+        ("启动第一次真实S0，授权trial_id: S0-T001，使用commit: "
+         + "b" * 40).encode("utf-8")).hexdigest()
+    assert hashes[1] == expected
+
+
+def test_snapshot_gate_and_recheck_detect_registry_change(tmp_path, monkeypatch):
+    """N-B: exercise the production snapshot state machine — Stage-A snapshot
+    written, recheck passes on an unchanged registry and fails after an
+    appended event."""
+    mod = real_run_module()
+    commit = "c" * 40
+    reg = _authorized_registry(tmp_path, commit)
+    monkeypatch.setattr(mod, "REGISTRY", reg)
+    chain = mod.RealChain()
+    snap1 = chain.authorization_snapshot()
+    snap2 = chain.authorization_snapshot()
+    assert snap1 == snap2                        # deterministic
+    # simulate the production recheck comparison
+    reg.write_text(reg.read_text("utf-8")
+                   + "| 3 | 2026-08-02 | X | y | z | inserted |\n",
+                   encoding="utf-8")
+    snap3 = chain.authorization_snapshot()
+    assert snap3["registry_sha256"] != snap1["registry_sha256"]
+    assert snap3["event_sequence"] == snap1["event_sequence"] + 1
+
+
+def test_main_wires_snapshot_control_and_appended_gates():
+    """N-F + N-E production pins: main() must wire both section-3 hooks and
+    append the two extra gates to the rosters."""
+    import inspect
+    mod = real_run_module()
+    src = inspect.getsource(mod.main)
+    assert "pre_exposure_recheck=pre_exposure_recheck" in src
+    assert "post_run_started_hook=post_run_started_hook" in src
+    assert "authorization_snapshot_recorded" in src
+    assert "ir24_f8_divergence_empty" in src
+
+
+def test_ir24_gate_fails_closed_when_diagnostics_key_missing():
+    """N-G: an absent diagnostics counter must FAIL the gate, not pass it."""
+    mod = real_run_module()
+    chain = mod.RealChain()
+    chain._ds = type("D", (), {"na_table": {}})()
+    chain._uni = object()
+    ok, detail = chain.ir24_divergence_guard()
+    assert ok is False and "fail closed" in detail

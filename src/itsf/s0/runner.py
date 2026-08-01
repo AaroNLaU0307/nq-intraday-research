@@ -294,11 +294,16 @@ class S0Runner:
         # Aaron 2026-08-02 §三.5: immediately before the transition, re-verify
         # the registry is byte-identical to the Stage-A authorization snapshot
         # (no event may be inserted between authorization and run start).
-        if self._d.pre_exposure_recheck is not None:
-            ok, why = self._d.pre_exposure_recheck()
-            if not ok:
-                raise RunGateError(
-                    f"pre-exposure registry recheck failed: {why} — STOP")
+        # SA-11 N-E: an UNWIRED recheck is fail-closed, not fail-open — the
+        # synthetic deps must inject an explicit passing recheck.
+        if self._d.pre_exposure_recheck is None:
+            raise RunGateError(
+                "no pre-exposure registry recheck wired — fail closed "
+                "(Aaron §三.5)")
+        ok, why = self._d.pre_exposure_recheck()
+        if not ok:
+            raise RunGateError(
+                f"pre-exposure registry recheck failed: {why} — STOP")
         rdir.mkdir(parents=True, exist_ok=False)
         try:
             self._d.append_registry_event(
@@ -325,14 +330,6 @@ class S0Runner:
                 f"RUN_STARTED registry append failed after dir creation; "
                 f"half-transition disclosed in {HALF_TRANSITION_NAME}: "
                 f"{type(exc).__name__}") from exc
-        # §三.6: record the post-append registry hash inside the run dir.
-        if self._d.post_run_started_hook is not None:
-            try:
-                self._d.post_run_started_hook(rdir)
-            except Exception as exc:                 # noqa: BLE001
-                raise RunGateError(
-                    f"post-RUN_STARTED registry-hash record failed: "
-                    f"{type(exc).__name__}") from exc
         return rdir
 
     # -- Stage E/F manifest chain (packet §6; SA-6 F-06) ---------------------
@@ -437,6 +434,17 @@ class S0Runner:
                 RunStage.B_LOAD_VALIDATE, "atomic_run_start",
                 f"run directory could not be created: {type(exc).__name__}: "
                 f"{exc}", exc)
+        # SA-11 N-D: RUN_STARTED has been appended — exposure IS consumed.
+        # A §三.6 post-hook failure is therefore a RUN failure (trial burned,
+        # outputs retained), never a pre-run attempt.
+        if d.post_run_started_hook is not None:
+            try:
+                d.post_run_started_hook(rdir)
+            except Exception as exc:                 # noqa: BLE001
+                return self._fail_run(
+                    RunStage.C_COMPUTE, rdir, "post_run_started_hook",
+                    f"registry-hash record failed after RUN_STARTED: "
+                    f"{type(exc).__name__}: {exc}", exc)
         self._safe_log(f"stage={RunStage.C_COMPUTE.value} status=start")
 
         # ---- Stage C: compute (zero information release) -------------------

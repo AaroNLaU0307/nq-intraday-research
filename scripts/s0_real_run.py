@@ -41,7 +41,7 @@ ATTEMPTS_ROOT = REPO / "attempts"
 # Baseline collected-test count at the SA-6 audit commit. The pytest gate
 # requires the suite to still COLLECT at least this many tests, so a muted
 # or filtered run cannot satisfy the gate with a handful of tests (F-09).
-MIN_COLLECTED_TESTS = 497                  # SA-10 N3: floor = current suite
+MIN_COLLECTED_TESTS = 509                  # SA-11 N-A: floor = current suite
 
 # External read-only tooling (packet §9 gate 4). Invoked as a subprocess;
 # the tool itself only reads repository files.
@@ -830,7 +830,14 @@ class RealChain:
         raw = REGISTRY.read_bytes()
         text = raw.decode("utf-8")
         events = parse_registry_events(text)
-        _row, commit, sentence = find_authorization_event(text)
+        _row, commit, _reason = find_authorization_event(text)
+        # SA-11 N-C: the parser's third return is a REASON string, not the
+        # sentence. The verbatim §10 sentence is fully determined by
+        # (trial_id, commit) — the parser only authorizes on an exact match —
+        # so reconstruct it and hash THAT (binds the snapshot to the sentence;
+        # distinct commits now yield distinct hashes).
+        sentence = (f"启动第一次真实S0，授权trial_id: {TRIAL_ID}，"
+                    f"使用commit: {commit}") if commit else ""
         return {
             "registry_sha256": hashlib.sha256(raw).hexdigest(),
             "event_sequence": len(events),
@@ -847,8 +854,13 @@ class RealChain:
         set must STOP pre-exposure and go to Aaron — never into a sealed
         one-shot report that would contradict IR-24."""
         ds, _uni = self._ensure()
-        n = int(ds.na_table.get("diagnostics", {}).get(
-            "opening_numerator_zero_ret_open30_undefined", 0))
+        diag = ds.na_table.get("diagnostics")
+        key = "opening_numerator_zero_ret_open30_undefined"
+        # SA-11 N-G: a MISSING diagnostics key is fail-closed, never a pass.
+        if diag is None or key not in diag:
+            return (False, "diagnostics counter absent from na_table — "
+                           "fail closed (cannot evidence divergence == 0)")
+        n = int(diag[key])
         if n == 0:
             return (True, "IR-24 F8 divergence set empty")
         return (False, f"IR-24 F8 divergence set NON-EMPTY (count={n}) — "
