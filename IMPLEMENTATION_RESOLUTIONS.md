@@ -74,6 +74,13 @@ modify 项按两阶段流程形成正式 Addendum 并更新实现与测试。
 **Y6 文字勘误（同批）**：n_year=1 → decile=1 是 **explicit singleton-year
 convention**，不得称"公式极限"（0/0 无唯一极限）。
 
+**IR-16 reconciliation（SA-6 F-32，Aaron 2026-08-02 批准关闭）**：冻结
+L30-32 以 symbology 映射**定义** F11/is_roll_transition；IR-16 的"仅验证
+与披露"限定的是**具体合约代码（raw_symbol）身份**——roll 识别本身来自
+instrument_id 变化（数据内在事实），官方映射用于独立验证该识别并披露
+合约身份，绝不反向修改 F5/F11 的 Primary 语义。两者不矛盾：映射 csv 在
+LOCKED 输入中是因为它是**验证输入**，不是特征取值来源。
+
 **报告治理修正（同批 Aaron 批复）**：(1) F10 必须双报 raw category membership counts 与
 final mutually-exclusive F10 counts，并断言 CPI+NFP+FOMC+none+NA_multi_event == 结构合格日数；
 (2) commit 元数据统一为 input_commit / subagent_integration_commit / post_integration_fix_commit /

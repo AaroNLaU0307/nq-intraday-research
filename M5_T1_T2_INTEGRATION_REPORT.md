@@ -35,6 +35,11 @@ A  tests/test_s0_dataset.py              （main agent 补写）
 （* 标注文件在本 commit 内因 IR-21 与注释清理再次变更；最终哈希以本
 commit 的 git blob 为准。）
 
+**行数口径披露（SA-6 F-33 / SA-10 复核，2026-08-02 补注）**：本表"行数"
+列为 **non-empty lines**（非空行）计数，非 physical lines——例如
+context.py 物理行 960、非空行 837。哈希列不受影响（当时与现在均逐位
+正确）；此为口径披露，非勘误。
+
 ## 3. 内容归属
 
 - **SA-4 落盘**：context.py 全部（837 行）；dataset.py 主体（除 Y6 段）；

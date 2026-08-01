@@ -111,6 +111,15 @@ class RunnerDeps:
     sha256=<64hex>`), so the guard is satisfiable by construction; a rejected
     message is recorded and escalated to a stage failure rather than
     swallowed."""
+    # Aaron 2026-08-02 §三 registry authorization-snapshot control. Optional
+    # (synthetic deps stay minimal); production wires both:
+    #   pre_exposure_recheck : re-verify the registry is byte-identical to
+    #     the Stage-A authorization snapshot, IMMEDIATELY before the atomic
+    #     transition (blocks event-insertion between authorization and run).
+    #   post_run_started_hook : record the post-append registry hash into
+    #     the freshly-created runs directory.
+    pre_exposure_recheck: Callable[[], tuple[bool, str]] | None = None
+    post_run_started_hook: Callable[[Path], None] | None = None
 
 
 @dataclass
@@ -282,6 +291,14 @@ class S0Runner:
             raise RunGateError(
                 f"runs root already holds {len(prior)} directory/ies for trial "
                 f"{self._d.config.trial_id} ({prior[0]} ...) — STOP")
+        # Aaron 2026-08-02 §三.5: immediately before the transition, re-verify
+        # the registry is byte-identical to the Stage-A authorization snapshot
+        # (no event may be inserted between authorization and run start).
+        if self._d.pre_exposure_recheck is not None:
+            ok, why = self._d.pre_exposure_recheck()
+            if not ok:
+                raise RunGateError(
+                    f"pre-exposure registry recheck failed: {why} — STOP")
         rdir.mkdir(parents=True, exist_ok=False)
         try:
             self._d.append_registry_event(
@@ -308,6 +325,14 @@ class S0Runner:
                 f"RUN_STARTED registry append failed after dir creation; "
                 f"half-transition disclosed in {HALF_TRANSITION_NAME}: "
                 f"{type(exc).__name__}") from exc
+        # §三.6: record the post-append registry hash inside the run dir.
+        if self._d.post_run_started_hook is not None:
+            try:
+                self._d.post_run_started_hook(rdir)
+            except Exception as exc:                 # noqa: BLE001
+                raise RunGateError(
+                    f"post-RUN_STARTED registry-hash record failed: "
+                    f"{type(exc).__name__}") from exc
         return rdir
 
     # -- Stage E/F manifest chain (packet §6; SA-6 F-06) ---------------------

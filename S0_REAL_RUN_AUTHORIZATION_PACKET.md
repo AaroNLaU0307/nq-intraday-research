@@ -23,22 +23,51 @@ PACKET_DRAFTED → PACKET_APPROVED → RUNNER_IMPLEMENTED
 - `PACKET_APPROVED` 与 `RUN_AUTHORIZED` 是**不同状态**，前者绝不自动
   推进为后者；每次状态变化以事件追加进 ops/TRIAL_REGISTRY.md
   （UTC 时间＋commit＋actor＋原因），既有记录永不修改。
-- **最终包重渲染要求**：runner 实现并完成审计后，本包必须重新渲染并
-  额外锁定——`authorized_commit` 完整 hash、`runner_entrypoint`、
-  runner 及关键模块 SHA-256、requirements/lockfile SHA-256、Python
-  版本、pandas/databento/pandas-market-calendars/tzdata 等版本、
-  操作系统与时区、runner 零配置覆盖检查结果。重渲染后的状态上限为
-  `READY_FOR_RUN_AUTHORIZATION`，仍须 Aaron 发 §10 精确语句才进入
-  `RUN_AUTHORIZED`。
+- **最终环境锁（M5-T5 重渲染，2026-08-02 实值；authorized_commit 除外
+  ——见 §1 防自引用定案）**：
+  ```
+  runner_entrypoint: scripts/s0_real_run.py  (zero CLI args; env-clean gate)
+  runner_source_sha256:
+    scripts/s0_real_run.py:  eef7f6e56f7ae4f82c0ab3b88686cae0f903c33e...
+    src/itsf/s0/runner.py:   ef2495930534db26...
+    src/itsf/s0/runinfra.py: b6cd12d3158ba2a7...
+    src/itsf/s0/context.py:  a20e959767191932...
+    src/itsf/s0/dataset.py:  8e12d35043c0110d...
+    src/itsf/s0/labels.py:   964af7725061ad5d...
+    src/itsf/s0/features.py: a5e222f679731640...
+    src/itsf/contracts.py:   80868657b68901d4...
+    src/itsf/guards.py:      6ec6345734e97f2f...
+  requirements_lock: ops/requirements.lock.txt
+    sha256 f87799f6d24d3788b8b7b41b7f81d3b01cb2da8070294eba56bada69bbcc16a0
+  python: 3.13.14 | pandas 2.3.3 | numpy 2.5.0 | databento 0.81.0
+  pandas-market-calendars 5.4.0 | tzdata 2026.3
+  os: Windows-11-10.0.26200-SP0 | machine tz irrelevant (all logic ET via
+  zoneinfo; context enforces tz-aware ET at the choke point)
+  preflight (M5-T5 rerun, IR-22/23/24, IR-24 divergence==0 evidenced):
+    S0_INPUT_PREFLIGHT.json  9d6dd1c15602f6188e0b85754118dd51eb81b65c...
+    S0_INPUT_PREFLIGHT_REPORT.md  ea287f85638c0afdac6d5d0dd9bbfbc85f1c...
+  zero-override proof: 13-gate roster incl. parent_env_clean +
+    frozen_constants_in_process; hermetic child env; no CLI args
+    (pinned by tests/test_s0_runner.py)
+  ```
+  重渲染后的状态上限为 `READY_FOR_RUN_AUTHORIZATION`（须 final-readiness
+  审计全 CLOSED），仍须 Aaron 发 §10 精确语句才进入 `RUN_AUTHORIZED`。
 
 ## 1. 运行代码版本
 
 - 起草时 Git HEAD（全 hash）：`541571f4c0f55eadf19f9edfda1688e98f5deffd`
 - 起草时工作区：CLEAN（git status --porcelain 空）
-- **本次运行允许使用的唯一 commit**：由 Aaron 在 §10 授权语句中指名的
-  完整 hash。诚实前提：真实 S0 runner 尚未实现（当前
-  `run_real_study()` 为 NotImplementedError 挡板）；流程为
-  本包批准 → runner 实现与审查 → 全部硬门通过 → Aaron 指名该 commit。
+- **本次运行允许使用的唯一 commit**（Aaron 2026-08-02 §四防自引用定案）：
+  ```
+  authorized_commit_source: exact_section_10_runtime_authorization_event
+  authorized_commit: TO_BE_SUPPLIED_BY_AARON
+  runtime_requirement: authorized_commit == git_HEAD
+  ```
+  tracked 授权包**永不**嵌入自身最终 commit hash（含自身 hash 的文件无法
+  稳定得到自己的 commit hash）；真正的 commit 只由 Aaron 的 §10 精确语句
+  提供，并由 registry 事件解析器结构化验证（event 单元格恰为
+  RUN_AUTHORIZED＋逐字语句＋40 位 hash == HEAD）。
+  历史注记：runner 已实现（M5-T1..T4），Stage C 为真实链，占位符全除。
 - 运行前 HEAD 若与授权语句中的 hash 不一致，**授权自动失效**，必须重新
   申请；工作区必须 CLEAN。
 
@@ -81,6 +110,16 @@ trial 开始后不得重置、删除或重新编号；失败运行同样入册�
   修复后必须申请 S0-T002。
 - **任何中间结果一旦被读取或展示，一律视为 Stage C exposure 已发生**，
   无论程序处于哪个阶段。
+- **措辞修正（SA-10 N1，Aaron 2026-08-02 批准）**：Stage B 会在内存中
+  完整构建数据集（IR-22 的 Stage-B STOP 语义要求如此），但**只释放结构
+  计数，绝不释放任何研究数值**；A/B 失败不消耗 exposure 的依据是
+  "未释放"，而非"未计算"。
+- **Registry 授权快照控制（SA-10 N5 补偿控制，Aaron 2026-08-02 §三）**：
+  Stage A 在授权门通过后结构化解析最后一个合法 RUN_AUTHORIZED 事件并
+  写入 attempt 目录 `AUTHORIZATION_SNAPSHOT.json`（registry_sha256／
+  event_sequence／trial_id／authorized_commit／精确语句 sha256）；
+  进入原子 RUN_STARTED 转换前**再次核验 registry 未变**（防事件插入）；
+  追加后把新 registry hash 记入 runs 目录。
 
 ## 4. 输入数据锁定（运行时逐项重验，不符即 STOP）
 

@@ -694,7 +694,8 @@ def test_first_gate_delegates_to_guards_assert_real_run_allowed(monkeypatch):
 
 def test_locked_inputs_include_the_assertion_file_and_a1_manifest():
     mod = real_run_module()
-    assert mod.LOCKED["preflight_json"][1].startswith("5c0ae2d7")
+    # M5-T5 rerun lock (IR-22/23/24 applied; IR-24 divergence==0 evidenced)
+    assert mod.LOCKED["preflight_json"][1].startswith("9d6dd1c1")
     assert mod.LOCKED_EXTERNAL["a1_manifest"][1].startswith("d8d1edc7")
     assert mod.RAW_FILE_SET_SHA256.startswith("08fca11b")
 

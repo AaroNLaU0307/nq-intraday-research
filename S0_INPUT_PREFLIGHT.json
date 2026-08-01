@@ -2,11 +2,11 @@
  "stage": "INPUT_PREFLIGHT_ONLY",
  "real_s0": "NOT_RUN",
  "approval": "AWAITING_AARON_APPROVAL",
- "input_commit": "c557c3b4a84ef41890fbc2a1689623eac8ae0ed9",
+ "input_commit": "e9fc48bda6546c64ee3e9f4393917643533da491",
  "subagent_integration_commit": "a8faf31593cad152dd83c9da236c3e236c47b47d",
  "post_integration_fix_commit": "c557c3b4a84ef41890fbc2a1689623eac8ae0ed9",
- "report_rendered_from_head": "c557c3b4a84ef41890fbc2a1689623eac8ae0ed9",
- "generated_at_utc": "2026-07-31T07:03:35.550233+00:00",
+ "report_rendered_from_head": "e9fc48bda6546c64ee3e9f4393917643533da491",
+ "generated_at_utc": "2026-08-01T11:18:48.703908+00:00",
  "development_window": {
   "start_inclusive": "2010-06-06",
   "end_exclusive": "2022-01-01"
@@ -427,7 +427,12 @@
    "2020-10-06",
    "2021-07-15"
   ],
-  "note": "ret_open30 == 0 exactly: frozen L82 requires these be counted and reported separately as no-direction, non-tradeable days. The day is NOT deleted."
+  "note": "ret_open30 == 0 exactly: frozen L82 requires these be counted and reported separately as no-direction, non-tradeable days. The day is NOT deleted. IR-24 (Option B, frozen literal): membership requires ret_open30 to be computable \u2014 O0930, C0959 and ADR14 all available and finite \u2014 and to be exactly zero."
+ },
+ "opening_numerator_zero_ret_open30_undefined": {
+  "count": 0,
+  "dates": [],
+  "note": "C0959 - O0930 is exactly 0 while ret_open30 itself is undefined (ADR14 unavailable, non-finite or zero). IR-24: such a day is direction_undeterminable_na and is NOT in the frozen L82 population; equal anchors never substitute for the ret_open30 definition. Disclosure counter only \u2014 no day is deleted and no NA class is created."
  },
  "na_reason_precedence": [
   "reasons are assigned by FIRST match in the documented order per feature; a day can satisfy several (e.g. an ADR14 warm-up day that is also a roll transition is counted once, under the earlier test), so reason counts sum to the NA total exactly",

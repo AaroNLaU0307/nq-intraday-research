@@ -3,11 +3,11 @@
 - stage: `INPUT_PREFLIGHT_ONLY`
 - real_s0: `NOT_RUN`
 - approval: `AWAITING_AARON_APPROVAL`
-- input_commit: `c557c3b4a84ef41890fbc2a1689623eac8ae0ed9`
+- input_commit: `e9fc48bda6546c64ee3e9f4393917643533da491`
 - subagent_integration_commit: `a8faf31593cad152dd83c9da236c3e236c47b47d`
 - post_integration_fix_commit: `c557c3b4a84ef41890fbc2a1689623eac8ae0ed9`
-- report_rendered_from_head: `c557c3b4a84ef41890fbc2a1689623eac8ae0ed9`
-- generated_at_utc: `2026-07-31T07:03:35.550233+00:00`
+- report_rendered_from_head: `e9fc48bda6546c64ee3e9f4393917643533da491`
+- generated_at_utc: `2026-08-01T11:18:48.703908+00:00`
 
 Input-eligibility verification only. This document contains counts, booleans, reason classifications and status fields exclusively. No feature value, no distribution, no label value, no cost figure, no simulation output and no judgment appears anywhere in it, by construction and by machine-checked guard (tests/test_preflight.py).
 
@@ -72,9 +72,15 @@ IR-19 sidecar `prev_close_from_early_close_day`: 58 days.
 
 ### Frozen L82 no-direction days: 26
 
-ret_open30 == 0 exactly: frozen L82 requires these be counted and reported separately as no-direction, non-tradeable days. The day is NOT deleted.
+ret_open30 == 0 exactly: frozen L82 requires these be counted and reported separately as no-direction, non-tradeable days. The day is NOT deleted. IR-24 (Option B, frozen literal): membership requires ret_open30 to be computable — O0930, C0959 and ADR14 all available and finite — and to be exactly zero.
 
 Dates: 2011-02-18, 2011-05-16, 2011-05-19, 2011-06-16, 2011-07-05, 2012-02-24, 2012-03-09, 2012-04-02, 2012-09-21, 2012-10-05, 2012-10-08, 2012-12-26, 2013-04-12, 2013-06-26, 2013-09-11, 2013-11-01, 2014-01-03, 2014-04-28, 2014-06-23, 2014-07-23, 2015-02-23, 2015-11-03, 2016-03-31, 2017-05-12, 2020-10-06, 2021-07-15
+
+### IR-24 `opening_numerator_zero_ret_open30_undefined`: 0
+
+C0959 - O0930 is exactly 0 while ret_open30 itself is undefined (ADR14 unavailable, non-finite or zero). IR-24: such a day is direction_undeterminable_na and is NOT in the frozen L82 population; equal anchors never substitute for the ret_open30 definition. Disclosure counter only — no day is deleted and no NA class is created.
+
+Dates: none
 
 NA reason precedence:
 

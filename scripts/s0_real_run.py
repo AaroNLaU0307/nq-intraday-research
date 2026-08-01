@@ -68,8 +68,9 @@ LOCKED = {
                     "51ce415c6e2c06eb363d8061b9543c13d1b9ff11dfecbd9ec2312e3c66212813"),
     # SA-6 F-07: the assertion FILE itself must be hash-locked, otherwise the
     # Stage-B comparison can be moved by editing the expectations.
+    # M5-T5 re-lock: rerun under IR-22/23/24; IR-24 divergence==0 evidenced.
     "preflight_json": ("S0_INPUT_PREFLIGHT.json",
-                       "5c0ae2d7bc007cd8196d2bca796c1bf2f36e0d2c35ef4ac354d0f1d187614bbf"),
+                       "9d6dd1c15602f6188e0b85754118dd51eb81b65cd60a086a133dee1bb14debd6"),
 }
 
 # packet §4 locked inputs that live OUTSIDE the repository.
@@ -822,6 +823,24 @@ class RealChain:
         ds, uni = self._ensure()
         return structural_actuals_from(ds, uni)
 
+    def authorization_snapshot(self) -> dict:
+        """Aaron 2026-08-02 §三: structured snapshot of the authorization
+        state, taken at Stage A and re-verified immediately before the atomic
+        RUN_STARTED transition."""
+        raw = REGISTRY.read_bytes()
+        text = raw.decode("utf-8")
+        events = parse_registry_events(text)
+        _row, commit, sentence = find_authorization_event(text)
+        return {
+            "registry_sha256": hashlib.sha256(raw).hexdigest(),
+            "event_sequence": len(events),
+            "trial_id": TRIAL_ID,
+            "authorized_commit": commit,
+            "exact_authorization_text_sha256":
+                hashlib.sha256(sentence.encode("utf-8")).hexdigest()
+                if sentence else "",
+        }
+
     def ir24_divergence_guard(self) -> tuple[bool, str]:
         """SA-10 N6 (blocking): the F8 NA-reason vocabulary and the IR-24 day
         class diverge exactly on the opening_numerator_zero set. A non-empty
@@ -887,10 +906,45 @@ def main() -> int:
     # integrity adapters -> sealed report. No placeholder anywhere.
     chain = RealChain()
 
+    # Aaron 2026-08-02 §三: authorization snapshot control ------------------
+    snap_state: dict = {}
+
+    def g_authorization_snapshot():
+        snap = chain.authorization_snapshot()
+        if not snap["authorized_commit"]:
+            return (False, "no RUN_AUTHORIZED event to snapshot")
+        adir = Path(cfg.attempts_dir)
+        adir.mkdir(parents=True, exist_ok=True)
+        (adir / "AUTHORIZATION_SNAPSHOT.json").write_text(
+            json.dumps(snap, indent=1, sort_keys=True), encoding="utf-8")
+        snap_state["snapshot"] = snap
+        return (True, "authorization snapshot recorded")
+
+    def pre_exposure_recheck():
+        before = snap_state.get("snapshot")
+        if before is None:
+            return (False, "no Stage-A authorization snapshot in memory")
+        now = chain.authorization_snapshot()
+        same = (now["registry_sha256"] == before["registry_sha256"]
+                and now["event_sequence"] == before["event_sequence"]
+                and now["authorized_commit"] == before["authorized_commit"])
+        return (same, "registry unchanged since authorization snapshot"
+                if same else "registry CHANGED between authorization and "
+                             "run start — possible event insertion")
+
+    def post_run_started_hook(rdir: Path) -> None:
+        after = hashlib.sha256(REGISTRY.read_bytes()).hexdigest()
+        (rdir / "REGISTRY_AFTER_RUN_STARTED.json").write_text(
+            json.dumps({"registry_sha256_after_run_started": after,
+                        "snapshot_before": snap_state.get("snapshot", {})},
+                       indent=1, sort_keys=True), encoding="utf-8")
+
     deps = RunnerDeps(
         config=cfg,
         trial_state=TrialState.PACKET_APPROVED,
-        gates=build_gates(),
+        gates=(*build_gates(),
+               GateCheck("authorization_snapshot_recorded",
+                         g_authorization_snapshot)),   # Aaron §三.1-4
         structural_checks=(*build_structural_checks(
             Path(cfg.assertions_path),
             actuals_provider=chain.structural_actuals,
@@ -902,7 +956,9 @@ def main() -> int:
         render_report=render_s0_report,
         append_registry_event=registry_append,
         clock_utc=clock,
-        log=guarded_log)
+        log=guarded_log,
+        pre_exposure_recheck=pre_exposure_recheck,     # Aaron §三.5
+        post_run_started_hook=post_run_started_hook)   # Aaron §三.6
 
     out = S0Runner(deps).run()
     print(f"terminal: stage={out.terminal_stage.value} ok={out.ok} "
