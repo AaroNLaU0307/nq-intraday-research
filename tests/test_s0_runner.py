@@ -714,10 +714,15 @@ def test_dual_state_satisfiability_layouts(tmp_path, monkeypatch):
     assert problem == "", problem
     assert len(live) <= 1
 
-    # Layout B — exactly one live authorization for this HEAD.
+    # Layout B — exactly one live authorization for this HEAD. IR-25
+    # erratum (SA-14): retire whatever is ALREADY live in the real bytes
+    # first — without this, the test itself is a second self-block: in the
+    # authorized state the probe row makes 2 live rows, the parser
+    # correctly fails closed, and the suite goes red mid-run.
     reg_b = tmp_path / "TRIAL_REGISTRY.md"
     n_supersedes = real.count("RUN_AUTHORIZATION_SUPERSEDED")
-    text_b = real + _auth_row(90 + n_supersedes, head)
+    retire = "".join(_supersede_row(89, r["seq"], c) for r, c in live)
+    text_b = real + retire + _auth_row(90 + n_supersedes, head)
     reg_b.write_text(text_b, encoding="utf-8")
     row, commit, detail = mod.find_authorization_event(text_b)
     assert commit == head, detail

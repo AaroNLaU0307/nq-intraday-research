@@ -108,3 +108,14 @@ INC-e6fe49ec63de）在 Stage-A `full_pytest` 门失败。根因＝结构性自�
 | 双状态可满足性（§四） | 全套 pytest 在布局 A（零存活授权）与布局 B（恰一条存活、commit==该布局 HEAD）均须通过；授权态测试必须走生产解析器与生产同构 registry 字节，禁 mock 直返成功。套件内唯一读真实 registry 的测试已状态无关化（grep 证据），布局 B 由生产字节＋追加合法行的 fixture 直测（含 RealChain.authorization_snapshot 全链） |
 | 本次失败处置（§三） | 行 6（RUN_AUTHORIZED @524c9ab）、"+"失败事件行、attempts/ 全部工件、incident 一律保留不改；追加行 7 `RUN_AUTHORIZATION_SUPERSEDED` 精确引用行 6（reason_code=RUNTIME_SELFBLOCK_FIX, incident_id=INC-e6fe49ec63de）；全部随修复 commit 入库 |
 | 收口序（§五） | IR 落档 → 修复 → 全量电池（含冻结 hash/扫描/Stage-A 合成测试）→ 新修复 commit → Opus 只读审计（重点=运行可满足性）→ 全 CLOSED 后追加新 READY_FOR_RUN_AUTHORIZATION → **停等 Aaron 对新 HEAD 重发 §10**。不得自动再授权或运行；S0-T001 未消耗，仍为首次真实 trial |
+
+**IR-25 勘误（SA-14 审计，2026-08-01）**：§四行中"套件内唯一读真实
+registry 的测试已状态无关化"陈述**不实**——实际有两个测试读真实
+registry（结构测试＋双状态测试），且双状态测试本身在授权态构成第二个
+自锁（对真实字节直接追加探针授权行→2 行存活→fail-closed→套件红，
+与 INC-e6fe49ec63de 同门同样式）。SA-14 已在隔离副本端到端验证修复
+（布局 B 先 supersede 存活集再追加探针行）：双布局 519 全绿、模拟
+13 门 Stage A 全过（COMPLETE 13/13）。修复仅动测试文件，收集数不变。
+SA-14 另留三条非阻塞观察（>40-hex 截断接受、supersede note 多字段组
+仅取首、非数字 seq 的 RUN_AUTHORIZED 行将永久不可 supersede）——
+记入 P3 backlog，不在授权前扩测试面。
