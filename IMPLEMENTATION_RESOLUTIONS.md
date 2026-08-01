@@ -63,6 +63,17 @@ modify 项按两阶段流程形成正式 Addendum 并更新实现与测试。
 
 | IR-21 (=Y6 装桶) | **修订版 Option A（APPROVED_BY_AARON 2026-07-31）**：按 calendar year 独立；排名总体=该年 Y_cont 非 NA 的 Development 日（L82 零方向/方向不可判/ADR warm-up 等一律 Y6=NA 且**继承** y_cont 底层 NA 原因，不造新原因）；ascending（decile 1=最低）；**ties 用 average rank，相同 Y_cont 必得相同 Y6，禁止日期/行序/index/rank(method="first") 拆并列**；percentile_rank=(average_rank−1)/(n_year−1)；decile=clip(1+floor(10·pr),1,10)；并列致箱不均或空箱允许并如实披露；机械边界：n_year=1 时按公式极限 pr=0→decile 1（披露）；**use_restriction 机器保证**：仅描述性，不进 feature/Oracle/Primary/样本资格/成本/候选筛选/trial 选择；convention 运行时参数整体移除（唯一规则，无可选项） | 行 91 / 行 45 | 仅描述性标签 | 修订版 Option A；8 项专项测试（跨年独立/min1 max10/ties 同箱/行序不变/NA 传播继承/不完整年/Oracle 路径隔离/无 tie-break 源扫描） |
 
+### SA-6 方法决策批次（APPROVED_BY_AARON 2026-08-01）
+
+| ID | 内容 | 冻结章节 | 批复定案 |
+|---|---|---|---|
+| IR-22 (=F4 非有限 volume) | 任一必需 09:30-09:59 volume 为 NaN/非有限 → classification=**INPUT_DATA_DEFECT**，**Stage B 立即 STOP**（非可继续运行的日级 NA）；当日不入 F4 参照集；不得继续产出该 trial 任何研究结果；**禁 np.nansum**——先断言窗口全 finite 再普通 sum；context.py 与 s0_input_preflight.py 同步修复同测试。当前 A1 零 NaN → 现有结构数字不变 | 行 56/45 | 修正语义版 Option A |
+| IR-23 (=Y1/Y2/Y3 独立计算) | **删除**任何 "d_open==0 → 整行标签 NA" 早退；每标签只按自身必要输入判可算：Y1{O1000,C1544,ADR14}、Y2{O1000,C1544,PM close path}、Y3{C1544,PM high,PM low}；Y1/Y2/Y3 **不得**因 zero_direction/undeterminable 本身 NA；warm-up 日 Y1 NA 但 Y2/Y3 可算；Y_cont/Y4/Y5 继续依赖方向；Y6 继续依赖 Y_cont；覆盖数字重跑机械生成不得手写。labels.py **限定语义解锁**（仅此改动，非任意重构） | 行 86-91/45 | Option A＋逐标签独立 |
+| IR-24 (=L82 判定) | **Option B（冻结字面）**：仅当 ret_open30 **可计算且 exactly zero** 才属 L82（需 O0930/C0959/ADR14 全可用且 finite）；ADR 缺失/非有限/为零或锚点缺失 → **不属 L82**，归 direction_undeterminable_na 等批准原因；新增 diagnostic `opening_numerator_zero_ret_open30_undefined`（分子为 0 但标准化回报不可定义的计数披露）；当前输入两口径零差异，但**此后不得用锚点相等替代 ret_open30 定义**（main agent 原推荐 A 被否——不得以"价格事实"新政策覆盖冻结字面） | 行 82 | Option B |
+
+**Y6 文字勘误（同批）**：n_year=1 → decile=1 是 **explicit singleton-year
+convention**，不得称"公式极限"（0/0 无唯一极限）。
+
 **报告治理修正（同批 Aaron 批复）**：(1) F10 必须双报 raw category membership counts 与
 final mutually-exclusive F10 counts，并断言 CPI+NFP+FOMC+none+NA_multi_event == 结构合格日数；
 (2) commit 元数据统一为 input_commit / subagent_integration_commit / post_integration_fix_commit /

@@ -153,6 +153,12 @@ class RunGateError(RuntimeError):
     """A packet-§9 hard gate failed in Stage A/B (pre-exposure)."""
 
 
+class InputDataDefectError(RuntimeError):
+    """IR-22: a required input value is structurally defective (e.g.
+    non-finite opening-window volume). Stage-B STOP — never a day-level NA
+    the run may continue past."""
+
+
 class NAConservationError(RuntimeError):
     """Stage D: produced NA does not conserve against APPROVED_NA_REASONS."""
 
