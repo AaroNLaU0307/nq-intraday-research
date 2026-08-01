@@ -41,7 +41,7 @@ ATTEMPTS_ROOT = REPO / "attempts"
 # Baseline collected-test count at the SA-6 audit commit. The pytest gate
 # requires the suite to still COLLECT at least this many tests, so a muted
 # or filtered run cannot satisfy the gate with a handful of tests (F-09).
-MIN_COLLECTED_TESTS = 347
+MIN_COLLECTED_TESTS = 497                  # SA-10 N3: floor = current suite
 
 # External read-only tooling (packet §9 gate 4). Invoked as a subprocess;
 # the tool itself only reads repository files.
@@ -414,7 +414,41 @@ def build_gates(*, repo: Path = REPO, registry: Path = REGISTRY,
                            f"{MIN_COLLECTED_TESTS} baseline (suite muted?)")
         return (True, f"pytest passed, {collected} tests collected")
 
+    def g_parent_env_clean():
+        # SA-10 N4 / F-09(b): the runner's OWN interpreter must not carry
+        # override vectors either (children are already hermetic).
+        hostile = [v for v in ("PYTHONPATH", "PYTHONSTARTUP", "PYTHONHOME",
+                               "PYTEST_ADDOPTS", "GIT_DIR", "GIT_WORK_TREE",
+                               "GIT_CONFIG", "GIT_CONFIG_GLOBAL",
+                               "GIT_TEMPLATE_DIR", "GIT_CEILING_DIRECTORIES")
+                   if os.environ.get(v)]
+        return (not hostile,
+                f"hostile env vars set in the runner's own process: {hostile}"
+                if hostile else "parent interpreter env clean")
+
+    def g_frozen_constants_in_process():
+        # SA-10 F-19: re-verify frozen module constants inside THIS
+        # interpreter (the pytest-child pins cannot see an in-process rebind).
+        from itsf.s0 import context as _ctx, dataset as _ds
+        expected = (
+            ("dataset.THETA_PRIMARY", _ds.THETA_PRIMARY, 0.5),
+            ("dataset.THETA_SECONDARY", _ds.THETA_SECONDARY, 0.3),
+            ("dataset.DECILE_COUNT", _ds.DECILE_COUNT, 10),
+            ("dataset.DEV_START", _ds.DEV_START, "2010-06-06"),
+            ("dataset.DEV_END_EXCL", _ds.DEV_END_EXCL, "2022-01-01"),
+            ("context.F4_LOOKBACK_DAYS", _ctx.F4_LOOKBACK_DAYS, 60),
+            ("context.MICRO_ERA_BOUNDARY", _ctx.MICRO_ERA_BOUNDARY,
+             "2019-05-06"),
+            ("config.seed", SEED, 20260731),
+        )
+        bad = [name for name, got, want in expected if got != want]
+        return (not bad, f"frozen-constant drift in-process: {bad}"
+                if bad else f"{len(expected)} frozen constants verified "
+                            "in the runner interpreter")
+
     return [
+        GateCheck("parent_env_clean", g_parent_env_clean),
+        GateCheck("frozen_constants_in_process", g_frozen_constants_in_process),
         GateCheck("real_run_allowed", g_real_run_allowed),
         GateCheck("git_clean", g_clean),
         GateCheck("run_authorized_event", g_authorized_event),
@@ -788,6 +822,19 @@ class RealChain:
         ds, uni = self._ensure()
         return structural_actuals_from(ds, uni)
 
+    def ir24_divergence_guard(self) -> tuple[bool, str]:
+        """SA-10 N6 (blocking): the F8 NA-reason vocabulary and the IR-24 day
+        class diverge exactly on the opening_numerator_zero set. A non-empty
+        set must STOP pre-exposure and go to Aaron — never into a sealed
+        one-shot report that would contradict IR-24."""
+        ds, _uni = self._ensure()
+        n = int(ds.na_table.get("diagnostics", {}).get(
+            "opening_numerator_zero_ret_open30_undefined", 0))
+        if n == 0:
+            return (True, "IR-24 F8 divergence set empty")
+        return (False, f"IR-24 F8 divergence set NON-EMPTY (count={n}) — "
+                       "STOP; requires an Aaron ruling before any run")
+
     def compute(self):
         ds, _uni = self._ensure()
         return stage_c_result(ds)
@@ -800,7 +847,7 @@ class RealChain:
 def main() -> int:
     from itsf.contracts import RunConfig, TrialState
     from itsf.s0 import runinfra
-    from itsf.s0.runner import RunnerDeps, S0Runner
+    from itsf.s0.runner import GateCheck, RunnerDeps, S0Runner
     from itsf.s0.runner import append_registry_event_line
 
     # whole-second UTC: the guarded log schemas admit no fractional seconds
@@ -844,10 +891,12 @@ def main() -> int:
         config=cfg,
         trial_state=TrialState.PACKET_APPROVED,
         gates=build_gates(),
-        structural_checks=build_structural_checks(
+        structural_checks=(*build_structural_checks(
             Path(cfg.assertions_path),
             actuals_provider=chain.structural_actuals,
             wiring_status=chain.ready),
+            GateCheck("ir24_f8_divergence_empty",
+                      chain.ir24_divergence_guard)),   # SA-10 N6, blocking
         compute=chain.compute,
         integrity_checks=build_integrity_checks(),
         render_report=render_s0_report,

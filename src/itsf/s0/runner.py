@@ -38,9 +38,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
 
-from itsf.contracts import (AssertionMismatchError, LogLeakError,
-                            NAConservationError, RunConfig, RunGateError,
-                            RunStage, TrialState)
+from itsf.contracts import (AssertionMismatchError, InputDataDefectError,
+                            LogLeakError, NAConservationError, RunConfig,
+                            RunGateError, RunStage, TrialState)
 from itsf.s0 import runinfra
 
 STAGE_ORDER = (RunStage.A_PRECHECK, RunStage.B_LOAD_VALIDATE,
@@ -55,7 +55,8 @@ HALF_TRANSITION_NAME = "HALF_TRANSITION.md"
 # STRING (a compute crash whose message merely started with "LogLeakError:"
 # used to be reported as a genuine log-leak abort).
 _CONTRACT_ERRORS: tuple[type[BaseException], ...] = (
-    RunGateError, NAConservationError, AssertionMismatchError, LogLeakError)
+    RunGateError, NAConservationError, AssertionMismatchError, LogLeakError,
+    InputDataDefectError)                      # SA-10 N2: IR-22 defects named
 
 
 def classify_exception(exc: BaseException | None) -> str:

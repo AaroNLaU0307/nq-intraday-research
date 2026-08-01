@@ -59,6 +59,7 @@ from pathlib import Path
 from itsf.contracts import (
     APPROVED_NA_REASONS,
     AssertionMismatchError,
+    InputDataDefectError,
     LogLeakError,
     NAConservationError,
     RunConfig,
@@ -952,6 +953,7 @@ _VALID_EXCEPTION_TYPES = (
     NAConservationError.__name__,
     AssertionMismatchError.__name__,
     LogLeakError.__name__,
+    InputDataDefectError.__name__,             # SA-10 N2 (IR-22)
     "Unknown",
 )
 

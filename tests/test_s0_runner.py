@@ -648,8 +648,10 @@ def test_parse_pytest_collected(output, expected):
 
 
 def test_pytest_gate_floor_is_the_audit_baseline():
+    """SA-10 N3: the floor tracks the CURRENT suite, closing the
+    silent-collection-drop headroom."""
     mod = real_run_module()
-    assert mod.MIN_COLLECTED_TESTS == 347
+    assert mod.MIN_COLLECTED_TESTS == 497
 
 
 # ===========================================================================
@@ -661,6 +663,8 @@ def test_gate_list_covers_every_packet_section_9_gate():
     mod = real_run_module()
     names = [g.name for g in mod.build_gates()]
     assert names == [
+        "parent_env_clean",                      # SA-10 N4 / F-09(b)
+        "frozen_constants_in_process",           # SA-6 F-19
         "real_run_allowed",                      # §9.6/8/9 via guards (F-34)
         "git_clean",                             # §9.1
         "run_authorized_event",                  # §9.12
@@ -683,8 +687,7 @@ def test_first_gate_delegates_to_guards_assert_real_run_allowed(monkeypatch):
     calls: list[str] = []
     monkeypatch.setattr(guards, "assert_real_run_allowed",
                         lambda *a, **k: calls.append("called"))
-    gate = mod.build_gates()[0]
-    assert gate.name == "real_run_allowed"
+    gate = {g.name: g for g in mod.build_gates()}["real_run_allowed"]
     ok, _ = gate.check()
     assert ok and calls == ["called"]
 
@@ -988,12 +991,12 @@ def test_e2e_synthetic_full_chain_a_through_e(tmp_path):
     adapters = mod.stage_c_result(ds)
     assert adapters["na_reason_counts"] and adapters["reported_total_na"]
 
-    # (4) manifest chain sealed per stage in the runs dir
-    manifest = Path(deps.config.runs_dir) / "MANIFEST.jsonl"
-    if manifest.exists():                    # runner-side chain (SA-7 wiring)
-        lines = [json.loads(x) for x in
-                 manifest.read_text("utf-8").splitlines()]
-        assert any(r.get("record_type") == "stage_seal" for r in lines)
+    # (4) manifest chain sealed per stage in the runs dir (SA-10 N9: exact
+    # filename, hard assertion — no case-insensitivity crutch)
+    manifest = Path(deps.config.runs_dir) / "manifest.jsonl"
+    assert manifest.exists()
+    lines = [json.loads(x) for x in manifest.read_text("utf-8").splitlines()]
+    assert any(r.get("record_type") == "stage_seal" for r in lines)
 
     # (5) the complete report is released only at Stage E, as whole files
     report = json.loads((Path(deps.config.runs_dir) / "S0_REPORT.json")
@@ -1035,3 +1038,54 @@ def test_real_chain_has_no_placeholder_left():
     mod = real_run_module()
     assert hasattr(mod, "RealChain")
     assert callable(mod.RealChain.compute)
+
+
+# --- SA-10 blocking-fix gates (N2/N3/N4/N6/F-19) -----------------------------
+
+def test_parent_env_clean_gate_blocks_hostile_vars(monkeypatch):
+    mod = real_run_module()
+    gates = {g.name: g for g in mod.build_gates()}
+    monkeypatch.delenv("PYTHONPATH", raising=False)
+    monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
+    ok, _ = gates["parent_env_clean"].check()
+    # may still fail if the live session carries other hostile vars; assert
+    # the DETECTION direction instead of the ambient state:
+    monkeypatch.setenv("GIT_DIR", "/tmp/evil")
+    ok2, detail2 = gates["parent_env_clean"].check()
+    assert ok2 is False and "GIT_DIR" in detail2
+
+
+def test_frozen_constants_in_process_gate(monkeypatch):
+    mod = real_run_module()
+    gates = {g.name: g for g in mod.build_gates()}
+    ok, detail = gates["frozen_constants_in_process"].check()
+    assert ok is True and "verified" in detail
+    # in-process rebind must be caught (SA-6 F-19's exact vector)
+    from itsf.s0 import dataset as ds_mod
+    monkeypatch.setattr(ds_mod, "THETA_PRIMARY", 0.7)
+    ok2, detail2 = gates["frozen_constants_in_process"].check()
+    assert ok2 is False and "THETA_PRIMARY" in detail2
+
+
+def test_ir22_defect_is_classified_by_name():
+    from itsf.contracts import InputDataDefectError
+    from itsf.s0.runner import classify_exception
+    assert classify_exception(
+        InputDataDefectError("x")) == "InputDataDefectError"
+
+
+def test_ir24_divergence_guard_blocks_nonzero(tmp_path):
+    """SA-10 N6: a non-empty opening-numerator-zero set must fail Stage B."""
+    mod = real_run_module()
+    chain = mod.RealChain()
+
+    class _FakeDS:
+        na_table = {"diagnostics":
+                    {"opening_numerator_zero_ret_open30_undefined": 2}}
+    chain._ds, chain._uni = _FakeDS(), object()
+    ok, detail = chain.ir24_divergence_guard()
+    assert ok is False and "Aaron" in detail
+    chain._ds = type("D", (), {"na_table": {"diagnostics": {
+        "opening_numerator_zero_ret_open30_undefined": 0}}})()
+    ok2, _ = chain.ir24_divergence_guard()
+    assert ok2 is True
