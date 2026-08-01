@@ -491,6 +491,28 @@ def _sentence(commit: str, trial_id: str = "S0-T001") -> str:
                                                       commit=commit)
 
 
+def _auth_row(seq, commit: str, trial_id: str = "S0-T001",
+              cell: str | None = None) -> str:
+    """One format-legal RUN_AUTHORIZED row (IR-25: cell == sentence commit
+    unless the test overrides `cell` to prove the inconsistency rejection)."""
+    return (f"| {seq} | 2026-08-01 | RUN_AUTHORIZED | "
+            f"{commit if cell is None else cell} | Aaron | "
+            f"{_sentence(commit, trial_id)} |\n")
+
+
+def _supersede_row(seq, target_seq, target_commit: str,
+                   trial_id: str = "S0-T001",
+                   reason: str = "RUNTIME_SELFBLOCK_FIX",
+                   incident: str = "INC-e6fe49ec63de",
+                   note: str | None = None) -> str:
+    if note is None:
+        note = (f"[{trial_id}] supersedes_event_sequence: {target_seq}; "
+                f"superseded_commit: {target_commit}; "
+                f"reason_code: {reason}; incident_id: {incident}")
+    return (f"| {seq} | 2026-08-01 | RUN_AUTHORIZATION_SUPERSEDED | - | "
+            f"main agent | {note} |\n")
+
+
 def test_prose_mentioning_run_authorized_is_not_an_event_row():
     mod = real_run_module()
     text = ("状态机见 packet §0: ... RUN_AUTHORIZED → RUNNING → COMPLETED。\n"
@@ -503,20 +525,35 @@ def test_prose_mentioning_run_authorized_is_not_an_event_row():
     assert "no RUN_AUTHORIZED row" in detail
 
 
-def test_live_registry_today_has_no_authorization_event():
-    """The real trial registry at this commit must NOT authorize a run."""
+def test_live_registry_structurally_valid_in_any_state():
+    """IR-25 (Aaron P1-B): STATE-AGNOSTIC. Suite outcome must not depend on
+    whether the real registry is currently unauthorized or authorized.
+    Asserted instead: the real registry parses; its append-only prefix is
+    intact; the authorization chain is well-formed (no malformed row, no
+    broken supersede reference); live authorizations number at most one;
+    and if one exists it satisfies the strict verbatim-§10 validation."""
+    import re as _re
     mod = real_run_module()
-    row, commit, _ = mod.find_authorization_event(
-        mod.REGISTRY.read_text(encoding="utf-8"))
-    assert row is None
-    assert commit == ""
+    text = mod.REGISTRY.read_text(encoding="utf-8")
+    rows = mod.parse_registry_events(text)
+    assert rows, "real registry parsed to zero event rows"
+    assert [r["event"] for r in rows[:3]] == [
+        "TRIAL_REGISTERED", "GOVERNANCE_FRAMEWORK_APPROVED",
+        "PACKET_APPROVED"]
+    live, problem = mod.resolve_authorizations(text)
+    assert problem == "", problem
+    assert len(live) <= 1
+    if live:
+        row, commit = live[0]
+        assert _re.match(r"^[0-9a-f]{40}$", commit)
+        assert _sentence(commit) in row["note"]
+        assert row["commit"] == commit
 
 
 def test_exact_sentence_with_full_hash_is_accepted():
     mod = real_run_module()
     commit = "b" * 40
-    text = HEADER + (f"| 4 | 2026-08-01 | RUN_AUTHORIZED | b62016a | Aaron | "
-                     f"{_sentence(commit)} |\n")
+    text = HEADER + _auth_row(4, commit)
     row, parsed, detail = mod.find_authorization_event(text)
     assert row is not None
     assert parsed == commit, detail
@@ -545,13 +582,149 @@ def test_sentence_in_a_non_run_authorized_row_is_rejected():
     assert commit == ""
 
 
-def test_two_authorization_rows_are_rejected():
+def test_two_live_authorization_rows_are_rejected():
+    """IR-25 fixture 8: two format-legal LIVE authorizations fail closed."""
     mod = real_run_module()
-    row = (f"| 4 | 2026-08-01 | RUN_AUTHORIZED | b62016a | Aaron | "
-           f"{_sentence('c' * 40)} |\n")
-    _, commit, detail = mod.find_authorization_event(HEADER + row + row)
+    text = HEADER + _auth_row(4, "c" * 40) + _auth_row(5, "d" * 40)
+    _, commit, detail = mod.find_authorization_event(text)
     assert commit == ""
-    assert "2 RUN_AUTHORIZED rows" in detail
+    assert "2 live RUN_AUTHORIZED rows" in detail
+
+
+# --- IR-25 supersede semantics (Aaron P2-A, fixtures 4/7/9-13) --------------
+
+def test_fenced_authorization_row_is_documentation_not_an_event():
+    """IR-25 fixture 4: a fully legal row quoted inside a ``` fence."""
+    mod = real_run_module()
+    text = (HEADER
+            + "| 1 | 2026-07-31 | TRIAL_REGISTERED | 79d7ca3 | main | 登记 |\n"
+            + "```\n" + _auth_row(4, "c" * 40) + "```\n")
+    rows = mod.parse_registry_events(text)
+    assert [r["event"] for r in rows] == ["TRIAL_REGISTERED"]
+    _, commit, detail = mod.find_authorization_event(text)
+    assert commit == "" and "no RUN_AUTHORIZED row" in detail
+
+
+def test_commit_cell_sentence_mismatch_fails_closed():
+    """IR-25 fixture 7: row commit cell != sentence commit (incl. the old
+    abbreviated-cell style) is an internal inconsistency, never accepted."""
+    mod = real_run_module()
+    for cell in ("b62016a", "c" * 40):
+        text = HEADER + _auth_row(4, "b" * 40, cell=cell)
+        _, commit, detail = mod.find_authorization_event(text)
+        assert commit == "", cell
+        assert "commit cell" in detail
+
+
+def test_superseded_authorization_resolves_to_unauthorized():
+    """IR-25 fixture 9: one authorization, then a legal supersede -> 0 live."""
+    mod = real_run_module()
+    text = (HEADER + _auth_row(6, "c" * 40)
+            + _supersede_row(7, 6, "c" * 40))
+    live, problem = mod.resolve_authorizations(text)
+    assert problem == "" and live == []
+    _, commit, detail = mod.find_authorization_event(text)
+    assert commit == "" and "no RUN_AUTHORIZED row" in detail
+
+
+def test_superseded_old_plus_legal_new_authorizes_the_new():
+    """IR-25 fixture 9b — the production reauthorization path: dead old row,
+    one live new row -> the new commit is authorized."""
+    mod = real_run_module()
+    text = (HEADER + _auth_row(6, "c" * 40)
+            + _supersede_row(7, 6, "c" * 40)
+            + _auth_row(8, "d" * 40))
+    row, commit, detail = mod.find_authorization_event(text)
+    assert commit == "d" * 40, detail
+    assert row["seq"] == "8"
+
+
+def test_supersede_of_nonexistent_sequence_fails_closed():
+    """IR-25 fixture 10."""
+    mod = real_run_module()
+    text = (HEADER + _auth_row(6, "c" * 40)
+            + _supersede_row(7, 99, "c" * 40))
+    live, problem = mod.resolve_authorizations(text)
+    assert live == [] and "not an existing RUN_AUTHORIZED row" in problem
+    _, commit, _ = mod.find_authorization_event(text)
+    assert commit == ""
+
+
+def test_forward_referencing_supersede_fails_closed():
+    """IR-25 fixture 11: the supersede appears BEFORE its target row."""
+    mod = real_run_module()
+    text = (HEADER + _supersede_row(5, 6, "c" * 40)
+            + _auth_row(6, "c" * 40))
+    live, problem = mod.resolve_authorizations(text)
+    assert live == [] and "forward reference" in problem
+
+
+def test_duplicate_supersede_fails_closed():
+    """IR-25 fixture 12."""
+    mod = real_run_module()
+    text = (HEADER + _auth_row(6, "c" * 40)
+            + _supersede_row(7, 6, "c" * 40)
+            + _supersede_row(8, 6, "c" * 40))
+    live, problem = mod.resolve_authorizations(text)
+    assert live == [] and "duplicate supersede" in problem
+
+
+def test_supersede_reference_mismatches_fail_closed():
+    """IR-25 fixture 13: wrong trial in the supersede note, or a
+    superseded_commit that differs from the referenced row's commit."""
+    mod = real_run_module()
+    base = HEADER + _auth_row(6, "c" * 40)
+    wrong_trial = base + _supersede_row(7, 6, "c" * 40, trial_id="S0-T002")
+    live, problem = mod.resolve_authorizations(wrong_trial)
+    assert live == [] and "S0-T002" in problem
+    wrong_commit = base + _supersede_row(7, 6, "d" * 40)
+    live, problem = mod.resolve_authorizations(wrong_commit)
+    assert live == [] and "does not equal the referenced row" in problem
+
+
+def test_unparsable_supersede_note_fails_closed():
+    """IR-25: a supersede row missing required fields is never ignored."""
+    mod = real_run_module()
+    text = (HEADER + _auth_row(6, "c" * 40)
+            + _supersede_row(7, 6, "c" * 40,
+                             note="[S0-T001] supersedes event 6, see incident"))
+    live, problem = mod.resolve_authorizations(text)
+    assert live == [] and "not machine-parsable" in problem
+
+
+def test_dual_state_satisfiability_layouts(tmp_path, monkeypatch):
+    """IR-25 (Aaron §4): both layouts resolve through the PRODUCTION parser
+    against production-shaped registry bytes — no mocks.
+
+    Layout A: the real registry exactly as committed (whatever its state,
+    the chain must be well-formed — this is what the battery/full_pytest
+    gate sees at run time). Layout B: the real bytes plus one appended
+    format-legal RUN_AUTHORIZED row whose commit equals THIS layout's git
+    HEAD; the production resolver and the production snapshot chain must
+    both authorize exactly that commit."""
+    import subprocess
+    mod = real_run_module()
+    real = mod.REGISTRY.read_text(encoding="utf-8")
+    head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
+                          text=True, cwd=REPO).stdout.strip()
+    assert len(head) == 40
+
+    # Layout A — as committed: well-formed, at most one live.
+    live, problem = mod.resolve_authorizations(real)
+    assert problem == "", problem
+    assert len(live) <= 1
+
+    # Layout B — exactly one live authorization for this HEAD.
+    reg_b = tmp_path / "TRIAL_REGISTRY.md"
+    n_supersedes = real.count("RUN_AUTHORIZATION_SUPERSEDED")
+    text_b = real + _auth_row(90 + n_supersedes, head)
+    reg_b.write_text(text_b, encoding="utf-8")
+    row, commit, detail = mod.find_authorization_event(text_b)
+    assert commit == head, detail
+    monkeypatch.setattr(mod, "REGISTRY", reg_b)
+    snap = mod.RealChain().authorization_snapshot()
+    assert snap["authorized_commit"] == head
+    assert snap["exact_authorization_text_sha256"]
 
 
 def test_head_gate_compares_against_the_parsed_commit_not_head(tmp_path):
@@ -559,9 +732,7 @@ def test_head_gate_compares_against_the_parsed_commit_not_head(tmp_path):
     must fail when HEAD differs, and never compare HEAD with itself."""
     mod = real_run_module()
     registry = tmp_path / "TRIAL_REGISTRY.md"
-    registry.write_text(
-        HEADER + f"| 4 | x | RUN_AUTHORIZED | x | Aaron | {_sentence('d' * 40)} |\n",
-        encoding="utf-8")
+    registry.write_text(HEADER + _auth_row(4, "d" * 40), encoding="utf-8")
     gates = {g.name: g for g in mod.build_gates(registry=registry)}
     ok, detail = gates["run_authorized_event"].check()
     assert ok, detail
@@ -655,7 +826,7 @@ def test_pytest_gate_floor_is_the_audit_baseline():
     """SA-10 N3: the floor tracks the CURRENT suite, closing the
     silent-collection-drop headroom."""
     mod = real_run_module()
-    assert mod.MIN_COLLECTED_TESTS == 509
+    assert mod.MIN_COLLECTED_TESTS == 519
 
 
 # ===========================================================================
@@ -1158,7 +1329,7 @@ def _authorized_registry(tmp_path, commit: str) -> Path:
         "| # | utc | event | commit | actor | note |\n"
         "|---|---|---|---|---|---|\n"
         f"| 1 | 2026-08-02 | PACKET_APPROVED | x | Aaron | note |\n"
-        f"| 2 | 2026-08-02 | RUN_AUTHORIZED | {commit[:7]} | Aaron | "
+        f"| 2 | 2026-08-02 | RUN_AUTHORIZED | {commit} | Aaron | "
         f"[S0-T001] {sentence} |\n", encoding="utf-8")
     return reg
 

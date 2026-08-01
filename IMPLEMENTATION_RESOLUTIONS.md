@@ -89,3 +89,22 @@ report_rendered_from_head 四字段（报告与 JSON 同源，禁自引用最终
 ae9b19c 红测试提交事故如实留档于 M4_FINAL_CLOSURE_REPORT。
 - SA-2 硬边界 commit a6bd012 经 Aaron 原则批准（Development [2010-06-06,
   2022-01-01)、IV fail-closed、整文件拒绝、边界不可参数化）。
+
+### IR-25 运行可满足性修复（APPROVED_BY_AARON 2026-08-01，DECISION_PACKET_RUNTIME_SELFBLOCK）
+
+背景：第一次真实 S0 尝试（attempts/S0-T001-A20260801T121730Z，incident
+INC-e6fe49ec63de）在 Stage-A `full_pytest` 门失败。根因＝结构性自锁：
+`test_live_registry_today_has_no_authorization_event` 钉死真实 registry
+的未授权态，而 Stage-A 在授权态运行全套件 → 授权后必红（508/1）。
+连带锁死：解析器拒绝 >1 行 RUN_AUTHORIZED，行 6 append-only 永存 →
+不改解析器无法二次授权。exposure 未消耗，S0-T001 完好。
+
+| 项 | 批复定案 |
+|---|---|
+| P1（自锁测试） | **Option B（状态无关化）**：删除"真实 registry 必无 RUN_AUTHORIZED"断言；改为——真实 registry 必须可完整解析；未被 supersede 的合法 RUN_AUTHORIZED ≤1；若存在必须严格满足 §10 完整语句＋trial_id＋40 位 commit；**pytest 通过与否不得依赖真实 registry 当前是未授权态还是授权态** |
+| P2（授权作废机制） | **Option A**：新事件类型 `RUN_AUTHORIZATION_SUPERSEDED`，note 必含 trial_id、supersedes_event_sequence、superseded_commit、reason_code、incident_id 五字段（机器可解析，缺一即整链 fail-closed）。**有效授权集合 = 全部格式合法 RUN_AUTHORIZED − 被格式合法 supersede 精确引用者**；存活数 0=未授权、1=继续验证 commit==HEAD、>1=fail-closed |
+| 解析器细则 | 格式非法的 RUN_AUTHORIZED 行**永不静默忽略**（整链 fail-closed）；RUN_AUTHORIZED 行 commit 单元格必须与语句 commit 完全相等（fixture 7）；围栏代码块内的行是文档非事件（fixture 4）；supersede 引用不存在/前向引用/重复引用/trial 或 commit 不一致 → 一律 fail-closed（fixtures 10-13） |
+| 十三项夹具测试 | 无授权／一条合法／散文提及／围栏引用／错 trial／短 hash／cell-语句不一致／两条存活／合法 supersede 后归零（＋9b：旧废新立授权新 commit）／引用不存在／前向引用／重复 supersede／引用不一致——全部生产解析器直测 |
+| 双状态可满足性（§四） | 全套 pytest 在布局 A（零存活授权）与布局 B（恰一条存活、commit==该布局 HEAD）均须通过；授权态测试必须走生产解析器与生产同构 registry 字节，禁 mock 直返成功。套件内唯一读真实 registry 的测试已状态无关化（grep 证据），布局 B 由生产字节＋追加合法行的 fixture 直测（含 RealChain.authorization_snapshot 全链） |
+| 本次失败处置（§三） | 行 6（RUN_AUTHORIZED @524c9ab）、"+"失败事件行、attempts/ 全部工件、incident 一律保留不改；追加行 7 `RUN_AUTHORIZATION_SUPERSEDED` 精确引用行 6（reason_code=RUNTIME_SELFBLOCK_FIX, incident_id=INC-e6fe49ec63de）；全部随修复 commit 入库 |
+| 收口序（§五） | IR 落档 → 修复 → 全量电池（含冻结 hash/扫描/Stage-A 合成测试）→ 新修复 commit → Opus 只读审计（重点=运行可满足性）→ 全 CLOSED 后追加新 READY_FOR_RUN_AUTHORIZATION → **停等 Aaron 对新 HEAD 重发 §10**。不得自动再授权或运行；S0-T001 未消耗，仍为首次真实 trial |

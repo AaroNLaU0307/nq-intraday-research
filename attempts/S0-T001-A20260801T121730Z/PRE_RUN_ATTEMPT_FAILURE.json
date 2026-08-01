@@ -1,0 +1,17 @@
+{
+  "authorized_commit": "524c9ab94eea8cbf2e906f3016f63cffde86e2c5",
+  "chain_status": {
+    "manifest": "not_started",
+    "stages_completed": []
+  },
+  "exception_type": "RunGateError",
+  "failure_reason": "RunGateError at gate 'full_pytest' (incident INC-e6fe49ec63de); raw detail sealed in INCIDENT_INC-e6fe49ec63de.md inside the attempt directory",
+  "generated_at_utc": "2026-08-01T12:17:30+00:00",
+  "released_information": [
+    "guarded stage logs only"
+  ],
+  "report_type": "PRE_RUN_ATTEMPT_FAILURE",
+  "stage": "A_PRECHECK",
+  "trial_id": "S0-T001",
+  "trial_state": "PACKET_APPROVED"
+}

@@ -41,7 +41,7 @@ ATTEMPTS_ROOT = REPO / "attempts"
 # Baseline collected-test count at the SA-6 audit commit. The pytest gate
 # requires the suite to still COLLECT at least this many tests, so a muted
 # or filtered run cannot satisfy the gate with a handful of tests (F-09).
-MIN_COLLECTED_TESTS = 509                  # SA-11 N-A: floor = current suite
+MIN_COLLECTED_TESTS = 519                  # IR-25: floor = current suite
 
 # External read-only tooling (packet §9 gate 4). Invoked as a subprocess;
 # the tool itself only reads repository files.
@@ -155,8 +155,16 @@ def parse_registry_events(text: str) -> list[dict[str, str]]:
     substring test was satisfied by the registry's own RULES paragraph).
     """
     rows: list[dict[str, str]] = []
+    in_fence = False
     for line in text.splitlines():
         stripped = line.strip()
+        # IR-25 fixture 4: a row-shaped line quoted inside a fenced code
+        # block is documentation, never an event.
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
         if not stripped.startswith("|") or not stripped.endswith("|"):
             continue
         cells = [c.strip() for c in stripped.strip("|").split("|")]
@@ -172,40 +180,134 @@ def parse_registry_events(text: str) -> list[dict[str, str]]:
     return rows
 
 
-def find_authorization_event(text: str, trial_id: str = TRIAL_ID
-                             ) -> tuple[dict[str, str] | None, str, str]:
-    """Locate the RUN_AUTHORIZED row and extract its authorized commit.
+_SUPERSEDE_NOTE_RE = re.compile(
+    r"\[(?P<trial>[A-Z0-9-]+)\]\s*"
+    r"supersedes_event_sequence:\s*(?P<seq>\d+);\s*"
+    r"superseded_commit:\s*(?P<commit>[0-9a-f]{40});\s*"
+    r"reason_code:\s*(?P<reason>[A-Z0-9_]+);\s*"
+    r"incident_id:\s*(?P<incident>INC-[0-9a-f]{12})")
 
-    Returns (row, commit, detail). `commit` is non-empty ONLY when a row
-    whose `event` cell is EXACTLY 'RUN_AUTHORIZED' carries a note containing
-    the verbatim packet-§10 sentence with a full 40-hex commit hash. Anything
-    weaker — a near-miss sentence, a 7-char hash, an event mentioned in prose
-    — yields ("", <why>) and therefore a failed gate.
+
+def _validate_authorized_row(row: dict[str, str], trial_id: str
+                             ) -> tuple[str, str]:
+    """Strict per-row validation of one RUN_AUTHORIZED row.
+
+    Returns (commit, "") on success, ("", why) on any defect. IR-25: a
+    malformed authorization row is NEVER silently ignored — the caller
+    fails the whole resolution closed.
     """
-    candidates = [r for r in parse_registry_events(text)
-                  if r["event"] == "RUN_AUTHORIZED"]
-    if not candidates:
-        return (None, "", "registry event table has no RUN_AUTHORIZED row "
-                          "(packet §10 sentence not issued)")
-    if len(candidates) > 1:
-        return (None, "", f"registry event table has {len(candidates)} "
-                          f"RUN_AUTHORIZED rows; exactly one is expected")
-    row = candidates[0]
     prefix = AUTHORIZATION_SENTENCE_TEMPLATE.format(trial_id=trial_id,
                                                     commit="")
     idx = row["note"].find(prefix)
     if idx < 0:
-        return (row, "", "RUN_AUTHORIZED row does not contain the verbatim "
-                         "packet §10 authorization sentence")
+        return ("", "RUN_AUTHORIZED row does not contain the verbatim "
+                    "packet §10 authorization sentence")
     tail = row["note"][idx + len(prefix):]
     commit = tail[:40]
     if not _HEX40_RE.match(commit):
-        return (row, "", "packet §10 sentence does not name a full 40-hex "
-                         "commit hash")
+        return ("", "packet §10 sentence does not name a full 40-hex "
+                    "commit hash")
     expected = AUTHORIZATION_SENTENCE_TEMPLATE.format(trial_id=trial_id,
                                                       commit=commit)
     if expected not in row["note"]:
-        return (row, "", "authorization sentence is not verbatim")
+        return ("", "authorization sentence is not verbatim")
+    # IR-25 fixture 7: the row's commit CELL must equal the sentence commit
+    # exactly — an internal inconsistency fails closed.
+    if row["commit"] != commit:
+        return ("", "RUN_AUTHORIZED row commit cell does not equal the "
+                    "sentence commit — internal inconsistency")
+    return (commit, "")
+
+
+def resolve_authorizations(text: str, trial_id: str = TRIAL_ID
+                           ) -> tuple[list[tuple[dict, str]], str]:
+    """IR-25 (Aaron P2-A): resolve the LIVE authorization set.
+
+    live = every format-legal RUN_AUTHORIZED row minus those precisely
+    referenced by a format-legal RUN_AUTHORIZATION_SUPERSEDED row.
+
+    Returns (live, problem) where live is [(row, commit), ...] and
+    problem != "" means the chain itself is malformed — every such case
+    fails CLOSED: malformed authorization row, malformed supersede note,
+    supersede of a nonexistent/ambiguous sequence, forward reference,
+    duplicate supersede, trial/commit reference mismatch.
+    """
+    rows = parse_registry_events(text)
+    auth: list[tuple[int, dict, str]] = []          # (position, row, commit)
+    for pos, row in enumerate(rows):
+        if row["event"] != "RUN_AUTHORIZED":
+            continue
+        commit, why = _validate_authorized_row(row, trial_id)
+        if why:
+            return ([], f"registry row #{row['seq']}: {why}")
+        auth.append((pos, row, commit))
+
+    superseded_positions: set[int] = set()
+    seen_targets: set[str] = set()
+    for pos, row in enumerate(rows):
+        if row["event"] != "RUN_AUTHORIZATION_SUPERSEDED":
+            continue
+        m = _SUPERSEDE_NOTE_RE.search(row["note"])
+        if not m:
+            return ([], f"registry row #{row['seq']}: "
+                        "RUN_AUTHORIZATION_SUPERSEDED note is not "
+                        "machine-parsable (required fields: trial_id, "
+                        "supersedes_event_sequence, superseded_commit, "
+                        "reason_code, incident_id)")
+        if m.group("trial") != trial_id:
+            return ([], f"registry row #{row['seq']}: supersede names "
+                        f"trial {m.group('trial')!r}, expected "
+                        f"{trial_id!r}")
+        target_seq = m.group("seq")
+        if target_seq in seen_targets:
+            return ([], f"registry row #{row['seq']}: duplicate supersede "
+                        f"of event sequence {target_seq}")
+        seen_targets.add(target_seq)
+        targets = [(p, r, c) for p, r, c in auth if r["seq"] == target_seq]
+        if not targets:
+            return ([], f"registry row #{row['seq']}: supersede references "
+                        f"event sequence {target_seq}, which is not an "
+                        "existing RUN_AUTHORIZED row")
+        if len(targets) > 1:
+            return ([], f"registry row #{row['seq']}: supersede reference "
+                        f"{target_seq} is ambiguous ({len(targets)} rows)")
+        t_pos, _t_row, t_commit = targets[0]
+        if t_pos >= pos:
+            return ([], f"registry row #{row['seq']}: supersede is a "
+                        "forward reference — it must appear after the row "
+                        "it supersedes")
+        if m.group("commit") != t_commit:
+            return ([], f"registry row #{row['seq']}: superseded_commit "
+                        "does not equal the referenced row's authorized "
+                        "commit")
+        superseded_positions.add(t_pos)
+
+    live = [(row, commit) for pos, row, commit in auth
+            if pos not in superseded_positions]
+    return (live, "")
+
+
+def find_authorization_event(text: str, trial_id: str = TRIAL_ID
+                             ) -> tuple[dict[str, str] | None, str, str]:
+    """Locate THE live RUN_AUTHORIZED row and extract its commit.
+
+    Returns (row, commit, detail). `commit` is non-empty ONLY when the
+    live authorization set (IR-25: format-legal RUN_AUTHORIZED rows minus
+    precisely-superseded ones) contains exactly one row carrying the
+    verbatim packet-§10 sentence with a full 40-hex commit. 0 live rows =
+    not authorized; >1 live rows or ANY malformed chain element fails
+    closed. Prose mentions and fenced examples are never rows.
+    """
+    live, problem = resolve_authorizations(text, trial_id)
+    if problem:
+        return (None, "", problem)
+    if not live:
+        return (None, "", "registry event table has no RUN_AUTHORIZED row "
+                          "(packet §10 sentence not issued)")
+    if len(live) > 1:
+        return (None, "", f"registry event table has {len(live)} live "
+                          f"RUN_AUTHORIZED rows; exactly one is expected")
+    row, commit = live[0]
     return (row, commit, "ok")
 
 
