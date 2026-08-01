@@ -87,20 +87,84 @@ def test_spike_day_mae_uses_minute_extremes():
     assert lab.y_cont == pytest.approx(3.45)
 
 
-def test_d_open_zero_day_all_na():
-    # frozen: S0 SS5 - ret_open30 == 0: no direction, not tradeable,
-    # counted separately; only trade_date/d_open populated.
+# ---------------------------------------------------------------------------
+# IR-23 (APPROVED_BY_AARON 2026-08-01) — per-label independence.
+# There is no "d_open == 0 -> whole row NA" early exit any more: Y1/Y2/Y3 do
+# not depend on the direction and must be computed on a no-direction day;
+# Y_cont/Y4/Y5 keep the direction dependency.
+# ---------------------------------------------------------------------------
+
+def test_ir23_no_direction_day_still_computes_y1_y2_y3():
     lab = compute_day_labels(pm("trend_up"), o1000=20000.0, adr14=100.0,
                              d_open=0)
     assert lab.trade_date == DATE
     assert lab.d_open == 0
+    # direction-FREE labels, hand-computed exactly as in the directional case
+    assert lab.y1 == pytest.approx(3.45)                 # (20345-20000)/100
+    assert lab.y2_de_pm == pytest.approx(1.0)            # |345|/345
+    assert lab.y3_close_pos_pm == pytest.approx(345.25 / 345.5)
+    # direction-DEPENDENT labels stay NA (frozen L82 day: not tradeable)
     assert lab.y_cont is None
-    assert lab.y1 is None
-    assert lab.y2_de_pm is None
-    assert lab.y3_close_pos_pm is None
     assert lab.y4_mfe is None
     assert lab.y5_mae is None
-    assert lab.y6_cont_decile is None
+    assert lab.y6_cont_decile is None                    # dataset-level pass
+
+
+def test_ir23_no_direction_and_no_adr14_still_computes_y2_y3():
+    """The warm-up shape: ADR14 missing AND no direction. Y2/Y3 need neither,
+    so they are computable; Y1 needs ADR14 and is NA for THAT reason."""
+    lab = compute_day_labels(pm("trend_up"), o1000=20000.0, adr14=None,
+                             d_open=0)
+    assert lab.y2_de_pm == pytest.approx(1.0)
+    assert lab.y3_close_pos_pm == pytest.approx(345.25 / 345.5)
+    assert lab.y1 is None                                # /ADR14
+    assert lab.y_cont is None and lab.y4_mfe is None and lab.y5_mae is None
+
+
+def test_ir23_availability_is_decided_per_label_by_its_own_inputs():
+    """Mechanical dependency table (IR-23), asserted over the whole grid
+    instead of a hand-written coverage number."""
+    needs_adr = {"y_cont": True, "y1": True, "y2_de_pm": False,
+                 "y3_close_pos_pm": False, "y4_mfe": True, "y5_mae": True}
+    needs_dir = {"y_cont": True, "y1": False, "y2_de_pm": False,
+                 "y3_close_pos_pm": False, "y4_mfe": True, "y5_mae": True}
+    for d_open in (-1, 0, 1):
+        for adr in (100.0, None):
+            lab = compute_day_labels(pm("trend_up"), o1000=20000.0, adr14=adr,
+                                     d_open=d_open)
+            for name in needs_adr:
+                expected = ((adr is not None or not needs_adr[name])
+                            and (d_open != 0 or not needs_dir[name]))
+                assert (getattr(lab, name) is not None) is expected, (
+                    name, d_open, adr)
+
+
+def test_ir23_direction_free_labels_are_invariant_to_d_open():
+    """Strongest form of "Y1/Y2/Y3 do not depend on the direction": the same
+    pm window must give the same three values for every d_open."""
+    got = {d_open: compute_day_labels(pm("trend_up"), o1000=20000.0,
+                                      adr14=100.0, d_open=d_open)
+           for d_open in (-1, 0, 1)}
+    for name in ("y1", "y2_de_pm", "y3_close_pos_pm"):
+        values = {getattr(lab, name) for lab in got.values()}
+        assert len(values) == 1, (name, values)
+
+
+def test_ir23_no_whole_row_early_exit_remains_in_the_source():
+    """Anti-regression on the exact construct IR-23 deleted: a d_open == 0
+    branch that returns a bare DayLabels before any label is computed."""
+    import ast
+    import inspect
+    from itsf.s0 import labels as labels_mod
+    src = inspect.getsource(labels_mod.compute_day_labels)
+    fn = ast.parse(src).body[0]
+    for node in ast.walk(fn):
+        if isinstance(node, ast.If):
+            body = ast.dump(node)
+            if "'d_open'" in body and "Return" in body:
+                # a d_open test that RETURNS is exactly the deleted early exit
+                assert "DayLabels" not in body, (
+                    "d_open == 0 whole-row early exit is forbidden (IR-23)")
 
 
 def test_missing_adr14_na_policy():

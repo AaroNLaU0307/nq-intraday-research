@@ -39,8 +39,9 @@ DIRECTION SEMANTICS (Aaron 2026-07-31, mandatory separation)
 zero-direction day and for an undeterminable one, so THIS layer separates them
 and they are never merged in any table, count or eligibility set:
 
-  zero_direction_day_l82        O0930 and C0959 both EXIST and are EQUAL —
-                                the market had no direction (frozen L82).
+  zero_direction_day_l82        ret_open30 is COMPUTABLE and exactly zero
+                                (IR-24: O0930, C0959 and ADR14 all available
+                                and finite) — the frozen L82 population.
   direction_undeterminable_na   ret_open30 is NA — most importantly when
                                 O0930 or C0959 is MISSING. Missing data is
                                 NOT evidence of a directionless market: such a
@@ -48,10 +49,16 @@ and they are never merged in any table, count or eligibility set:
                                 Oracle candidate set, but it is counted apart
                                 from the frozen L82 population.
 
-Precedence when both could apply (an ADR14 warm-up day whose two anchors exist
-and are equal): the anchor-based L82 reading wins, because the market fact is
-observed. That intersection is empty on the approved input set; it is stated
-here so the rule is deterministic rather than incidental.
+IR-24 (APPROVED_BY_AARON 2026-08-01, Option B = the frozen literal; resolves
+DECISION_PACKET_L82_DEFINITION) fixes the case both readings could claim — an
+ADR14 warm-up day whose two anchors exist and are EQUAL. Frozen L82 defines the
+class by `ret_open30 == 0`, so a day on which ret_open30 cannot be defined at
+all is NOT in it: it is direction_undeterminable_na, and the numerator-only
+fact is disclosed as the diagnostic counter
+`opening_numerator_zero_ret_open30_undefined`. Equal anchors must NEVER be
+substituted for the ret_open30 definition (the earlier "price fact wins"
+precedence note recorded here was NOT approved and is superseded). The
+intersection is empty on the approved input set, so no current number moves.
 """
 from __future__ import annotations
 
@@ -111,8 +118,10 @@ DIRECTION_DIRECTIONAL = "directional"
 #   ties by date/row order/index is prohibited);
 #   percentile_rank = (average_rank - 1) / (n_year - 1);
 #   decile = clip(1 + floor(10 * percentile_rank), 1, 10);
-#   mechanical limit n_year == 1 -> percentile_rank = 0 -> decile 1
-#   (disclosed); Y_cont NA -> Y6 NA inheriting the underlying reason.
+#   n_year == 1 -> percentile_rank = 0 -> decile 1 by EXPLICIT SINGLETON-YEAR
+#   CONVENTION (disclosed) — Y6 erratum, same 2026-08-01 batch as IR-22/23/24:
+#   0/0 has no unique limit, so this is a stated convention and must not be
+#   described as a formula limit; Y_cont NA -> Y6 NA inheriting the reason.
 # Descriptive-only: never enters features/Oracle/Primary/eligibility/costs.
 Y6_RULE = "IR21_per_year_average_rank_decile"
 
@@ -132,6 +141,11 @@ LABEL_NA_FIELDS = PRE_Y6_LABEL_NA_FIELDS + (
 # Per-label frozen dependencies (L86-91), used for NA attribution and for the
 # preflight-comparable label ANCHOR-availability table. MappingProxyType:
 # immutable view, keeps the module namespace free of mutable containers.
+#
+# IR-23 (APPROVED_BY_AARON 2026-08-01): the d_open column is the AUTHORITATIVE
+# per-label direction dependency and is now actually consulted. Y1/Y2/Y3 do not
+# depend on the direction and must never be NA merely because the day has none;
+# only Y_cont/Y4/Y5 do (Y6 inherits from Y_cont, one pass later).
 from types import MappingProxyType as _MappingProxyType
 
 _LABEL_DEPS = _MappingProxyType({
@@ -143,6 +157,11 @@ _LABEL_DEPS = _MappingProxyType({
     "y4_mfe":   (True,  False, True,  True,   ""),
     "y5_mae":   (True,  False, True,  True,   ""),
 })
+
+# IR-24 diagnostic disclosure (NOT an NA reason, never in APPROVED_NA_REASONS):
+# the opening numerator C0959 - O0930 is exactly 0 while ret_open30 itself is
+# undefined, so the day is direction_undeterminable_na and NOT frozen-L82.
+DIAG_OPENING_NUMERATOR_ZERO = "opening_numerator_zero_ret_open30_undefined"
 
 
 # ===========================================================================
@@ -215,6 +234,9 @@ def compute_day(ctx: DayContext) -> DayRecord:
     sidecar = dict(ctx.sidecar)
     sidecar["direction_status"] = status
     sidecar["direction_na_cause"] = cause
+    # IR-24 disclosure counter (diagnostic only; never an eligibility input).
+    sidecar[DIAG_OPENING_NUMERATOR_ZERO] = _opening_numerator_zero_undefined(
+        ctx, f)
 
     return DayRecord(
         trade_date=ctx.trade_date, year=_year(ctx.trade_date),
@@ -250,16 +272,46 @@ def _mask_labels(lb: DayLabels, ctx: DayContext) -> DayLabels:
     return replace(lb, **updates) if updates else lb
 
 
+def _ret_open30_defined(f: DayFeatures) -> bool:
+    """IR-24 — is ret_open30 itself COMPUTABLE on this day?
+
+    True exactly when F1 came back as a finite number, which by construction
+    means O0930, C0959 and ADR14 were all available and finite (features.py F1
+    + the context-level anchor/warm-up mask).
+    """
+    return f.ret_open30 is not None and math.isfinite(f.ret_open30)
+
+
+def _opening_numerator_zero_undefined(ctx: DayContext, f: DayFeatures) -> bool:
+    """IR-24 diagnostic: numerator exactly 0 while ret_open30 is undefined.
+
+    These days used to be swept into the frozen-L82 population by the
+    anchors-equal shortcut. They are disclosed, counted and kept OUT of L82.
+    """
+    return (not _ret_open30_defined(f)
+            and ctx.o0930 is not None and ctx.c0959 is not None
+            and ctx.c0959 == ctx.o0930)
+
+
 def _direction_status(ctx: DayContext, f: DayFeatures,
                       d_open: int) -> tuple[str, str]:
-    """Separate frozen-L82 zero direction from undeterminable direction."""
+    """Separate frozen-L82 zero direction from undeterminable direction.
+
+    IR-24 (Option B, the frozen literal): frozen L82 defines the zero-direction
+    class as `ret_open30 == 0`, so membership requires ret_open30 to BE
+    computable (O0930/C0959/ADR14 all available and finite) and to be exactly
+    zero. ADR14 missing / non-finite / zero, or an absent anchor, means
+    ret_open30 is undefined -> direction_undeterminable_na, never L82. Equal
+    anchors are NOT a substitute for the ret_open30 definition.
+    """
     if d_open != 0:
         return DIRECTION_DIRECTIONAL, ""
+    if _ret_open30_defined(f):
+        # d_open == 0 with a defined ret_open30 can only mean exactly 0.
+        return NA_ZERO_DIRECTION, ""              # frozen L82, IR-24 literal
     if ctx.o0930 is None or ctx.c0959 is None:
-        # Case B: missing data is NEVER read as "the market had no direction".
+        # missing data is NEVER read as "the market had no direction"
         return NA_DIRECTION_UNDETERMINABLE, NA_ANCHOR_MISSING
-    if ctx.c0959 == ctx.o0930:
-        return NA_ZERO_DIRECTION, ""              # Case A, frozen L82
     return (NA_DIRECTION_UNDETERMINABLE,
             ctx.context_na_reasons.get("ret_open30", NA_ANCHOR_MISSING))
 
@@ -291,14 +343,17 @@ def _attribute_label_na(lb: DayLabels, ctx: DayContext,
                         direction_status: str) -> dict[str, str]:
     """Label NA attribution, precedence: anchor -> ADR14 -> direction -> value.
 
-    The direction level catches every label on a d_open == 0 day because
-    labels.py (REPLACE_PROHIBITED) returns bare labels there; the reason is the
-    day's own direction class, so the frozen-L82 and undeterminable
-    populations stay separated in the NA table too.
+    IR-23: the direction level applies ONLY to the labels that actually depend
+    on d_open (the `needs_dir` column of _LABEL_DEPS: Y_cont/Y4/Y5). Y1/Y2/Y3
+    are computed on a no-direction day, so they carry no reason there at all —
+    the previous unconditional direction branch was what made this layer look
+    consistent with labels.py voiding the whole row. The reason for the labels
+    that DO depend on direction is the day's own direction class, so the
+    frozen-L82 and undeterminable populations stay separated in the NA table.
     """
     out: dict[str, str] = {}
     for name, (needs_o1000, needs_c1544, needs_adr,
-               _needs_dir, value_reason) in _LABEL_DEPS.items():
+               needs_dir, value_reason) in _LABEL_DEPS.items():
         if getattr(lb, name) is not None:
             continue
         if (ctx.pm_window_empty
@@ -307,7 +362,7 @@ def _attribute_label_na(lb: DayLabels, ctx: DayContext,
             out[name] = NA_ANCHOR_MISSING
         elif needs_adr and ctx.adr14 is None:
             out[name] = NA_ADR14_WARMUP
-        elif direction_status != DIRECTION_DIRECTIONAL:
+        elif needs_dir and direction_status != DIRECTION_DIRECTIONAL:
             out[name] = direction_status
         elif value_reason:
             out[name] = value_reason
@@ -346,6 +401,11 @@ def assign_y6_deciles(rows: Sequence[DayLabels]) -> tuple[DayLabels, ...]:
     IR-21 (APPROVED 2026-07-31) fixes the binning rule — see Y6_RULE above.
     Value-only ranking: equal Y_cont always shares one decile; the input
     order, trade_date and index play NO role in the result.
+
+    A year holding exactly ONE ranked day gets percentile_rank 0 -> decile 1 by
+    EXPLICIT SINGLETON-YEAR CONVENTION (Y6 erratum, 2026-08-01): (rank-1)/(n-1)
+    is 0/0 there, which has no unique limit, so the value below is a stated
+    convention and is never to be called a formula/mechanical limit.
     """
     by_year: dict[str, list[int]] = {}
     for i, r in enumerate(rows):
@@ -369,6 +429,8 @@ def assign_y6_deciles(rows: Sequence[DayLabels]) -> tuple[DayLabels, ...]:
                 avg_rank[order[j]] = avg
             pos = end + 1
         for k, i in enumerate(idx):
+            # n == 1: explicit singleton-year convention (see docstring), NOT a
+            # formula limit — 0/0 is undefined.
             pr = 0.0 if n == 1 else (avg_rank[k] - 1.0) / (n - 1.0)
             deciles[i] = int(min(DECILE_COUNT,
                                  max(1, 1 + math.floor(DECILE_COUNT * pr))))
@@ -583,6 +645,15 @@ def build_na_table(records: Sequence[DayRecord]) -> dict[str, object]:
             NA_ZERO_DIRECTION: direction[NA_ZERO_DIRECTION],
             NA_DIRECTION_UNDETERMINABLE: direction[NA_DIRECTION_UNDETERMINABLE],
         },
+        # IR-24 disclosure. NOT an NA reason and deliberately outside
+        # `totals_by_reason`: it counts days whose opening numerator is zero
+        # while ret_open30 is undefined, which are classified
+        # direction_undeterminable_na above and are NOT frozen-L82 days.
+        "diagnostics": {
+            DIAG_OPENING_NUMERATOR_ZERO: sum(
+                1 for r in records
+                if bool(r.sidecar.get(DIAG_OPENING_NUMERATOR_ZERO))),
+        },
         "totals_by_reason": dict(sorted(totals.items())),
         "checks": checks,
     }
@@ -593,11 +664,16 @@ def _label_anchor_availability(universe: S0Universe,
                                ) -> dict[str, dict[str, int]]:
     """Label ANCHOR existence (frozen L86-91), preflight-comparable.
 
-    Distinct from the label NA counts: labels.py (REPLACE_PROHIBITED) returns
-    bare labels on every d_open == 0 day, so the descriptive Y1/Y2/Y3 are NA
-    there even though their anchors exist. This table reports anchor existence
-    exactly as the approved preflight does, so the runner compares like with
-    like; the divergence is disclosed in the SA-4 report.
+    Per-label dependency sets are the IR-23 ones (identical to the approved
+    preflight's `label_anchor_availability`), so the runner compares like with
+    like: Y1 {O1000, C1544, ADR14}, Y2 {O1000, C1544, pm close path},
+    Y3 {C1544, pm high, pm low}, and only Y_cont/Y4/Y5 add the direction.
+
+    Still DISTINCT from the label NA counts, but now only for value-level
+    reasons: an anchor can exist while the label is NA because its own
+    denominator degenerates (path_zero / degenerate_window). Since IR-23 the
+    descriptive Y1/Y2/Y3 are no longer voided on a no-direction day, so that
+    former systematic divergence is gone.
     """
     out = {k: {"available_days": 0, "unavailable_days": 0}
            for k in _LABEL_DEPS}

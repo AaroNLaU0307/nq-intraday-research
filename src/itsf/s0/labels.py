@@ -56,11 +56,17 @@ def compute_day_labels(
     bars = pm_bars.sort_values("ts").reset_index(drop=True)
     trade_date = bars["ts"].iloc[0].date().isoformat()
 
-    if d_open == 0:
-        # frozen: S0 SS5 - ret_open30 == 0: no direction, NOT tradeable,
-        # counted separately. All labels stay NA (main-agent instruction:
-        # only trade_date/d_open are populated on no-direction days).
-        return DayLabels(trade_date=trade_date, d_open=0)
+    # IR-23 (APPROVED_BY_AARON 2026-08-01, resolves
+    # DECISION_PACKET_Y123_NONDIRECTIONAL): there is NO "d_open == 0 -> whole
+    # label row NA" early exit. Each label is decided by ITS OWN required
+    # inputs (frozen: S0 SS5 L86-91 + the SS3 NA policy "NA is for what cannot
+    # be computed"):
+    #   Y1 {O1000, C1544, ADR14}      Y2 {O1000, C1544, pm close path}
+    #   Y3 {C1544, pm high, pm low}   -> none of the three depends on d_open
+    #   Y_cont / Y4 / Y5              -> keep the direction dependency
+    # A no-direction day is still counted and reported separately (frozen L82);
+    # that is a DAY class, not a reason to void direction-free labels.
+    directional = d_open != 0
 
     # frozen: S0 SS1 bar convention - C1000 = close of the 10:00 bar;
     # C1544 = close of the 15:44 bar (last pm bar; forced exit - S0 SS3).
@@ -75,10 +81,13 @@ def compute_day_labels(
 
     # Y_cont = d_open x (C1544 - O1000) / ADR14 (primary, Oracle deciding)
     #                                            # frozen: S0 SS5 Y_cont
-    y_cont = d_open * (c1544 - o1000) / adr14 if adr_ok else None
+    # Direction-dependent (IR-23): NA without a direction.
+    y_cont = (d_open * (c1544 - o1000) / adr14
+              if (adr_ok and directional) else None)
 
     # Y1 = (C1544 - O1000) / ADR14 (descriptive only; FORBIDDEN as Oracle
     # direction)                                 # frozen: S0 SS5 Y1
+    # Direction-FREE (IR-23): computed on no-direction days too.
     y1 = (c1544 - o1000) / adr14 if adr_ok else None
 
     # Y2 de_pm - close-path version ONLY (verbatim):
@@ -104,9 +113,10 @@ def compute_day_labels(
     # S0 SS10.1). Sign convention: y4_mfe >= 0, y5_mae <= 0 (signed
     # excursions in d_open units). Close-vs-extreme ambiguity of the frozen
     # one-liner is recorded in the subagent report.
+    # Direction-dependent (IR-23): NA without a direction.
     fav = highs if d_open == 1 else lows
     adv = lows if d_open == 1 else highs
-    if adr_ok:
+    if adr_ok and directional:
         y4_mfe = float(np.max(d_open * (fav - o1000))) / adr14
         y5_mae = float(np.min(d_open * (adv - o1000))) / adr14
     else:

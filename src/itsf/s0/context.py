@@ -61,6 +61,10 @@ Approved Implementation Resolutions applied verbatim:
            strictly before the day, each with a complete 30-bar 09:30-09:59
            window; scheduled early-close days included; downstream S0/ADR14
            eligibility NOT required; zero-bar and incomplete-morning days out.
+  IR-22    a non-finite REQUIRED 09:30-09:59 volume is classification
+           INPUT_DATA_DEFECT and STOPs Stage B (`InputDataDefectError`), never
+           a day-level NA the run continues past; np.nansum is forbidden on
+           that window — assert finite first, then a plain sum.
 
 Semantics are kept identical to the APPROVED scripts/s0_input_preflight.py
 (the runner compares independently computed counts against
@@ -76,7 +80,7 @@ from typing import Iterator, Mapping, Sequence
 import numpy as np
 import pandas as pd
 
-from itsf.contracts import APPROVED_NA_REASONS
+from itsf.contracts import APPROVED_NA_REASONS, InputDataDefectError
 from itsf.data.calendar import (
     ADR_LOOKBACK_DAYS,
     EXPECTED_RTH_MINUTES,
@@ -348,6 +352,35 @@ def _nan_minmax(a: float, b: float, fn) -> float:
     return fn(a, b)
 
 
+def opening_window_volume(date: str, volume: np.ndarray,
+                          obs_mask: np.ndarray) -> float:
+    """IR-22 — 09:30-09:59 volume. ASSERT finite FIRST, then a plain sum.
+
+    `np.nansum` is forbidden here (IR-22, resolving
+    DECISION_PACKET_F4_NAN_VOLUME): it reads a NaN volume as 0, so a day whose
+    30 opening bars are all present but whose volume column is defective
+    produced a plausible-looking `obs_volume == 0.0` — not an NA — and that day
+    then entered the IR-20 F4 reference set and poisoned the median denominator
+    of up to 60 following days.
+
+    A non-finite REQUIRED volume is an INPUT DATA DEFECT, never a day-level NA
+    the run may continue past: it raises `InputDataDefectError` (Stage B STOP).
+    The "that day does not enter the F4 reference set" half of IR-22 needs no
+    separate branch — the whole assembly stops, so no reference set is built.
+    """
+    if not obs_mask.any():
+        return 0.0
+    window = volume[obs_mask]
+    bad = ~np.isfinite(window)
+    if bad.any():
+        raise InputDataDefectError(
+            f"{int(bad.sum())} non-finite value(s) in column 'volume' inside "
+            f"the frozen 09:30-09:59 observation window on {date} — IR-22 "
+            "classification INPUT_DATA_DEFECT, Stage B STOP (never a day-level "
+            "NA; np.nansum would have read the defect as volume 0)")
+    return float(window.sum())
+
+
 def summarise_day(date: str, bars: pd.DataFrame,
                   schedule: SessionSchedule) -> DaySummary:
     """One ET date -> DaySummary. Pure; duplicate RTH minutes fail closed."""
@@ -408,7 +441,7 @@ def summarise_day(date: str, bars: pd.DataFrame,
         rth_high=float(np.max(h[rth])) if rth.any() else nan,
         rth_low=float(np.min(lo[rth])) if rth.any() else nan,
         obs_present=int(obs.sum()),
-        obs_volume=float(np.nansum(v[obs])) if obs.any() else 0.0,
+        obs_volume=opening_window_volume(date, v, obs),   # IR-22 (no nansum)
         pm_present=int(pm.sum()),
         official_close=_close_at(close_bar),
         o0930=_open_at(M_0930), c0959=_close_at(M_0959),

@@ -58,6 +58,16 @@ RESOLUTIONS.md, M4 batch, APPROVED_BY_AARON 2026-07-29):
          encoding is unaffected and those rows must not delete a day nor make
          F10 NA.
 
+APPROVED 2026-08-01 batch (same rulings the S0 assembly layer applies):
+  IR-22  a non-finite REQUIRED 09:30-09:59 volume is classification
+         INPUT_DATA_DEFECT and STOPs (InputDataDefectError); it is never a
+         day-level NA and never a silent 0. np.nansum is forbidden on that
+         window: assert finite first, then a plain sum.
+  IR-24  frozen L82 membership requires ret_open30 to be COMPUTABLE (O0930,
+         C0959, ADR14 all available and finite) and exactly zero; numerator
+         zero with ret_open30 undefined is disclosed as
+         opening_numerator_zero_ret_open30_undefined and is not L82.
+
 Real data is read exclusively through DevelopmentSignalLoader (the approved
 QA read path). Execution-cost-calibration and Internal-Validation paths are
 never touched.
@@ -88,6 +98,7 @@ from itsf.data.calendar import (                                    # noqa: E402
     MAX_MISSING_FRACTION,
     ROLL_WINDOW_TRADING_DAYS,
 )
+from itsf.contracts import InputDataDefectError                     # noqa: E402
 from itsf.data.dbn_loader import DevelopmentSignalLoader            # noqa: E402
 from itsf.data.roles import ROLE_WINDOWS, DataRole                  # noqa: E402
 
@@ -116,6 +127,13 @@ UNSCHEDULED_FOMC = ("2019-10-11", "2020-03-03", "2020-03-15", "2020-03-23")
 STAGE = "INPUT_PREFLIGHT_ONLY"
 REAL_S0 = "NOT_RUN"
 APPROVAL = "AWAITING_AARON_APPROVAL"
+
+# IR-24 opening-direction classes (same vocabulary as the S0 assembly layer).
+L82_ZERO_DIRECTION = "zero_direction_day_l82"
+DIRECTION_UNDETERMINABLE = "direction_undeterminable_na"
+DIRECTIONAL = "directional"
+# IR-24 diagnostic disclosure — NOT an NA reason and NOT an L82 membership.
+OPENING_NUMERATOR_ZERO_UNDEFINED = "opening_numerator_zero_ret_open30_undefined"
 
 
 # --------------------------------------------------------------------------
@@ -238,6 +256,57 @@ def extract_days(loader: DevelopmentSignalLoader,
 
 def window_present(db: DayBars, lo: int, hi: int) -> int:
     return int(np.sum(~np.isnan(db.c[lo - RTH_LO:hi - RTH_LO + 1])))
+
+
+def opening_window_volume(db: DayBars, date: str) -> float:
+    """IR-22 — 09:30-09:59 volume. ASSERT finite FIRST, then a plain sum.
+
+    `np.nansum` is forbidden on this window (IR-22, resolving
+    DECISION_PACKET_F4_NAN_VOLUME): it reads a NaN volume as 0, so a defective
+    volume column produced a plausible-looking sum instead of an error, and the
+    day then entered the IR-20 F4 reference set and poisoned the median
+    denominator of up to 60 following days.
+
+    A minute with NO bar is absence, not a defect (IR-15: absence stays
+    absence), and is simply not part of the sum; presence is read from the
+    close grid exactly as `window_present` does. A minute that HAS a bar whose
+    volume is NaN or otherwise non-finite is an INPUT DATA DEFECT and raises —
+    never a silent 0, never a day-level NA.
+    """
+    sl = slice(W1_LO - RTH_LO, W1_HI - RTH_LO + 1)
+    v = db.v[sl]
+    present = ~np.isnan(db.c[sl])            # this minute actually has a bar
+    bad = present & ~np.isfinite(v)
+    if bad.any():
+        minutes = [int(W1_LO + i) for i in np.flatnonzero(bad)]
+        raise InputDataDefectError(
+            f"non-finite 'volume' on {date} at opening-window minute-of-day "
+            f"{minutes} (the bar exists) — IR-22 classification "
+            "INPUT_DATA_DEFECT, STOP; the day does not enter the F4 "
+            "reference set")
+    return float(np.sum(v[present])) if present.any() else 0.0
+
+
+def opening_direction_class(o930: float, c959: float, adr14: float) -> str:
+    """IR-24 (Option B = the frozen literal) — the opening direction class.
+
+    Frozen L82 defines the zero-direction class by `ret_open30 == 0`, so a day
+    belongs to it ONLY when ret_open30 is itself computable (O0930, C0959 and
+    ADR14 all available and finite, ADR14 non-zero) and is exactly zero. An
+    undefined ret_open30 is `direction_undeterminable_na`; if its numerator
+    (C0959 - O0930) happens to be exactly 0 that fact is DISCLOSED as
+    `opening_numerator_zero_ret_open30_undefined` and still never counts as
+    L82. Equal anchors are NOT a substitute for the ret_open30 definition.
+    """
+    if np.isnan(o930) or np.isnan(c959):
+        return DIRECTION_UNDETERMINABLE
+    if not np.isfinite(adr14) or adr14 == 0:
+        return (OPENING_NUMERATOR_ZERO_UNDEFINED if c959 == o930
+                else DIRECTION_UNDETERMINABLE)
+    ret_open30 = (c959 - o930) / adr14
+    if not np.isfinite(ret_open30):
+        return DIRECTION_UNDETERMINABLE
+    return L82_ZERO_DIRECTION if ret_open30 == 0 else DIRECTIONAL
 
 
 def anchor_open(db: DayBars, minute: int) -> float:
@@ -579,12 +648,13 @@ def main() -> int:
     for d in obs_order:
         db = days[d]
         if window_present(db, W1_LO, W1_HI) == 30:
-            obs_vol_hist.append((d, float(np.nansum(db.v[W1_LO - RTH_LO:
-                                                         W1_HI - RTH_LO + 1]))))
+            # IR-22: assert-then-sum; a non-finite volume STOPs the script.
+            obs_vol_hist.append((d, opening_window_volume(db, d)))
     vol_dates = [x[0] for x in obs_vol_hist]
     vol_vals = [x[1] for x in obs_vol_hist]
 
     zero_direction_days: list[str] = []
+    numerator_zero_ret_undefined: list[str] = []      # IR-24 disclosure
 
     def rec(name: str, ok: bool, reason: str, val: float = np.nan) -> None:
         if ok:
@@ -637,7 +707,7 @@ def main() -> int:
             rec("F4", False, "f4_lookback_warmup")
         else:
             med = float(np.median(vol_vals[j - F4_LOOKBACK_DAYS:j]))
-            cur = float(np.nansum(db.v[W1_LO - RTH_LO:W1_HI - RTH_LO + 1]))
+            cur = opening_window_volume(db, d)          # IR-22 (no nansum)
             rec("F4", True, "", np.nan if med == 0 else cur / med)
 
         # F5 gap — NA on is_roll_transition (frozen L57)
@@ -677,9 +747,17 @@ def main() -> int:
         if np.isnan(o930) or np.isnan(c959):
             rec("F8", False, "anchor_missing")
         elif c959 == o930:
-            # frozen L82: ret_open30 == 0 -> no direction, not tradeable,
-            # counted and reported separately. Recorded here as a COUNT only.
-            zero_direction_days.append(d)
+            # F8's own NA is the frozen L77 zero denominator |C0959-O0930|==0
+            # and is unchanged. The DAY-CLASS question is separate: IR-24
+            # (Option B, frozen literal) puts the day in the frozen L82
+            # zero-direction population only when ret_open30 is computable and
+            # exactly zero; numerator zero with ret_open30 undefined (ADR14
+            # unavailable / non-finite / zero) is disclosed apart and is NOT
+            # L82. Both are recorded here as COUNTS only.
+            if opening_direction_class(o930, c959, a) == L82_ZERO_DIRECTION:
+                zero_direction_days.append(d)
+            else:
+                numerator_zero_ret_undefined.append(d)
             rec("F8", False, "zero_denominator_no_direction")
         else:
             dr = np.sign(c959 - o930)
@@ -797,7 +875,21 @@ def main() -> int:
             "dates": zero_direction_days,
             "note": ("ret_open30 == 0 exactly: frozen L82 requires these be "
                      "counted and reported separately as no-direction, "
-                     "non-tradeable days. The day is NOT deleted."),
+                     "non-tradeable days. The day is NOT deleted. IR-24 "
+                     "(Option B, frozen literal): membership requires "
+                     "ret_open30 to be computable — O0930, C0959 and ADR14 "
+                     "all available and finite — and to be exactly zero."),
+        },
+        "opening_numerator_zero_ret_open30_undefined": {   # IR-24 disclosure
+            "count": len(numerator_zero_ret_undefined),
+            "dates": numerator_zero_ret_undefined,
+            "note": ("C0959 - O0930 is exactly 0 while ret_open30 itself is "
+                     "undefined (ADR14 unavailable, non-finite or zero). "
+                     "IR-24: such a day is direction_undeterminable_na and is "
+                     "NOT in the frozen L82 population; equal anchors never "
+                     "substitute for the ret_open30 definition. Disclosure "
+                     "counter only — no day is deleted and no NA class is "
+                     "created."),
         },
         "na_reason_precedence": [
             "reasons are assigned by FIRST match in the documented order per "
@@ -1174,6 +1266,16 @@ def render_report(p: dict) -> str:
     A(f"{z['note']}")
     A("")
     A(f"Dates: {', '.join(z['dates']) or 'none'}")
+    A("")
+    # IR-24 disclosure. `.get` keeps an older payload renderable.
+    nz = p.get("opening_numerator_zero_ret_open30_undefined",
+               {"count": 0, "dates": [], "note": ""})
+    A(f"### IR-24 `opening_numerator_zero_ret_open30_undefined`: {nz['count']}")
+    A("")
+    if nz["note"]:
+        A(f"{nz['note']}")
+        A("")
+    A(f"Dates: {', '.join(nz['dates']) or 'none'}")
     A("")
     A("NA reason precedence:")
     A("")

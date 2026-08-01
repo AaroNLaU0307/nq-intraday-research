@@ -264,6 +264,114 @@ def test_overnight_range_empty_when_no_bars():
 
 
 # --------------------------------------------------------------------------
+# IR-22 — non-finite opening-window volume is an INPUT DATA DEFECT
+# (APPROVED_BY_AARON 2026-08-01, resolves DECISION_PACKET_F4_NAN_VOLUME).
+# The S0 assembly layer (itsf.s0.context) carries the same rule and the same
+# test shape; both had the identical np.nansum defect.
+# --------------------------------------------------------------------------
+
+DATE = "2020-01-02"
+
+
+def test_opening_window_volume_is_a_plain_sum_of_present_bars():
+    db = full_day()                       # 30 opening bars, volume 10.0 each
+    assert pf.opening_window_volume(db, DATE) == pytest.approx(300.0)
+
+
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+def test_nan_volume_in_the_opening_window_is_an_input_data_defect(bad):
+    """np.nansum used to read this as 0, producing a plausible-looking sum;
+    the day then entered the IR-20 F4 reference set and poisoned the median
+    denominator of up to 60 following days."""
+    from itsf.contracts import InputDataDefectError
+    db = full_day()
+    db.v[580 - pf.RTH_LO] = bad           # 09:40 bar, inside 09:30-09:59
+    with pytest.raises(InputDataDefectError) as exc:
+        pf.opening_window_volume(db, DATE)
+    message = str(exc.value)
+    assert DATE in message and "volume" in message
+
+
+def test_absent_opening_minute_is_absence_never_a_volume_defect():
+    """IR-15: a minute with no bar stays absent and is simply not summed."""
+    minutes = [m for m in range(pf.RTH_LO, pf.RTH_HI + 1) if m != 580]
+    db = make_day(minutes)
+    assert np.isnan(db.c[580 - pf.RTH_LO])
+    assert pf.opening_window_volume(db, DATE) == pytest.approx(290.0)
+
+
+def test_volume_defect_outside_the_opening_window_is_out_of_scope():
+    """The IR-22 assertion covers the frozen 09:30-09:59 F4 window (L56)."""
+    db = full_day()
+    db.v[700 - pf.RTH_LO] = np.nan        # 11:40 bar
+    assert pf.opening_window_volume(db, DATE) == pytest.approx(300.0)
+
+
+def test_preflight_never_calls_nansum():
+    """Anti-regression on the exact construct IR-22 forbids."""
+    src = (REPO / "scripts" / "s0_input_preflight.py").read_text(
+        encoding="utf-8")
+    calls = [ln for ln in src.splitlines()
+             if "nansum(" in ln and not ln.lstrip().startswith("#")
+             and "`" not in ln and "forbidden" not in ln]
+    assert not calls, calls
+
+
+# --------------------------------------------------------------------------
+# IR-24 — frozen-L82 membership needs a COMPUTABLE ret_open30
+# (APPROVED_BY_AARON 2026-08-01, Option B; resolves
+# DECISION_PACKET_L82_DEFINITION). Same rule as itsf.s0.dataset.
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("o930,c959,adr,expected", [
+    # ret_open30 computable and exactly zero -> the frozen L82 class
+    (100.0, 100.0, 50.0, "zero_direction_day_l82"),
+    # numerator zero but ret_open30 undefined -> disclosure, NOT L82
+    (100.0, 100.0, np.nan, "opening_numerator_zero_ret_open30_undefined"),
+    (100.0, 100.0, 0.0, "opening_numerator_zero_ret_open30_undefined"),
+    (100.0, 100.0, np.inf, "opening_numerator_zero_ret_open30_undefined"),
+    # ret_open30 undefined with a non-zero numerator
+    (100.0, 101.0, np.nan, "direction_undeterminable_na"),
+    # an absent anchor is never read as "the market had no direction"
+    (np.nan, 100.0, 50.0, "direction_undeterminable_na"),
+    (100.0, np.nan, 50.0, "direction_undeterminable_na"),
+    # ordinary directional days
+    (100.0, 101.0, 50.0, "directional"),
+    (101.0, 100.0, 50.0, "directional"),
+])
+def test_opening_direction_class_follows_the_frozen_literal(o930, c959, adr,
+                                                            expected):
+    assert pf.opening_direction_class(o930, c959, adr) == expected
+
+
+def test_equal_anchors_alone_never_make_an_l82_day():
+    """The superseded shortcut, pinned: equal anchors with an unusable ADR14
+    must NOT reach the frozen L82 population."""
+    assert pf.opening_direction_class(100.0, 100.0, np.nan) != \
+        pf.L82_ZERO_DIRECTION
+    assert (pf.opening_direction_class(100.0, 100.0, np.nan)
+            == pf.OPENING_NUMERATOR_ZERO_UNDEFINED)
+    # the disclosure counter is a DIAGNOSTIC, never an approved NA reason
+    from itsf.contracts import APPROVED_NA_REASONS
+    assert pf.OPENING_NUMERATOR_ZERO_UNDEFINED not in APPROVED_NA_REASONS
+    assert pf.L82_ZERO_DIRECTION in APPROVED_NA_REASONS
+    assert pf.DIRECTION_UNDETERMINABLE in APPROVED_NA_REASONS
+
+
+def test_ir24_disclosure_renders_without_a_key_error_on_an_older_payload():
+    """render_report must stay able to render a payload produced before the
+    IR-24 key existed (the shipped JSON is one)."""
+    p = REPO / "S0_INPUT_PREFLIGHT.json"
+    if not p.exists():
+        pytest.skip("json not generated yet")
+    payload = json.loads(p.read_text(encoding="utf-8"))
+    payload.pop("opening_numerator_zero_ret_open30_undefined", None)
+    text = pf.render_report(payload)
+    assert "opening_numerator_zero_ret_open30_undefined" in text
+    assert pf.scan_forbidden(text) == []
+
+
+# --------------------------------------------------------------------------
 # 5. forbidden-vocabulary guard
 # --------------------------------------------------------------------------
 

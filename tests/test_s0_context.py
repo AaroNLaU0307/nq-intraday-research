@@ -400,6 +400,66 @@ def test_f4_reference_set_is_strictly_prior():
 
 
 # ---------------------------------------------------------------------------
+# IR-22 — a non-finite REQUIRED opening-window volume is an INPUT DATA DEFECT
+# (APPROVED_BY_AARON 2026-08-01, resolves DECISION_PACKET_F4_NAN_VOLUME).
+# ---------------------------------------------------------------------------
+
+def _market_with_volume(minute: int, value: float, n: int = 20, idx: int = 10):
+    """A normal synthetic market whose day `idx` carries `value` as the volume
+    of the bar starting at minute-of-day `minute`."""
+    dates = weekdays("2020-01-02", n)
+    target = dates[idx]
+    bars, schedule = make_market(dates)
+    g = bars[target].copy()
+    sel = (g["ts"].dt.hour * 60 + g["ts"].dt.minute) == minute
+    assert int(sel.sum()) == 1
+    g.loc[sel, "volume"] = value
+    bars[target] = g
+    return bars, schedule, target
+
+
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+def test_nan_or_infinite_opening_volume_is_an_input_data_defect(bad):
+    """IR-22: the day is NOT a day-level NA and NOT a silent 0 — the whole
+    assembly STOPs, which is also what keeps the day out of the IR-20 F4
+    reference set (there is no reference set to enter)."""
+    from itsf.contracts import InputDataDefectError
+    bars, schedule, target = _market_with_volume(580, bad)   # 09:40 bar
+    with pytest.raises(InputDataDefectError) as exc:
+        build_universe(bars, schedule, NO_EVENTS, ())
+    message = str(exc.value)
+    assert target in message and "volume" in message         # date + column
+
+
+def test_opening_volume_defect_is_scoped_to_the_frozen_window():
+    """The assertion covers the frozen 09:30-09:59 observation window (the F4
+    input, frozen L56), not the rest of the session."""
+    bars, schedule, target = _market_with_volume(700, np.nan)   # 11:40 bar
+    uni = build_universe(bars, schedule, NO_EVENTS, ())
+    assert uni.summaries[target].obs_volume == pytest.approx(30 * 100.0)
+
+
+def test_opening_volume_is_a_plain_sum_of_the_present_bars():
+    dates = weekdays("2020-01-02", 20)
+    bars, uni = universe_of(dates, {dates[10]: {"volume": 150.0}})
+    assert uni.summaries[dates[10]].obs_volume == pytest.approx(30 * 150.0)
+    # a genuinely ABSENT minute is absence, never a defect (IR-15)
+    bars2, uni2 = universe_of(dates, {dates[10]: {"skip_minutes": (580,)}})
+    assert uni2.summaries[dates[10]].obs_volume == pytest.approx(29 * 100.0)
+
+
+def test_context_never_calls_nansum_on_the_opening_window():
+    """Anti-regression on the exact construct IR-22 forbids: np.nansum reads a
+    NaN volume as 0 and yields a plausible-looking obs_volume of 0.0."""
+    src = (Path(__file__).resolve().parents[1]
+           / "src" / "itsf" / "s0" / "context.py").read_text(encoding="utf-8")
+    calls = [ln for ln in src.splitlines()
+             if "nansum(" in ln and not ln.lstrip().startswith("#")
+             and "`" not in ln]
+    assert not calls, calls
+
+
+# ---------------------------------------------------------------------------
 # prev_rth_close (IR-19)
 # ---------------------------------------------------------------------------
 

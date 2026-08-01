@@ -486,7 +486,8 @@ def stage_c_actuals_unavailable():
 
 def build_structural_checks(assertions_path: Path, *,
                             expected_loader=load_expected_assertions,
-                            actuals_provider=stage_c_actuals_unavailable):
+                            actuals_provider=stage_c_actuals_unavailable,
+                            wiring_status=None):
     """Stage-B checks (pre-exposure, packet §7).
 
     The assertion comparison is REAL wiring: `expected` comes from the locked
@@ -521,9 +522,13 @@ def build_structural_checks(assertions_path: Path, *,
         # i.e. AFTER the atomic run-start — a fully-authorized invocation
         # would have burned S0-T001 and researcher exposure for zero output.
         # As a Stage-B gate it fails PRE-exposure, costing nothing.
+        # Since Aaron 2026-08-01 §三.4 the REAL wiring exists (RealChain);
+        # callers pass its readiness probe. A caller that supplies none gets
+        # the historical inert message (used by injection tests only).
+        if wiring_status is not None:
+            return wiring_status()
         return (False,
-                "Stage C wiring not yet activated — final packet re-render "
-                "pending (packet §0)")
+                "Stage C wiring status not supplied — inert by default")
 
     # `stage_c_wiring_activated` sits BEFORE the comparison so that today's
     # inert run stops with that exact, honest message rather than with a
@@ -575,6 +580,220 @@ def _attr(obj, name):
 
 
 # =========================================================================
+# Stage C real computation chain (MAIN-AGENT OWNED; Aaron 2026-08-01 §三.4)
+# context -> dataset -> integrity adapters -> report render. No placeholder,
+# no not-implemented sentinel. Real-data loading happens ONLY here, only when
+# the Stage-A authorization gates have passed; the e2e tests drive exactly
+# these functions with synthetic universes instead.
+# =========================================================================
+
+# IR-13 enumerated non-scheduled FOMC actions (diagnostic-only, frozen)
+UNSCHEDULED_FOMC = ("2019-10-11", "2020-03-03", "2020-03-15", "2020-03-23")
+F10_CSV = REPO / "gate1" / "f10_event_calendar" / "f10_events.csv"
+SYMBOLOGY_CSV = REPO / "gate1" / "symbology" / "nq_v0_mapping.csv"
+
+FEATURE_FIELD_TO_F = {
+    "ret_open30": "F1", "or_width": "F2", "de_open30": "F3",
+    "rvol_open30": "F4", "gap": "F5", "open_loc_on": "F6", "on_range": "F7",
+    "retrace_open30": "F8", "close_pos_open30": "F9", "is_event_day": "F10",
+}
+LABEL_KEY_TO_NAME = {"y_cont": "Y_cont", "y1": "Y1", "y2_de_pm": "Y2",
+                     "y3_close_pos_pm": "Y3", "y4_mfe": "Y4", "y5_mae": "Y5"}
+PRICE_ANCHORS = ("O0930", "C0959", "O1000", "C1544")
+
+
+def _norm_reason(word: str) -> str:
+    """Fold vocabulary via the F-14 table when it knows the word; contract
+    words pass through unchanged."""
+    from itsf.s0 import runinfra
+    try:
+        return runinfra.translate_na_reason(word)
+    except ValueError:
+        return word
+
+
+def load_real_event_calendar():
+    import csv as _csv
+    from collections import Counter as _Counter
+    from itsf.s0.context import EventCalendar
+    with F10_CSV.open(encoding="utf-8", newline="") as fh:
+        rows = list(_csv.DictReader(fh))
+    cpi = {r["date_et"] for r in rows if r["is_cpi_release_day"] == "true"}
+    nfp = {r["date_et"] for r in rows if r["is_nfp_release_day"] == "true"}
+    stmt = {r["date_et"] for r in rows
+            if r["is_fomc_statement_day"] == "true"}
+    kinds: dict[str, set[str]] = {}
+    for r in rows:
+        kinds.setdefault(r["date_et"], set()).add(r["event_type"])
+    raw_multi = {d for d, k in kinds.items() if len(k) > 1}
+    return EventCalendar(cpi, nfp, stmt, frozenset(UNSCHEDULED_FOMC),
+                         frozenset(raw_multi))
+
+
+def load_real_roll_intervals():
+    import csv as _csv
+    from itsf.s0.context import RollInterval
+    with SYMBOLOGY_CSV.open(encoding="utf-8", newline="") as fh:
+        rows = list(_csv.DictReader(fh))
+    return tuple(RollInterval(r["start_date_utc"], r["end_date_utc_excl"],
+                              r["raw_symbol"], int(r["instrument_id"]))
+                 for r in rows)
+
+
+def load_real_session_schedule():
+    from itsf.s0.context import SessionSchedule
+    import pandas_market_calendars as pmc
+    cal = pmc.get_calendar("CME_Equity")
+    sched = cal.schedule(start_date="2010-06-06", end_date="2021-12-31")
+    closes = sched["market_close"].dt.tz_convert("America/New_York")
+    close_minute = {str(d.date()): c.hour * 60 + c.minute
+                    for d, c in closes.items()}
+    cond = json.loads((A1_JOB_DIR / "condition.json").read_text("utf-8"))
+    degraded = frozenset(r["date"] for r in cond
+                         if r["condition"] != "available")
+    return SessionSchedule(close_minute=close_minute,
+                           vendor_degraded_dates=degraded)
+
+
+def structural_actuals_from(ds, universe) -> dict:
+    """Independently-computed actuals mirroring translate_preflight_assertions
+    key families. Compare-only output (packet §5)."""
+    import numpy as np
+    out: dict[str, int] = {}
+    fc = dict(ds.funnel_counts)
+    for key in ("L0_scheduled_trading_days", "L1_observed_rth_days",
+                "L2_regular_full_session_candidates",
+                "L3_structurally_eligible_days",
+                "L4_final_feature_construction_dates"):
+        out[f"funnel.{key}"] = int(fc[key])
+    for cat, n in ds.f10_counts.items():
+        out[f"f10.{cat}"] = int(n)
+    per = ds.na_table["per_field"]["features"]
+    pop = int(ds.na_table["population"])
+    for field, fname in FEATURE_FIELD_TO_F.items():
+        row = per[field]
+        out[f"feature.{fname}.constructible"] = int(row["not_na"])
+        out[f"feature.{fname}.na"] = int(row["na"])
+        for word, n in row["reasons"].items():
+            k = f"na_reason.{fname}.{_norm_reason(word)}"
+            out[k] = out.get(k, 0) + int(n)
+    out["feature.F11.constructible"] = pop          # structural booleans
+    out["feature.F11.na"] = 0
+    # anchors over the eligible population
+    elig = [r.trade_date for r in ds.records]
+    for name, attr in (("O0930", "o0930"), ("C0959", "c0959"),
+                       ("O1000", "o1000"), ("C1544", "c1544")):
+        missing = sum(1 for d in elig
+                      if np.isnan(getattr(universe.summaries[d], attr)))
+        out[f"anchor.{name}.available"] = len(elig) - missing
+        out[f"anchor.{name}.missing"] = missing
+        if missing:
+            out[f"na_reason.anchor.{name}.anchor_missing"] = missing
+    prev_missing = [d for d in elig
+                    if d not in universe.prev_rth_close]
+    out["anchor.prev_rth_close.available"] = len(elig) - len(prev_missing)
+    out["anchor.prev_rth_close.missing"] = len(prev_missing)
+    for d in prev_missing:
+        word = _norm_reason(universe.prev_rth_close_cause.get(
+            d, "prev_rth_close_anchor_missing"))
+        k = f"na_reason.anchor.prev_rth_close.{word}"
+        out[k] = out.get(k, 0) + 1
+    for key, name in LABEL_KEY_TO_NAME.items():
+        row = ds.label_anchor_availability[key]
+        out[f"label.{name}.available"] = int(row["available_days"])
+        out[f"label.{name}.unavailable"] = int(row["unavailable_days"])
+    return out
+
+
+def stage_c_result(ds):
+    """Wrap the dataset with the Stage-D adapters the integrity checks read
+    (na_reason_counts itemized per column + reported_total_na)."""
+    counts: dict[str, dict[str, int]] = {}
+    totals: dict[str, int] = {}
+    for table in ("features", "labels"):
+        for field, row in ds.na_table["per_field"][table].items():
+            col = f"{table}.{field}"
+            counts[col] = dict(row["reasons"])
+            totals[col] = int(row["na"])
+    return {"dataset": ds, "na_reason_counts": counts,
+            "reported_total_na": totals}
+
+
+def render_s0_report(result) -> dict[str, str]:
+    """Stage-E sealed release: the FORMAL S0 report, whole-document only
+    (packet §7 — nothing here reaches a log line)."""
+    ds = result["dataset"]
+    payload = {
+        "trial_report": "S0_REPORT",
+        "y6_rule": ds.y6_rule,
+        "funnel": dict(ds.funnel_counts),
+        "f10_final_mutually_exclusive": dict(ds.f10_counts),
+        "f10_raw_membership": dict(ds.f10_raw_membership_counts),
+        "na_table": ds.na_table,
+        "frequency": ds.frequency,
+        "label_anchor_availability": ds.label_anchor_availability,
+        "eras": {k: len(v) for k, v in ds.eras.items()},
+        "groups": {g: {k: len(v) for k, v in m.items()}
+                   for g, m in ds.groups.items()},
+        "pending_decisions": list(ds.pending_decisions),
+    }
+    md = ["# S0 FORMAL REPORT (sealed at Stage E)", "",
+          f"- y6_rule: {ds.y6_rule}",
+          f"- records: {len(ds.records)}",
+          "- full structures in S0_REPORT.json (single sealed release)"]
+    return {"S0_REPORT.json": json.dumps(payload, indent=1, sort_keys=True,
+                                         default=str),
+            "S0_REPORT.md": "\n".join(md)}
+
+
+class RealChain:
+    """Cached real-data chain. Universe/dataset are built at most once per
+    process; Stage B reads only structural counts from them, Stage C returns
+    the same cached dataset (no recompute, no drift)."""
+
+    def __init__(self) -> None:
+        self._ds = None
+        self._uni = None
+
+    def ready(self) -> tuple[bool, str]:
+        missing = [str(p) for p in (F10_CSV, SYMBOLOGY_CSV,
+                                    A1_JOB_DIR / "condition.json",
+                                    A1_JOB_DIR / "manifest.json")
+                   if not p.exists()]
+        if missing:
+            return (False, f"stage-C artifacts missing: {missing}")
+        return (True, "stage C wiring ready (context->dataset->report)")
+
+    def _ensure(self):
+        if self._ds is None:
+            from itsf.data.dbn_loader import DevelopmentSignalLoader
+            from itsf.s0.context import build_universe
+            from itsf.s0.dataset import build_s0_dataset
+            loader = DevelopmentSignalLoader(A1_JOB_DIR)
+            bars_by_date: dict = {}
+            for name in sorted(p.name for p in A1_JOB_DIR.glob("*.dbn.zst")):
+                df, _events = loader.load_real(name, source_format="dbn")
+                for d, block in df.groupby(df["ts"].dt.date.astype(str)):
+                    bars_by_date[d] = (block if d not in bars_by_date else
+                                       __import__("pandas").concat(
+                                           [bars_by_date[d], block]))
+            uni = build_universe(bars_by_date, load_real_session_schedule(),
+                                 load_real_event_calendar(),
+                                 load_real_roll_intervals())
+            self._uni = uni
+            self._ds = build_s0_dataset(bars_by_date, uni)
+        return self._ds, self._uni
+
+    def structural_actuals(self) -> dict:
+        ds, uni = self._ensure()
+        return structural_actuals_from(ds, uni)
+
+    def compute(self):
+        ds, _uni = self._ensure()
+        return stage_c_result(ds)
+
+
+# =========================================================================
 # entrypoint
 # =========================================================================
 
@@ -617,20 +836,21 @@ def main() -> int:
         runinfra.validate_log_event(message)
         print(f"[s0-runner] {message}", flush=True)
 
-    def compute_unreachable():
-        from itsf.contracts import RunGateError
-        raise RunGateError(
-            "Stage C compute is not wired; the stage_c_wiring_activated "
-            "Stage-B gate must fail before this can ever be reached")
+    # Aaron 2026-08-01 §三.4: the REAL chain — context -> dataset ->
+    # integrity adapters -> sealed report. No placeholder anywhere.
+    chain = RealChain()
 
     deps = RunnerDeps(
         config=cfg,
         trial_state=TrialState.PACKET_APPROVED,
         gates=build_gates(),
-        structural_checks=build_structural_checks(Path(cfg.assertions_path)),
-        compute=compute_unreachable,
+        structural_checks=build_structural_checks(
+            Path(cfg.assertions_path),
+            actuals_provider=chain.structural_actuals,
+            wiring_status=chain.ready),
+        compute=chain.compute,
         integrity_checks=build_integrity_checks(),
-        render_report=lambda r: {},
+        render_report=render_s0_report,
         append_registry_event=registry_append,
         clock_utc=clock,
         log=guarded_log)

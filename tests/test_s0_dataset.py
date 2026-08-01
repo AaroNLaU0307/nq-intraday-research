@@ -24,6 +24,7 @@ from test_s0_context import (
 from itsf.contracts import APPROVED_NA_REASONS
 from itsf.s0.context import (
     MICRO_ERA_BOUNDARY,
+    NA_ADR14_WARMUP,
     NA_ANCHOR_MISSING,
     NA_DIRECTION_UNDETERMINABLE,
     NA_ZERO_DIRECTION,
@@ -33,6 +34,7 @@ from itsf.s0.context import (
 from itsf.s0.dataset import (
     DEV_END_EXCL,
     DEV_START,
+    DIAG_OPENING_NUMERATOR_ZERO,
     DIRECTION_DIRECTIONAL,
     Y6_RULE,
     build_s0_dataset,
@@ -40,6 +42,8 @@ from itsf.s0.dataset import (
 
 # Past the 14-day ADR warm-up in a 30-weekday universe starting 2020-01-02.
 IDX_A, IDX_B, IDX_C = 20, 22, 24
+# Inside that warm-up (fewer than 14 prior complete RTH days).
+IDX_WARMUP = 5
 
 
 def dataset_of(dates, spec=None, **kw):
@@ -116,6 +120,168 @@ def test_case_a_and_case_b_never_merged_in_any_table():
     assert overall["direction_undeterminable_days"] == 15
     assert ds.na_table["checks"][
         "zero_direction_and_undeterminable_reported_separately"] is True
+
+
+# ---------------------------------------------------------------------------
+# IR-24 (APPROVED_BY_AARON 2026-08-01, Option B = the frozen literal):
+# frozen-L82 membership requires ret_open30 to be COMPUTABLE and exactly zero.
+# ---------------------------------------------------------------------------
+
+def test_ir24_warmup_day_with_equal_anchors_is_undeterminable_not_l82():
+    """The case the two readings disagreed on: O0930 == C0959 while ADR14 is
+    unavailable, so ret_open30 is undefined. IR-24: NOT an L82 day."""
+    dates = weekdays("2020-01-02", 30)
+    day = dates[IDX_WARMUP]
+    ds = dataset_of(dates, {day: {"closes": zero_open30_closes(20000.0)}})
+    r = record_for(ds, day)
+
+    assert r.features.adr14 is None                # ret_open30 not computable
+    assert r.features.ret_open30 is None
+    assert r.direction_status == NA_DIRECTION_UNDETERMINABLE
+    assert r.direction_status != NA_ZERO_DIRECTION
+    assert r.direction_na_cause == NA_ADR14_WARMUP
+    assert r.oracle_candidate is False
+
+    # the numerator-zero fact is DISCLOSED, per day and as a count
+    assert r.sidecar[DIAG_OPENING_NUMERATOR_ZERO] is True
+    assert ds.na_table["diagnostics"][DIAG_OPENING_NUMERATOR_ZERO] == 1
+
+    # ... and the day appears in NO frozen-L82 population anywhere
+    assert ds.na_table["direction"][NA_ZERO_DIRECTION] == 0
+    assert ds.frequency["overall"]["zero_direction_days_l82"] == 0
+    tbl = ds.day_status_table
+    assert set(tbl.loc[tbl.trade_date == day, "direction_status"]) == {
+        NA_DIRECTION_UNDETERMINABLE}
+    assert DIAG_OPENING_NUMERATOR_ZERO not in set(APPROVED_NA_REASONS)
+
+
+def test_ir24_same_shape_after_warmup_is_l82_with_no_diagnostic():
+    """Control for the test above: identical closes, ADR14 now available, so
+    ret_open30 IS computable and exactly zero -> the frozen L82 class."""
+    dates = weekdays("2020-01-02", 30)
+    day = dates[IDX_A]
+    ds = dataset_of(dates, {day: {"closes": zero_open30_closes(20000.0)}})
+    r = record_for(ds, day)
+    assert r.features.ret_open30 == 0.0
+    assert r.direction_status == NA_ZERO_DIRECTION
+    assert r.direction_na_cause == ""
+    assert r.sidecar[DIAG_OPENING_NUMERATOR_ZERO] is False
+    assert ds.na_table["diagnostics"][DIAG_OPENING_NUMERATOR_ZERO] == 0
+    assert ds.na_table["direction"][NA_ZERO_DIRECTION] == 1
+
+
+def test_ir24_l82_branch_is_driven_by_ret_open30_not_by_equal_anchors():
+    """Anti-regression on the superseded shortcut: the branch that classifies a
+    day as frozen-L82 must test ret_open30, never an anchor comparison."""
+    import ast
+    import inspect
+    import textwrap
+    from itsf.s0 import dataset as ds_mod
+    fn = ast.parse(textwrap.dedent(
+        inspect.getsource(ds_mod._direction_status))).body[0]
+    guards = [ast.dump(node.test) for node in ast.walk(fn)
+              if isinstance(node, ast.If)
+              and any(isinstance(n, ast.Return)
+                      and "NA_ZERO_DIRECTION" in ast.dump(n)
+                      for n in node.body)]
+    assert len(guards) == 1, guards
+    assert "ret_open30" in guards[0]
+    for banned in ("o0930", "c0959"):
+        assert banned not in guards[0], guards[0]
+
+
+# ---------------------------------------------------------------------------
+# IR-23 (APPROVED_BY_AARON 2026-08-01) — per-label independence at the
+# assembly layer: Y1/Y2/Y3 never go NA for a direction reason.
+# ---------------------------------------------------------------------------
+
+def test_ir23_zero_direction_day_keeps_y1_y2_y3():
+    dates = weekdays("2020-01-02", 30)
+    day = dates[IDX_A]
+    ds = dataset_of(dates, {day: {"closes": zero_open30_closes(20000.0)}})
+    r = record_for(ds, day)
+    assert r.direction_status == NA_ZERO_DIRECTION
+
+    # direction-FREE labels are computed, and carry no NA reason at all
+    for name in ("y1", "y2_de_pm", "y3_close_pos_pm"):
+        assert getattr(r.labels, name) is not None, name
+        assert name not in r.label_na_reasons, name
+    # direction-DEPENDENT labels stay NA under the day's own direction class
+    for name in ("y_cont", "y4_mfe", "y5_mae"):
+        assert getattr(r.labels, name) is None, name
+        assert r.label_na_reasons[name] == NA_ZERO_DIRECTION, name
+    # Y6 keeps inheriting the Y_cont reason (IR-21, unchanged)
+    assert r.labels.y6_cont_decile is None
+    assert r.label_na_reasons["y6_cont_decile"] == NA_ZERO_DIRECTION
+
+
+def test_ir23_adr14_warmup_day_computes_y2_y3_but_not_y1():
+    """Warm-up shape: no ADR14 (so no direction either). Y2/Y3 need neither and
+    must be present; Y1 is NA for its OWN reason, the ADR14 warm-up."""
+    dates = weekdays("2020-01-02", 30)
+    ds = dataset_of(dates)
+    r = record_for(ds, dates[IDX_WARMUP])
+    assert r.features.adr14 is None
+    assert r.direction_status == NA_DIRECTION_UNDETERMINABLE
+    assert r.labels.y2_de_pm is not None
+    assert r.labels.y3_close_pos_pm is not None
+    assert "y2_de_pm" not in r.label_na_reasons
+    assert "y3_close_pos_pm" not in r.label_na_reasons
+    assert r.labels.y1 is None
+    assert r.label_na_reasons["y1"] == NA_ADR14_WARMUP     # not a direction
+    assert r.label_na_reasons["y_cont"] == NA_ADR14_WARMUP
+
+
+def test_ir23_missing_direction_anchor_day_still_computes_its_own_labels():
+    """The 09:30 anchor is absent, so the direction is undeterminable — but
+    Y1/Y2/Y3 depend on O1000/C1544/ADR14/the pm window, all of which exist."""
+    dates = weekdays("2020-01-02", 30)
+    day = dates[IDX_B]
+    ds = dataset_of(dates, {day: {"skip_minutes": (570,)}})
+    r = record_for(ds, day)
+    assert r.direction_status == NA_DIRECTION_UNDETERMINABLE
+    assert r.labels.y1 is not None
+    assert r.labels.y2_de_pm is not None
+    assert r.labels.y3_close_pos_pm is not None
+    assert r.label_na_reasons["y_cont"] == NA_DIRECTION_UNDETERMINABLE
+    assert r.label_na_reasons["y4_mfe"] == NA_DIRECTION_UNDETERMINABLE
+
+
+def test_ir23_coverage_is_mechanical_and_no_direction_reason_reaches_y1_y2_y3():
+    """Coverage numbers are DERIVED from the synthetic universe, never written
+    by hand, and the direction classes must not appear on Y1/Y2/Y3 anywhere."""
+    dates = weekdays("2020-01-02", 30)
+    spec = {dates[IDX_WARMUP]: {"closes": zero_open30_closes(20000.0)},
+            dates[IDX_A]: {"closes": zero_open30_closes(20000.0)},
+            dates[IDX_B]: {"skip_minutes": (570,)},
+            dates[IDX_C]: {"skip_minutes": (944,)}}
+    bars, uni = universe_of(dates, spec)
+    ds = build_s0_dataset(bars, uni)
+
+    direction_reasons = {NA_ZERO_DIRECTION, NA_DIRECTION_UNDETERMINABLE}
+    for r in ds.records:
+        for name in ("y1", "y2_de_pm", "y3_close_pos_pm"):
+            assert r.label_na_reasons.get(name) not in direction_reasons, (
+                r.trade_date, name)
+
+    # Y1 is available exactly on the days whose OWN inputs exist.
+    expected_y1 = sum(
+        1 for r in ds.records
+        if not np.isnan(uni.summaries[r.trade_date].o1000)
+        and not np.isnan(uni.summaries[r.trade_date].c1544)
+        and uni.adr14[r.trade_date] is not None)
+    got_y1 = sum(1 for r in ds.records if r.labels.y1 is not None)
+    assert got_y1 == expected_y1
+    # the anchor-availability table now agrees with the produced labels
+    assert ds.label_anchor_availability["y1"]["available_days"] == got_y1
+
+    # and that is strictly more days than Y_cont, which does need a direction
+    got_y_cont = sum(1 for r in ds.records if r.labels.y_cont is not None)
+    assert got_y1 > got_y_cont
+
+    # NA bijection and the approved vocabulary still hold after all of this
+    assert set(ds.na_table["totals_by_reason"]) <= set(APPROVED_NA_REASONS)
+    assert all(ds.na_table["checks"].values())
 
 
 # ---------------------------------------------------------------------------
