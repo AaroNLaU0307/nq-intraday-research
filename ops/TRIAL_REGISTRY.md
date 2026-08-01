@@ -18,4 +18,7 @@ RUN_STARTED 事件 = 进入 Stage C = exposure 正式消耗。
 
 | 3 | 2026-07-31 | **PACKET_APPROVED** | （M5-T0 commit） | Aaron | "Approved for runner implementation only"；real_s0 = REAL_S0_NOT_AUTHORIZED；PACKET_APPROVED != RUN_AUTHORIZED——仅允许实现与测试 runner，禁止真实 S0/Oracle/收益/EV/MC/Checkpoint 0 |
 
+| 4 | 2026-08-01 | **RUNNER_IMPLEMENTED** | 79606038066152c66e63fad9a8184067db170ff1 | main agent | M5-T5 完成：SA-11 八项（N-A..N-H）修复→SA-12 全面审计判 N-B/N-G PARTIAL→二轮修复（§三闭包模块级工厂化＋缺键分支）→SA-13 聚焦复审 ALL_CLOSED（两项判定性变异验收均红、回归扫掠零回归、包哈希 12/12）。电池：pytest 509/509、0 skipped、冻结哈希 OK、三扫描 CLEAN，全 exit-code 门控 |
+| 5 | 2026-08-01 | **READY_FOR_RUN_AUTHORIZATION** | 79606038066152c66e63fad9a8184067db170ff1 | main agent | final-readiness 条件全满足（SA-13 ALL_CLOSED @7960603）。等待 Aaron 发 §10 精确语句（含完整 40 位 commit hash）方可进入 RUN_AUTHORIZED；在此之前禁止真实 S0/Oracle/收益/EV/MC/Checkpoint 0。SA-13 留一非阻塞观察（hook 新鲜度子性质非变异判定性，备选一行测试补强）已交 Aaron 记录 |
+
 <!-- 只允许在此表之下追加新事件行；上方内容一经提交不得改动。 -->
