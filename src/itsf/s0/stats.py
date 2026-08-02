@@ -207,11 +207,19 @@ def _method_string(block_len: float, n_boot: int, ci_level: float,
         "tolerance of its own")
 
 
-def bootstrap_mean_ci(series: Sequence[float], block_len: float,
-                      n_boot: int = N_BOOT, ci_level: float = CI_LEVEL,
-                      master_seeds: Sequence[int] = RESEARCH_BOOTSTRAP_SEEDS,
-                      ) -> dict:
-    """Frozen S0 §9 percentile CI for the MEAN daily USD P&L.
+def _bootstrap_mean_ci_unchecked(series: Sequence[float], block_len: float,
+                                 n_boot: int = N_BOOT, ci_level: float = CI_LEVEL,
+                                 master_seeds: Sequence[int] = RESEARCH_BOOTSTRAP_SEEDS,
+                                 ) -> dict:
+    """Frozen S0 §9 percentile CI for the MEAN daily USD P&L — INTERNAL.
+
+    UNCHECKED: unlike the public `bootstrap_mean_ci`, this accepts ANY
+    `master_seeds` sequence, including one that is not
+    contracts.RESEARCH_BOOTSTRAP_SEEDS. It exists ONLY so tests can exercise a
+    cheap single-seed run or the seed-ORDER-dependent "quoted = first seed"
+    convention without paying for three full seeds; production/report code
+    must go through the public `bootstrap_mean_ci`, which enforces IR DR-02
+    (# frozen: S0 §9 seeds {7,13,31}) before delegating here.
 
     Parameters
     ----------
@@ -266,3 +274,34 @@ def bootstrap_mean_ci(series: Sequence[float], block_len: float,
         "quoted": per_seed[quoted_seed],
         "method": _method_string(block, count, level, seeds, quoted_seed),
     }
+
+
+def bootstrap_mean_ci(series: Sequence[float], block_len: float,
+                      n_boot: int = N_BOOT, ci_level: float = CI_LEVEL,
+                      master_seeds: Sequence[int] = RESEARCH_BOOTSTRAP_SEEDS,
+                      ) -> dict:
+    """Frozen S0 §9 percentile CI for the MEAN daily USD P&L — PUBLIC entry.
+
+    IR DR-02 mutation guard: `master_seeds` MUST be exactly
+    `contracts.RESEARCH_BOOTSTRAP_SEEDS` (the frozen {7, 13, 31}, in that
+    order) — the only seeds any research-path RNG may derive from. Any other
+    value is REFUSED with ValueError rather than silently honoured, so a
+    caller cannot swap in an unregistered seed set through this entry point.
+    Tests that need a cheap single-seed run, a reordered-seed run, or an
+    invalid-seed run to exercise `_validated_seeds` call
+    `_bootstrap_mean_ci_unchecked` directly — a private helper that ONLY
+    tests may use.
+
+    See `_bootstrap_mean_ci_unchecked` for parameters and the return shape;
+    this function does nothing but validate `master_seeds` and delegate.
+    """
+    seeds = tuple(int(s) for s in master_seeds)
+    if seeds != RESEARCH_BOOTSTRAP_SEEDS:
+        raise ValueError(
+            "master_seeds must be exactly contracts.RESEARCH_BOOTSTRAP_SEEDS "
+            f"{RESEARCH_BOOTSTRAP_SEEDS} — IR DR-02: the only seeds any "
+            f"research-path RNG may derive from; got {seeds}. A test that "
+            "needs different seeds must call _bootstrap_mean_ci_unchecked "
+            "directly instead of this public entry point.")
+    return _bootstrap_mean_ci_unchecked(series, block_len, n_boot=n_boot,
+                                        ci_level=ci_level, master_seeds=seeds)

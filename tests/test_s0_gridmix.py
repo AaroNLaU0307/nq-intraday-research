@@ -64,8 +64,10 @@ def test_frozen_grid_axes_exact_no_float_drift():
     assert gridmix.N_YEAR_TRADING_DAYS == 252
 
     d_tp, d_fp, strata = make_populations()
-    out = gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=0.4,
-                             master_seeds=(7,))
+    # single seed (7,) is cheaper than the frozen tuple and is not itself the
+    # frozen tuple, so this goes through the private unchecked helper.
+    out = gridmix._build_grid_unchecked(d_tp, d_fp, strata, base_rate_p=0.4,
+                                        master_seeds=(7,))
     assert len(out["grid"]) == 9 * 7
     qs = sorted({p["target_precision"] for p in out["grid"].values()})
     rs = sorted({p["target_recall"] for p in out["grid"].values()})
@@ -86,6 +88,30 @@ def test_master_seed_default_is_the_contracts_constant():
     assert params["master_seeds"].default is contracts.RESEARCH_BOOTSTRAP_SEEDS
     assert contracts.RESEARCH_BOOTSTRAP_SEEDS == (7, 13, 31)
     assert gridmix.GRID_STREAM_TAG != 0
+
+
+def test_public_api_refuses_non_frozen_master_seeds():
+    """# frozen: S0 Appendix A step 3 seeds {7,13,31}; IR DR-02 — the public
+    `build_grid` refuses ANY other seed set, including a same-shape
+    substitute like (1, 2, 3), rather than silently honouring it."""
+    d_tp, d_fp, strata = make_populations()
+    with pytest.raises(ValueError, match="DR-02"):
+        gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=0.4,
+                           master_seeds=(1, 2, 3))
+
+
+def test_public_api_accepts_the_frozen_seed_tuple():
+    """The public `build_grid` still works normally for the frozen tuple,
+    whether passed explicitly or left at its default."""
+    d_tp, d_fp, strata = make_populations()
+    explicit = gridmix.build_grid(
+        d_tp, d_fp, strata, base_rate_p=0.4,
+        master_seeds=contracts.RESEARCH_BOOTSTRAP_SEEDS,
+        q_grid=[0.50], r_grid=[0.50])
+    default = gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=0.4,
+                                 q_grid=[0.50], r_grid=[0.50])
+    assert explicit["grid"] == default["grid"]
+    assert set(explicit["grid"]["q0.50_r0.50"]["per_seed"]) == {7, 13, 31}
 
 
 # ---------------------------------------------------------------------------
@@ -152,8 +178,10 @@ def test_allocation_on_two_strata_exact_counts():
     """TP pool 6 low / 4 high, r = 0.50 -> n_tp = 5 -> exactly 3 low + 2 high,
     and the selected dates really come from those strata."""
     d_tp, d_fp, strata = make_populations()
-    out = gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=0.4,
-                             master_seeds=(7,), q_grid=[0.50], r_grid=[0.50])
+    # single seed (7,) is not the frozen tuple -> private unchecked helper.
+    out = gridmix._build_grid_unchecked(d_tp, d_fp, strata, base_rate_p=0.4,
+                                        master_seeds=(7,), q_grid=[0.50],
+                                        r_grid=[0.50])
     point = out["grid"]["q0.50_r0.50"]
     assert point["n_tp_target"] == 5 and point["n_fp_target"] == 5
     seed_block = point["per_seed"][7]
@@ -357,9 +385,12 @@ def test_degenerate_inputs_fail_closed():
         gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=1.4)
     with pytest.raises(ValueError):
         gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=0.4, n_year=0)
+    # empty seeds exercises _validated_seeds itself (private unchecked helper;
+    # () is not the frozen tuple anyway, so the public entry would refuse it
+    # for the WRONG reason first).
     with pytest.raises(ValueError):
-        gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=0.4,
-                           master_seeds=())
+        gridmix._build_grid_unchecked(d_tp, d_fp, strata, base_rate_p=0.4,
+                                      master_seeds=())
     with pytest.raises(ValueError):
         gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=0.4, q_grid=[1.5])
 

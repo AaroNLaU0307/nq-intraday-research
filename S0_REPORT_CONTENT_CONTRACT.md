@@ -1,4 +1,17 @@
-# S0_REPORT_CONTENT_CONTRACT（DR-01 Option A；v1.0-draft）
+# S0_REPORT_CONTENT_CONTRACT（DR-01 Option A；v1.1-draft，M6.1）
+
+**v1.1 变更（Codex HOLD 第 2/3 项）**：①正式 payload 顶层键与本契约
+**逐字同构**，权威键表 = `src/itsf/s0/report.py::FORMAL_SECTIONS`
+（A1-A12 ＋ A2b `stability_views` 共 13 键，含 `oracle_daily` 复位）；
+②新增 A2b：冻结 §2 稳定性视图（三时代/逐年/LOYO/多空必备；
+vol_terciles 未裁时 status=unresolved ⇒ 拒封存）；③序列化强制严格
+JSON（allow_nan=False、未知类型 raise、禁 default=str）；④validator
+逐胞强制 n_boot==10000、block∈{5,21}、per_seed=={7,13,31}、
+quoted_seed==7；⑤内部对象（dataset/DataFrame/记录实例）禁入正式
+payload（envelope 分离，legacy structural 封存旁路移除）；⑥A9 记录
+文件字段用冻结 §10.1 名（entry_timestamp/exit_timestamp）；A12 补
+authorized_commit、engineering_seed 实值、七项冻结哈希、registry
+sequence 快照。
 
 地位：正式 S0 密封报告的**内容契约**。Stage E 渲染器产出的报告 payload
 必须通过本契约的机器校验（`scripts/s0_real_run.py` 内契约校验门）才可
@@ -14,6 +27,7 @@
 |---|---|---|---|
 | A1 | structural | 漏斗/F10 双报/NA 表/锚点/标签可用性/eras/groups（现有结构层全保留） | §4/§5/IR-12..24 |
 | A2 | oracle_daily | 每 θ∈{0.5,0.3} × engine∈{E1,E2} × scenario∈{Base,Conservative,Stress,Severe}：oracle 日逐日 USD P&L 序列（date 键控），era 分列＋pooled | §7 |
+| A2b | stability_views | 冻结 §2 视图：三时代/逐年/LOYO/多空必备＋vol_terciles（未裁=unresolved⇒拒封存） | §2 |
 | A3 | theoretical_oracle | 每 θ：TP 日 Base 场景理论 Oracle 逐日 USD 序列（经济上限，独立标注不可执行） | §7 |
 | A4 | e2_worst_days | 每 θ × scenario：E2 日 P&L 的 P1/P5（era 分列＋pooled） | §7 表（强制） |
 | A5 | sizing_outputs | §8 六字段逐日表（per engine × scenario）＋{$50,75,100,150} 描述性覆盖率 | §8/§10.1 |
@@ -39,5 +53,5 @@
 
 ## C. 版本
 
-v1.0-draft（M6）：结构定稿，待 DR-M6-A/B 裁决后升 v1.0 并入首个
+v1.1-draft（M6.1）：A2b 入 §A 表、封存规则见页首；v1.0-draft（M6）：结构定稿，待 DR-M6-A/B 裁决后升 v1.0 并入首个
 可运行候选。修订走 IR 流程。

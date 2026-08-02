@@ -55,8 +55,15 @@ SELF = ("_PAT", "re.compile")                                           # E7
 
 
 def main() -> int:
-    files = subprocess.run(["git", "ls-files"], capture_output=True,
-                           text=True, check=True).stdout.splitlines()
+    # M6.1 (Codex §5.3): tracked files PLUS untracked-unignored ones — an
+    # untracked repo-root file is exactly what tripped SA-16's OPEN-1, and
+    # secrets/placeholders must not hide in not-yet-added files either.
+    tracked = subprocess.run(["git", "ls-files"], capture_output=True,
+                             text=True, check=True).stdout.splitlines()
+    untracked = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        capture_output=True, text=True, check=True).stdout.splitlines()
+    files = tracked + untracked
     texts = [f for f in files if f.endswith(
         (".py", ".md", ".yaml", ".yml", ".toml", ".txt", ".json"))]
     fails: list[str] = []

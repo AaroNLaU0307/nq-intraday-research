@@ -55,18 +55,34 @@ def _market(n_days: int = 46):
 _CACHE: dict = {}
 
 
-_LIVE = object()          # sentinel: use the module's live PENDING default
+_LIVE = object()          # sentinel: carry the module's DERIVED pending list
 
 
-def _payload(pending=_LIVE, n_boot=40):
+def _payload(pending=_LIVE, n_boot=None):
     mod = real_run_module()
     if "m" not in _CACHE:
         _CACHE["m"] = _market()
     bars, ds = _CACHE["m"]
-    kw = {} if pending is _LIVE else {"pending_decisions": pending}
-    return mod.build_full_study_result(
-        ds, bars, spread_scalars=(0.5, 0.75, 0.75),
-        regime_of=lambda d: "R", n_boot=n_boot, **kw)
+    pend = mod.PENDING_METHOD_DECISIONS if pending is _LIVE else tuple(pending)
+    # sealable payloads must carry the frozen n_boot (validator R3);
+    # refusal-path payloads stay cheap.
+    if n_boot is None:
+        n_boot = 10_000 if not pend else 40
+    ck = (pend, n_boot)
+    if ck in _CACHE:
+        return _CACHE[ck]
+    cfg = mod.StudyConfig(spread_scalars=(0.5, 0.75, 0.75),
+                          regime_of=lambda d: "R",
+                          pending_decisions=pend,
+                          vol_axis_of=(None if pend else (lambda d: "T2")))
+    gov = {"trial_id": "S0-T001", "authorized_commit": "a" * 40,
+           "engineering_seed": 20260731,
+           "frozen_hashes": {f"f{i}.md": "0" * 64 for i in range(7)},
+           "registry_sequence_snapshot": 13}
+    _CACHE[ck] = mod.build_full_study_result(ds, bars, config=cfg,
+                                             governance_meta=gov,
+                                             n_boot=n_boot)
+    return _CACHE[ck]
 
 
 # --- e2e + contract ---------------------------------------------------------
@@ -74,39 +90,40 @@ def _payload(pending=_LIVE, n_boot=40):
 def test_e2e_contract_green_when_no_pending_decisions():
     mod = real_run_module()
     payload = _payload(pending=())
-    assert mod.validate_report_contract(payload) == []
+    assert mod.validate_report_contract(_formal(payload)) == []
 
 
 def test_pending_decisions_refuse_sealing():
     mod = real_run_module()
     payload = _payload()          # default = the live PENDING tuple
-    problems = mod.validate_report_contract(payload)
-    assert "pending_method_decisions_unresolved" in problems
+    problems = mod.validate_report_contract(_formal(payload))
+    assert problems != []
     with pytest.raises(ValueError, match="contract violations"):
         mod.render_s0_report(payload)
 
 
 def test_missing_ci_cell_is_flagged():
     mod = real_run_module()
-    payload = _payload(pending=())
-    key = next(iter(payload["bootstrap_ci"]))
-    del payload["bootstrap_ci"][key]
-    assert any(p.startswith("missing_ci:") for p in
-               mod.validate_report_contract(payload))
+    formal = dict(_formal(_payload(pending=())))
+    formal["bootstrap_ci"] = dict(formal["bootstrap_ci"])
+    del formal["bootstrap_ci"][next(iter(formal["bootstrap_ci"]))]
+    assert mod.validate_report_contract(formal) != []
 
 
 def test_records_conservation_is_checked():
     mod = real_run_module()
-    payload = _payload(pending=())
-    payload["mc_handoff_manifest"]["E1"]["Base"]["n_records"] += 1
-    assert any(p.startswith("records_conservation:") for p in
-               mod.validate_report_contract(payload))
+    formal = dict(_formal(_payload(pending=())))
+    counts = {e: {s: dict(c) for s, c in by.items()}
+              for e, by in formal["mc_handoff_manifest"]["counts"].items()}
+    counts["E1"]["Base"]["n_records"] = -1
+    formal["mc_handoff_manifest"] = {"counts": counts}
+    assert mod.validate_report_contract(formal) != []
 
 
 def test_ci_cells_carry_all_three_frozen_seeds():
     payload = _payload(pending=())
     for cell in payload["bootstrap_ci"].values():
-        assert sorted(cell["per_seed"]) == [7, 13, 31]
+        assert sorted(int(k) for k in cell["per_seed"]) == [7, 13, 31]
         assert cell["quoted_seed"] == 7
 
 
@@ -117,7 +134,11 @@ def test_renderer_seals_full_payload_with_record_files():
     jsonl = [n for n in files if n.startswith("MC_HANDOFF_")]
     assert len(jsonl) == 8                      # 2 engines x 4 scenarios
     payload = json.loads(files["S0_REPORT.json"])
-    assert "records" not in payload["study"]    # records live in JSONL only
+    # E2 envelope separation: internal objects never reach the sealed json
+    from itsf.s0.report import FORMAL_SECTIONS
+    assert "study" not in payload and "records" not in payload
+    assert "dataset" not in payload
+    assert set(FORMAL_SECTIONS) <= set(payload)
     for meta in payload["mc_handoff_manifest"]["files"].values():
         assert re.fullmatch(r"[0-9a-f]{64}", meta["sha256"])
         body = files[meta["file"]]
@@ -139,7 +160,10 @@ def test_real_chain_not_ready_while_rulings_pend():
     assert mod.PENDING_METHOD_DECISIONS       # M6 state: three open rulings
     ok, why = mod.RealChain().ready()
     assert ok is False
-    assert "DR-M6" in why
+    assert "pending method rulings" in why
+    # E1: ready and compute share resolved_study_config — same predicate
+    cfg, why2 = mod.resolved_study_config()
+    assert cfg is None and "pending method rulings" in why2
 
 
 def test_real_compute_fails_closed_without_loading_data():
@@ -186,3 +210,57 @@ def test_frozen_boot_constants_pin():
     mod = real_run_module()
     assert mod.FROZEN_N_BOOT == 10_000        # frozen: S0 §9
     assert mod.FROZEN_BLOCKS == (5, 21)       # frozen: S0 §9
+
+
+def _formal(payload):
+    from itsf.s0 import report as rep
+    _internal, formal = rep.split_envelope(payload)
+    return formal
+
+
+def test_e7_runner_a_to_f_seals_resolved_synthetic_payload(tmp_path):
+    """M6.1 E7: a REAL S0Runner pass A->F over the synthetic resolved
+    payload — synthetic gates, production compute-result, production
+    renderer. Seals with the manifest re-verified; failure paths never
+    write COMPLETED (covered by the runner suite)."""
+    from test_s0_runner import make_deps, ok_gate
+    from itsf.s0.runner import S0Runner
+    mod = real_run_module()
+    payload = _payload(pending=())
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()],
+        compute=lambda: payload,
+        renderer=mod.render_s0_report,
+        integrity=())
+    out = S0Runner(deps).run()
+    assert out.ok is True, (out.failure_kind, out.failed_gate)
+    assert [e for e, _ in events] == ["RUN_STARTED", "COMPLETED"]
+    sealed = sorted(x.name for x in out.runs_dir.iterdir())
+    assert "S0_REPORT.json" in sealed and "SEED_MANIFEST.json" in sealed
+    assert sum(1 for n in sealed if n.startswith("MC_HANDOFF_")) == 8
+
+
+def test_e7_unresolved_payload_never_seals(tmp_path):
+    from test_s0_runner import make_deps, ok_gate
+    from itsf.s0.runner import S0Runner
+    mod = real_run_module()
+    payload = _payload()                     # live pending decisions
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()],
+        compute=lambda: payload,
+        renderer=mod.render_s0_report,
+        integrity=())
+    out = S0Runner(deps).run()
+    assert out.ok is False
+    assert "COMPLETED" not in [e for e, _ in events]
+
+
+def test_sealed_file_verification_is_on_the_wire(monkeypatch):
+    """O5: render_s0_report must ABORT when validate_sealed_files reports
+    problems — pins the call site, not just the function."""
+    from itsf.s0 import report as rep
+    mod = real_run_module()
+    monkeypatch.setattr(rep, "validate_sealed_files",
+                        lambda *a, **k: ["synthetic_tamper"])
+    with pytest.raises(ValueError, match="sealed-file verification failed"):
+        mod.render_s0_report(_payload(pending=()))

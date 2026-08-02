@@ -831,7 +831,7 @@ def test_pytest_gate_floor_is_the_audit_baseline():
     """SA-10 N3: the floor tracks the CURRENT suite, closing the
     silent-collection-drop headroom."""
     mod = real_run_module()
-    assert mod.MIN_COLLECTED_TESTS == 612
+    assert mod.MIN_COLLECTED_TESTS == 732
 
 
 # ===========================================================================
@@ -1027,7 +1027,7 @@ def test_stage_b_holds_the_stage_c_wiring_gate_before_exposure():
     g2 = {c.name: c for c in wired}["stage_c_wiring_activated"]
     ok2, detail2 = g2.check()
     if mod.PENDING_METHOD_DECISIONS:
-        assert ok2 is False and "DR-M6" in detail2
+        assert ok2 is False and "pending method rulings" in detail2
     else:
         assert ok2 is True and "ready" in detail2
     # ordering: the wiring gate precedes the assertion comparison
@@ -1141,56 +1141,13 @@ def _synthetic_dataset():
 
 
 def test_e2e_synthetic_full_chain_a_through_e(tmp_path):
+    """M6.1 O1: the legacy structural-only seal path is REMOVED — the
+    production renderer refuses any payload without the formal study
+    sections (sealing only via the full contract-validated path)."""
     mod = real_run_module()
-    ds, uni = _synthetic_dataset()
-    actuals = mod.structural_actuals_from(ds, uni)
-
-    sink: list[str] = []
-    deps, events, _ = make_deps(
-        tmp_path,
-        gates=[ok_gate("g1")],
-        b_checks=mod.build_structural_checks(
-            _touch_json(tmp_path / "assertions.json"),
-            expected_loader=lambda p: dict(actuals),   # expected == actual
-            actuals_provider=lambda: mod.structural_actuals_from(ds, uni),
-            wiring_status=lambda: (True, "synthetic wiring ready")),
-        compute=lambda: mod.stage_c_result(ds),
-        integrity=mod.build_integrity_checks(),
-        renderer=mod.render_s0_report,
-        log=guarded_logger(sink))
-    out = S0Runner(deps).run()
-    assert out.ok is True, out
-    assert out.stages_completed[-1] == "F_SEALED"
-
-    # (1) exposure consumed exactly at Stage C entry
-    assert [e for e, _ in events][0] == "RUN_STARTED"
-    assert out.exposure_consumed is True
-
-    # (2) no research number in any intermediate log line: every line passed
-    # the guard (guarded_logger raises otherwise) - and none mentions a
-    # frequency/base-rate style token
-    assert sink, "guarded logger saw no traffic - guard not on the wire"
-
-    # (3) NA conservation ran itemized over the synthetic dataset
-    # (build_integrity_checks raises NAConservationError on violation;
-    # reaching F_SEALED proves it passed on real per-column adapters)
-    adapters = mod.stage_c_result(ds)
-    assert adapters["na_reason_counts"] and adapters["reported_total_na"]
-
-    # (4) manifest chain sealed per stage in the runs dir (SA-10 N9: exact
-    # filename, hard assertion — no case-insensitivity crutch)
-    manifest = Path(deps.config.runs_dir) / "manifest.jsonl"
-    assert manifest.exists()
-    lines = [json.loads(x) for x in manifest.read_text("utf-8").splitlines()]
-    assert any(r.get("record_type") == "stage_seal" for r in lines)
-
-    # (5) the complete report is released only at Stage E, as whole files
-    report = json.loads((Path(deps.config.runs_dir) / "S0_REPORT.json")
-                        .read_text("utf-8"))
-    assert report["funnel"] and report["f10_final_mutually_exclusive"]
-    assert report["y6_rule"] == ds.y6_rule
-    # frequency structure is INSIDE the sealed report, never in logs
-    assert "overall" in report["frequency"]
+    import pytest as _pt
+    with _pt.raises(ValueError, match="refusing non-study payload"):
+        mod.render_s0_report({"dataset": object(), "frequency": {}})
 
 
 def test_e2e_structural_mismatch_stops_pre_exposure(tmp_path):

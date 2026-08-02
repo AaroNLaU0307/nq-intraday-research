@@ -24,6 +24,53 @@ S0_PLATFORM_FEE_RT_USD = 1.74
 RESEARCH_BOOTSTRAP_SEEDS: tuple[int, int, int] = (7, 13, 31)
 
 
+@dataclass(frozen=True)
+class ResolvedS0Methods:
+    """M6.1 E1 — the SINGLE source of truth for post-freeze method rulings.
+
+    One field per open ruling; None == still pending. The live pending list
+    is DERIVED from the None fields (there is no second hand-written
+    pending tuple anywhere). ready() and compute() must consume the same
+    instance. No field may carry a hidden default value for an unruled
+    method — a ruling lands ONLY by the main agent writing the approved
+    value here together with its IR reference.
+    """
+    spread_scalar_rule: str | None = None          # DR-M6-A-v2
+    adverse_slippage_final: object | None = None   # IR-7 final ticks vector
+    volatility_regime: object | None = None        # DR-M6-B-v2 definition
+    fp_allocation_basis: str | None = None         # DR-M6-C
+    bootstrap_population: str | None = None        # DR-M6-D
+    grid_repeat_policy: object | None = None       # DR-M6-E (K/RNG/conv)
+    event_na_stratum_rule: str | None = None       # DR-M6-F
+
+    def pending_fields(self) -> tuple[str, ...]:
+        from dataclasses import fields as _fields
+        return tuple(sorted(f.name for f in _fields(self)
+                            if getattr(self, f.name) is None))
+
+    @property
+    def fully_resolved(self) -> bool:
+        return not self.pending_fields()
+
+
+@dataclass(frozen=True)
+class StudyConfig:
+    """M6.1 E1 — named injectable bundle for the full study chain.
+
+    No positional tuples, no hidden defaults for unruled methods: a
+    synthetic caller must supply every method-bearing field explicitly.
+    Lives here (a real package module) rather than in the spec-loaded
+    entrypoint so dataclass annotation resolution is well-defined.
+    """
+    spread_scalars: tuple[float, float, float]
+    regime_of: object                       # Callable[[date_str], str]
+    pending_decisions: tuple[str, ...]      # REQUIRED (O7): no default
+    # DR-M6-B-v2: the ruled vol-tercile mapping (Callable[[date], str]).
+    # None == unruled -> stability vol axis reports unresolved and formal
+    # sealing fails (E4). Synthetic resolved-state tests must supply it.
+    vol_axis_of: object | None = None
+
+
 @dataclass
 class CostScenarioParams:
     """Market-friction scenario (S0 §6). spread values are FULL bid-ask width

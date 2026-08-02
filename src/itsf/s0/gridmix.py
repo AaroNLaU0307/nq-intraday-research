@@ -358,13 +358,23 @@ def _method_string(seeds: tuple[int, ...], n_year: int) -> str:
         "feasibility boundary only — supports no H1 performance claim")
 
 
-def build_grid(d_tp: Mapping[str, float], d_fp: Mapping[str, float],
-               strata: Mapping[str, Sequence[object]], base_rate_p: float,
-               master_seeds: Sequence[int] = RESEARCH_BOOTSTRAP_SEEDS,
-               q_grid: Sequence[float] | None = None,
-               r_grid: Sequence[float] | None = None,
-               n_year: int = N_YEAR_TRADING_DAYS) -> dict:
-    """Build the frozen Appendix A (q, r) grid for ONE engine × scenario.
+def _build_grid_unchecked(d_tp: Mapping[str, float], d_fp: Mapping[str, float],
+                          strata: Mapping[str, Sequence[object]],
+                          base_rate_p: float,
+                          master_seeds: Sequence[int] = RESEARCH_BOOTSTRAP_SEEDS,
+                          q_grid: Sequence[float] | None = None,
+                          r_grid: Sequence[float] | None = None,
+                          n_year: int = N_YEAR_TRADING_DAYS) -> dict:
+    """Build the frozen Appendix A (q, r) grid for ONE engine × scenario —
+    INTERNAL.
+
+    UNCHECKED: unlike the public `build_grid`, this accepts ANY `master_seeds`
+    sequence, including one that is not contracts.RESEARCH_BOOTSTRAP_SEEDS. It
+    exists ONLY so tests can exercise a cheap single-seed grid or the
+    `_validated_seeds` failure modes (empty / duplicate) without paying for
+    three full seeds; production/report code must go through the public
+    `build_grid`, which enforces IR DR-02 (# frozen: S0 Appendix A step 3
+    seeds {7,13,31}) before delegating here.
 
     Parameters
     ----------
@@ -432,6 +442,40 @@ def build_grid(d_tp: Mapping[str, float], d_fp: Mapping[str, float],
             "n_tp_available": n_tp_available,
             "n_fp_available": n_fp_available,
             "method": _method_string(seeds, n_year)}
+
+
+def build_grid(d_tp: Mapping[str, float], d_fp: Mapping[str, float],
+               strata: Mapping[str, Sequence[object]], base_rate_p: float,
+               master_seeds: Sequence[int] = RESEARCH_BOOTSTRAP_SEEDS,
+               q_grid: Sequence[float] | None = None,
+               r_grid: Sequence[float] | None = None,
+               n_year: int = N_YEAR_TRADING_DAYS) -> dict:
+    """Build the frozen Appendix A (q, r) grid for ONE engine × scenario —
+    PUBLIC entry.
+
+    IR DR-02 mutation guard: `master_seeds` MUST be exactly
+    `contracts.RESEARCH_BOOTSTRAP_SEEDS` (the frozen {7, 13, 31}, in that
+    order) — the only seeds any research-path RNG may derive from. Any other
+    value is REFUSED with ValueError rather than silently honoured. Tests that
+    need a cheap single-seed grid or an invalid-seed case call
+    `_build_grid_unchecked` directly — a private helper that ONLY tests may
+    use.
+
+    See `_build_grid_unchecked` for the full parameter and return-shape
+    documentation; this function does nothing but validate `master_seeds` and
+    delegate.
+    """
+    seeds = tuple(int(s) for s in master_seeds)
+    if seeds != RESEARCH_BOOTSTRAP_SEEDS:
+        raise ValueError(
+            "master_seeds must be exactly contracts.RESEARCH_BOOTSTRAP_SEEDS "
+            f"{RESEARCH_BOOTSTRAP_SEEDS} — IR DR-02: the only seeds any "
+            f"research-path RNG may derive from; got {seeds}. A test that "
+            "needs different seeds must call _build_grid_unchecked directly "
+            "instead of this public entry point.")
+    return _build_grid_unchecked(d_tp, d_fp, strata, base_rate_p,
+                                 master_seeds=seeds, q_grid=q_grid,
+                                 r_grid=r_grid, n_year=n_year)
 
 
 def _grid_point(q_mil: int, r_mil: int, tp_pnl: Mapping[str, float],

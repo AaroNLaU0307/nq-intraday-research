@@ -83,11 +83,15 @@ def test_percentile_endpoints_match_independent_recomputation():
     Rebuild the stream from the documented derivation
     default_rng([seed, STATS_STREAM_TAG, block millis]) and the SAME
     mc.bootstrap index generator, then compare byte-for-byte.
+
+    Uses the private `_bootstrap_mean_ci_unchecked` because a single-seed
+    (7,) run is not the frozen {7,13,31} the public entry point requires.
     """
     series = synthetic_pnl(40)
     n_boot = 25
-    out = stats.bootstrap_mean_ci(series, block_len=5.0, n_boot=n_boot,
-                                  ci_level=0.90, master_seeds=(7,))
+    out = stats._bootstrap_mean_ci_unchecked(series, block_len=5.0,
+                                             n_boot=n_boot, ci_level=0.90,
+                                             master_seeds=(7,))
     rng = np.random.default_rng([7, stats.STATS_STREAM_TAG, 5000])
     values = np.asarray(series, dtype=float)
     means = np.asarray([values[stationary_bootstrap_indices(
@@ -179,14 +183,20 @@ def test_block_len_flows_through_primary_and_sensitivity():
 
 def test_quoted_is_the_first_seed_by_fixed_convention_never_best_of():
     """Quoted = FIRST master seed, always. Feed the seeds in a different order
-    and the quote follows the convention, not the most flattering interval."""
+    and the quote follows the convention, not the most flattering interval.
+
+    The reordered-seed call goes through `_bootstrap_mean_ci_unchecked`: the
+    public entry point requires the frozen tuple EXACTLY (7, 13, 31), so a
+    reordering like (13, 7, 31) is refused there by design (IR DR-02).
+    """
     series = synthetic_pnl(80)
     out = stats.bootstrap_mean_ci(series, block_len=5.0, n_boot=60)
     assert out["quoted_seed"] == contracts.RESEARCH_BOOTSTRAP_SEEDS[0] == 7
     assert out["quoted"] == out["per_seed"][7]
 
-    shuffled = stats.bootstrap_mean_ci(series, block_len=5.0, n_boot=60,
-                                       master_seeds=(13, 7, 31))
+    shuffled = stats._bootstrap_mean_ci_unchecked(series, block_len=5.0,
+                                                  n_boot=60,
+                                                  master_seeds=(13, 7, 31))
     assert shuffled["quoted_seed"] == 13
     assert shuffled["quoted"] == shuffled["per_seed"][13]
     # same three seeds, same per-seed results — only the convention moved
@@ -232,12 +242,41 @@ def test_invalid_parameters_rejected():
         stats.bootstrap_mean_ci(series, block_len=5.0, n_boot=0)
     with pytest.raises(ValueError):
         stats.bootstrap_mean_ci(series, block_len=5.0, n_boot=10, ci_level=1.0)
+    # empty / duplicate seeds exercise _validated_seeds itself, so they go
+    # through the unchecked helper (neither is the frozen tuple anyway, so
+    # the public entry would refuse them for the WRONG reason first).
     with pytest.raises(ValueError):
-        stats.bootstrap_mean_ci(series, block_len=5.0, n_boot=10,
-                                master_seeds=())
+        stats._bootstrap_mean_ci_unchecked(series, block_len=5.0, n_boot=10,
+                                           master_seeds=())
     with pytest.raises(ValueError):
+        stats._bootstrap_mean_ci_unchecked(series, block_len=5.0, n_boot=10,
+                                           master_seeds=(7, 7))
+
+
+# ---------------------------------------------------------------------------
+# IR DR-02 mutation guard on the public entry point
+# ---------------------------------------------------------------------------
+
+def test_public_api_refuses_non_frozen_master_seeds():
+    """# frozen: S0 §9 seeds {7,13,31}; IR DR-02 — the public entry point
+    refuses ANY other seed set, including a same-shape substitute like
+    (1, 2, 3), rather than silently honouring it."""
+    series = synthetic_pnl(30)
+    with pytest.raises(ValueError, match="DR-02"):
         stats.bootstrap_mean_ci(series, block_len=5.0, n_boot=10,
-                                master_seeds=(7, 7))
+                                master_seeds=(1, 2, 3))
+
+
+def test_public_api_accepts_the_frozen_seed_tuple():
+    """The public entry point still works normally for the frozen tuple,
+    whether passed explicitly or left at its default."""
+    series = synthetic_pnl(30)
+    explicit = stats.bootstrap_mean_ci(
+        series, block_len=5.0, n_boot=10,
+        master_seeds=contracts.RESEARCH_BOOTSTRAP_SEEDS)
+    default = stats.bootstrap_mean_ci(series, block_len=5.0, n_boot=10)
+    assert set(explicit["per_seed"]) == {7, 13, 31}
+    assert explicit["per_seed"] == default["per_seed"]
 
 
 def test_method_string_discloses_the_whole_recipe():

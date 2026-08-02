@@ -44,7 +44,7 @@ ATTEMPTS_ROOT = REPO / "attempts"
 # Baseline collected-test count at the SA-6 audit commit. The pytest gate
 # requires the suite to still COLLECT at least this many tests, so a muted
 # or filtered run cannot satisfy the gate with a handful of tests (F-09).
-MIN_COLLECTED_TESTS = 612                  # M6: floor = current suite
+MIN_COLLECTED_TESTS = 732                  # M6.1: floor = current suite
 
 # External read-only tooling (packet §9 gate 4). Invoked as a subprocess;
 # the tool itself only reads repository files.
@@ -876,73 +876,84 @@ def render_s0_report(result) -> dict[str, str]:
     before.
     """
     if isinstance(result, dict) and "study" in result:
-        from dataclasses import asdict as _asdict
-        problems = validate_report_contract(result)
+        from itsf.s0 import handoff as ho
+        from itsf.s0 import report as rep
+        internal, formal = rep.split_envelope(result)
+        problems = rep.validate_formal_payload(formal)
         if problems:
             raise ValueError("report contract violations: "
                              + "; ".join(problems))
         files: dict[str, str] = {}
         file_manifest: dict[str, object] = {}
-        for eng, by_scn in result["study"]["records"].items():
+        for eng, by_scn in result["records"].items():
             for scn, recs in by_scn.items():
                 name = f"MC_HANDOFF_{eng}_{scn}.jsonl"
-                body = "\n".join(json.dumps(_asdict(r), sort_keys=True)
-                                 for r in recs)
+                body = "\n".join(
+                    json.dumps(rep.record_to_formal_dict(r),
+                               sort_keys=True, allow_nan=False)
+                    for r in recs)
                 files[name] = body
                 file_manifest[f"{eng}|{scn}"] = {
                     "file": name, "n_records": len(recs),
                     "sha256": hashlib.sha256(
                         body.encode("utf-8")).hexdigest()}
-        payload = dict(result)
-        slim = dict(result["study"])
-        slim.pop("records")
-        payload["study"] = slim
-        payload["mc_handoff_manifest"] = {
-            "counts": result["mc_handoff_manifest"],
-            "files": file_manifest}
-        files["S0_REPORT.json"] = json.dumps(payload, indent=1,
-                                             sort_keys=True, default=str)
+        files["SEED_MANIFEST.json"] = ho.dumps_canonical(
+            ho.build_seed_manifest())
+        formal = dict(formal)
+        formal["mc_handoff_manifest"] = {
+            **formal["mc_handoff_manifest"], "files": file_manifest}
+        files["S0_REPORT.json"] = rep.to_formal_json(formal)
+        # E2: the manifest is generated AFTER file serialization and then
+        # re-verified against the actual bytes before sealing.
+        univ = {d for t in formal["oracle_daily"].values()
+                for d in (*t["day_universe"]["tp_days"],
+                          *t["day_universe"]["fp_days"])}
+        post = rep.validate_sealed_files(files, formal,
+                                         trade_date_universe=univ)
+        if post:
+            raise ValueError("sealed-file verification failed: "
+                             + "; ".join(post))
         files["S0_REPORT.md"] = "\n".join([
             "# S0 FORMAL REPORT (sealed at Stage E)", "",
-            "- full-study payload: S0_REPORT.json (single sealed release)",
-            "- MC handoff records: MC_HANDOFF_<engine>_<scenario>.jsonl "
-            "(sha256 in manifest)"])
+            "- formal payload: S0_REPORT.json (single sealed release)",
+            "- MC handoff records: MC_HANDOFF_<engine>_<scenario>.jsonl",
+            "- seed manifest: SEED_MANIFEST.json",
+            "- DAY_STRATA/GRID_SAMPLES: wired after the DR-M6 rulings "
+            "(schema skeletons in src/itsf/s0/handoff.py)"])
         return files
-    ds = result["dataset"]
-    payload = {
-        "trial_report": "S0_REPORT",
-        "y6_rule": ds.y6_rule,
-        "funnel": dict(ds.funnel_counts),
-        "f10_final_mutually_exclusive": dict(ds.f10_counts),
-        "f10_raw_membership": dict(ds.f10_raw_membership_counts),
-        "na_table": ds.na_table,
-        "frequency": ds.frequency,
-        "label_anchor_availability": ds.label_anchor_availability,
-        "eras": {k: len(v) for k, v in ds.eras.items()},
-        "groups": {g: {k: len(v) for k, v in m.items()}
-                   for g, m in ds.groups.items()},
-        "pending_decisions": list(ds.pending_decisions),
-    }
-    md = ["# S0 FORMAL REPORT (sealed at Stage E)", "",
-          f"- y6_rule: {ds.y6_rule}",
-          f"- records: {len(ds.records)}",
-          "- full structures in S0_REPORT.json (single sealed release)"]
-    return {"S0_REPORT.json": json.dumps(payload, indent=1, sort_keys=True,
-                                         default=str),
-            "S0_REPORT.md": "\n".join(md)}
+    raise ValueError(
+        "render_s0_report: refusing non-study payload — the legacy "
+        "structural-only seal path was removed (M6.1 O1); production "
+        "sealing requires the full formal payload")
+
+def _resolved_methods():
+    """M6.1 E1 — the ONLY method-ruling state source (contracts dataclass).
+    Every field is None until Aaron's ruling lands here with its IR ref."""
+    from itsf.contracts import ResolvedS0Methods
+    return ResolvedS0Methods()
 
 
-# =========================================================================
-# M6 full production chain (Codex DR-01 Option A) — CODE-COMPLETE and
-# synthetic-tested; the REAL-run path stays FAIL-CLOSED until every pending
-# method ruling lands (Stage-B wiring gate blocks pre-exposure).
-# =========================================================================
+# Derived, never hand-written (E1): the live pending list.
+PENDING_METHOD_DECISIONS: tuple[str, ...] = _resolved_methods().pending_fields()
 
-PENDING_METHOD_DECISIONS: tuple[str, ...] = (
-    "DR-M6-A_spread_scalar_reduction_rule",
-    "DR-M6-B_volatility_regime_definition",
-    "DR-M6-C_fp_stratum_allocation_basis",
-)
+
+from itsf.contracts import StudyConfig    # noqa: E402 (after sys.path setup)
+
+
+def resolved_study_config() -> tuple[StudyConfig | None, str]:
+    """Shared readiness/compute predicate (E1). ready() reports the reason;
+    compute() refuses on the SAME object — ready=False and compute-raises
+    can never diverge."""
+    pend = _resolved_methods().pending_fields()
+    if pend:
+        return (None, "pending method rulings: " + ", ".join(pend))
+    # Reached only after ALL rulings land in ResolvedS0Methods. Deriving
+    # the concrete injectables (spread scalars per the ruled reduction
+    # rule, the ruled regime mapping, ...) is the main-agent wiring step
+    # that accompanies the rulings; until it exists this still fails
+    # CLOSED — and ready() reports it, so Stage B blocks pre-exposure.
+    return (None, "rulings landed but config derivation not implemented "
+                  "(M6.1 wiring step) — fail closed pre-exposure")
 
 FROZEN_N_BOOT = 10_000                 # frozen: S0 §9 — 10,000 resamples
 FROZEN_BLOCKS = (5, 21)                # frozen: S0 §9 — Primary 5 / Sens 21
@@ -981,9 +992,17 @@ def make_day_inputs(ds, bars_by_date):
     return out
 
 
-def build_full_study_result(ds, bars_by_date, *, spread_scalars, regime_of,
-                            pending_decisions=PENDING_METHOD_DECISIONS,
-                            n_boot=FROZEN_N_BOOT):
+def _strkeys(obj):
+    """Recursively stringify non-str dict keys (formal JSON boundary)."""
+    if isinstance(obj, dict):
+        return {str(k): _strkeys(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_strkeys(v) for v in obj]
+    return obj
+
+
+def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
+                            governance_meta, n_boot=FROZEN_N_BOOT):
     """Assemble the FULL S0 payload per S0_REPORT_CONTENT_CONTRACT §A.
 
     spread_scalars (DR-M6-A) and regime_of (DR-M6-B) are INJECTED so the
@@ -998,7 +1017,7 @@ def build_full_study_result(ds, bars_by_date, *, spread_scalars, regime_of,
     from itsf.s0.stats import bootstrap_mean_ci
     from itsf.s0.study import build_study
 
-    scenarios = _costs.build_scenarios(*spread_scalars)
+    scenarios = _costs.build_scenarios(*config.spread_scalars)
     study = build_study(ds, make_day_inputs(ds, bars_by_date), scenarios)
 
     event_of = {r.trade_date: (r.features.is_event_day or "none_or_na")
@@ -1016,7 +1035,7 @@ def build_full_study_result(ds, bars_by_date, *, spread_scalars, regime_of,
                     bootstrap_ci[f"{tkey}|{eng}|{scn}|block{blk}"] = \
                         bootstrap_mean_ci(series, block_len=blk,
                                           n_boot=n_boot)
-                strata = {d: (d[:4], str(regime_of(d)), event_of[d])
+                strata = {d: (d[:4], str(config.regime_of(d)), event_of[d])
                           for d in {**d_tp, **d_fp}}
                 feasibility_grid[f"{tkey}|{eng}|{scn}"] = build_grid(
                     d_tp, d_fp, strata, p)
@@ -1027,15 +1046,26 @@ def build_full_study_result(ds, bars_by_date, *, spread_scalars, regime_of,
               for scn in study["scenarios_used"]}
         for eng in _CONTRACT_ENGINES}
 
+    from itsf.s0.stability import build_stability_views
     structural = stage_c_result(ds)
+    day_meta = {r.trade_date: {"year": r.year, "era": r.era,
+                               "d_open": int(r.labels.d_open or 0)}
+                for r in ds.records}
     return {
-        "structural": structural,
-        # Stage-D integrity adapters must stay at TOP level (runner reads
-        # them from the compute result directly).
+        # ---- internal envelope (split_envelope; never sealed) -----------
         "dataset": structural["dataset"],
         "na_reason_counts": structural["na_reason_counts"],
         "reported_total_na": structural["reported_total_na"],
+        "records": records,
         "study": study,
+        # ---- formal sections (report.FORMAL_SECTIONS, flat) -------------
+        "structural": {k: _strkeys(v) for k, v in structural.items()
+                       if k != "dataset"},
+        "oracle_daily": {t: {"day_universe":
+                             study["per_theta"][t]["day_universe"],
+                             "executable":
+                             study["per_theta"][t]["executable"]}
+                         for t in study["per_theta"]},
         "theoretical_oracle": {t: study["per_theta"][t]["theoretical_oracle"]
                                for t in study["per_theta"]},
         "e2_worst_days": {
@@ -1048,10 +1078,15 @@ def build_full_study_result(ds, bars_by_date, *, spread_scalars, regime_of,
                            for t in study["per_theta"]},
         "frequency": {t: study["per_theta"][t]["frequency"]
                       for t in study["per_theta"]},
-        "bootstrap_ci": bootstrap_ci,
-        "feasibility_grid": {"cells": feasibility_grid,
+        "stability_views": {t: build_stability_views(
+            study["per_theta"][t], day_meta,
+            vol_axis=(None if config.vol_axis_of is None else
+                      {d: str(config.vol_axis_of(d)) for d in day_meta}))
+            for t in study["per_theta"]},
+        "bootstrap_ci": _strkeys(bootstrap_ci),
+        "feasibility_grid": {"cells": _strkeys(feasibility_grid),
                              "regions": {"status": "pending_mc"}},
-        "mc_handoff_manifest": manifest,
+        "mc_handoff_manifest": {"counts": manifest},
         "era_axis": {
             "axes": list(ds.eras),
             "counterfactual_disclosure": (
@@ -1060,75 +1095,25 @@ def build_full_study_result(ds, bars_by_date, *, spread_scalars, regime_of,
                 "MNQ history (frozen §6).")},
         "disclosures": {
             "untradeable": study["untradeable_disclosure"],
-            "pending_method_decisions": list(pending_decisions),
+            "pending_method_decisions": list(config.pending_decisions),
             "method_conventions": {
                 "quoted_seed_convention": "first frozen seed (7), fixed "
                                           "before any data was seen",
                 "stream_tags": "stats 9001 / gridmix 9002 (SeedSequence "
                                "array derivation, disclosed engineering "
                                "convention)",
-                "spread_scalars_used": list(spread_scalars),
+                "spread_scalars_used": list(config.spread_scalars),
             }},
-        "governance": {
-            "trial_id": TRIAL_ID,
-            "engineering_seed_role": "run-infra provenance only (DR-02); "
-                                     "research seeds frozen {7,13,31}",
-        },
+        "governance": dict(governance_meta),
     }
 
 
 def validate_report_contract(payload) -> list[str]:
-    """S0_REPORT_CONTENT_CONTRACT §B machine check. Returns problems
-    (empty == sealable). Stage E treats ANY problem as run failure."""
-    problems: list[str] = []
-    required = ("structural", "study", "theoretical_oracle", "e2_worst_days",
-                "sizing_outputs", "frequency", "bootstrap_ci",
-                "feasibility_grid", "mc_handoff_manifest", "era_axis",
-                "disclosures", "governance")
-    for key in required:                                   # B1
-        if key not in payload or payload[key] in (None, {}, []):
-            problems.append(f"missing_or_empty:{key}")
-    if problems:
-        return problems
-
-    study = payload["study"]
-    tkeys = list(study["per_theta"])
-    if len(tkeys) != 2:                                    # B2 theta axis
-        problems.append(f"theta_axis:{tkeys}")
-    for tkey in tkeys:                                     # B2 matrix
-        for eng in _CONTRACT_ENGINES:
-            for scn in _CONTRACT_SCENARIOS:
-                if scn not in study["per_theta"][tkey]["executable"].get(
-                        eng, {}):
-                    problems.append(f"missing_cell:{tkey}|{eng}|{scn}")
-                for blk in FROZEN_BLOCKS:
-                    cell = payload["bootstrap_ci"].get(
-                        f"{tkey}|{eng}|{scn}|block{blk}")
-                    if cell is None:
-                        problems.append(
-                            f"missing_ci:{tkey}|{eng}|{scn}|block{blk}")
-                        continue
-                    seeds = sorted(cell.get("per_seed", {}))   # B3
-                    if seeds != [7, 13, 31]:
-                        problems.append(
-                            f"ci_seeds:{tkey}|{eng}|{scn}|{blk}:{seeds}")
-                    if cell.get("quoted_seed") != 7:
-                        problems.append(f"quoted_seed:{tkey}|{eng}|{scn}")
-    if payload["feasibility_grid"]["regions"].get("status") != "pending_mc":
-        problems.append("regions_not_marked_pending_mc")    # B1 exception
-    if payload["disclosures"]["pending_method_decisions"]:  # B4
-        problems.append("pending_method_decisions_unresolved")
-    for tkey in tkeys:                                      # B5 conservation
-        uni = study["per_theta"][tkey]["day_universe"]
-        n_expected = uni["n_tp"] + uni["n_fp"]
-        for eng in _CONTRACT_ENGINES:
-            for scn in _CONTRACT_SCENARIOS:
-                n_rec = payload["mc_handoff_manifest"][eng][scn]["n_records"]
-                if n_rec != n_expected:
-                    problems.append(
-                        f"records_conservation:{tkey}|{eng}|{scn}:"
-                        f"{n_rec}!={n_expected}")
-    return problems
+    """M6.1 E3: thin alias — the authoritative validator lives in
+    src/itsf/s0/report.py (validate_formal_payload). Kept so older callers
+    and tests share one implementation."""
+    from itsf.s0 import report as rep
+    return rep.validate_formal_payload(payload)
 
 
 class RealChain:
@@ -1148,13 +1133,11 @@ class RealChain:
                    if not p.exists()]
         if missing:
             return (False, f"stage-C artifacts missing: {missing}")
-        # M6: the full production chain is code-complete but the real-run
-        # path stays FAIL-CLOSED (pre-exposure, Stage B) until every pending
-        # method ruling lands — an authorized attempt must not burn the
-        # trial on an unruled parameter.
-        if PENDING_METHOD_DECISIONS:
-            return (False, "M6 production chain fail-closed: pending method "
-                           "rulings " + ", ".join(PENDING_METHOD_DECISIONS))
+        # M6.1 E1: readiness and compute share resolved_study_config —
+        # ready() can never say True while compute() would refuse.
+        cfg, why = resolved_study_config()
+        if cfg is None:
+            return (False, f"stage-C fail-closed pre-exposure: {why}")
         return (True, "stage C wiring ready (full study chain)")
 
     def _ensure(self):
@@ -1228,16 +1211,24 @@ class RealChain:
                        "STOP; requires an Aaron ruling before any run")
 
     def compute(self):
-        # Defense-in-depth: ready() already blocks in Stage B; a compute
-        # reached with pending rulings must still never produce numbers.
-        if PENDING_METHOD_DECISIONS:
-            raise RuntimeError(
-                "M6 production chain fail-closed: pending method rulings "
-                + ", ".join(PENDING_METHOD_DECISIONS))
+        # M6.1 E1: SAME predicate as ready() — refusal here is unreachable
+        # when Stage B passed, and precedes any data load either way.
+        cfg, why = resolved_study_config()
+        if cfg is None:
+            raise RuntimeError(f"stage-C config unavailable: {why}")
         ds, _uni = self._ensure()
-        raise RuntimeError(
-            "M6: real spread_scalars/regime_of injection not wired — "
-            "requires the DR-M6 rulings and a re-rendered packet")
+        from itsf import guards as _g
+        text = REGISTRY.read_text(encoding="utf-8")
+        _row, commit, _reason = find_authorization_event(text)
+        gov = {
+            "trial_id": TRIAL_ID,
+            "authorized_commit": commit,
+            "engineering_seed": ENGINEERING_SEED,
+            "frozen_hashes": dict(_g.FROZEN_HASHES),
+            "registry_sequence_snapshot": len(parse_registry_events(text)),
+        }
+        return build_full_study_result(ds, self._bars, config=cfg,
+                                       governance_meta=gov)
 
 
 # =========================================================================

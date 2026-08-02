@@ -23,8 +23,13 @@ from collections.abc import Sequence
 
 import numpy as np
 
-# frozen: MC1 SS5 convergence rule (b) — three independent master seeds
-MASTER_SEEDS = (7, 13, 31)
+# frozen: MC1 SS5 convergence rule (b) — three independent master seeds.
+# IR DR-02 (Aaron 2026-08-01): contracts.RESEARCH_BOOTSTRAP_SEEDS is the ONE
+# and only source any research-path RNG may derive its seeds from. Re-exported
+# under the historical name `MASTER_SEEDS` (identity-preserving: it IS the
+# contracts tuple object, not a copy) so existing consumers of
+# itsf.mc.bootstrap.MASTER_SEEDS keep working unchanged.
+from itsf.contracts import RESEARCH_BOOTSTRAP_SEEDS as MASTER_SEEDS
 
 # frozen: MC1 SS5 — 认知层 block 长 5 交易日（S0 SS9 一致）
 EXPECTED_BLOCK_DAYS = 5.0

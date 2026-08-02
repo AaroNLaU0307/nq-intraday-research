@@ -10,7 +10,9 @@ import numpy as np
 import pytest
 
 from conftest import make_trade_path
+from itsf import contracts
 from itsf.guards import RunBlockedError
+from itsf.mc import bootstrap as mc_bootstrap
 from itsf.mc.account import (LUCID_ABSOLUTE_MAX_MICROS,
                              TOPSTEP_ABSOLUTE_MAX_MICROS, PRIMARY_POLICY,
                              buffer_at_entry, n_micros, risk_budget_usd,
@@ -34,6 +36,13 @@ def test_frozen_master_seeds():
     # frozen: MC1 SS5 convergence rule (b)
     assert MASTER_SEEDS == (7, 13, 31)
     assert EXPECTED_BLOCK_DAYS == 5.0
+
+
+def test_master_seeds_is_single_sourced_from_contracts():
+    """# IR DR-02 mutation guard: itsf.mc.bootstrap.MASTER_SEEDS must BE
+    contracts.RESEARCH_BOOTSTRAP_SEEDS (same object), not a local copy that
+    could drift from the one research-seed source of truth."""
+    assert mc_bootstrap.MASTER_SEEDS is contracts.RESEARCH_BOOTSTRAP_SEEDS
 
 
 def test_same_master_seed_identical_worlds():
