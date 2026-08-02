@@ -16,6 +16,13 @@ MNQ_TICK_VALUE_USD = 0.5
 # Frozen s0_cost_handoff primary (platform_params.execution_costs)
 S0_PLATFORM_FEE_RT_USD = 1.74
 
+# IR DR-02 (Aaron 2026-08-01, Codex baseline audit): the ONLY seeds any
+# research-path RNG may derive from.  # frozen: S0 §9 (Primary bootstrap
+# seeds {7,13,31}), S0 Appendix A step 3, MC_METHOD_SPEC §(b) three master
+# seeds. The engineering seed (RunConfig.engineering_seed) must NEVER reach
+# a research computation.
+RESEARCH_BOOTSTRAP_SEEDS: tuple[int, int, int] = (7, 13, 31)
+
 
 @dataclass
 class CostScenarioParams:
@@ -180,7 +187,10 @@ class RunConfig:
     compare-only)."""
     trial_id: str                         # e.g. S0-T001
     authorized_commit: str                # full 40-hex from Aaron's sentence
-    seed: int                             # packet §5: 20260731 (bootstrap only)
+    # DR-02: run-infra provenance stamp ONLY (recorded in run metadata).
+    # NEVER a research RNG seed — research randomness derives exclusively
+    # from RESEARCH_BOOTSTRAP_SEEDS (7/13/31, frozen S0 §9/App A).
+    engineering_seed: int
     attempts_dir: str                     # attempts/<trial>-A<seq>_<UTC>/
     runs_dir: str                         # runs/<trial>_<UTC>/ (Stage C entry)
     assertions_path: str                  # expected_preflight_assertions json

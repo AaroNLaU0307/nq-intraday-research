@@ -68,7 +68,7 @@ def _run_config() -> RunConfig:
     return RunConfig(
         trial_id="S0-T001",
         authorized_commit="0" * 40,
-        seed=20260731,
+        engineering_seed=20260731,
         attempts_dir="attempts/S0-T001-A1_20260731T000000Z",
         runs_dir="runs/S0-T001_20260731T000000Z",
         assertions_path="expected_preflight_assertions.json",

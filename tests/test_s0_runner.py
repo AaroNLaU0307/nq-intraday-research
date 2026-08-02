@@ -55,7 +55,7 @@ def make_deps(tmp_path: Path, *, gates=(), b_checks=(),
               runs_dir=None):
     cfg = RunConfig(trial_id="S0-T001",
                     authorized_commit="a" * 40,
-                    seed=20260731,
+                    engineering_seed=20260731,
                     attempts_dir=str(tmp_path / "attempts" / "A001"),
                     runs_dir=str(runs_dir or (tmp_path / "runs" / "S0-T001")),
                     assertions_path=str(tmp_path / "assertions.json"))
@@ -831,7 +831,7 @@ def test_pytest_gate_floor_is_the_audit_baseline():
     """SA-10 N3: the floor tracks the CURRENT suite, closing the
     silent-collection-drop headroom."""
     mod = real_run_module()
-    assert mod.MIN_COLLECTED_TESTS == 524
+    assert mod.MIN_COLLECTED_TESTS == 612
 
 
 # ===========================================================================
@@ -1018,13 +1018,18 @@ def test_stage_b_holds_the_stage_c_wiring_gate_before_exposure():
     ok, detail = gate.check()
     assert ok is False                       # no probe supplied -> inert
     assert "not supplied" in detail
-    # with the real probe the gate reports readiness (artifacts on disk)
+    # with the real probe: M6 keeps the chain FAIL-CLOSED (pre-exposure)
+    # while the DR-M6 method rulings pend — readiness returns only when
+    # PENDING_METHOD_DECISIONS is empty AND artifacts are on disk.
     wired = mod.build_structural_checks(
         REPO / "S0_INPUT_PREFLIGHT.json",
         wiring_status=mod.RealChain().ready)
     g2 = {c.name: c for c in wired}["stage_c_wiring_activated"]
     ok2, detail2 = g2.check()
-    assert ok2 is True and "ready" in detail2
+    if mod.PENDING_METHOD_DECISIONS:
+        assert ok2 is False and "DR-M6" in detail2
+    else:
+        assert ok2 is True and "ready" in detail2
     # ordering: the wiring gate precedes the assertion comparison
     assert names.index("stage_c_wiring_activated") < names.index(
         "preflight_assertions_match")
