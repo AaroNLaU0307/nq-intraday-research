@@ -24,29 +24,78 @@ S0_PLATFORM_FEE_RT_USD = 1.74
 RESEARCH_BOOTSTRAP_SEEDS: tuple[int, int, int] = (7, 13, 31)
 
 
+# --- M6.1.1: structured method sub-items (one dataclass per DR family; no
+#     coarse strings hiding several sub-decisions). Every field is set ONLY
+#     when Aaron's ruling lands with its IR reference. ----------------------
+
+@dataclass(frozen=True)
+class SpreadCostMethod:                    # DR-M6-A-v2 + IR-7
+    scalar_rule: str                       # e.g. "B-i" once ruled
+    adverse_slippage_ticks: object         # Mapping[str, float] per scenario
+    adverse_semantics: str                 # "replaces_per_side" (documented)
+
+
+@dataclass(frozen=True)
+class VolatilityRegimeMethod:              # DR-M6-B-v2
+    close_source: str
+    return_basis: str
+    ddof: int
+    roll_crossing_rule: str
+    tercile_reference: str
+    na_rule: str
+
+
+@dataclass(frozen=True)
+class FpAllocationMethod:                  # DR-M6-C
+    basis: str                             # "A" | "B" | "C"
+    weight_source: str
+    shortfall_rule: str
+
+
+@dataclass(frozen=True)
+class BootstrapMethod:                     # DR-M6-D
+    population: str
+    na_day_rule: str
+    statistic: str
+    n_boot_per_seed: bool
+    quoted_seed_rule: str
+    percentile_interpolation: str
+    crn_scope: str
+
+
+@dataclass(frozen=True)
+class GridRepeatPolicy:                    # DR-M6-E
+    k_per_seed: int
+    k_start_index: int
+    stream_includes_theta: bool
+    convergence_rule: str
+    max_doublings: int
+
+
 @dataclass(frozen=True)
 class ResolvedS0Methods:
-    """M6.1 E1 — the SINGLE source of truth for post-freeze method rulings.
+    """M6.1.1 — the SINGLE source of truth for post-freeze method rulings.
 
-    One field per open ruling; None == still pending. The live pending list
-    is DERIVED from the None fields (there is no second hand-written
-    pending tuple anywhere). ready() and compute() must consume the same
-    instance. No field may carry a hidden default value for an unruled
-    method — a ruling lands ONLY by the main agent writing the approved
-    value here together with its IR reference.
+    One structured field per DR family; None == pending. The pending list
+    is DERIVED (no second hand-written tuple anywhere). StudyConfig can
+    ONLY be built from a fully-resolved instance via derive_study_config.
+    `test_only=True` marks synthetic values that must never reach a real
+    run (the entrypoint refuses a test_only config outside tests).
     """
-    spread_scalar_rule: str | None = None          # DR-M6-A-v2
-    adverse_slippage_final: object | None = None   # IR-7 final ticks vector
-    volatility_regime: object | None = None        # DR-M6-B-v2 definition
-    fp_allocation_basis: str | None = None         # DR-M6-C
-    bootstrap_population: str | None = None        # DR-M6-D
-    grid_repeat_policy: object | None = None       # DR-M6-E (K/RNG/conv)
-    event_na_stratum_rule: str | None = None       # DR-M6-F
+    spread_cost: SpreadCostMethod | None = None        # DR-M6-A-v2+IR-7
+    volatility_regime: VolatilityRegimeMethod | None = None  # DR-M6-B-v2
+    fp_allocation: FpAllocationMethod | None = None    # DR-M6-C
+    bootstrap_method: BootstrapMethod | None = None    # DR-M6-D
+    grid_policy: GridRepeatPolicy | None = None        # DR-M6-E
+    event_na_mapping: str | None = None                # DR-M6-F
+    stability_population: str | None = None            # DR-M6-G
+    test_only: bool = False
 
     def pending_fields(self) -> tuple[str, ...]:
         from dataclasses import fields as _fields
         return tuple(sorted(f.name for f in _fields(self)
-                            if getattr(self, f.name) is None))
+                            if f.name != "test_only"
+                            and getattr(self, f.name) is None))
 
     @property
     def fully_resolved(self) -> bool:
@@ -55,20 +104,47 @@ class ResolvedS0Methods:
 
 @dataclass(frozen=True)
 class StudyConfig:
-    """M6.1 E1 — named injectable bundle for the full study chain.
+    """M6.1.1 — DERIVED bundle; never hand-built in production.
 
-    No positional tuples, no hidden defaults for unruled methods: a
-    synthetic caller must supply every method-bearing field explicitly.
-    Lives here (a real package module) rather than in the spec-loaded
-    entrypoint so dataclass annotation resolution is well-defined.
+    The ONLY constructor is derive_study_config(methods, ...), which
+    refuses a partially-resolved ResolvedS0Methods — so there is no
+    second pending-truth-source: disclosures/pending come from
+    `methods.pending_fields()` alone, and every method sub-item travels
+    structurally on `methods` for its consumer to read.
     """
+    methods: ResolvedS0Methods
     spread_scalars: tuple[float, float, float]
     regime_of: object                       # Callable[[date_str], str]
-    pending_decisions: tuple[str, ...]      # REQUIRED (O7): no default
-    # DR-M6-B-v2: the ruled vol-tercile mapping (Callable[[date], str]).
-    # None == unruled -> stability vol axis reports unresolved and formal
-    # sealing fails (E4). Synthetic resolved-state tests must supply it.
-    vol_axis_of: object | None = None
+    vol_axis_of: object                     # Callable[[date_str], str]
+
+    def __post_init__(self):
+        # LOW-1 (M6.1.1 audit): the "derived-only" claim is ENFORCED —
+        # direct construction with pending methods raises exactly like
+        # derive_study_config would.
+        pend = self.methods.pending_fields()
+        if pend:
+            raise ValueError("StudyConfig: pending method rulings: "
+                             + ", ".join(pend))
+
+
+def derive_study_config(methods: ResolvedS0Methods, *,
+                        spread_scalars, regime_of,
+                        vol_axis_of) -> StudyConfig:
+    """Build a StudyConfig from a FULLY-resolved ResolvedS0Methods.
+
+    Raises ValueError while any ruling pends (fail closed — the caller
+    reports the pending list instead). The concrete injectables
+    (spread_scalars per the ruled reduction rule, the ruled regime/vol
+    mappings) are supplied by the caller that read them from locked
+    artifacts — or, in tests, from TEST_ONLY synthetic values on a
+    methods instance with test_only=True.
+    """
+    pend = methods.pending_fields()
+    if pend:
+        raise ValueError("derive_study_config: pending method rulings: "
+                         + ", ".join(pend))
+    return StudyConfig(methods=methods, spread_scalars=tuple(spread_scalars),
+                       regime_of=regime_of, vol_axis_of=vol_axis_of)
 
 
 @dataclass

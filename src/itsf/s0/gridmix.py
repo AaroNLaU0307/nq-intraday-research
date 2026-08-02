@@ -274,6 +274,17 @@ def allocate(required: int, available: Mapping[str, int],
     ruling that the FP mixture must copy the TP stratum composition) would make
     it live immediately; `weights` is that hook, and no `build_grid` parameter
     exposes it.
+
+    GUARANTEE: `sum(allocate(...).values()) == required` on every successful
+    return, or this function raises — it never returns a silently-short
+    allocation. Two failure modes are distinguished: `required > total`
+    (available) is the frozen infeasible_by_sample signal, raised immediately
+    below; a `weights` map whose support is DISJOINT from `available`'s
+    support (every available stratum has zero weight — e.g. mismatched
+    stratum keys between the two mappings) is a caller error, not a
+    legitimate shortfall, and is ALSO raised rather than silently returning
+    every stratum at 0 (which the naive weight-driven loop would otherwise do,
+    since it would never find a positive-weight stratum to start from).
     """
     avail = {k: int(v) for k, v in available.items()}
     basis = dict(avail) if weights is None else {k: int(weights.get(k, 0))
@@ -284,6 +295,14 @@ def allocate(required: int, available: Mapping[str, int],
     if required > total:
         raise ValueError(f"required {required} exceeds total availability "
                          f"{total} — infeasible_by_sample")
+    if required > 0 and sum(basis.values()) == 0:
+        raise ValueError(
+            f"allocate: `weights` support is disjoint from `available`'s "
+            f"support — every available stratum has zero weight, so a "
+            f"required={required} allocation cannot be split on this basis "
+            "(caller error, e.g. mismatched stratum keys between `weights` "
+            "and `available`; NOT the same as the required > total "
+            "infeasible_by_sample case above, and never silently short)")
     alloc = {k: 0 for k in avail}
     remaining = required
     active = {k: basis[k] for k in avail if avail[k] > 0 and basis[k] > 0}
@@ -298,6 +317,13 @@ def allocate(required: int, available: Mapping[str, int],
         # have room, in proportion to THEIR available days. Each pass either
         # finishes or saturates at least one stratum, so this terminates.
         active = {k: avail[k] for k in avail if alloc[k] < avail[k]}
+    if sum(alloc.values()) != required:
+        raise RuntimeError(
+            f"allocate: internal invariant violated — required {required} "
+            f"but produced sum(allocation)={sum(alloc.values())}; this is a "
+            "bug in the redistribution logic, never a legitimate shortfall "
+            "(a legitimate shortfall is the required > total ValueError "
+            "raised above, which the caller reads as infeasible_by_sample)")
     return alloc
 
 

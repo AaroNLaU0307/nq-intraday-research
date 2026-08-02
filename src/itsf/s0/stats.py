@@ -169,12 +169,26 @@ def resample_means(series: Sequence[float], block_len: float, n_boot: int,
     sequence, so resample b is a pure function of (seed, block, b): doubling
     n_boot for the MC_METHOD_SPEC §5 (a) convergence re-run reproduces the
     first n_boot resamples byte-identically and only appends new ones.
+
+    IR DR-02 frozen-seed guard: unlike `_bootstrap_mean_ci_unchecked`, this
+    function IS public (it is `bootstrap_mean_ci`'s per-seed inner loop, not
+    a test-only helper), so it cannot simply trust an arbitrary caller-passed
+    `master_seed` the way an underscore-prefixed helper could. `master_seed`
+    must be one of `contracts.RESEARCH_BOOTSTRAP_SEEDS` (7, 13, or 31) —
+    membership, not the full-tuple equality `bootstrap_mean_ci` enforces,
+    because this entry point takes ONE seed at a time, not all three.
     """
+    seed = int(master_seed)
+    if seed not in RESEARCH_BOOTSTRAP_SEEDS:
+        raise ValueError(
+            f"master_seed must be one of contracts.RESEARCH_BOOTSTRAP_SEEDS "
+            f"{RESEARCH_BOOTSTRAP_SEEDS} — IR DR-02: the only seeds any "
+            f"research-path RNG may derive from; got {seed}")
     values = _validated_series(series)
     block = _validated_block_len(block_len)
     count = _validated_n_boot(n_boot)
     rng = np.random.default_rng(
-        [int(master_seed), STATS_STREAM_TAG, block_stream_key(block)])
+        [seed, STATS_STREAM_TAG, block_stream_key(block)])
     n = int(values.shape[0])
     means = np.empty(count, dtype=float)
     for b in range(count):

@@ -6,10 +6,14 @@ All paths are SYNTHETIC (tests/conftest.py generators) — no real data.
 """
 from __future__ import annotations
 
+import importlib.util
+import shutil
+import subprocess
+
 import numpy as np
 import pytest
 
-from conftest import make_trade_path
+from conftest import REPO, make_trade_path
 from itsf import contracts
 from itsf.guards import RunBlockedError
 from itsf.mc import bootstrap as mc_bootstrap
@@ -20,6 +24,11 @@ from itsf.mc.account import (LUCID_ABSOLUTE_MAX_MICROS,
 from itsf.mc.bootstrap import (EXPECTED_BLOCK_DAYS, MASTER_SEEDS,
                                build_worlds, stationary_bootstrap_indices)
 from itsf.mc.platforms.base import TrailingFloorEngine
+
+_fcs_spec = importlib.util.spec_from_file_location(
+    "final_candidate_scans", REPO / "scripts" / "final_candidate_scans.py")
+fcs = importlib.util.module_from_spec(_fcs_spec)
+_fcs_spec.loader.exec_module(fcs)
 
 DAY_IDS = [f"2026-08-{i:02d}" for i in range(1, 61)]  # synthetic template ids
 
@@ -77,6 +86,22 @@ def test_build_worlds_rejects_degenerate_inputs():
         build_worlds([], B=4, master_seed=7)
 
 
+def test_build_worlds_rejects_non_frozen_master_seed():
+    """# hardening: `build_worlds` is a PUBLIC research-RNG entry point that
+    used to accept ANY `master_seed` with zero validation. IR DR-02: only
+    contracts.RESEARCH_BOOTSTRAP_SEEDS (7/13/31) may seed a research-path
+    RNG; every other value — including the forbidden marker 20260731 — is
+    refused rather than silently honoured."""
+    with pytest.raises(ValueError, match="DR-02"):
+        build_worlds(DAY_IDS, B=4, master_seed=20260731)
+    with pytest.raises(ValueError, match="DR-02"):
+        build_worlds(DAY_IDS, B=4, master_seed=999)
+    # the frozen seeds still work normally
+    for seed in mc_bootstrap.MASTER_SEEDS:
+        worlds = build_worlds(DAY_IDS, B=2, master_seed=seed)
+        assert len(worlds) == 2
+
+
 # ---------------------------------------------------------------------------
 # bootstrap: block geometry
 # ---------------------------------------------------------------------------
@@ -115,6 +140,80 @@ def test_circular_wrap():
     assert all(idx[t] == (start + t) % n for t in range(n))
     if start != 0:
         assert 0 in idx[1:]              # the wrap actually occurred
+
+
+# ---------------------------------------------------------------------------
+# scripts/final_candidate_scans.py: import-closure-derived E4 scope
+# (M6.1.1 S2 item 7 — this belongs here because it is fundamentally about
+# mc/bootstrap.py's own reachability from scripts/s0_real_run.py, the same
+# reason mc/account.py's tests already live in this file per its own
+# docstring rather than a separate file.)
+# ---------------------------------------------------------------------------
+
+def _make_scratch_repo(tmp_path):
+    """Copy scripts/s0_real_run.py + the full src/itsf/** tree into a fresh
+    scratch git repo, so `production_import_closure` and `git ls-files` both
+    behave exactly as they do at the real repo root. Nothing outside
+    `tmp_path` is touched: no commit, no staged change, no mutation of the
+    real repo's git state."""
+    scratch = tmp_path / "scratch_repo"
+    (scratch / "scripts").mkdir(parents=True)
+    shutil.copy2(REPO / "scripts" / "s0_real_run.py",
+                scratch / "scripts" / "s0_real_run.py")
+    shutil.copytree(REPO / "src" / "itsf", scratch / "src" / "itsf",
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    subprocess.run(["git", "init", "-q"], cwd=scratch, check=True)
+    return scratch
+
+
+def _plant_marker(path):
+    # Assembled from two halves, never spelled out contiguously in THIS
+    # file's own source: the final_candidate_scans scan of forbidden-word
+    # lines covers tests/ too (only the separate skip-marker check is
+    # tests/-restricted), so writing the word out whole here would be a
+    # correct finding against test_bootstrap.py itself, not only against the
+    # scratch file this helper injects it into.
+    marker = "TO" + "DO" + ": planted marker"
+    path.write_text(
+        path.read_text(encoding="utf-8") + f"\n# {marker}\n",
+        encoding="utf-8")
+
+
+def test_import_closure_includes_bootstrap_excludes_account_and_orchestrator(
+        tmp_path):
+    """itsf.s0.stats imports itsf.mc.bootstrap.stationary_bootstrap_indices
+    (stats.py's own import line), so mc/bootstrap.py IS reachable from
+    scripts/s0_real_run.py; mc/account.py and mc/orchestrator.py are not
+    imported anywhere on that path (a repo-wide grep for "itsf.mc" during
+    M6.1.1 found it only in stats.py, account.py, orchestrator.py, and the
+    platforms/ modules — and only stats.py sits on the s0_real_run.py import
+    path) and stay OUTSIDE the closure."""
+    scratch = _make_scratch_repo(tmp_path)
+    closure = fcs.production_import_closure(
+        scratch / "scripts" / "s0_real_run.py", scratch / "src")
+    closure_files = {p.relative_to(scratch).as_posix()
+                     for p in closure.values()}
+    assert "src/itsf/mc/bootstrap.py" in closure_files
+    assert "src/itsf/mc/account.py" not in closure_files
+    assert "src/itsf/mc/orchestrator.py" not in closure_files
+
+
+def test_scanner_flags_reachable_marker_but_exempts_deferred_stub(
+        tmp_path, capsys):
+    """The E4 exemption is now import-closure-derived, not a blanket
+    src/itsf/mc/ prefix exclusion: a forbidden marker planted in
+    bootstrap.py (IN the closure) must be flagged; the SAME marker planted
+    in account.py (a deliberately-deferred stub, NOT in the closure) must
+    stay exempt — proving the scan scope tracks real reachability rather
+    than a path prefix."""
+    scratch = _make_scratch_repo(tmp_path)
+    _plant_marker(scratch / "src" / "itsf" / "mc" / "bootstrap.py")
+    _plant_marker(scratch / "src" / "itsf" / "mc" / "account.py")
+    exit_code = fcs.main(scratch)
+    out = capsys.readouterr().out
+    assert exit_code == 1
+    assert "src/itsf/mc/bootstrap.py" in out
+    assert "src/itsf/mc/account.py" not in out
 
 
 # ---------------------------------------------------------------------------

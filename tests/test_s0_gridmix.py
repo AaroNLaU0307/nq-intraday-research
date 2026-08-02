@@ -198,6 +198,38 @@ def test_allocation_on_two_strata_exact_counts():
         s: seed_block["allocation_tp"] for s in (7, 13, 31)}
 
 
+def test_allocate_disjoint_weights_support_raises_not_short():
+    """# hardening: `weights` keyed ENTIRELY off strata absent from
+    `available` used to silently return every stratum at 0 (sum 0 !=
+    required) — the initial weight-driven `active` set was empty from the
+    start, so the redistribution loop never ran even once. Now this is a
+    caller error (e.g. mismatched stratum keys between the two mappings) and
+    must raise, never return a short allocation."""
+    available = {"a": 5, "b": 5}
+    with pytest.raises(ValueError):
+        gridmix.allocate(6, available, weights={"x": 10, "y": 20})
+    with pytest.raises(ValueError):
+        gridmix.allocate(1, available, weights={"nonexistent_key": 999})
+    # required == 0 is never ambiguous, even with fully-disjoint weights
+    assert gridmix.allocate(0, available, weights={"x": 10}) == {
+        "a": 0, "b": 0}
+
+
+def test_allocate_guarantees_sum_equals_required():
+    """# guarantee: `allocate` never returns sum(allocation) != required —
+    either it equals required, or the call raised."""
+    available = {"a": 2, "b": 5, "c": 5}
+    alloc = gridmix.allocate(9, available, weights={"a": 1, "b": 1, "c": 1})
+    assert sum(alloc.values()) == 9
+    alloc_default = gridmix.allocate(7, available)
+    assert sum(alloc_default.values()) == 7
+    # a partial-overlap weights map (some strata weighted, others not) still
+    # reaches the full requirement via the availability-based redistribution
+    # fallback, not a raise — only FULLY disjoint support raises.
+    alloc_partial = gridmix.allocate(10, available, weights={"a": 1})
+    assert sum(alloc_partial.values()) == 10
+
+
 def test_shortfall_redistributes_over_remaining_strata():
     """# frozen: S0 Appendix A — 缺额按其余层的可用日数比例重新分配.
 

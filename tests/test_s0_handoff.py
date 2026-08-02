@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from itsf import contracts
-from itsf.s0 import gridmix, handoff, stability
+from itsf.s0 import gridmix, handoff, stability, stats
 
 ERA_ACTUAL = "actual_micro_available_era"
 ERA_PROXY = "counterfactual_micro_execution"
@@ -85,13 +85,17 @@ def test_micro_era_and_stability_epoch_distinct_values_pass():
 
 
 def test_tp_fp_class_must_match_requested_thetas_exactly():
+    # theta_0.5=FP / theta_0.3=TP is THETA-NESTING-MONOTONE (Y_cont between
+    # 0.3 and 0.5: continues past the lower bar, not past the higher one),
+    # unlike the reverse pairing, which is now rejected elsewhere (see
+    # test_theta_nesting_monotonicity_violation_rejected below).
     day_rows = {"2019-06-03": _day_row(
-        tp_fp_class={"theta_0.5": "TP", "theta_0.3": "FP"})}
+        tp_fp_class={"theta_0.5": "FP", "theta_0.3": "TP"})}
     with pytest.raises(ValueError):
         handoff.build_day_strata(day_rows, thetas=[0.5])   # extra key 0.3
     out = handoff.build_day_strata(day_rows, thetas=[0.5, 0.3])
     assert out["days"]["2019-06-03"]["tp_fp_class"] == {
-        "theta_0.5": "TP", "theta_0.3": "FP"}
+        "theta_0.5": "FP", "theta_0.3": "TP"}
 
 
 def test_tp_fp_class_bad_value_rejected():
@@ -154,6 +158,121 @@ def test_duplicate_or_empty_thetas_rejected():
 
 
 # ---------------------------------------------------------------------------
+# build_day_strata hardening (M6.1.1 S2 item 1)
+# ---------------------------------------------------------------------------
+
+def test_event_flag_final_frozen_f10_vocabulary_enforced():
+    """# frozen F10 vocabulary, IR-12/18: only "CPI"/"NFP"/"FOMC"/"none" or
+    None. "none_or_na" (and any other spelling) is rejected, not silently
+    treated as NA."""
+    for bad in ("none_or_na", "cpi", "NA", "unknown"):
+        day_rows = {"2019-06-03": _day_row(event_flag_final=bad)}
+        with pytest.raises(ValueError):
+            handoff.build_day_strata(day_rows, thetas=[0.5])
+    # every concrete category and the "none"/None pair still pass
+    for good in ("CPI", "NFP", "FOMC", "none", None):
+        day_rows = {"2019-06-03": _day_row(event_flag_final=good)}
+        out = handoff.build_day_strata(day_rows, thetas=[0.5])
+        assert out["days"]["2019-06-03"]["event_flag_final"] == good
+
+
+def test_year_must_match_the_date_itself():
+    day_rows = {"2019-06-03": _day_row(year="2020")}
+    with pytest.raises(ValueError):
+        handoff.build_day_strata(day_rows, thetas=[0.5])
+
+
+def test_stability_epoch_must_match_the_year_computed_epoch():
+    # 2019 falls in 2018-2021, not 2014-2017 — inconsistent pairing rejected.
+    day_rows = {"2019-06-03": _day_row(stability_epoch="2014-2017")}
+    with pytest.raises(ValueError):
+        handoff.build_day_strata(day_rows, thetas=[0.5])
+    # "outside_epochs" is a valid label, but ONLY for a year outside every
+    # frozen bucket (e.g. 2009); 2019 paired with it is still inconsistent.
+    day_rows2 = {"2019-06-03": _day_row(stability_epoch="outside_epochs")}
+    with pytest.raises(ValueError):
+        handoff.build_day_strata(day_rows2, thetas=[0.5])
+    # a year genuinely outside every bucket correctly pairs with
+    # "outside_epochs"
+    day_rows3 = {"2009-06-03": _day_row(year="2009",
+                                        stability_epoch="outside_epochs")}
+    out = handoff.build_day_strata(day_rows3, thetas=[0.5])
+    assert out["days"]["2009-06-03"]["stability_epoch"] == "outside_epochs"
+
+
+def test_d_open_zero_requires_non_tradeable_for_every_theta():
+    day_rows = {"2019-06-03": _day_row(
+        d_open=0, tp_fp_class={"theta_0.5": "TP", "theta_0.3": "TP"})}
+    with pytest.raises(ValueError):
+        handoff.build_day_strata(day_rows, thetas=[0.5, 0.3])
+    # the correct all-non_tradeable pairing passes
+    ok_rows = {"2019-06-03": _day_row(
+        d_open=0,
+        tp_fp_class={"theta_0.5": "non_tradeable",
+                    "theta_0.3": "non_tradeable"})}
+    out = handoff.build_day_strata(ok_rows, thetas=[0.5, 0.3])
+    assert out["days"]["2019-06-03"]["tp_fp_class"] == {
+        "theta_0.5": "non_tradeable", "theta_0.3": "non_tradeable"}
+    # ONE non-non_tradeable theta among several is still a violation
+    partial_rows = {"2019-06-03": _day_row(
+        d_open=0,
+        tp_fp_class={"theta_0.5": "non_tradeable", "theta_0.3": "FP"})}
+    with pytest.raises(ValueError):
+        handoff.build_day_strata(partial_rows, thetas=[0.5, 0.3])
+
+
+def test_theta_nesting_monotonicity_violation_rejected():
+    """A day TP at theta=0.5 (the HIGHER bar) must also be TP at theta=0.3
+    (the LOWER bar): Y_cont >= 0.5 implies Y_cont >= 0.3. FP at 0.3 while TP
+    at 0.5 is impossible under that semantics and must raise."""
+    day_rows = {"2019-06-03": _day_row(
+        tp_fp_class={"theta_0.5": "TP", "theta_0.3": "FP"})}
+    with pytest.raises(ValueError):
+        handoff.build_day_strata(day_rows, thetas=[0.5, 0.3])
+    # the reverse (FP at the higher theta, TP at the lower) is fine
+    ok_rows = {"2019-06-03": _day_row(
+        tp_fp_class={"theta_0.5": "FP", "theta_0.3": "TP"})}
+    handoff.build_day_strata(ok_rows, thetas=[0.5, 0.3])   # does not raise
+    # both TP, or both FP, at every theta are trivially monotone
+    both_tp = {"2019-06-03": _day_row(
+        tp_fp_class={"theta_0.5": "TP", "theta_0.3": "TP"})}
+    handoff.build_day_strata(both_tp, thetas=[0.5, 0.3])
+    both_fp = {"2019-06-03": _day_row(
+        tp_fp_class={"theta_0.5": "FP", "theta_0.3": "FP"})}
+    handoff.build_day_strata(both_fp, thetas=[0.5, 0.3])
+
+
+def test_build_day_strata_formal_sealable_is_false_while_dr_m6_f_is_open():
+    day_rows = {"2019-06-03": _day_row()}
+    out = handoff.build_day_strata(day_rows, thetas=[0.5])
+    assert out["formal_sealable"] is False
+
+
+def test_build_seed_manifest_guards_are_real_raises_not_bare_asserts(
+        monkeypatch):
+    """A production governance gate must be a real `raise`, not a bare
+    `assert` (stripped under `python -O`). Break the IR DR-02 identity guard
+    via monkeypatch — a same-VALUE, different-OBJECT tuple — and confirm it
+    still fires for BOTH single-sourced constants."""
+    # tuple(some_tuple) is a CPython no-op that returns the SAME object, so
+    # a genuinely different object needs to round-trip through a list first.
+    same_values_new_object = tuple(
+        [int(s) for s in contracts.RESEARCH_BOOTSTRAP_SEEDS])
+    assert same_values_new_object is not contracts.RESEARCH_BOOTSTRAP_SEEDS
+    assert same_values_new_object == contracts.RESEARCH_BOOTSTRAP_SEEDS
+    monkeypatch.setattr(stats, "RESEARCH_BOOTSTRAP_SEEDS",
+                        same_values_new_object)
+    with pytest.raises(AssertionError):
+        handoff.build_seed_manifest()
+    monkeypatch.setattr(stats, "RESEARCH_BOOTSTRAP_SEEDS",
+                        contracts.RESEARCH_BOOTSTRAP_SEEDS)
+    monkeypatch.setattr(gridmix, "RESEARCH_BOOTSTRAP_SEEDS",
+                        same_values_new_object)
+    with pytest.raises(AssertionError):
+        handoff.build_seed_manifest()
+
+
+# ---------------------------------------------------------------------------
 # build_seed_manifest
 # ---------------------------------------------------------------------------
 
@@ -165,6 +284,7 @@ def test_build_seed_manifest_shape_and_identity():
         "stats_stream_tag": 9001, "grid_stream_tag": 9002}
     assert manifest["k_policy"] == "UNRESOLVED_DR-M6-E"
     assert manifest["crn_scope"] == "UNRESOLVED"
+    assert manifest["formal_sealable"] is False
     assert "run-infra provenance only" in manifest["engineering_seed_note"]
     assert "FIRST frozen master seed" in manifest["quoted_seed_convention"]
 
@@ -189,14 +309,21 @@ def _fabricated_grid_populations():
     return d_tp, d_fp, strata
 
 
+def _run_meta(**overrides) -> dict[str, object]:
+    meta = {"theta": 0.5, "engine": "E1", "scenario": "Base"}
+    meta.update(overrides)
+    return meta
+
+
 def test_build_grid_samples_shape_and_infeasible_passthrough():
     d_tp, d_fp, strata = _fabricated_grid_populations()
     grid_output = gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=0.4,
                                      q_grid=[0.50], r_grid=[0.50])
-    samples = handoff.build_grid_samples(grid_output,
-                                         run_meta={"theta": 0.5, "engine": "E1"})
+    samples = handoff.build_grid_samples(grid_output, run_meta=_run_meta())
     assert samples["schema_version"] == handoff.SCHEMA_VERSION
-    assert samples["run_meta"] == {"theta": 0.5, "engine": "E1"}
+    assert samples["formal_sealable"] is False
+    assert samples["run_meta"] == {"theta": 0.5, "engine": "E1",
+                                   "scenario": "Base"}
     cell = samples["cells"]["q0.50_r0.50"]
     assert cell["infeasible_by_sample"] is False
     assert cell["q_mil"] == 500 and cell["r_mil"] == 500
@@ -215,10 +342,60 @@ def test_build_grid_samples_reports_infeasible_cells():
     small_fp = {"2010-04-01": -10.0, "2010-04-02": -20.0}
     grid_output = gridmix.build_grid(d_tp, small_fp, strata, base_rate_p=0.4,
                                      q_grid=[0.35], r_grid=[0.80])
-    samples = handoff.build_grid_samples(grid_output, run_meta={})
+    samples = handoff.build_grid_samples(grid_output, run_meta=_run_meta())
     cell = samples["cells"]["q0.35_r0.80"]
     assert cell["infeasible_by_sample"] is True
     assert cell["per_seed"] == {}
+
+
+# ---------------------------------------------------------------------------
+# build_grid_samples run_meta validation (M6.1.1 S2 item 3)
+# ---------------------------------------------------------------------------
+
+def test_run_meta_missing_required_key_rejected():
+    d_tp, d_fp, strata = _fabricated_grid_populations()
+    grid_output = gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=0.4,
+                                     q_grid=[0.50], r_grid=[0.50])
+    for key in ("theta", "engine", "scenario"):
+        incomplete = _run_meta()
+        del incomplete[key]
+        with pytest.raises(ValueError):
+            handoff.build_grid_samples(grid_output, run_meta=incomplete)
+    with pytest.raises(ValueError):
+        handoff.build_grid_samples(grid_output, run_meta={})
+
+
+def test_run_meta_unknown_key_rejected():
+    d_tp, d_fp, strata = _fabricated_grid_populations()
+    grid_output = gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=0.4,
+                                     q_grid=[0.50], r_grid=[0.50])
+    with pytest.raises(ValueError):
+        handoff.build_grid_samples(
+            grid_output, run_meta=_run_meta(cost_scenario="extra_key"))
+
+
+def test_run_meta_wrong_type_rejected():
+    d_tp, d_fp, strata = _fabricated_grid_populations()
+    grid_output = gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=0.4,
+                                     q_grid=[0.50], r_grid=[0.50])
+    with pytest.raises(ValueError):
+        handoff.build_grid_samples(grid_output,
+                                   run_meta=_run_meta(theta="0.5"))
+    with pytest.raises(ValueError):
+        handoff.build_grid_samples(grid_output, run_meta=_run_meta(engine=1))
+    with pytest.raises(ValueError):
+        handoff.build_grid_samples(grid_output,
+                                   run_meta=_run_meta(theta=True))  # bool trap
+
+
+def test_run_meta_theta_normalised_to_float():
+    d_tp, d_fp, strata = _fabricated_grid_populations()
+    grid_output = gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=0.4,
+                                     q_grid=[0.50], r_grid=[0.50])
+    samples = handoff.build_grid_samples(
+        grid_output, run_meta=_run_meta(theta=1))     # int in, float out
+    assert samples["run_meta"]["theta"] == 1.0
+    assert isinstance(samples["run_meta"]["theta"], float)
 
 
 def test_grid_replay_reproduces_the_selection():
@@ -230,7 +407,7 @@ def test_grid_replay_reproduces_the_selection():
     d_tp, d_fp, strata = _fabricated_grid_populations()
     grid_output = gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=0.4,
                                      q_grid=[0.50], r_grid=[0.50])
-    samples = handoff.build_grid_samples(grid_output, run_meta={})
+    samples = handoff.build_grid_samples(grid_output, run_meta=_run_meta())
     cell = samples["cells"]["q0.50_r0.50"]
     seed = 7
     expected_tp = cell["per_seed"][seed]["tp_dates"]
@@ -257,6 +434,88 @@ def test_grid_replay_reproduces_the_selection():
         idx = rng.choice(len(pool), size=k, replace=False)
         picked.extend(pool[int(i)] for i in idx)
     assert sorted(picked) == expected_tp
+
+
+# ---------------------------------------------------------------------------
+# REPLAY-COMPLETENESS from the three handoff artifacts ALONE
+# (M6.1.1 S2 item 3 — DAY_STRATA + GRID_SAMPLES + SEED_MANIFEST, no access to
+# the raw d_tp/d_fp/strata test fixtures and no gridmix internals beyond the
+# public `floor_n_tp`/`allocate` and the disclosed stream formula)
+# ---------------------------------------------------------------------------
+
+def test_replay_completeness_from_artifacts_alone():
+    """Reconstruct a cell's exact TP and FP selections using ONLY the three
+    handoff artifacts (day_strata, grid_samples, seed_manifest) — never the
+    original d_tp/d_fp/strata fixtures, and never gridmix's private
+    `_select`/`_pools` helpers.
+
+    Deliberate single-stratum construction: gridmix's actual stratum key is
+    `(year, volatility_regime, event_flag)`, and day_strata does NOT carry
+    that same key today (`event_stratum` is UNRESOLVED_DR-M6-F and there is
+    no `volatility_regime` field at all — DR-M6-B is also open). A test that
+    pretended to reconstruct a MULTI-stratum pool split from day_strata alone
+    would be fabricating a resolution to those open decisions. Restricting
+    this fixture to exactly ONE stratum sidesteps that gap honestly: the
+    "available" pool for a population is then simply every date day_strata
+    classifies TP (or FP) for the relevant theta, which day_strata DOES
+    already carry today, closed-book.
+    """
+    d_tp, d_fp, strata = _fabricated_grid_populations()
+    single_stratum = {d: ("2010", "flat", "none") for d in strata}
+
+    grid_output = gridmix.build_grid(d_tp, d_fp, single_stratum,
+                                     base_rate_p=0.4, q_grid=[0.50],
+                                     r_grid=[0.50])
+    grid_samples = handoff.build_grid_samples(grid_output,
+                                              run_meta=_run_meta(theta=0.5))
+    seed_manifest = handoff.build_seed_manifest()
+
+    day_rows = {}
+    for d in d_tp:
+        day_rows[d] = _day_row(year="2010", stability_epoch="2010-2013",
+                               tp_fp_class={"theta_0.5": "TP"})
+    for d in d_fp:
+        day_rows[d] = _day_row(year="2010", stability_epoch="2010-2013",
+                               tp_fp_class={"theta_0.5": "FP"})
+    day_strata = handoff.build_day_strata(day_rows, thetas=[0.5])
+
+    # Conservation holds for this fixture (sanity, not the point of THIS
+    # test — test_conservation_* covers it directly).
+    assert handoff.verify_handoff_conservation(
+        day_strata, grid_samples, {}) == []
+
+    cell = grid_samples["cells"]["q0.50_r0.50"]
+    q_mil, r_mil = cell["q_mil"], cell["r_mil"]
+    tag = grid_samples["replay"]["grid_stream_tag"]
+    assert tag == seed_manifest["stream_tags"]["grid_stream_tag"]
+
+    theta_key = "theta_0.5"
+    tp_pool = tuple(sorted(
+        d for d, row in day_strata["days"].items()
+        if row["tp_fp_class"][theta_key] == "TP"))
+    fp_pool = tuple(sorted(
+        d for d, row in day_strata["days"].items()
+        if row["tp_fp_class"][theta_key] == "FP"))
+    STRATUM = "S"
+
+    n_tp = gridmix.floor_n_tp(r_mil, len(tp_pool))          # PUBLIC
+    n_fp = gridmix.n_fp_for(n_tp, q_mil)                    # PUBLIC
+    tp_alloc = gridmix.allocate(n_tp, {STRATUM: len(tp_pool)})   # PUBLIC
+    fp_alloc = gridmix.allocate(n_fp, {STRATUM: len(fp_pool)})   # PUBLIC
+
+    for seed in seed_manifest["research_bootstrap_seeds"]:
+        # disclosed PUBLIC stream formula, from the artifacts alone
+        rng = np.random.default_rng([seed, tag, q_mil, r_mil])
+        idx_tp = rng.choice(len(tp_pool), size=tp_alloc[STRATUM],
+                            replace=False)
+        replayed_tp = sorted(tp_pool[int(i)] for i in idx_tp)
+        idx_fp = rng.choice(len(fp_pool), size=fp_alloc[STRATUM],
+                            replace=False)
+        replayed_fp = sorted(fp_pool[int(i)] for i in idx_fp)
+
+        recorded = cell["per_seed"][seed]
+        assert replayed_tp == recorded["tp_dates"]
+        assert replayed_fp == recorded["fp_dates"]
 
 
 # ---------------------------------------------------------------------------
@@ -287,6 +546,40 @@ def test_build_handoff_manifest_sha256_bytes_line_count(tmp_path):
     assert "line_count" not in plain_entry
 
 
+def test_jsonl_line_count_empty_body_is_zero(tmp_path):
+    """# hardening: an empty .jsonl body has ZERO lines — not 1 from a naive
+    '"\\n" count + 1' fix that forgets the empty-file edge."""
+    p = tmp_path / "empty.jsonl"
+    p.write_bytes(b"")
+    manifest = handoff.build_handoff_manifest({"e": str(p)})
+    entry = manifest["files"]["e"]
+    assert entry["bytes"] == 0
+    assert entry["line_count"] == 0
+
+
+def test_jsonl_line_count_no_trailing_newline_counts_the_last_line(tmp_path):
+    """# hardening: N records joined by "\\n" with NO trailing newline has
+    only N-1 "\\n" bytes; the OLD counting logic (`chunk.count(b"\\n")`)
+    undercounted by exactly 1 in this case. Pinned: N lines, no trailing
+    newline -> N."""
+    p = tmp_path / "notrail.jsonl"
+    content = b'{"a": 1}\n{"b": 2}\n{"c": 3}'          # 3 records, no trailing \n
+    p.write_bytes(content)
+    manifest = handoff.build_handoff_manifest({"e": str(p)})
+    entry = manifest["files"]["e"]
+    assert entry["bytes"] == len(content)
+    assert entry["line_count"] == 3
+
+
+def test_jsonl_line_count_single_line_no_trailing_newline(tmp_path):
+    """The single-record degenerate case of the same bug: 0 "\\n" bytes but
+    1 real (unterminated) line — the old logic reported 0."""
+    p = tmp_path / "one.jsonl"
+    p.write_bytes(b'{"only": true}')
+    manifest = handoff.build_handoff_manifest({"e": str(p)})
+    assert manifest["files"]["e"]["line_count"] == 1
+
+
 # ---------------------------------------------------------------------------
 # verify_handoff_conservation
 # ---------------------------------------------------------------------------
@@ -301,8 +594,10 @@ def _day_strata_with(dates_classes: dict[str, str]) -> dict[str, object]:
 def test_conservation_positive_case_no_problems():
     day_strata = _day_strata_with({
         "2019-06-01": "TP", "2019-06-02": "FP", "2019-06-03": "non_tradeable"})
-    grid_samples = {"cells": {"q0.50_r0.50": {"per_seed": {
-        7: {"tp_dates": ["2019-06-01"], "fp_dates": ["2019-06-02"]}}}}}
+    grid_samples = {
+        "run_meta": {"theta": 0.5, "engine": "E1", "scenario": "Base"},
+        "cells": {"q0.50_r0.50": {"per_seed": {
+            7: {"tp_dates": ["2019-06-01"], "fp_dates": ["2019-06-02"]}}}}}
     records = {"E1": {"Base": ["2019-06-01", "2019-06-02"]}}
     problems = handoff.verify_handoff_conservation(day_strata, grid_samples,
                                                     records)
@@ -311,12 +606,43 @@ def test_conservation_positive_case_no_problems():
 
 def test_conservation_grid_date_missing_from_day_strata():
     day_strata = _day_strata_with({"2019-06-01": "TP"})
-    grid_samples = {"cells": {"q0.50_r0.50": {"per_seed": {
-        7: {"tp_dates": ["2019-06-01", "2099-01-01"], "fp_dates": []}}}}}
+    grid_samples = {
+        "run_meta": {"theta": 0.5, "engine": "E1", "scenario": "Base"},
+        "cells": {"q0.50_r0.50": {"per_seed": {
+            7: {"tp_dates": ["2019-06-01", "2099-01-01"], "fp_dates": []}}}}}
     records = {"E1": {"Base": ["2019-06-01"]}}
     problems = handoff.verify_handoff_conservation(day_strata, grid_samples,
                                                     records)
     assert any("2099-01-01" in p and "grid sample" in p for p in problems)
+
+
+def test_conservation_swapped_tp_fp_marker_is_flagged():
+    """# per-theta hardening: a grid sample marker that disagrees with
+    day_strata's SAME-theta TP/FP call must be caught. Before this check
+    existed, only "TP/FP-classed for ANY theta" was verified, which a
+    swapped TP<->FP marker pair could pass right through."""
+    day_strata = _day_strata_with({
+        "2019-06-01": "TP", "2019-06-02": "FP"})
+    # marker pair SWAPPED relative to day_strata's theta_0.5 call
+    grid_samples = {
+        "run_meta": {"theta": 0.5, "engine": "E1", "scenario": "Base"},
+        "cells": {"q0.50_r0.50": {"per_seed": {
+            7: {"tp_dates": ["2019-06-02"], "fp_dates": ["2019-06-01"]}}}}}
+    records = {"E1": {"Base": ["2019-06-01", "2019-06-02"]}}
+    problems = handoff.verify_handoff_conservation(day_strata, grid_samples,
+                                                    records)
+    assert any("2019-06-01" in p and "TP" in p for p in problems)
+    assert any("2019-06-02" in p and "FP" in p for p in problems)
+
+
+def test_conservation_requires_run_meta_theta_when_grid_has_dates():
+    """A grid_samples bundle with dates but no run_meta/theta cannot be
+    per-theta checked and must fail closed, not silently skip the check."""
+    day_strata = _day_strata_with({"2019-06-01": "TP"})
+    grid_samples = {"cells": {"q0.50_r0.50": {"per_seed": {
+        7: {"tp_dates": ["2019-06-01"], "fp_dates": []}}}}}
+    with pytest.raises(ValueError):
+        handoff.verify_handoff_conservation(day_strata, grid_samples, {})
 
 
 def test_conservation_record_date_missing_from_day_strata():

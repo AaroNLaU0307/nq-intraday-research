@@ -267,6 +267,36 @@ def test_public_api_refuses_non_frozen_master_seeds():
                                 master_seeds=(1, 2, 3))
 
 
+def test_public_api_refuses_a_seed_set_containing_the_forbidden_marker():
+    """Every public research-RNG entry point in this module must raise on
+    ANY seed set containing 20260731 — a superset like the frozen tuple PLUS
+    this marker must be refused just as loudly as a wholesale substitute."""
+    series = synthetic_pnl(30)
+    with pytest.raises(ValueError, match="DR-02"):
+        stats.bootstrap_mean_ci(series, block_len=5.0, n_boot=10,
+                                master_seeds=(20260731,))
+    with pytest.raises(ValueError, match="DR-02"):
+        stats.bootstrap_mean_ci(series, block_len=5.0, n_boot=10,
+                                master_seeds=(7, 13, 31, 20260731))
+
+
+def test_resample_means_is_not_publicly_callable_with_an_arbitrary_seed():
+    """# hardening: `resample_means` is `bootstrap_mean_ci`'s per-seed inner
+    loop and IS public (unlike `_bootstrap_mean_ci_unchecked`), so it needs
+    its OWN frozen-seed guard rather than trusting whatever `master_seed` a
+    caller passes. Membership in {7,13,31}, not full-tuple equality, since
+    this entry point takes one seed at a time."""
+    series = synthetic_pnl(30)
+    with pytest.raises(ValueError, match="DR-02"):
+        stats.resample_means(series, 5.0, 10, 20260731)
+    with pytest.raises(ValueError, match="DR-02"):
+        stats.resample_means(series, 5.0, 10, 999)
+    # the frozen seeds still work normally
+    for seed in contracts.RESEARCH_BOOTSTRAP_SEEDS:
+        means = stats.resample_means(series, 5.0, 10, seed)
+        assert means.shape == (10,)
+
+
 def test_public_api_accepts_the_frozen_seed_tuple():
     """The public entry point still works normally for the frozen tuple,
     whether passed explicitly or left at its default."""

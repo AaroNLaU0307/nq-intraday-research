@@ -16,6 +16,24 @@ M6_HOLD_RESPONSE.md items 2 and 10):
      S0_REPORT_CONTENT_CONTRACT.md §B describes; ANY problem in the
      returned list means Stage E must refuse to seal (fail-closed).
 
+M6.1.1-S1 hardening (Codex M6.1 seal-boundary findings): the exact theta
+axis {0.5, 0.3}; A2 day_universe conservation flags (literally True, no
+exceptions); the A2 executable E1/E2 x 4-scenario matrix UNCONDITIONALLY
+(no longer gated on mc_handoff_manifest); the A1 structural sub-keys
+(funnel/F10 dual report/na_table/label_anchor_availability/eras/groups);
+required-field completeness for frequency/sizing_outputs/stability_views/
+feasibility_grid against their REAL src/itsf/s0 producer shapes; a
+disclosures.pending_method_decisions key that must EXIST (missing is a
+problem distinct from non-empty); and a `governance` CONTEXT cross-check
+(`expected_governance`) that a formal payload's embedded governance block
+must match EXACTLY — omitting it is itself a sealing-blocking problem.
+`validate_sealed_files` gained the matching hardening for the manifest
+file-key set, a triple count equality, per-line engine/cost_scenario
+identity, per-file trade_date uniqueness, and an EXACT per-file
+trade_date-set match against the payload's own day universe. See
+`validate_formal_payload`'s docstring for the mandatory TWO-CALL contract
+the Stage-E renderer must follow (pre- and post-manifest-injection).
+
 This module does not render anything and does not decide what numbers go
 into a study payload — it is the boundary that either lets a payload
 through onto disk or explains, in a flat list of strings, exactly why not.
@@ -33,7 +51,7 @@ from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
 
 from itsf.s0.dataset import ERA_ACTUAL, ERA_PROXY
-from itsf.s0.study import ENGINES
+from itsf.s0.study import ENGINES, FROZEN_THETAS, theta_key
 
 # ---------------------------------------------------------------------------
 # 1. frozen top-level section keys (S0_REPORT_CONTENT_CONTRACT.md §A1-A12,
@@ -70,6 +88,73 @@ _DIRECTIONS: tuple[str, ...] = ("+1", "-1")
 # frozen: S0 §2 (多空分开 — long/short split)
 FROZEN_N_BOOT = 10_000
 # frozen: S0 §9 (10,000 resamples)
+
+# frozen: S0 §7 L133 — the theta axis is EXACTLY the frozen pair, never a
+# superset/subset/renamed key (M6.1 seal-boundary finding: a single-theta
+# payload must never seal).
+_EXPECTED_THETA_KEYS: frozenset[str] = frozenset(
+    theta_key(t) for t in FROZEN_THETAS)
+
+# --- A1 structural required sub-keys — VERBATIM S0Dataset attribute names
+#     (src/itsf/s0/dataset.py::S0Dataset), so the producer
+#     (scripts/s0_real_run.py build_full_study_result) can populate
+#     "structural" with a direct `ds.<name>` pull, no re-derivation. Contract
+#     citation: S0_REPORT_CONTENT_CONTRACT.md A1 "漏斗/F10 双报/NA 表/锚点/
+#     标签可用性/eras/groups". ------------------------------------------------
+_STRUCTURAL_REQUIRED_KEYS: tuple[str, ...] = (
+    "funnel_counts", "f10_counts", "f10_raw_membership_counts",
+    "na_table", "label_anchor_availability", "eras", "groups",
+)
+# frozen: S0 §4/§5 funnel levels L0-L4 (dataset.py funnel.counts() keys).
+_FUNNEL_LEVELS: tuple[str, ...] = (
+    "L0_scheduled_trading_days", "L1_observed_rth_days",
+    "L2_regular_full_session_candidates", "L3_structurally_eligible_days",
+    "L4_final_feature_construction_dates",
+)
+# frozen: S0 §5 label table (dataset.py _LABEL_DEPS keys).
+_LABEL_ANCHOR_KEYS: tuple[str, ...] = (
+    "y_cont", "y1", "y2_de_pm", "y3_close_pos_pm", "y4_mfe", "y5_mae",
+)
+# frozen: S0 §2 L36 groupings (dataset.py _groups() keys).
+_GROUPS_REQUIRED_KEYS: tuple[str, ...] = (
+    "by_year", "leave_one_year_out", "stability_epochs",
+)
+
+# frozen: S0 §10.5 — study.py `_frequency_cell` real per-cell field set.
+_FREQUENCY_CELL_FIELDS: tuple[str, ...] = (
+    "n_days_in_sample", "n_directional_tradeable", "n_trade_constructible",
+    "n_continuation_days_labelled", "n_continuation_days_traded",
+    "continuation_base_rate_p", "continuation_base_rate_p_traded_only",
+    "n_months_in_slice", "oracle_monthly_frequency",
+    "oracle_monthly_frequency_labelled",
+)
+
+# frozen: S0 §8 — study.py `_sizing_row` real per-row field set.
+_SIZING_ROW_FIELDS: tuple[str, ...] = (
+    "trade_date", "engine", "cost_scenario", "direction", "era", "year",
+    "stop_level_points", "counterfactual_anchor", "stop_distance_points",
+    "risk_usd_per_1_MNQ_planned", "risk_usd_per_1_MNQ_realized",
+    "cost_usd_per_1_MNQ", "cost_as_pct_of_R", "minimum_1_contract_risk",
+    "stop_triggered", "nonpositive_planned_risk",
+)
+# frozen: S0 §8/§10.1 non-decisional risk budgets — study.py RISK_BUDGETS_USD.
+_COVERAGE_BUDGETS: tuple[str, ...] = ("50", "75", "100", "150")
+
+# frozen: Appendix A — gridmix.py `build_grid` real top-level return keys.
+_FEASIBILITY_CELL_FIELDS: tuple[str, ...] = (
+    "grid", "n_tp_available", "n_fp_available", "method",
+)
+
+# frozen: S0 §2 — stability.py `_cell()` real descriptive-cell field set.
+_STABILITY_CELL_FIELDS: tuple[str, ...] = (
+    "n", "sum_usd", "mean_usd", "worst_day_pnl_percentiles",
+    "best_day", "worst_day", "n_positive", "n_negative", "n_zero",
+)
+# bookkeeping keys that ride alongside real buckets on a stability axis —
+# never a descriptive cell themselves (stability.py's conservation flag /
+# the epoch axis's overflow bucket is a real cell, "outside_epochs" IS a
+# real bucket too — only "conservation_ok" is bookkeeping, not a cell).
+_STABILITY_AXIS_BOOKKEEPING_KEYS: frozenset[str] = frozenset({"conservation_ok"})
 
 
 # ---------------------------------------------------------------------------
@@ -270,12 +355,44 @@ def _walk_r8(obj, path: str, problems: list[str]) -> None:
     problems.append(f"unexpected_type:{path}:{type(obj).__name__}")
 
 
-def validate_formal_payload(payload) -> list[str]:
-    """S0_REPORT_CONTENT_CONTRACT.md §B machine check, rules R1-R10.
+def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
+    """S0_REPORT_CONTENT_CONTRACT.md §B machine check, rules R1-R10 + the
+    M6.1 seal-boundary hardening (conservation gates, exact schemas, the
+    governance CONTEXT cross-check).
 
     Returns a flat list of problem strings; EMPTY means sealable. Never
     raises on a malformed payload — every rule below degrades to a problem
     string instead (a validator that can crash is not a fail-closed gate).
+
+    `expected_governance`: the caller's INDEPENDENTLY-derived governance
+    truth (fresh `guards.FROZEN_HASHES`, a freshly re-parsed registry
+    event, the trial_id/authorized_commit/engineering_seed/
+    registry_sequence_snapshot the CALLER — never the payload itself —
+    believes are current). Formal sealing REQUIRES this: omitting it (the
+    default, `None`) is ITSELF a problem (`governance_context_not_supplied`)
+    rather than a silent pass, because a payload can be internally
+    well-formed while its embedded `governance` block is stale or
+    fabricated. When supplied, every field is compared for EXACT equality
+    (`trial_id`, `authorized_commit`, `engineering_seed`, `frozen_hashes`
+    as a whole-dict equality, `registry_sequence_snapshot`); any mismatch
+    is `governance_mismatch:<field>`.
+
+    TWO-CALL CONTRACT (M6.1 finding on the seal boundary): this function
+    cannot see the sealed JSONL bytes — those are serialized by the
+    renderer AFTER this payload is judged sealable, and the
+    `mc_handoff_manifest.counts` -> `mc_handoff_manifest.files` manifest is
+    injected into the payload only at that point. The renderer (main-agent
+    owned, scripts/s0_real_run.py `render_s0_report`) MUST therefore call
+    this function TWICE: once on the pre-injection payload (as today), and
+    AGAIN on the manifest-injected payload immediately before sealing —
+    the second call is safe (a `files` sub-key under `mc_handoff_manifest`
+    is never inspected here and never rejected) but is not sufficient by
+    itself: a counts-vs-actual-bytes conflict is invisible to a
+    payload-only check and is caught only by `validate_sealed_files`
+    (called against the same post-injection payload). See
+    `test_post_injection_corruption_caught_by_second_validate_call` in
+    tests/test_s0_report.py for a worked example of why both calls plus
+    `validate_sealed_files` are required together.
     """
     if not isinstance(payload, dict):
         return ["payload_not_dict"]
@@ -295,9 +412,99 @@ def validate_formal_payload(payload) -> list[str]:
         # fail closed on the coarse defect rather than risk KeyError noise.
         return problems
 
+    # frozen: S0 §7 L133 — the theta axis is EXACTLY {0.5, 0.3}, never a
+    # subset (a single-theta payload), a superset, or a renamed key.
     tkeys = sorted(payload["oracle_daily"])
-    if len(tkeys) != 2:
-        problems.append(f"theta_axis_count:{tkeys}")
+    if set(tkeys) != _EXPECTED_THETA_KEYS:
+        problems.append(
+            f"theta_axis_mismatch:got={tkeys}:"
+            f"expected={sorted(_EXPECTED_THETA_KEYS)}")
+
+    # R-DU — A2 day_universe: n_tp/n_fp/tp_days/fp_days present, and every
+    # conservation flag LITERALLY True (frozen App A: under every one of
+    # the four readings study.py checks, nothing may be silently dropped;
+    # a single False anywhere is a defect, never a warning).
+    for tkey in tkeys:
+        tcell = payload["oracle_daily"].get(tkey)
+        du = tcell.get("day_universe") if isinstance(tcell, dict) else None
+        if not isinstance(du, dict):
+            problems.append(f"day_universe_missing:{tkey}")
+            continue
+        for field in ("n_tp", "n_fp"):
+            v = du.get(field)
+            if not isinstance(v, int) or isinstance(v, bool) or v < 0:
+                problems.append(f"day_universe_field_invalid:{tkey}:{field}")
+        for field in ("tp_days", "fp_days"):
+            if not isinstance(du.get(field), list):
+                problems.append(f"day_universe_field_invalid:{tkey}:{field}")
+        cons = du.get("conservation")
+        if not isinstance(cons, dict) or not cons:
+            problems.append(f"day_universe_conservation_missing:{tkey}")
+        else:
+            for flag, val in cons.items():
+                if val is not True:
+                    problems.append(
+                        f"day_universe_conservation_false:{tkey}:{flag}")
+
+    # R-EXEC — A2 executable matrix: E1/E2 x {Base,Conservative,Stress,
+    # Severe}, for EVERY frozen theta, UNCONDITIONALLY (the M6.1 relaxation
+    # that only checked this when mc_handoff_manifest also validated is
+    # removed now that the fixture mirrors the real study.py producer
+    # shape — frozen S0 §7).
+    for tkey in tkeys:
+        tcell = payload["oracle_daily"].get(tkey)
+        ex = tcell.get("executable") if isinstance(tcell, dict) else None
+        if not isinstance(ex, dict):
+            problems.append(f"oracle_daily_executable_missing:{tkey}")
+            continue
+        for eng in ENGINES:
+            eng_block = ex.get(eng)
+            if not isinstance(eng_block, dict):
+                problems.append(
+                    f"oracle_daily_executable_missing:{tkey}|{eng}")
+                continue
+            for scn in _SCENARIOS:
+                cell = eng_block.get(scn)
+                if not isinstance(cell, dict) or not cell:
+                    problems.append(
+                        f"oracle_daily_executable_missing:{tkey}|{eng}|{scn}")
+
+    # R-STRUCT — A1 structural: funnel + F10 dual report (final + raw
+    # membership) + na_table + label_anchor_availability + eras + groups.
+    # Key names are VERBATIM S0Dataset attribute names (see the
+    # _STRUCTURAL_REQUIRED_KEYS citation above) — the entrypoint populates
+    # this section with a direct `ds.<name>` pull.
+    st = payload["structural"]
+    for key in _STRUCTURAL_REQUIRED_KEYS:
+        if key not in st:
+            problems.append(f"structural_missing:{key}")
+    fc = st.get("funnel_counts")
+    if fc is not None and (not isinstance(fc, dict)
+                           or not set(_FUNNEL_LEVELS) <= set(fc)):
+        problems.append("structural_funnel_counts_incomplete")
+    for key in ("f10_counts", "f10_raw_membership_counts"):
+        v = st.get(key)
+        if v is not None and not (isinstance(v, dict) and v):
+            problems.append(f"structural_{key}_empty")
+    nat = st.get("na_table")
+    if nat is not None:
+        per_field = nat.get("per_field") if isinstance(nat, dict) else None
+        if (not isinstance(nat, dict) or "population" not in nat
+                or not isinstance(per_field, dict)
+                or not {"features", "labels"} <= set(per_field)):
+            problems.append("structural_na_table_incomplete")
+    laa = st.get("label_anchor_availability")
+    if laa is not None and (not isinstance(laa, dict)
+                            or not set(_LABEL_ANCHOR_KEYS) <= set(laa)):
+        problems.append("structural_label_anchor_availability_incomplete")
+    er = st.get("eras")
+    if er is not None and (not isinstance(er, dict)
+                           or not set(_ERAS) <= set(er)):
+        problems.append("structural_eras_incomplete")
+    gr = st.get("groups")
+    if gr is not None and (not isinstance(gr, dict)
+                           or not set(_GROUPS_REQUIRED_KEYS) <= set(gr)):
+        problems.append("structural_groups_incomplete")
 
     # R2 + R3 — bootstrap_ci grid + per-cell shape.
     expected_ci = {f"{t}|{e}|{s}|block{b}"
@@ -351,12 +558,49 @@ def validate_formal_payload(payload) -> list[str]:
                 and math.isfinite(lo) and math.isfinite(hi) and lo <= hi)
             if not bounds_ok:
                 problems.append(f"bootstrap_ci_bounds:{key}:{seed}")
+        conv = cell.get("convergence")
+        if (not isinstance(conv, dict)
+                or not {"max_abs_ci_lo_diff", "max_abs_ci_hi_diff"}
+                       <= set(conv)):
+            problems.append(f"bootstrap_ci_convergence_missing:{key}")
 
     # R4 — oracle_daily / e2_worst_days / sizing_outputs / frequency.
     for section in ("oracle_daily", "e2_worst_days", "sizing_outputs",
                     "frequency"):
         if sorted(payload[section]) != tkeys:
             problems.append(f"theta_keys_mismatch:{section}")
+
+    # frozen: S0 §10.5 — frequency required-field completeness against the
+    # REAL study.py `_frequency_block`/`_frequency_cell` shape (pooled +
+    # by_era{PROXY,ACTUAL} + by_year{...}, each a full frequency cell).
+    for tkey in tkeys:
+        freq = payload["frequency"].get(tkey)
+        if not isinstance(freq, dict):
+            problems.append(f"frequency_missing:{tkey}")
+            continue
+        pooled = freq.get("pooled")
+        if (not isinstance(pooled, dict)
+                or not set(_FREQUENCY_CELL_FIELDS) <= set(pooled)):
+            problems.append(f"frequency_cell_incomplete:{tkey}|pooled")
+        by_era = freq.get("by_era")
+        if not isinstance(by_era, dict) or not set(_ERAS) <= set(by_era):
+            problems.append(f"frequency_by_era_missing:{tkey}")
+        else:
+            for era in _ERAS:
+                cell = by_era.get(era)
+                if (not isinstance(cell, dict)
+                        or not set(_FREQUENCY_CELL_FIELDS) <= set(cell)):
+                    problems.append(
+                        f"frequency_cell_incomplete:{tkey}|by_era|{era}")
+        by_year = freq.get("by_year")
+        if not isinstance(by_year, dict) or not by_year:
+            problems.append(f"frequency_by_year_missing:{tkey}")
+        else:
+            for y, cell in by_year.items():
+                if (not isinstance(cell, dict)
+                        or not set(_FREQUENCY_CELL_FIELDS) <= set(cell)):
+                    problems.append(
+                        f"frequency_cell_incomplete:{tkey}|by_year|{y}")
 
     for tkey in tkeys:
         for scn in _SCENARIOS:
@@ -400,6 +644,39 @@ def validate_formal_payload(payload) -> list[str]:
                         problems.append(
                             f"sizing_outputs_{label}_cell_missing:"
                             f"{tkey}|{eng}|{scn}")
+
+    # frozen: S0 §8 — sizing_outputs required-field completeness against
+    # the REAL study.py `_sizing_row`/`_coverage` shapes.
+    for tkey in tkeys:
+        cell = payload["sizing_outputs"].get(tkey, {})
+        rows_block = cell.get("rows") if isinstance(cell, dict) else None
+        cov_block = cell.get("coverage") if isinstance(cell, dict) else None
+        for eng in ENGINES:
+            for scn in _SCENARIOS:
+                if isinstance(rows_block, dict):
+                    eng_rows = rows_block.get(eng)
+                    rows = (eng_rows.get(scn)
+                           if isinstance(eng_rows, dict) else None)
+                    if isinstance(rows, list):
+                        for i, row in enumerate(rows):
+                            if (not isinstance(row, dict)
+                                    or not set(_SIZING_ROW_FIELDS)
+                                           <= set(row)):
+                                problems.append(
+                                    f"sizing_outputs_row_incomplete:"
+                                    f"{tkey}|{eng}|{scn}:{i}")
+                if isinstance(cov_block, dict):
+                    eng_cov = cov_block.get(eng)
+                    cov = (eng_cov.get(scn)
+                          if isinstance(eng_cov, dict) else None)
+                    if isinstance(cov, dict):
+                        by_budget = cov.get("by_budget_usd")
+                        if (not isinstance(by_budget, dict)
+                                or not set(_COVERAGE_BUDGETS)
+                                       <= set(by_budget)):
+                            problems.append(
+                                f"sizing_outputs_coverage_incomplete:"
+                                f"{tkey}|{eng}|{scn}")
 
     # R5 — stability_views (M6_HOLD_RESPONSE.md item 3 / frozen S0 §2).
     for tkey in tkeys:
@@ -447,8 +724,35 @@ def validate_formal_payload(payload) -> list[str]:
                     # must fail closed until the sub-definition ruling lands.
                     problems.append("vol_axis_unresolved")
 
-    # R6 — disclosures.pending_method_decisions must be empty to seal.
-    if payload["disclosures"].get("pending_method_decisions"):
+                # frozen: S0 §2 — required-field completeness of the real
+                # stability.py `_cell()` descriptive shape, checked on every
+                # real bucket of every partitioning axis (bookkeeping keys
+                # like "conservation_ok" are not cells and are skipped).
+                for axis_name, buckets in (
+                        ("epochs", epochs),
+                        ("by_year", cell.get("by_year")),
+                        ("leave_one_year_out", cell.get("leave_one_year_out")),
+                        ("by_direction", by_dir)):
+                    if not isinstance(buckets, dict):
+                        continue
+                    for bkey, bval in buckets.items():
+                        if bkey in _STABILITY_AXIS_BOOKKEEPING_KEYS:
+                            continue
+                        if (not isinstance(bval, dict)
+                                or not set(_STABILITY_CELL_FIELDS)
+                                       <= set(bval)):
+                            problems.append(
+                                f"stability_views_cell_incomplete:"
+                                f"{tkey}|{eng}|{scn}|{axis_name}|{bkey}")
+
+    # R6 — disclosures.pending_method_decisions: the key MUST EXIST and MUST
+    # be empty to seal — a MISSING key and a NON-EMPTY value are distinct
+    # problems (a validator that treats "absent" and "empty" the same way
+    # can't tell "nothing pends" from "the producer forgot to disclose").
+    disclosures = payload["disclosures"]
+    if "pending_method_decisions" not in disclosures:
+        problems.append("pending_method_decisions_missing")
+    elif disclosures["pending_method_decisions"]:
         problems.append("pending_method_decisions_unresolved")
 
     # R7 — governance.
@@ -475,7 +779,29 @@ def validate_formal_payload(payload) -> list[str]:
     if not isinstance(seq, int) or isinstance(seq, bool) or seq < 1:
         problems.append("governance_registry_sequence_snapshot")
 
-    # R9 — mc_handoff_manifest counts grid.
+    # governance CONTEXT cross-check (M6.1 seal-boundary finding): a
+    # payload can be internally well-formed (every format check above
+    # passes) while its embedded governance block is STALE or fabricated
+    # relative to reality — e.g. a fake frozen_hashes entry, or a commit
+    # that does not match the CURRENT registry authorization. Formal
+    # sealing REQUIRES an independently-derived `expected_governance` to
+    # compare against; not supplying one is itself a problem, never a
+    # silent pass (packet §0-5).
+    if not isinstance(expected_governance, Mapping):
+        problems.append("governance_context_not_supplied")
+    else:
+        for field in ("trial_id", "authorized_commit", "engineering_seed",
+                     "registry_sequence_snapshot"):
+            if gov.get(field) != expected_governance.get(field):
+                problems.append(f"governance_mismatch:{field}")
+        if gov.get("frozen_hashes") != expected_governance.get("frozen_hashes"):
+            problems.append("governance_mismatch:frozen_hashes")
+
+    # R9 — mc_handoff_manifest counts grid. NOTE: only the "counts" sub-key
+    # is inspected here — a "files" sub-key (added by the renderer AFTER
+    # this payload seals, see the two-call contract in this function's
+    # docstring) is never inspected and never rejected, so this validator
+    # is safe to call again on the manifest-injected payload.
     counts = payload["mc_handoff_manifest"].get("counts")
     if not isinstance(counts, dict):
         problems.append("mc_handoff_manifest_counts_missing")
@@ -494,10 +820,26 @@ def validate_formal_payload(payload) -> list[str]:
                     problems.append(
                         f"mc_handoff_manifest_counts_invalid:{eng}|{scn}")
 
-    # R10 — feasibility_grid.
+    # R10 — feasibility_grid: exact (theta, engine, scenario) cell coverage
+    # (frozen: Appendix A grid) + per-cell field completeness against the
+    # REAL gridmix.py `build_grid` return shape.
     fg = payload["feasibility_grid"]
-    if not fg.get("cells"):
+    cells = fg.get("cells")
+    expected_cells = {f"{t}|{e}|{s}" for t in tkeys for e in ENGINES
+                      for s in _SCENARIOS}
+    if not isinstance(cells, dict) or not cells:
         problems.append("feasibility_grid_cells_empty")
+    else:
+        actual_cells = set(cells)
+        for k in sorted(expected_cells - actual_cells):
+            problems.append(f"feasibility_grid_missing:{k}")
+        for k in sorted(actual_cells - expected_cells):
+            problems.append(f"feasibility_grid_extra:{k}")
+        for k in sorted(expected_cells & actual_cells):
+            cval = cells[k]
+            if (not isinstance(cval, dict)
+                    or not set(_FEASIBILITY_CELL_FIELDS) <= set(cval)):
+                problems.append(f"feasibility_grid_cell_incomplete:{k}")
     if fg.get("regions", {}).get("status") != "pending_mc":
         problems.append("feasibility_grid_regions_not_pending_mc")
 
@@ -505,30 +847,32 @@ def validate_formal_payload(payload) -> list[str]:
     # are reported with their own, more specific codes first).
     _walk_r8(payload, "$", problems)
 
-    # O2: A2 matrix completeness + A9 record-count conservation
-    od = payload.get("oracle_daily")
-    mh = payload.get("mc_handoff_manifest")
-    if isinstance(od, dict) and isinstance(mh, dict):
-        counts = mh.get("counts", {})
-        for tkey, tcell in od.items():
-            ex = tcell.get("executable") if isinstance(tcell, dict) else None
-            uni = tcell.get("day_universe") if isinstance(tcell, dict) else {}
-            n_exp = None
-            if isinstance(uni, dict):
-                try:
-                    n_exp = int(uni["n_tp"]) + int(uni["n_fp"])
-                except Exception:
-                    n_exp = None
-            for eng in ENGINES:
-                for scn in _SCENARIOS:
-                    if isinstance(ex, dict) and scn not in ex.get(eng, {}):
-                        problems.append(f"oracle_daily_cell:{tkey}|{eng}|{scn}")
-                    n_rec = (counts.get(eng, {}).get(scn, {})
-                             .get("n_records"))
-                    if n_exp is not None and n_rec != n_exp:
-                        problems.append(
-                            f"records_conservation:{tkey}|{eng}|{scn}:"
-                            f"{n_rec}!={n_exp}")
+    # A9 record-count conservation: mc_handoff_manifest counts per engine x
+    # scenario must equal n_tp + n_fp for EVERY frozen theta (every theta's
+    # TP/FP partition covers the SAME trade-constructible population, so
+    # this identity holds for both thetas simultaneously — frozen App A).
+    # The executable-matrix completeness itself is R-EXEC above, now
+    # UNCONDITIONAL; this block is the count arithmetic only.
+    mh_counts = payload["mc_handoff_manifest"].get("counts", {})
+    for tkey in tkeys:
+        uni = payload["oracle_daily"].get(tkey, {}).get("day_universe", {})
+        n_exp = None
+        if isinstance(uni, dict):
+            try:
+                n_exp = int(uni["n_tp"]) + int(uni["n_fp"])
+            except Exception:
+                n_exp = None
+        if n_exp is None:
+            continue
+        for eng in ENGINES:
+            for scn in _SCENARIOS:
+                n_rec = (mh_counts.get(eng, {}).get(scn, {})
+                         .get("n_records") if isinstance(mh_counts, dict)
+                         else None)
+                if n_rec != n_exp:
+                    problems.append(
+                        f"records_conservation:{tkey}|{eng}|{scn}:"
+                        f"{n_rec}!={n_exp}")
     return problems
 
 
@@ -542,23 +886,52 @@ _INTERNAL_NAME_LEAK: tuple[str, ...] = ("entry_ts", "exit_ts")
 def validate_sealed_files(files: Mapping[str, str], payload, *,
                           trade_date_universe=None) -> list[str]:
     """Verify the sealed JSONL bodies against `payload["mc_handoff_manifest"]
-    ["files"]` (name -> {"file", "n_records", "sha256"}).
+    ["files"]` (name -> {"file", "n_records", "sha256"}) — the SECOND half
+    of the M6.1 seal-boundary gate. `validate_formal_payload` alone cannot
+    catch a defect that only exists in the actual sealed bytes (they do not
+    exist until the renderer serializes them); this function is what does,
+    and it must be called on the SAME manifest-injected payload that the
+    renderer's second `validate_formal_payload` call also inspects (see
+    that function's docstring for the full two-call contract).
 
-    For every manifest entry: the named file must be present in `files`;
-    its sha256 (of the UTF-8 bytes) must match; its line count must equal
-    `n_records`; and every line must parse as a JSON object carrying the
-    FROZEN §10.1 `entry_timestamp`/`exit_timestamp`/`trade_date` names (an
-    internal `entry_ts`/`exit_ts` name anywhere on a line is flagged as a
-    leak, never silently accepted as a synonym).
+    Checks (S0_REPORT_CONTENT_CONTRACT.md A9 + M6.1 findings):
+      * manifest file-KEY SET is EXACTLY {E1,E2} x {Base,Conservative,
+        Stress,Severe} — 8 keys, no fewer/more/renamed;
+      * per manifest entry: the named file exists in `files`; its sha256
+        (of the UTF-8 bytes) matches; its LINE COUNT (`str.splitlines()` —
+        correct with or without a trailing newline, unlike a bare
+        `str.split("\\n")` which off-by-ones on a trailing newline) equals
+        BOTH the manifest's own `n_records` AND
+        `payload["mc_handoff_manifest"]["counts"][eng][scn]["n_records"]`
+        (a triple equality: manifest vs actual bytes vs the formal
+        payload's own record-count section — a payload-only check can
+        never see the first two, and a bytes-only check can never see the
+        third);
+      * every line parses as a JSON object whose field set is EXACTLY
+        `FORMAL_RECORD_FIELDS` (missing/extra -> problem, on top of the
+        FROZEN §10.1 name-specific check below), and whose `engine` /
+        `cost_scenario` equal the file's OWN eng/scn (parsed from the
+        manifest key "eng|scn") — a line that quietly belongs to the wrong
+        file is never accepted;
+      * an internal `entry_ts`/`exit_ts` name anywhere on a line is a leak,
+        never silently accepted as a synonym for entry_timestamp/
+        exit_timestamp;
+      * per FILE (not pooled across files), no duplicate `trade_date`;
+      * per FILE, the trade_date SET is EXACTLY the union, across every
+        theta in `payload["oracle_daily"]`, of that theta's TP ∪ FP day
+        universe (`day_universe["tp_days"]`/`["fp_days"]`) — every engine x
+        scenario trades the SAME trade-constructible population, so a
+        MISSING day, an EXTRA day, and a same-count REPLACED day (one date
+        swapped for another — invisible to a count-only check) are all
+        flagged.
 
-    `trade_date_universe`: the contract wants every sealed trade_date to
-    lie inside the union of the oracle_daily TP/FP day universes, but the
-    M6.1 formal `oracle_daily` nested shape is not yet nailed down (see this
-    module's `unresolved` report for the interface request). Rather than
-    guess a key convention that might not match the final contract, that
-    check is exposed as an EXPLICIT optional day-set argument: pass any
-    iterable of "YYYY-MM-DD" strings to enable the containment check; omit
-    it (default) to skip that one sub-check.
+    `trade_date_universe`: normally omitted (default `None`), in which case
+    the day-set is derived from `payload["oracle_daily"]` as described
+    above — this is now the MANDATORY default behaviour (the M6.1 relaxation
+    that made this an opt-in, caller-supplied, pooled-only check is
+    removed). An explicit iterable of "YYYY-MM-DD" strings OVERRIDES that
+    derivation, for a caller validating a narrower payload that carries no
+    `oracle_daily` section at all.
     """
     problems: list[str] = []
     manifest = (payload.get("mc_handoff_manifest", {})
@@ -567,11 +940,33 @@ def validate_sealed_files(files: Mapping[str, str], payload, *,
     if not isinstance(file_specs, dict) or not file_specs:
         return ["mc_handoff_manifest_files_missing"]
 
-    universe = (set(trade_date_universe)
-               if trade_date_universe is not None else None)
-    seen_dates: set[str] = set()
+    expected_keys = {f"{e}|{s}" for e in ENGINES for s in _SCENARIOS}
+    got_keys = set(file_specs)
+    if got_keys != expected_keys:
+        problems.append(
+            "mc_handoff_manifest_files_key_set_mismatch:"
+            f"missing={sorted(expected_keys - got_keys)}:"
+            f"extra={sorted(got_keys - expected_keys)}")
+
+    if trade_date_universe is not None:
+        universe = set(trade_date_universe)
+    else:
+        od = payload.get("oracle_daily", {}) if isinstance(payload, dict) \
+            else {}
+        universe = {
+            d for tcell in (od.values() if isinstance(od, dict) else ())
+            if isinstance(tcell, dict)
+            for grp in ("tp_days", "fp_days")
+            for d in ((tcell.get("day_universe") or {}).get(grp) or ())
+        }
+
+    counts = manifest.get("counts", {}) if isinstance(manifest, dict) else {}
 
     for name, spec in file_specs.items():
+        eng, sep, scn = name.partition("|")
+        if not sep:
+            problems.append(f"sealed_file_spec_key_format:{name}")
+            eng = scn = None
         if not isinstance(spec, dict):
             problems.append(f"sealed_file_spec_type:{name}")
             continue
@@ -590,6 +985,18 @@ def validate_sealed_files(files: Mapping[str, str], payload, *,
             problems.append(
                 f"sealed_file_line_count_mismatch:{name}:"
                 f"{len(lines)}!={want_n}")
+        if eng is not None:
+            eng_counts = counts.get(eng) if isinstance(counts, dict) else None
+            scn_counts = (eng_counts.get(scn)
+                         if isinstance(eng_counts, dict) else None)
+            n_counts = (scn_counts.get("n_records")
+                       if isinstance(scn_counts, dict) else None)
+            if n_counts != want_n:
+                problems.append(
+                    f"sealed_file_counts_mismatch:{name}:"
+                    f"{n_counts}!={want_n}")
+
+        per_file_dates: list[str] = []
         for i, line in enumerate(lines):
             try:
                 rec = json.loads(line)
@@ -603,17 +1010,44 @@ def validate_sealed_files(files: Mapping[str, str], payload, *,
                 if field not in rec:
                     problems.append(
                         f"sealed_file_line_missing_field:{name}:{i}:{field}")
+            got_fields, want_fields = set(rec), set(FORMAL_RECORD_FIELDS)
+            if got_fields != want_fields:
+                problems.append(
+                    f"sealed_file_line_field_set_mismatch:{name}:{i}:"
+                    f"missing={sorted(want_fields - got_fields)}:"
+                    f"extra={sorted(got_fields - want_fields)}")
             leaked = [f for f in _INTERNAL_NAME_LEAK if f in rec]
             if leaked:
                 problems.append(
                     f"sealed_file_line_internal_name_leak:{name}:{i}:"
                     f"{leaked}")
+            if eng is not None:
+                if rec.get("engine") != eng:
+                    problems.append(
+                        f"sealed_file_line_engine_mismatch:{name}:{i}:"
+                        f"{rec.get('engine')!r}!={eng!r}")
+                if rec.get("cost_scenario") != scn:
+                    problems.append(
+                        f"sealed_file_line_scenario_mismatch:{name}:{i}:"
+                        f"{rec.get('cost_scenario')!r}!={scn!r}")
             trade_date = rec.get("trade_date")
             if isinstance(trade_date, str):
-                seen_dates.add(trade_date)
+                per_file_dates.append(trade_date)
 
-    if universe is not None:
-        for d in sorted(seen_dates - universe):
-            problems.append(f"trade_date_outside_universe:{d}")
+        dupes = sorted({d for d in per_file_dates
+                        if per_file_dates.count(d) > 1})
+        if dupes:
+            problems.append(f"sealed_file_duplicate_trade_date:{name}:{dupes}")
+
+        if universe:
+            file_dates = set(per_file_dates)
+            missing = sorted(universe - file_dates)
+            extra = sorted(file_dates - universe)
+            if missing:
+                problems.append(
+                    f"sealed_file_missing_trade_dates:{name}:{missing}")
+            if extra:
+                problems.append(
+                    f"sealed_file_extra_trade_dates:{name}:{extra}")
 
     return problems

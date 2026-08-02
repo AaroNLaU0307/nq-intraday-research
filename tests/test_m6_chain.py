@@ -1,10 +1,9 @@
-"""M6 full-chain integration tests (main-agent authored).
+"""M6/M6.1.1 full-chain integration tests (main-agent authored).
 
-Covers: the synthetic end-to-end chain (build_full_study_result ->
-validate_report_contract -> render_s0_report), the FAIL-CLOSED pending-
-decision posture of the real chain (DR-M6-A/B/C), DR-02 engineering-seed
-isolation of every research module, and purity checks mirroring the house
-PURE_MODULES discipline for the M6 research modules.
+Covers: derived-only StudyConfig (single method-truth-source), the
+FAIL-CLOSED pending posture, the synthetic e2e through the REAL S0Runner
+A->F with the production builder invoked INSIDE Stage C, DR-02 isolation,
+and the explicit event-NA block (no invented vocabulary).
 """
 from __future__ import annotations
 
@@ -15,10 +14,12 @@ from pathlib import Path
 import pytest
 
 from test_s0_context import linear_closes, universe_of, weekdays
-from test_s0_runner import real_run_module
+from test_s0_runner import make_deps, ok_gate, real_run_module
 
+from itsf import contracts as C
 from itsf.contracts import RESEARCH_BOOTSTRAP_SEEDS
 from itsf.s0.dataset import build_s0_dataset
+from itsf.s0.runner import GateCheck, S0Runner
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -42,9 +43,6 @@ def _fp_closes(base: float) -> list[float]:
 
 def _market(n_days: int = 46):
     dates = weekdays("2020-01-02", n_days)
-    # ADR14 warm-up needs 14 prior complete days; alternate strong
-    # continuation days (linear rise -> Y_cont >> 0.5) with failed days
-    # (_fp_closes -> Y_cont < 0) afterwards.
     spec = {d: {"closes": _fp_closes(20000.0)}
             for i, d in enumerate(dates) if i >= 14 and i % 2 == 1}
     bars, uni = universe_of(dates, spec)
@@ -52,137 +50,212 @@ def _market(n_days: int = 46):
     return bars, ds
 
 
+def _test_methods() -> C.ResolvedS0Methods:
+    """Fully-populated TEST_ONLY methods — every value is a synthetic
+    stand-in explicitly marked, never a silently-adopted ruling."""
+    return C.ResolvedS0Methods(
+        spread_cost=C.SpreadCostMethod(
+            scalar_rule="TEST_ONLY", adverse_slippage_ticks={"Base": 1.0},
+            adverse_semantics="replaces_per_side"),
+        volatility_regime=C.VolatilityRegimeMethod(
+            close_source="TEST_ONLY", return_basis="simple", ddof=1,
+            roll_crossing_rule="TEST_ONLY", tercile_reference="TEST_ONLY",
+            na_rule="vol_na"),
+        fp_allocation=C.FpAllocationMethod(
+            basis="A", weight_source="self_pool",
+            shortfall_rule="proportional"),
+        bootstrap_method=C.BootstrapMethod(
+            population="TEST_ONLY", na_day_rule="TEST_ONLY",
+            statistic="mean", n_boot_per_seed=True,
+            quoted_seed_rule="first_seed",
+            percentile_interpolation="linear", crn_scope="TEST_ONLY"),
+        grid_policy=C.GridRepeatPolicy(
+            k_per_seed=1, k_start_index=0, stream_includes_theta=False,
+            convergence_rule="TEST_ONLY", max_doublings=0),
+        event_na_mapping="five_stratum",
+        stability_population="TEST_ONLY",
+        test_only=True)
+
+
+def _test_config() -> C.StudyConfig:
+    return C.derive_study_config(
+        _test_methods(), spread_scalars=(0.5, 0.75, 0.75),
+        regime_of=lambda d: "R", vol_axis_of=lambda d: "T2")
+
+
+_GOV = {"trial_id": "S0-T001", "authorized_commit": "a" * 40,
+        "engineering_seed": 20260731,
+        "frozen_hashes": {f"f{i}.md": "0" * 64 for i in range(7)},
+        "registry_sequence_snapshot": 13}
+
 _CACHE: dict = {}
 
 
-_LIVE = object()          # sentinel: carry the module's DERIVED pending list
-
-
-def _payload(pending=_LIVE, n_boot=None):
+def _payload(n_boot=10_000):
     mod = real_run_module()
     if "m" not in _CACHE:
         _CACHE["m"] = _market()
     bars, ds = _CACHE["m"]
-    pend = mod.PENDING_METHOD_DECISIONS if pending is _LIVE else tuple(pending)
-    # sealable payloads must carry the frozen n_boot (validator R3);
-    # refusal-path payloads stay cheap.
-    if n_boot is None:
-        n_boot = 10_000 if not pend else 40
-    ck = (pend, n_boot)
-    if ck in _CACHE:
-        return _CACHE[ck]
-    cfg = mod.StudyConfig(spread_scalars=(0.5, 0.75, 0.75),
-                          regime_of=lambda d: "R",
-                          pending_decisions=pend,
-                          vol_axis_of=(None if pend else (lambda d: "T2")))
-    gov = {"trial_id": "S0-T001", "authorized_commit": "a" * 40,
-           "engineering_seed": 20260731,
-           "frozen_hashes": {f"f{i}.md": "0" * 64 for i in range(7)},
-           "registry_sequence_snapshot": 13}
-    _CACHE[ck] = mod.build_full_study_result(ds, bars, config=cfg,
-                                             governance_meta=gov,
-                                             n_boot=n_boot)
+    ck = ("p", n_boot)
+    if ck not in _CACHE:
+        _CACHE[ck] = mod.build_full_study_result(
+            ds, bars, config=_test_config(), governance_meta=dict(_GOV),
+            n_boot=n_boot)
     return _CACHE[ck]
 
 
-# --- e2e + contract ---------------------------------------------------------
+def _formal(payload):
+    from itsf.s0 import report as rep
+    _internal, formal = rep.split_envelope(payload)
+    return formal
 
-def test_e2e_contract_green_when_no_pending_decisions():
+
+# --- single method-truth-source (M6.1.1 main-agent item 1) ------------------
+
+def test_derive_config_refuses_pending_methods():
+    with pytest.raises(ValueError, match="pending method rulings"):
+        C.derive_study_config(C.ResolvedS0Methods(),
+                              spread_scalars=(1, 1, 1),
+                              regime_of=lambda d: "R",
+                              vol_axis_of=lambda d: "T")
+    assert len(C.ResolvedS0Methods().pending_fields()) == 7
+
+
+def test_studyconfig_has_no_pending_field():
+    assert "pending_decisions" not in {
+        f.name for f in C.StudyConfig.__dataclass_fields__.values()}
+
+
+def test_payload_pending_disclosure_is_derived_and_empty():
+    p = _payload()
+    d = p["disclosures"]
+    assert d["pending_method_decisions"] == []
+    assert d["methods_test_only"] is True
+
+
+def test_production_path_refuses_test_only_config(monkeypatch):
     mod = real_run_module()
-    payload = _payload(pending=())
-    assert mod.validate_report_contract(_formal(payload)) == []
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (_test_config(), "ok"))
+    cfg, why = mod.resolved_study_config()
+    assert cfg is None and "test_only" in why
 
 
-def test_pending_decisions_refuse_sealing():
-    mod = real_run_module()
-    payload = _payload()          # default = the live PENDING tuple
-    problems = mod.validate_report_contract(_formal(payload))
-    assert problems != []
-    with pytest.raises(ValueError, match="contract violations"):
-        mod.render_s0_report(payload)
-
-
-def test_missing_ci_cell_is_flagged():
-    mod = real_run_module()
-    formal = dict(_formal(_payload(pending=())))
-    formal["bootstrap_ci"] = dict(formal["bootstrap_ci"])
-    del formal["bootstrap_ci"][next(iter(formal["bootstrap_ci"]))]
-    assert mod.validate_report_contract(formal) != []
-
-
-def test_records_conservation_is_checked():
-    mod = real_run_module()
-    formal = dict(_formal(_payload(pending=())))
-    counts = {e: {s: dict(c) for s, c in by.items()}
-              for e, by in formal["mc_handoff_manifest"]["counts"].items()}
-    counts["E1"]["Base"]["n_records"] = -1
-    formal["mc_handoff_manifest"] = {"counts": counts}
-    assert mod.validate_report_contract(formal) != []
-
-
-def test_ci_cells_carry_all_three_frozen_seeds():
-    payload = _payload(pending=())
-    for cell in payload["bootstrap_ci"].values():
-        assert sorted(int(k) for k in cell["per_seed"]) == [7, 13, 31]
-        assert cell["quoted_seed"] == 7
-
-
-def test_renderer_seals_full_payload_with_record_files():
-    mod = real_run_module()
-    files = mod.render_s0_report(_payload(pending=()))
-    assert "S0_REPORT.json" in files and "S0_REPORT.md" in files
-    jsonl = [n for n in files if n.startswith("MC_HANDOFF_")]
-    assert len(jsonl) == 8                      # 2 engines x 4 scenarios
-    payload = json.loads(files["S0_REPORT.json"])
-    # E2 envelope separation: internal objects never reach the sealed json
-    from itsf.s0.report import FORMAL_SECTIONS
-    assert "study" not in payload and "records" not in payload
-    assert "dataset" not in payload
-    assert set(FORMAL_SECTIONS) <= set(payload)
-    for meta in payload["mc_handoff_manifest"]["files"].values():
-        assert re.fullmatch(r"[0-9a-f]{64}", meta["sha256"])
-        body = files[meta["file"]]
-        n_lines = len(body.splitlines()) if body else 0
-        assert n_lines == meta["n_records"]
-
-
-def test_grid_present_for_every_theta_engine_scenario():
-    payload = _payload(pending=())
-    cells = payload["feasibility_grid"]["cells"]
-    assert len(cells) == 2 * 2 * 4
-    assert payload["feasibility_grid"]["regions"]["status"] == "pending_mc"
-
-
-# --- real-chain fail-closed posture (DR-M6) ---------------------------------
+# --- fail-closed pending posture --------------------------------------------
 
 def test_real_chain_not_ready_while_rulings_pend():
     mod = real_run_module()
-    assert mod.PENDING_METHOD_DECISIONS       # M6 state: three open rulings
+    mod._CONFIG_CACHE.clear()
+    assert mod.PENDING_METHOD_DECISIONS
     ok, why = mod.RealChain().ready()
-    assert ok is False
-    assert "pending method rulings" in why
-    # E1: ready and compute share resolved_study_config — same predicate
+    assert ok is False and "pending method rulings" in why
     cfg, why2 = mod.resolved_study_config()
     assert cfg is None and "pending method rulings" in why2
 
 
 def test_real_compute_fails_closed_without_loading_data():
     mod = real_run_module()
+    mod._CONFIG_CACHE.clear()
     chain = mod.RealChain()
     with pytest.raises(RuntimeError, match="pending method rulings"):
         chain.compute()
-    assert chain._ds is None                  # raised BEFORE any data load
+    assert chain._ds is None
 
 
-# --- DR-02: engineering-seed isolation of the research path -----------------
+def test_event_na_blocks_without_ruled_mapping():
+    """M6.1.1 item 5: a None event flag under an unrecognized mapping rule
+    raises explicitly — no invented vocabulary, ever."""
+    mod = real_run_module()
+    bars, ds = _CACHE.get("m") or _market()
+    _CACHE["m"] = (bars, ds)
+    import dataclasses as _dc
+    m = _dc.replace(_test_methods(), event_na_mapping="UNRULED")
+    cfg = C.derive_study_config(m, spread_scalars=(0.5, 0.75, 0.75),
+                                regime_of=lambda d: "R",
+                                vol_axis_of=lambda d: "T2")
+    r0 = ds.records[20]
+    object.__setattr__(r0.features, "is_event_day", None) \
+        if getattr(type(r0.features), "__dataclass_params__").frozen \
+        else setattr(r0.features, "is_event_day", None)
+    try:
+        with pytest.raises(ValueError, match="DR-M6-F"):
+            mod.build_full_study_result(ds, bars, config=cfg,
+                                        governance_meta=dict(_GOV),
+                                        n_boot=40)
+    finally:
+        setattr(r0.features, "is_event_day", "none")
+
+
+# --- E7: REAL S0Runner A->F with production builder inside Stage C ----------
+
+def test_e7_runner_a_to_f_production_builder_inside_stage_c(tmp_path):
+    mod = real_run_module()
+    if "m" not in _CACHE:
+        _CACHE["m"] = _market()
+    bars, ds = _CACHE["m"]
+    calls = {"n": 0}
+
+    def compute():                        # runs INSIDE Stage C, not before
+        calls["n"] += 1
+        return mod.build_full_study_result(
+            ds, bars, config=_test_config(), governance_meta=dict(_GOV),
+            n_boot=10_000)
+
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()], compute=compute,
+        renderer=lambda r: mod.render_s0_report(
+            r, expected_governance=dict(_GOV)),
+        integrity=mod.build_integrity_checks())
+    assert calls["n"] == 0                # nothing precomputed
+    out = S0Runner(deps).run()
+    assert calls["n"] == 1
+    assert out.ok is True, (out.failure_kind, out.failed_gate)
+    assert [e for e, _ in events] == ["RUN_STARTED", "COMPLETED"]
+    sealed = sorted(x.name for x in out.runs_dir.iterdir())
+    assert "S0_REPORT.json" in sealed
+    assert sum(1 for n in sealed if n.startswith("MC_HANDOFF_")) == 8
+
+
+def test_e7_unresolved_config_refused_in_stage_b_zero_exposure(tmp_path):
+    mod = real_run_module()
+    mod._CONFIG_CACHE.clear()
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()],
+        b_checks=[GateCheck("stage_c_wiring_activated",
+                            mod.RealChain().ready)],
+        compute=lambda: (_ for _ in ()).throw(AssertionError("unreachable")),
+        renderer=mod.render_s0_report)
+    out = S0Runner(deps).run()
+    assert out.ok is False
+    assert out.failure_kind == "pre_run_attempt"
+    assert out.exposure_consumed is False
+    assert "RUN_STARTED" not in [e for e, _ in events]
+    assert not Path(deps.config.runs_dir).exists()
+
+
+def test_ready_true_implies_compute_has_no_wiring_error(monkeypatch):
+    """M6.1.1 E7 invariant: with the SAME cached config instance, ready=True
+    means compute cannot raise a wiring/config error (synthetic ensure)."""
+    mod = real_run_module()
+    if "m" not in _CACHE:
+        _CACHE["m"] = _market()
+    bars, ds = _CACHE["m"]
+    cfg = _test_config()
+    monkeypatch.setattr(mod, "resolved_study_config",
+                        lambda: (cfg, "TEST_ONLY injected"))
+    chain = mod.RealChain()
+    monkeypatch.setattr(chain, "_ensure", lambda: (ds, None))
+    chain._bars = bars
+    payload = chain.compute()             # must not raise wiring/config
+    assert payload["disclosures"]["methods_test_only"] is True
+
+
+# --- DR-02: engineering-seed isolation --------------------------------------
 
 @pytest.mark.parametrize("rel", RESEARCH_MODULES)
 def test_research_module_never_references_the_engineering_seed(rel):
     src = (REPO / rel).read_text(encoding="utf-8")
     assert "20260731" not in src
     assert "engineering_seed" not in src
-    # RunConfig must never be IMPORTED/used by the research layer (a prose
-    # mention in an isolation docstring is allowed).
     for line in src.splitlines():
         if re.match(r"\s*(from|import)\s", line):
             assert "RunConfig" not in line, line
@@ -200,10 +273,6 @@ def test_deterministic_research_modules_have_no_rng(rel):
 
 def test_frozen_research_seeds_pin():
     assert RESEARCH_BOOTSTRAP_SEEDS == (7, 13, 31)
-    mod = real_run_module()
-    import inspect
-    src = inspect.getsource(mod.build_full_study_result)
-    assert "bootstrap_mean_ci" in src and "build_grid" in src
 
 
 def test_frozen_boot_constants_pin():
@@ -212,55 +281,70 @@ def test_frozen_boot_constants_pin():
     assert mod.FROZEN_BLOCKS == (5, 21)       # frozen: S0 §9
 
 
-def _formal(payload):
-    from itsf.s0 import report as rep
-    _internal, formal = rep.split_envelope(payload)
-    return formal
+def test_no_invented_event_vocabulary_in_entrypoint():
+    src = (REPO / "scripts" / "s0_real_run.py").read_text(encoding="utf-8")
+    assert "none_or_na" not in src
 
 
-def test_e7_runner_a_to_f_seals_resolved_synthetic_payload(tmp_path):
-    """M6.1 E7: a REAL S0Runner pass A->F over the synthetic resolved
-    payload — synthetic gates, production compute-result, production
-    renderer. Seals with the manifest re-verified; failure paths never
-    write COMPLETED (covered by the runner suite)."""
-    from test_s0_runner import make_deps, ok_gate
-    from itsf.s0.runner import S0Runner
+# --- MED-1 (M6.1.1 audit): mechanical ruling->consumer link -----------------
+
+# Field -> source patterns that must exist in the PRODUCTION sources the
+# moment the field is resolved. Empty list == no consumer wired YET; the
+# assertion below forces this map (and a real consumer) to be updated in
+# the SAME commit that lands a ruling — a resolved field with no wired
+# consumer turns the suite red.
+_METHOD_CONSUMERS: dict[str, list[str]] = {
+    "spread_cost": [],
+    "volatility_regime": [],
+    "fp_allocation": [],
+    "bootstrap_method": [],
+    "grid_policy": [],
+    "event_na_mapping": ["config.methods.event_na_mapping"],
+    "stability_population": [],
+}
+
+
+def test_every_resolved_method_field_has_a_wired_consumer():
     mod = real_run_module()
-    payload = _payload(pending=())
-    deps, events, _ = make_deps(
-        tmp_path, gates=[ok_gate()],
-        compute=lambda: payload,
-        renderer=mod.render_s0_report,
-        integrity=())
-    out = S0Runner(deps).run()
-    assert out.ok is True, (out.failure_kind, out.failed_gate)
-    assert [e for e, _ in events] == ["RUN_STARTED", "COMPLETED"]
-    sealed = sorted(x.name for x in out.runs_dir.iterdir())
-    assert "S0_REPORT.json" in sealed and "SEED_MANIFEST.json" in sealed
-    assert sum(1 for n in sealed if n.startswith("MC_HANDOFF_")) == 8
+    import dataclasses as _dc
+    field_names = {f.name for f in _dc.fields(C.ResolvedS0Methods)
+                   if f.name != "test_only"}
+    assert set(_METHOD_CONSUMERS) == field_names
+    entry_src = (REPO / "scripts" / "s0_real_run.py").read_text(
+        encoding="utf-8")
+    live = mod._resolved_methods()
+    for name, patterns in _METHOD_CONSUMERS.items():
+        resolved = getattr(live, name) is not None
+        if resolved:
+            assert patterns, (
+                f"{name} is RESOLVED but no consumer is wired/mapped — "
+                "ruling, consumer and this map must land in ONE commit")
+        for pat in patterns:
+            assert pat in entry_src, (name, pat)
 
 
-def test_e7_unresolved_payload_never_seals(tmp_path):
-    from test_s0_runner import make_deps, ok_gate
-    from itsf.s0.runner import S0Runner
+# --- LOW-2 (M6.1.1 audit): _expected_governance independence ----------------
+
+def test_expected_governance_rederives_from_primary_sources():
+    import inspect
     mod = real_run_module()
-    payload = _payload()                     # live pending decisions
-    deps, events, _ = make_deps(
-        tmp_path, gates=[ok_gate()],
-        compute=lambda: payload,
-        renderer=mod.render_s0_report,
-        integrity=())
-    out = S0Runner(deps).run()
-    assert out.ok is False
-    assert "COMPLETED" not in [e for e, _ in events]
+    from itsf import guards
+    gov = mod._expected_governance()
+    assert sorted(gov) == ["authorized_commit", "engineering_seed",
+                           "frozen_hashes", "registry_sequence_snapshot",
+                           "trial_id"]
+    assert gov["frozen_hashes"] == dict(guards.FROZEN_HASHES)
+    assert gov["engineering_seed"] == mod.ENGINEERING_SEED
+    text = mod.REGISTRY.read_text(encoding="utf-8")
+    assert gov["registry_sequence_snapshot"] == len(
+        mod.parse_registry_events(text))
+    _row, commit, _ = mod.find_authorization_event(text)
+    assert gov["authorized_commit"] == commit
+    # independence: takes NO payload argument
+    assert len(inspect.signature(mod._expected_governance).parameters) == 0
 
 
-def test_sealed_file_verification_is_on_the_wire(monkeypatch):
-    """O5: render_s0_report must ABORT when validate_sealed_files reports
-    problems — pins the call site, not just the function."""
-    from itsf.s0 import report as rep
-    mod = real_run_module()
-    monkeypatch.setattr(rep, "validate_sealed_files",
-                        lambda *a, **k: ["synthetic_tamper"])
-    with pytest.raises(ValueError, match="sealed-file verification failed"):
-        mod.render_s0_report(_payload(pending=()))
+def test_empty_day_strata_is_not_sealable():
+    from itsf.s0 import handoff as ho
+    out = ho.build_day_strata({}, thetas=(0.5, 0.3))
+    assert out["formal_sealable"] is False

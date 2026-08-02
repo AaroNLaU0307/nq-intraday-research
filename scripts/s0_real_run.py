@@ -44,7 +44,7 @@ ATTEMPTS_ROOT = REPO / "attempts"
 # Baseline collected-test count at the SA-6 audit commit. The pytest gate
 # requires the suite to still COLLECT at least this many tests, so a muted
 # or filtered run cannot satisfy the gate with a handful of tests (F-09).
-MIN_COLLECTED_TESTS = 732                  # M6.1: floor = current suite
+MIN_COLLECTED_TESTS = 782                  # M6.1: floor = current suite
 
 # External read-only tooling (packet §9 gate 4). Invoked as a subprocess;
 # the tool itself only reads repository files.
@@ -865,7 +865,7 @@ def stage_c_result(ds):
             "reported_total_na": totals}
 
 
-def render_s0_report(result) -> dict[str, str]:
+def render_s0_report(result, *, expected_governance=None) -> dict[str, str]:
     """Stage-E sealed release: the FORMAL S0 report, whole-document only
     (packet §7 — nothing here reaches a log line).
 
@@ -878,8 +878,11 @@ def render_s0_report(result) -> dict[str, str]:
     if isinstance(result, dict) and "study" in result:
         from itsf.s0 import handoff as ho
         from itsf.s0 import report as rep
+        if expected_governance is None:
+            expected_governance = _expected_governance()
         internal, formal = rep.split_envelope(result)
-        problems = rep.validate_formal_payload(formal)
+        problems = rep.validate_formal_payload(
+            formal, expected_governance=expected_governance)
         if problems:
             raise ValueError("report contract violations: "
                              + "; ".join(problems))
@@ -902,6 +905,14 @@ def render_s0_report(result) -> dict[str, str]:
         formal = dict(formal)
         formal["mc_handoff_manifest"] = {
             **formal["mc_handoff_manifest"], "files": file_manifest}
+        # M6.1.1 S1 two-call contract: the FULL payload validation runs
+        # AGAIN after manifest injection (a payload that only becomes
+        # invalid post-injection must still refuse to seal).
+        problems2 = rep.validate_formal_payload(
+            formal, expected_governance=expected_governance)
+        if problems2:
+            raise ValueError("report contract violations (post-manifest): "
+                             + "; ".join(problems2))
         files["S0_REPORT.json"] = rep.to_formal_json(formal)
         # E2: the manifest is generated AFTER file serialization and then
         # re-verified against the actual bytes before sealing.
@@ -940,20 +951,32 @@ PENDING_METHOD_DECISIONS: tuple[str, ...] = _resolved_methods().pending_fields()
 from itsf.contracts import StudyConfig    # noqa: E402 (after sys.path setup)
 
 
+_CONFIG_CACHE: dict = {}
+
+
 def resolved_study_config() -> tuple[StudyConfig | None, str]:
-    """Shared readiness/compute predicate (E1). ready() reports the reason;
-    compute() refuses on the SAME object — ready=False and compute-raises
-    can never diverge."""
+    """Shared readiness/compute predicate (E1/M6.1.1). ready() and
+    compute() consume the SAME cached immutable instance — ready=False and
+    compute-raises can never diverge. A test_only config is refused here
+    (production path) even if one were cached."""
+    if "cfg" in _CONFIG_CACHE:
+        cfg, why = _CONFIG_CACHE["cfg"]
+        if cfg is not None and cfg.methods.test_only:
+            return (None, "test_only config refused on the production path")
+        return (cfg, why)
     pend = _resolved_methods().pending_fields()
     if pend:
-        return (None, "pending method rulings: " + ", ".join(pend))
-    # Reached only after ALL rulings land in ResolvedS0Methods. Deriving
-    # the concrete injectables (spread scalars per the ruled reduction
-    # rule, the ruled regime mapping, ...) is the main-agent wiring step
-    # that accompanies the rulings; until it exists this still fails
-    # CLOSED — and ready() reports it, so Stage B blocks pre-exposure.
-    return (None, "rulings landed but config derivation not implemented "
-                  "(M6.1 wiring step) — fail closed pre-exposure")
+        out = (None, "pending method rulings: " + ", ".join(pend))
+    else:
+        # Reached only after ALL rulings land. Deriving the concrete
+        # injectables (spread scalars per the ruled reduction rule, the
+        # ruled regime/vol mappings) is the main-agent wiring step that
+        # accompanies the rulings; until it exists this fails CLOSED and
+        # Stage B blocks pre-exposure.
+        out = (None, "rulings landed but config derivation not implemented "
+                     "(M6.1 wiring step) — fail closed pre-exposure")
+    _CONFIG_CACHE["cfg"] = out
+    return out
 
 FROZEN_N_BOOT = 10_000                 # frozen: S0 §9 — 10,000 resamples
 FROZEN_BLOCKS = (5, 21)                # frozen: S0 §9 — Primary 5 / Sens 21
@@ -1020,7 +1043,21 @@ def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
     scenarios = _costs.build_scenarios(*config.spread_scalars)
     study = build_study(ds, make_day_inputs(ds, bars_by_date), scenarios)
 
-    event_of = {r.trade_date: (r.features.is_event_day or "none_or_na")
+    # M6.1.1: NO invented vocabulary. A None flag (F10 multi-event NA,
+    # IR-12/18) may only enter the strata under the RULED event mapping;
+    # while DR-M6-F pends no config exists, and an unrecognized rule
+    # blocks explicitly rather than defaulting.
+    def _event_stratum(flag):
+        if flag is not None:
+            return flag
+        rule = config.methods.event_na_mapping
+        if rule == "five_stratum":         # IR-12/18 vocabulary, TEST_ONLY
+            return "NA_multi_event"
+        raise ValueError(
+            f"event-NA stratum mapping {rule!r} not implemented — "
+            "DR-M6-F ruling required (fail closed)")
+
+    event_of = {r.trade_date: _event_stratum(r.features.is_event_day)
                 for r in ds.records}
     bootstrap_ci: dict[str, object] = {}
     feasibility_grid: dict[str, object] = {}
@@ -1059,8 +1096,17 @@ def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
         "records": records,
         "study": study,
         # ---- formal sections (report.FORMAL_SECTIONS, flat) -------------
-        "structural": {k: _strkeys(v) for k, v in structural.items()
-                       if k != "dataset"},
+        "structural": _strkeys({
+            "funnel_counts": dict(ds.funnel_counts),
+            "f10_counts": dict(ds.f10_counts),
+            "f10_raw_membership_counts":
+                dict(ds.f10_raw_membership_counts),
+            "na_table": ds.na_table,
+            "label_anchor_availability": ds.label_anchor_availability,
+            "eras": {k: list(v) for k, v in ds.eras.items()},
+            "groups": {g: {k: list(v) for k, v in m.items()}
+                       for g, m in ds.groups.items()},
+        }),
         "oracle_daily": {t: {"day_universe":
                              study["per_theta"][t]["day_universe"],
                              "executable":
@@ -1080,8 +1126,7 @@ def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
                       for t in study["per_theta"]},
         "stability_views": {t: build_stability_views(
             study["per_theta"][t], day_meta,
-            vol_axis=(None if config.vol_axis_of is None else
-                      {d: str(config.vol_axis_of(d)) for d in day_meta}))
+            vol_axis={d: str(config.vol_axis_of(d)) for d in day_meta})
             for t in study["per_theta"]},
         "bootstrap_ci": _strkeys(bootstrap_ci),
         "feasibility_grid": {"cells": _strkeys(feasibility_grid),
@@ -1095,7 +1140,11 @@ def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
                 "MNQ history (frozen §6).")},
         "disclosures": {
             "untradeable": study["untradeable_disclosure"],
-            "pending_method_decisions": list(config.pending_decisions),
+            # single truth source: DERIVED from ResolvedS0Methods (empty by
+            # construction — derive_study_config refuses pending methods)
+            "pending_method_decisions":
+                list(config.methods.pending_fields()),
+            "methods_test_only": bool(config.methods.test_only),
             "method_conventions": {
                 "quoted_seed_convention": "first frozen seed (7), fixed "
                                           "before any data was seen",
@@ -1108,12 +1157,31 @@ def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
     }
 
 
-def validate_report_contract(payload) -> list[str]:
+def _expected_governance() -> dict:
+    """Independently RE-derive the governance context from primary sources
+    (registry bytes + guards constants) — never from the payload's own
+    governance block, so the cross-check catches drift/tampering between
+    compute and seal (M6.1.1 S1 wiring)."""
+    from itsf import guards as _g
+    text = REGISTRY.read_text(encoding="utf-8")
+    _row, commit, _reason = find_authorization_event(text)
+    return {
+        "trial_id": TRIAL_ID,
+        "authorized_commit": commit,
+        "engineering_seed": ENGINEERING_SEED,
+        "frozen_hashes": dict(_g.FROZEN_HASHES),
+        "registry_sequence_snapshot": len(parse_registry_events(text)),
+    }
+
+
+def validate_report_contract(payload, *, expected_governance=None
+                             ) -> list[str]:
     """M6.1 E3: thin alias — the authoritative validator lives in
     src/itsf/s0/report.py (validate_formal_payload). Kept so older callers
     and tests share one implementation."""
     from itsf.s0 import report as rep
-    return rep.validate_formal_payload(payload)
+    return rep.validate_formal_payload(
+        payload, expected_governance=expected_governance)
 
 
 class RealChain:

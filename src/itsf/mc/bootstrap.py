@@ -74,14 +74,27 @@ def build_worlds(day_ids: Sequence[str], B: int, master_seed: int,
     is how CRN across configs is guaranteed by construction. Callers MUST
     reuse one returned list across all configs of a comparison, never
     re-draw per config.  # frozen: MC1 SS5 common random numbers
+
+    IR DR-02 frozen-seed guard: this is a PUBLIC research-RNG entry point
+    (the three-seed convergence check calls it once per seed), so
+    `master_seed` must be one of `MASTER_SEEDS` (== contracts.
+    RESEARCH_BOOTSTRAP_SEEDS, 7/13/31) — membership, since one call takes
+    ONE seed, not all three at once. Any other value is refused rather than
+    silently honoured.
     """
     if B <= 0:
         raise ValueError("B must be >= 1")
     if len(day_ids) == 0:
         raise ValueError("day_ids must be non-empty")
+    seed = int(master_seed)
+    if seed not in MASTER_SEEDS:
+        raise ValueError(
+            f"master_seed must be one of {MASTER_SEEDS} (contracts."
+            "RESEARCH_BOOTSTRAP_SEEDS) — IR DR-02: the only seeds any "
+            f"research-path RNG may derive from; got {seed}")
     days = list(day_ids)
     n = len(days)
-    children = np.random.SeedSequence(master_seed).spawn(B)
+    children = np.random.SeedSequence(seed).spawn(B)
     worlds: list[list[str]] = []
     for child in children:
         rng = np.random.Generator(np.random.PCG64(child))

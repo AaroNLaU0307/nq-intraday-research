@@ -1,7 +1,16 @@
 # DECISION_REQUIRED_M6_1（六项方法裁决包；Fable 起草，Sol 立场并列，Aaron 裁决）
 
-通用声明：全部机制已参数化实现或以 UNRESOLVED 阻断；任何一项未裁 →
-`ResolvedS0Methods` 对应字段为 None → Stage B 拒绝、零 exposure。
+通用声明（M6.1.1-r2，审计后精确化）：并非全部机制已参数化——
+**六个结构化字段（spread_cost / volatility_regime / fp_allocation /
+bootstrap_method / grid_policy / stability_population）今日无消费者**，
+其未裁前行为硬编码于被调方（IR-7 暂用 adverse、FP 基准 A、D_TP 子序列
+bootstrap、K=1、D_TP 条件 stability 总体）；唯一被消费的是
+event_na_mapping（scripts/s0_real_run.py 事件层显式阻断点）；
+消费者接线由 test_m6_chain 的 ruling→consumer 机器断言强制与裁决同
+commit 落地；已参数化的是**阻断本身**：
+任何一项未裁 → `ResolvedS0Methods` 对应字段为 None → StudyConfig 无法
+派生（derive_study_config 拒绝）→ Stage B 拒绝、零 exposure。裁决落地
+＝写入结构化字段＋接线其消费者＋mutation test，三者同 commit。
 本文件零 S0 结果引用。落地形式栏指 IR 或 S0.x addendum。
 
 ---
@@ -60,8 +69,10 @@
   warm-up/NA 全部未逐字定义；§2 与附录 A 是否共用 mapping 未定。
 - **候选 normative text**：vol20(d) = std(r_1..r_20, ddof=1)，
   r_i = (C_{t-i+1} − C_{t-i}) / C_{t-i}（simple；log 备选），
-  C = **精确排期 RTH 官方收盘**（IR-19/26 同一定义点：常规 15:59
-  bar close、早收盘取最后排期 bar close；15:44 与 settlement 备选，
+  C = **精确排期 RTH 最后一根一分钟 bar 的 close**（IR-19/26 同一定义点：
+  常规＝15:59 bar close、早收盘＝最后排期 bar close；20 个 return 需要
+  **21 个此类 close**，窗口取严格早于 d 的最近 21 个合格收盘日；该定义
+  同时喂 §2 描述轴与附录 A 分层——一旦裁定将影响附录 A 抽样与 MC 交接；15:44 与 settlement 备选，
   settlement 无数据=**data_unavailable**）；窗口=严格早于 d 的最近
   20 个有官方收盘的实际 RTH 交易日（lag 终点 d−1，无前视）；
   **跨 roll transition 的相邻收盘对**：Option r1=剔除该 return 并向
@@ -108,7 +119,17 @@
 - **分歧状态**：**unresolved_disagreement（正式登记）**，Aaron 裁。
 - 落地：IR；ResolvedS0Methods.fp_allocation_basis。
 
-## DR-4（DR-M6-D）Primary bootstrap 总体与统计量
+## DR-4（DR-M6-D）Primary bootstrap —— 分项裁决（每项独立勾选）
+
+D4.1 population：完整合格交易日序列 vs D_TP 子序列（现状=后者）；
+D4.2 NA 时间轴：n1 剔出序列（披露）vs n2 保留 NA 分母排除；
+D4.3 statistic：每交易日均值 vs 每 oracle 日均值（现状=后者）；
+D4.4 10,000 归属：每 seed（现状）vs 三 seed 合计；
+D4.5 quoted seed：固定 seed 7（现状约定）——正式确认或另裁；
+D4.6 percentile interpolation：linear（现状披露）——正式确认；
+D4.7 CRN scope：θ 内 engine×scenario 共用重抽索引 vs 各自独立。
+
+## DR-4 原文（背景）
 
 - **frozen source**：S0 §9（"stationary bootstrap，期望块长 5 交易日，
   10,000 次，seeds {7,13,31}，百分位法 95% CI"）。
@@ -139,6 +160,9 @@
   MC_METHOD_SPEC §5（收敛四规则）。
 - **精确歧义**：K 未定义；stream 是否含 θ；收敛判据在 S0 侧的
   作用面。
+- **规模分列（M6.1.1）**：unique draws = K×3 seeds×63 cells；全组合
+  evaluations = 该数 × **2 θ** × 2 engines × 4 scenarios（θ 必须计入——
+  每 θ 网格独立）；K=200 时 unique≈37,800、evaluations≈604,800。
 - **提案（K=200 仅提案，未实现）**：K/seed/cell=200，k 从 **0**；
   RNG=PCG64 via default_rng(SeedSequence([master, GRID_TAG, θ_mil,
   q_mil, r_mil, k]))——**θ 入 stream**（避免跨 θ 相同抽签相关）；
@@ -162,9 +186,11 @@
 - **frozen source**：IR-12/18（F10 多事件日=NA＋sidecar，互斥五类
   128+134+83+2528+9）；附录 A step 3（event_flag 分层）；§3 NA
   政策（不删日）。
-- **当前事实（精确陈述）**：`"none"` 保持 `"none"`；**仅 `None`**
-  （multi-event NA，9 日）被映射为未批准哨兵 `"none_or_na"`。
-  无合并发生；缺陷=哨兵词不在批准词表。
+- **当前事实（M6.1.1 更新）**：正式 builder 已移除 `none_or_na` 哨兵：
+  `"none"` 保持 `"none"`、`None` 保持 `None`；`None` 进入分层仅当
+  `event_na_mapping` 已裁（TEST_ONLY 合成值 `five_stratum` 映射到
+  IR-12/18 词表 `NA_multi_event`），未裁即显式 raise（fail closed）。
+  残留：TEST_ONLY 映射的词表选择仍待本 DR 正式裁决。
 - **选项**：
   - **F1**：五层 {CPI, NFP, FOMC, none, NA_multi_event}——NA 日
     独立层，可抽样、不删日、词表=IR-12/18 现有五类。
@@ -190,3 +216,27 @@
 | 4 | bootstrap_population | 完整序列+n1+每seed10k+CRN共用 | 方向同 | 细目 unresolved |
 | 5 | grid_repeat_policy | K=200/θ入流/前缀嵌套/加倍2次 | 待表态 | unresolved |
 | 6 | event_na_stratum_rule | F1 五层 | 待表态 | unresolved |
+
+
+## DR-7（DR-M6-G）stability 视图总体（新增，M6.1.1）
+
+- **frozen source**：S0 §2（五轴稳定性视图）；§7（Oracle 日定义）。
+- **精确歧义**：§2 视图作用于什么日序列——当前实现=D_TP 条件序列
+  （仅 oracle 日）；备选=完整 structurally-eligible 日序列（非 oracle
+  日计 0 或 NA）；或两者并报。
+- **影响**：条件序列回答"oracle 交易日的年度/时代稳定性"；完整序列
+  回答"策略整体（含频率）的稳定性"——与 DR-4 population 裁决联动。
+- **Fable 推荐**：两者并报（§2 文本未限定，双报无信息损失，
+  成本可忽略）。**Sol 立场**：待表态。分歧交 Aaron。
+- 落地：IR；ResolvedS0Methods.stability_population。
+
+## 附注：§10.1 四个扩展 record 字段的授权核查（M6.1.1）
+
+| 字段 | 冻结出处 | 结论 |
+|---|---|---|
+| engine / cost_scenario | §10.1 原文"每引擎 × 每成本场景，每笔、每合约"——记录按该轴键控，字段=轴身份 | 有既有授权 |
+| ambiguous_stop_vs_floor | §10.1 原文"标记 `ambiguous` 并双场景报告" | 有既有授权 |
+| sizing_anchor_usd | §8 `risk_usd_per_1_MNQ_planned`＋MC §3 anchor（paths.py 冻结引注 SS8/MC SS3） | 有既有授权 |
+
+四字段均有冻结文本出处，**不构成对 §10.1 schema 的未授权扩展**；
+如 Codex 异议任一条，按其条目单开 DECISION_REQUIRED。

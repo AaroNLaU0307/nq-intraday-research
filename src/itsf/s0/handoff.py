@@ -51,6 +51,7 @@ import json
 from collections.abc import Mapping, Sequence
 
 from itsf import contracts
+from itsf.s0 import context as s0_context
 from itsf.s0 import gridmix as s0_gridmix
 from itsf.s0 import stability as s0_stability
 from itsf.s0 import stats as s0_stats
@@ -93,6 +94,15 @@ def _unresolved(decision_id: str) -> str:
     return f"UNRESOLVED_{decision_id}"
 
 
+def _is_unresolved(value: object) -> bool:
+    """True iff `value` is one of THIS module's own UNRESOLVED markers (the
+    bare sentinel, or a decision-tagged "UNRESOLVED_..." string). Used only
+    to DERIVE `formal_sealable` below — it never changes what a field's
+    value actually is, and it never resolves anything itself."""
+    return value is UNRESOLVED or (isinstance(value, str)
+                                   and value.startswith("UNRESOLVED"))
+
+
 # ===========================================================================
 # canonical JSON
 # ===========================================================================
@@ -120,6 +130,13 @@ _KNOWN_ERAS = frozenset({"counterfactual_micro_execution",
 _KNOWN_EPOCHS = frozenset(s0_stability.ALL_EPOCH_LABELS)
 _TP_FP_VALUES = frozenset({"TP", "FP", "non_tradeable"})
 
+# Frozen F10 vocabulary (IR-12/18): a concrete category from the SAME
+# single-sourced `s0_context.F10_CATEGORIES` tuple, or the literal "none"
+# (zero-category day), or None (NA on a multi-category conflict — see
+# `s0_context.EventCalendar.encode_f10`). "none_or_na" or any other spelling
+# is NOT part of this vocabulary and is rejected below.
+_EVENT_FLAG_VALUES = frozenset(s0_context.F10_CATEGORIES) | {"none"}
+
 
 def _theta_key(theta: float) -> str:
     """Kept in sync with `s0.study.theta_key` BY CONVENTION (both format the
@@ -127,6 +144,19 @@ def _theta_key(theta: float) -> str:
     rather than imported so this schema-only module stays decoupled from the
     day-set-selection layer (`s0/study.py`)."""
     return f"theta_{theta:g}"
+
+
+def _epoch_for_year(year: int) -> str:
+    """Epoch label for `year`, read from the SAME frozen bucket boundaries
+    `s0_stability.py` uses (`EPOCHS` / `OUTSIDE_EPOCHS`) — the boundary
+    VALUES are single-sourced from that module's public constants; only this
+    trivial lookup loop is (deliberately) duplicated, exactly the way
+    `_theta_key` above duplicates a formatting convention rather than an
+    import."""
+    for label, lo, hi in s0_stability.EPOCHS:
+        if lo <= year <= hi:
+            return label
+    return s0_stability.OUTSIDE_EPOCHS
 
 
 def build_day_strata(day_rows: Mapping[str, Mapping[str, object]],
@@ -156,6 +186,12 @@ def build_day_strata(day_rows: Mapping[str, Mapping[str, object]],
     if len(set(theta_keys)) != len(theta_keys):
         raise ValueError(f"duplicate theta in {thetas}")
     theta_key_set = set(theta_keys)
+    # Descending order: THETA NESTING MONOTONICITY is checked on adjacent
+    # pairs (higher, lower) below — a day TP at the higher theta must also be
+    # TP at the lower one (Y_cont >= hi implies Y_cont >= lo), so the TP set
+    # only grows as theta falls. Checking adjacent pairs of the full sorted
+    # sequence covers every pair transitively.
+    theta_keys_desc = tuple(_theta_key(t) for t in sorted(thetas, reverse=True))
 
     days: dict[str, object] = {}
     for date in sorted(day_rows):
@@ -184,6 +220,33 @@ def build_day_strata(day_rows: Mapping[str, Mapping[str, object]],
                 "micro_execution_era label in this slot would be a "
                 "conflation")
 
+        year_str = str(row["year"])
+        if year_str != date[:4]:
+            raise ValueError(
+                f"{date}: year {year_str!r} != the year implied by the date "
+                f"itself ({date[:4]!r}) — date/year consistency violated")
+        try:
+            year_int = int(year_str)
+        except ValueError:
+            raise ValueError(
+                f"{date}: year {year_str!r} is not an integer") from None
+        expected_epoch = _epoch_for_year(year_int)
+        if epoch != expected_epoch:
+            raise ValueError(
+                f"{date}: stability_epoch {epoch!r} does not match the "
+                f"epoch computed from year {year_int} ({expected_epoch!r}) "
+                "via the frozen S0 §2 buckets 2010-2013/2014-2017/2018-2021 "
+                "(or 'outside_epochs') — year/epoch consistency violated")
+
+        event_flag_final = row["event_flag_final"]
+        if event_flag_final is not None and event_flag_final not in _EVENT_FLAG_VALUES:
+            raise ValueError(
+                f"{date}: event_flag_final {event_flag_final!r} is not one "
+                f"of {sorted(_EVENT_FLAG_VALUES)} or None (frozen F10 "
+                "vocabulary, IR-12/18 via itsf.s0.context.F10_CATEGORIES) — "
+                "e.g. 'none_or_na' is NOT a valid value; NA is represented "
+                "by None only")
+
         d_open = int(row["d_open"])
         if d_open not in (-1, 0, 1):
             raise ValueError(f"{date}: d_open must be in (-1, 0, 1), got "
@@ -201,11 +264,30 @@ def build_day_strata(day_rows: Mapping[str, Mapping[str, object]],
                 f"{date}: tp_fp_class has non-TP/FP/non_tradeable values "
                 f"{bad_values}")
 
-        event_flag_final = row["event_flag_final"]
+        if d_open == 0:
+            not_non_tradeable = {k: v for k, v in tp_fp_class.items()
+                                 if v != "non_tradeable"}
+            if not_non_tradeable:
+                raise ValueError(
+                    f"{date}: d_open == 0 (no direction) requires "
+                    f"tp_fp_class == 'non_tradeable' for EVERY theta, got "
+                    f"{not_non_tradeable} — frozen S0 §5 no-direction days "
+                    "are not Oracle days")
+
+        for hi_key, lo_key in zip(theta_keys_desc, theta_keys_desc[1:]):
+            if tp_fp_class[hi_key] == "TP" and tp_fp_class[lo_key] != "TP":
+                raise ValueError(
+                    f"{date}: THETA NESTING MONOTONICITY violated — "
+                    f"tp_fp_class[{hi_key!r}] == 'TP' but "
+                    f"tp_fp_class[{lo_key!r}] == {tp_fp_class[lo_key]!r}; "
+                    "the TP set at a HIGHER theta must be a SUBSET of the "
+                    "TP set at a LOWER theta (Y_cont >= hi implies "
+                    "Y_cont >= lo)")
+
         days[date] = {
             "micro_execution_era": era,
             "stability_epoch": epoch,
-            "year": str(row["year"]),
+            "year": year_str,
             "d_open": d_open,
             "event_flag_final": event_flag_final,
             "event_na": event_flag_final is None,
@@ -216,9 +298,20 @@ def build_day_strata(day_rows: Mapping[str, Mapping[str, object]],
             "tp_fp_class": {k: tp_fp_class[k] for k in theta_keys},
         }
 
+    # formal_sealable: False whenever ANY artifact-level field is still an
+    # UNRESOLVED marker (today: event_stratum, always, until DR-M6-F closes)
+    # — a disclosed refusal flag for whatever "formal path" later seals these
+    # artifacts for MC, never a silent pass.
+    # LOW-3 (M6.1.1 audit): an EMPTY artifact is never sealable — the
+    # vacuous-truth reading would let a zero-day strata self-declare.
+    formal_sealable = bool(days) and not any(
+        _is_unresolved(row["event_stratum"])
+                              for row in days.values())
+
     return {
         "schema_version": SCHEMA_VERSION,
         "ordering": "sorted-by-date",
+        "formal_sealable": formal_sealable,
         "days": days,
     }
 
@@ -226,6 +319,40 @@ def build_day_strata(day_rows: Mapping[str, Mapping[str, object]],
 # ===========================================================================
 # E6b — build_grid_samples
 # ===========================================================================
+
+# run_meta is no longer an opaque passthrough: it is exactly which
+# theta/engine/scenario this ONE grid belongs to (build_grid is always
+# called for ONE engine x cost-scenario x theta), and `verify_handoff_
+# conservation` now reads `run_meta["theta"]` to check the PER-THETA TP/FP
+# classification, so its shape must be pinned rather than caller-defined.
+_REQUIRED_RUN_META: dict[str, tuple[type, ...]] = {
+    "theta": (int, float),
+    "engine": (str,),
+    "scenario": (str,),
+}
+
+
+def _validated_run_meta(run_meta: Mapping[str, object]) -> dict[str, object]:
+    unknown = sorted(set(run_meta) - set(_REQUIRED_RUN_META))
+    if unknown:
+        raise ValueError(
+            f"run_meta has unknown key(s) {unknown} — only "
+            f"{sorted(_REQUIRED_RUN_META)} are recognised (unknown keys are "
+            "rejected rather than silently passed through)")
+    missing = [k for k in _REQUIRED_RUN_META if k not in run_meta]
+    if missing:
+        raise ValueError(f"run_meta is missing required key(s) {missing} "
+                         f"(needs {sorted(_REQUIRED_RUN_META)})")
+    out: dict[str, object] = {}
+    for key, types in _REQUIRED_RUN_META.items():
+        value = run_meta[key]
+        if isinstance(value, bool) or not isinstance(value, types):
+            raise ValueError(
+                f"run_meta[{key!r}] must be one of {types}, got {value!r} "
+                f"({type(value).__name__})")
+        out[key] = float(value) if key == "theta" else value
+    return out
+
 
 def build_grid_samples(grid_output: Mapping[str, object],
                        run_meta: Mapping[str, object]) -> dict[str, object]:
@@ -237,16 +364,17 @@ def build_grid_samples(grid_output: Mapping[str, object],
         the return value of `gridmix.build_grid` (or `_build_grid_unchecked`
         in a test) for ONE engine x cost-scenario x theta.
     run_meta
-        caller-supplied provenance (e.g. which theta/engine/scenario this
-        grid belongs to) — passed through verbatim under `"run_meta"` so a
-        replay consumer can identify which grid it is looking at; this
-        module attaches no meaning to its contents.
+        provenance for which theta/engine/scenario this grid belongs to.
+        Required keys, validated and normalised (unknown keys rejected):
+        `"theta"` (int or float, stored as float), `"engine"` (str),
+        `"scenario"` (str). Pinned (rather than an opaque caller-defined
+        blob) because `verify_handoff_conservation` reads `run_meta["theta"]`
+        to check per-theta TP/FP conservation against day_strata.
 
     Returns
     -------
-    {"schema_version", "cells": {cell_key: {"per_seed": {seed: {...}},
-                                           "infeasible_by_sample", "q_mil",
-                                           "r_mil"}},
+    {"schema_version", "formal_sealable", "cells": {cell_key: {
+        "per_seed": {seed: {...}}, "infeasible_by_sample", "q_mil", "r_mil"}},
      "run_meta", "replay": {"stream_formula", "grid_stream_tag", "k_policy",
                            "crn_scope"}}
 
@@ -258,6 +386,7 @@ def build_grid_samples(grid_output: Mapping[str, object],
     integers plus `replay.grid_stream_tag` and reproduces the cell's
     selection.
     """
+    validated_run_meta = _validated_run_meta(run_meta)
     grid = grid_output["grid"]
     cells: dict[str, object] = {}
     for cell_key, point in grid.items():
@@ -279,17 +408,22 @@ def build_grid_samples(grid_output: Mapping[str, object],
             "r_mil": int(round(point["target_recall"] * 1000)),
         }
 
+    replay = {
+        "stream_formula":
+            "default_rng([master, GRID_STREAM_TAG, q_mil, r_mil])",
+        "grid_stream_tag": s0_gridmix.GRID_STREAM_TAG,
+        "k_policy": _unresolved("DR-M6-E"),
+        "crn_scope": str(UNRESOLVED),
+    }
+    formal_sealable = not (_is_unresolved(replay["k_policy"])
+                          or _is_unresolved(replay["crn_scope"]))
+
     return {
         "schema_version": SCHEMA_VERSION,
+        "formal_sealable": formal_sealable,
         "cells": cells,
-        "run_meta": dict(run_meta),
-        "replay": {
-            "stream_formula":
-                "default_rng([master, GRID_STREAM_TAG, q_mil, r_mil])",
-            "grid_stream_tag": s0_gridmix.GRID_STREAM_TAG,
-            "k_policy": _unresolved("DR-M6-E"),
-            "crn_scope": str(UNRESOLVED),
-        },
+        "run_meta": validated_run_meta,
+        "replay": replay,
     }
 
 
@@ -300,14 +434,29 @@ def build_grid_samples(grid_output: Mapping[str, object],
 def build_seed_manifest() -> dict[str, object]:
     """The frozen seed/stream provenance MC needs to replay S0's randomness,
     read from the modules that own each constant (never a second copy)."""
-    # IR DR-02 single-source assertion: stats.py / gridmix.py must be
+    # IR DR-02 single-source guard: stats.py / gridmix.py must be
     # re-exporting the SAME object as contracts.RESEARCH_BOOTSTRAP_SEEDS, not
-    # a local copy that could silently drift.
-    assert s0_stats.RESEARCH_BOOTSTRAP_SEEDS is contracts.RESEARCH_BOOTSTRAP_SEEDS
-    assert s0_gridmix.RESEARCH_BOOTSTRAP_SEEDS is contracts.RESEARCH_BOOTSTRAP_SEEDS
+    # a local copy that could silently drift. A production governance gate
+    # must be a real `raise`, never a bare `assert` — `python -O` strips
+    # `assert` statements, which would silently disable this exact check.
+    if s0_stats.RESEARCH_BOOTSTRAP_SEEDS is not contracts.RESEARCH_BOOTSTRAP_SEEDS:
+        raise AssertionError(
+            "itsf.s0.stats.RESEARCH_BOOTSTRAP_SEEDS is not the SAME object "
+            "as contracts.RESEARCH_BOOTSTRAP_SEEDS — IR DR-02 single-source "
+            "mutation guard tripped (a local copy would silently drift from "
+            "the one research-seed source of truth)")
+    if s0_gridmix.RESEARCH_BOOTSTRAP_SEEDS is not contracts.RESEARCH_BOOTSTRAP_SEEDS:
+        raise AssertionError(
+            "itsf.s0.gridmix.RESEARCH_BOOTSTRAP_SEEDS is not the SAME "
+            "object as contracts.RESEARCH_BOOTSTRAP_SEEDS — IR DR-02 "
+            "single-source mutation guard tripped")
 
+    k_policy = _unresolved("DR-M6-E")
+    crn_scope = str(UNRESOLVED)
     return {
         "schema_version": SCHEMA_VERSION,
+        "formal_sealable": not (_is_unresolved(k_policy)
+                               or _is_unresolved(crn_scope)),
         "research_bootstrap_seeds": list(contracts.RESEARCH_BOOTSTRAP_SEEDS),
         "quoted_seed_convention": (
             "quoted interval/selection = the FIRST frozen master seed, by "
@@ -317,8 +466,8 @@ def build_seed_manifest() -> dict[str, object]:
             "stats_stream_tag": s0_stats.STATS_STREAM_TAG,
             "grid_stream_tag": s0_gridmix.GRID_STREAM_TAG,
         },
-        "k_policy": _unresolved("DR-M6-E"),
-        "crn_scope": str(UNRESOLVED),
+        "k_policy": k_policy,
+        "crn_scope": crn_scope,
         "engineering_seed_note": (
             "run-infra provenance only; value recorded in governance "
             "metadata, not here"),
@@ -332,22 +481,39 @@ def build_seed_manifest() -> dict[str, object]:
 def build_handoff_manifest(files: Mapping[str, str]) -> dict[str, object]:
     """name -> {sha256, bytes, line_count (.jsonl only)} manifest of the
     files being handed off to MC. Each file is read exactly once, streamed
-    through the hash so a large .jsonl handoff never needs two full passes."""
+    through the hash so a large .jsonl handoff never needs two full passes.
+
+    `line_count` counts LINES, not `\\n` bytes: for a well-formed JSONL body
+    (every line, including the last, ends with `\\n`) those are the same
+    number, but a body with NO trailing newline has one more line than it
+    has `\\n` bytes (the final, unterminated line still counts), and a
+    completely empty body has zero lines even though "ends with `\\n`" is
+    vacuously false for it. Both edges are pinned: empty body -> 0; N lines
+    with no trailing newline -> N.
+    """
     manifest: dict[str, object] = {}
     for name, path in files.items():
         digest = hashlib.sha256()
         n_bytes = 0
-        n_lines = 0
+        n_newlines = 0
+        last_byte = b""
         is_jsonl = str(path).endswith(".jsonl")
         with open(path, "rb") as fh:
             for chunk in iter(lambda: fh.read(1 << 20), b""):
                 digest.update(chunk)
                 n_bytes += len(chunk)
                 if is_jsonl:
-                    n_lines += chunk.count(b"\n")
+                    n_newlines += chunk.count(b"\n")
+                    last_byte = chunk[-1:]
         entry: dict[str, object] = {"sha256": digest.hexdigest(),
                                     "bytes": n_bytes}
         if is_jsonl:
+            if n_bytes == 0:
+                n_lines = 0
+            elif last_byte == b"\n":
+                n_lines = n_newlines
+            else:
+                n_lines = n_newlines + 1        # trailing unterminated line
             entry["line_count"] = n_lines
         manifest[name] = entry
     return {"schema_version": SCHEMA_VERSION, "files": manifest}
@@ -369,6 +535,14 @@ def verify_handoff_conservation(
     ------
     1. every date appearing in a grid sample (any cell, any seed, TP or FP)
        is present in `day_strata`;
+    1b. PER-THETA marker agreement: `grid_samples["run_meta"]["theta"]`
+       names which theta this grid_samples bundle is FOR (build_grid_samples
+       always attaches it — see `_validated_run_meta`); every date a grid
+       sample marks as a tp-marker must be classed "TP" in day_strata for
+       THAT theta (not merely "TP for some theta"), and every fp-marker date
+       must be classed "FP" for that SAME theta. A swapped TP/FP marker pair
+       is caught here even though the OLD "any theta" check in #3 below
+       would have missed it.
     2. every date appearing in `record_dates_by_engine_scenario` (any engine
        x scenario) is present in `day_strata`;
     3. BIDIRECTIONAL TP/FP <-> record coverage: every date `day_strata`
@@ -390,6 +564,39 @@ def verify_handoff_conservation(
             problems.append(
                 f"{date}: appears in a grid sample but is absent from "
                 "day_strata")
+
+    if grid_dates:
+        run_meta = grid_samples.get("run_meta")
+        if not isinstance(run_meta, Mapping) or "theta" not in run_meta:
+            raise ValueError(
+                "grid_samples['run_meta']['theta'] is required to check "
+                "PER-THETA TP/FP conservation (build_grid_samples always "
+                "attaches it); a grid_samples without it cannot be "
+                "cross-checked against day_strata's per-theta tp_fp_class "
+                "— fail closed rather than silently skip the check")
+        theta_key = _theta_key(float(run_meta["theta"]))
+        for cell in grid_samples.get("cells", {}).values():
+            for block in cell.get("per_seed", {}).values():
+                for date in block.get("tp_dates", ()):
+                    row = days.get(date)
+                    if row is None:
+                        continue          # already reported above (check 1)
+                    actual = row.get("tp_fp_class", {}).get(theta_key)
+                    if actual != "TP":
+                        problems.append(
+                            f"{date}: grid sample marks it a TP date for "
+                            f"{theta_key} but day_strata classifies it "
+                            f"{actual!r} for {theta_key}")
+                for date in block.get("fp_dates", ()):
+                    row = days.get(date)
+                    if row is None:
+                        continue
+                    actual = row.get("tp_fp_class", {}).get(theta_key)
+                    if actual != "FP":
+                        problems.append(
+                            f"{date}: grid sample marks it an FP date for "
+                            f"{theta_key} but day_strata classifies it "
+                            f"{actual!r} for {theta_key}")
 
     engine_scenarios = [(engine, scenario)
                         for engine, scenarios in
