@@ -349,6 +349,30 @@ def test_build_grid_samples_reports_infeasible_cells():
 
 
 # ---------------------------------------------------------------------------
+# build_grid_samples replay_status honesty (M6.1.1 S2 item 5)
+# ---------------------------------------------------------------------------
+
+def test_build_grid_samples_replay_status_is_partial_today():
+    """The multi-stratum replay is NOT implemented (day_strata carries no
+    real stratum key while DR-M6-B/DR-M6-F pend): `replay_status` must be
+    PARTIAL, machine-visible, and never "CLOSED" — and that PARTIAL status
+    must, on its own, keep the artifact out of `formal_seal_admission`'s
+    admitted set even in a hypothetical future where k_policy/crn_scope
+    resolve but the replay itself stays single-stratum."""
+    d_tp, d_fp, strata = _fabricated_grid_populations()
+    grid_output = gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=0.4,
+                                     q_grid=[0.50], r_grid=[0.50])
+    samples = handoff.build_grid_samples(grid_output, run_meta=_run_meta())
+    assert samples["replay_status"] == "PARTIAL_single_stratum_only"
+    assert samples["replay_status"] == handoff.REPLAY_STATUS_PARTIAL_SINGLE_STRATUM
+    assert samples["replay_status"] != handoff.REPLAY_STATUS_CLOSED
+    assert samples["formal_sealable"] is False
+    problems = handoff.formal_seal_admission({"grid_samples": samples})
+    assert len(problems) == 1
+    assert "grid_samples" in problems[0]
+
+
+# ---------------------------------------------------------------------------
 # build_grid_samples run_meta validation (M6.1.1 S2 item 3)
 # ---------------------------------------------------------------------------
 
@@ -480,9 +504,16 @@ def test_replay_completeness_from_artifacts_alone():
     day_strata = handoff.build_day_strata(day_rows, thetas=[0.5])
 
     # Conservation holds for this fixture (sanity, not the point of THIS
-    # test — test_conservation_* covers it directly).
+    # test — test_conservation_* covers it directly). The record matrix must
+    # now be the full frozen 8-cell {ENGINES} x {SCENARIOS} shape (M6.1.1 S2
+    # item 1) — every classified date recorded in every cell — rather than
+    # `{}`, which the OLD (pre-item-1) conservation check let pass silently.
+    classified = sorted(
+        d for d, row in day_strata["days"].items()
+        if any(v in ("TP", "FP") for v in row["tp_fp_class"].values()))
+    records = _full_record_matrix(classified)
     assert handoff.verify_handoff_conservation(
-        day_strata, grid_samples, {}) == []
+        day_strata, grid_samples, records) == []
 
     cell = grid_samples["cells"]["q0.50_r0.50"]
     q_mil, r_mil = cell["q_mil"], cell["r_mil"]
@@ -591,6 +622,16 @@ def _day_strata_with(dates_classes: dict[str, str]) -> dict[str, object]:
     return handoff.build_day_strata(day_rows, thetas=[0.5])
 
 
+def _full_record_matrix(dates) -> dict[str, dict[str, list[str]]]:
+    """The frozen 8-cell {ENGINES} x {SCENARIOS} record matrix, every cell
+    carrying the SAME `dates` list — used wherever a test's point is NOT the
+    per-cell record-matrix-shape check itself (M6.1.1 S2 item 1), so an
+    otherwise-conserving fixture does not incidentally trip the now-mandatory
+    8-cell shape requirement."""
+    return {engine: {scenario: list(dates) for scenario in handoff.SCENARIOS}
+           for engine in handoff.ENGINES}
+
+
 def test_conservation_positive_case_no_problems():
     day_strata = _day_strata_with({
         "2019-06-01": "TP", "2019-06-02": "FP", "2019-06-03": "non_tradeable"})
@@ -598,7 +639,7 @@ def test_conservation_positive_case_no_problems():
         "run_meta": {"theta": 0.5, "engine": "E1", "scenario": "Base"},
         "cells": {"q0.50_r0.50": {"per_seed": {
             7: {"tp_dates": ["2019-06-01"], "fp_dates": ["2019-06-02"]}}}}}
-    records = {"E1": {"Base": ["2019-06-01", "2019-06-02"]}}
+    records = _full_record_matrix(["2019-06-01", "2019-06-02"])
     problems = handoff.verify_handoff_conservation(day_strata, grid_samples,
                                                     records)
     assert problems == []
@@ -675,6 +716,221 @@ def test_conservation_record_without_classification():
                                                     records)
     assert any("2019-06-02" in p and "not TP/FP-classed" in p
               for p in problems)
+
+
+# ---------------------------------------------------------------------------
+# verify_handoff_conservation — record matrix SHAPE enforcement
+# (M6.1.1 S2 item 1, Codex finding (a): "an empty or partial record matrix
+# passes" today; the fix requires the matrix's keys to be EXACTLY the frozen
+# {ENGINES} x {SCENARIOS} 8 cells, with an empty matrix, a missing cell and
+# an extra/renamed cell reported as DISTINCT problems)
+# ---------------------------------------------------------------------------
+
+def test_engines_and_scenarios_are_the_frozen_eight_cells():
+    assert handoff.ENGINES == ("E1", "E2")
+    assert handoff.SCENARIOS == ("Base", "Conservative", "Stress", "Severe")
+    assert handoff.FROZEN_THETAS == (0.5, 0.3)
+    assert handoff.FROZEN_SEEDS == (7, 13, 31)
+    assert handoff.FROZEN_SEEDS is contracts.RESEARCH_BOOTSTRAP_SEEDS
+    # single-sourced from study.py, never a local re-typed copy
+    from itsf.s0 import study as s0_study
+    assert handoff.ENGINES is s0_study.ENGINES
+    assert handoff.FROZEN_THETAS is s0_study.FROZEN_THETAS
+
+
+def test_conservation_empty_record_matrix_is_rejected():
+    day_strata = _day_strata_with({"2019-06-01": "TP"})
+    grid_samples = {"cells": {}}
+    problems = handoff.verify_handoff_conservation(day_strata, grid_samples, {})
+    assert any("EMPTY" in p for p in problems)
+
+
+def test_conservation_seven_cell_partial_matrix_is_rejected():
+    """Dropping exactly ONE of the frozen 8 cells must be flagged — a
+    partial matrix is not "close enough"."""
+    day_strata = _day_strata_with({"2019-06-01": "TP"})
+    grid_samples = {"cells": {}}
+    records = _full_record_matrix(["2019-06-01"])
+    del records["E2"]["Severe"]                  # 8 -> 7 cells
+    problems = handoff.verify_handoff_conservation(day_strata, grid_samples,
+                                                    records)
+    assert any("E2/Severe" in p and "missing" in p for p in problems)
+
+
+def test_conservation_renamed_engine_is_rejected():
+    """A renamed engine key produces BOTH a "missing" problem for the real
+    frozen engine it silently replaced and an "unrecognised" problem for the
+    bogus key — a renamed cell is never mistaken for the real one."""
+    day_strata = _day_strata_with({"2019-06-01": "TP"})
+    grid_samples = {"cells": {}}
+    records = _full_record_matrix(["2019-06-01"])
+    records["E9"] = records.pop("E1")
+    problems = handoff.verify_handoff_conservation(day_strata, grid_samples,
+                                                    records)
+    assert any("E9" in p and "unrecognised" in p for p in problems)
+    assert any("E1/Base" in p and "missing" in p for p in problems)
+
+
+def test_conservation_correct_eight_cell_matrix_control_passes():
+    day_strata = _day_strata_with({"2019-06-01": "TP"})
+    grid_samples = {"cells": {}}
+    records = _full_record_matrix(["2019-06-01"])
+    problems = handoff.verify_handoff_conservation(day_strata, grid_samples,
+                                                    records)
+    assert problems == []
+
+
+# ---------------------------------------------------------------------------
+# verify_handoff_conservation — AXIS LOCKS + SEED_MANIFEST cross-verification
+# (M6.1.1 S2 item 2, Codex finding (b))
+# ---------------------------------------------------------------------------
+
+def test_conservation_theta_key_outside_frozen_pair_is_flagged():
+    """day_strata built from an out-of-pair theta (build_day_strata itself
+    does not restrict `thetas` to the frozen pair — that is exactly the axis
+    gap this closes at the conservation-check layer)."""
+    day_rows = {"2019-06-03": _day_row(tp_fp_class={"theta_0.9": "TP"})}
+    day_strata = handoff.build_day_strata(day_rows, thetas=[0.9])
+    grid_samples = {"cells": {}}
+    problems = handoff.verify_handoff_conservation(day_strata, grid_samples, {})
+    assert any("theta_0.9" in p and "frozen theta pair" in p for p in problems)
+
+
+def test_conservation_run_meta_theta_outside_frozen_pair_is_flagged():
+    day_strata = _day_strata_with({"2019-06-01": "TP"})
+    grid_samples = {"run_meta": {"theta": 0.9, "engine": "E1",
+                                 "scenario": "Base"}, "cells": {}}
+    problems = handoff.verify_handoff_conservation(day_strata, grid_samples, {})
+    assert any("theta_0.9" in p and "frozen theta pair" in p for p in problems)
+
+
+def _seeded_grid_samples(seeds) -> dict[str, object]:
+    return {
+        "run_meta": {"theta": 0.5, "engine": "E1", "scenario": "Base"},
+        "cells": {"q0.50_r0.50": {"per_seed": {
+            seed: {"tp_dates": ["2019-06-01"], "fp_dates": []}
+            for seed in seeds}}}}
+
+
+def test_conservation_seed_manifest_rogue_seed_is_flagged():
+    day_strata = _day_strata_with({"2019-06-01": "TP"})
+    grid_samples = _seeded_grid_samples((7, 13, 31))
+    records = _full_record_matrix(["2019-06-01"])
+    rogue_manifest = dict(handoff.build_seed_manifest())
+    rogue_manifest["research_bootstrap_seeds"] = [7, 13, 99]
+    problems = handoff.verify_handoff_conservation(
+        day_strata, grid_samples, records, seed_manifest=rogue_manifest)
+    assert any("research_bootstrap_seeds" in p and "99" in p
+              for p in problems)
+
+
+def test_conservation_fourth_seed_in_grid_samples_is_flagged():
+    day_strata = _day_strata_with({"2019-06-01": "TP"})
+    grid_samples = _seeded_grid_samples((7, 13, 31, 99))
+    records = _full_record_matrix(["2019-06-01"])
+    manifest = handoff.build_seed_manifest()
+    problems = handoff.verify_handoff_conservation(
+        day_strata, grid_samples, records, seed_manifest=manifest)
+    assert any("99" in p and "seed AXIS LOCK" in p for p in problems)
+
+
+def test_conservation_seed_manifest_not_supplied_skips_seed_axis_check():
+    """`seed_manifest` is OPTIONAL: a grid_samples carrying a rogue 4th seed
+    is not flagged for the seed axis when no manifest is supplied to compare
+    against (there is nothing to cross-check) — the caller must opt in."""
+    day_strata = _day_strata_with({"2019-06-01": "TP"})
+    grid_samples = _seeded_grid_samples((7, 13, 31, 99))
+    records = _full_record_matrix(["2019-06-01"])
+    problems = handoff.verify_handoff_conservation(day_strata, grid_samples,
+                                                    records)
+    assert not any("seed AXIS LOCK" in p for p in problems)
+
+
+def test_conservation_matching_seed_manifest_adds_no_problems():
+    day_strata = _day_strata_with({"2019-06-01": "TP"})
+    grid_samples = _seeded_grid_samples((7, 13, 31))
+    records = _full_record_matrix(["2019-06-01"])
+    manifest = handoff.build_seed_manifest()
+    problems = handoff.verify_handoff_conservation(
+        day_strata, grid_samples, records, seed_manifest=manifest)
+    assert problems == []
+
+
+# ---------------------------------------------------------------------------
+# formal_seal_admission (M6.1.1 S2 item 3, Codex finding (c): a dead
+# `formal_sealable` flag with no consumer — this IS the consumer)
+# ---------------------------------------------------------------------------
+
+def test_formal_seal_admission_all_sealable_is_empty():
+    artifacts = {
+        "a": {"formal_sealable": True},
+        "b": {"formal_sealable": True, "nested": {"x": 1}},
+    }
+    assert handoff.formal_seal_admission(artifacts) == []
+
+
+def test_formal_seal_admission_missing_flag_entirely_is_a_problem():
+    problems = handoff.formal_seal_admission({"no_flag": {"some_key": 1}})
+    assert len(problems) == 1
+    assert "no_flag" in problems[0]
+    assert "missing" in problems[0]
+
+
+def test_formal_seal_admission_todays_real_builders_all_refused():
+    """The three real M6.1 handoff builders are ALL formal_sealable=False
+    today (DR-M6-E / DR-M6-F / crn_scope all open) — exactly three problems,
+    each naming its own blocking UNRESOLVED marker(s)."""
+    day_rows = {"2019-06-03": _day_row()}
+    day_strata = handoff.build_day_strata(day_rows, thetas=[0.5])
+    d_tp, d_fp, strata = _fabricated_grid_populations()
+    grid_output = gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=0.4,
+                                     q_grid=[0.50], r_grid=[0.50])
+    grid_samples = handoff.build_grid_samples(grid_output, run_meta=_run_meta())
+    seed_manifest = handoff.build_seed_manifest()
+
+    assert day_strata["formal_sealable"] is False
+    assert grid_samples["formal_sealable"] is False
+    assert seed_manifest["formal_sealable"] is False
+
+    problems = handoff.formal_seal_admission({
+        "day_strata": day_strata, "grid_samples": grid_samples,
+        "seed_manifest": seed_manifest})
+    assert len(problems) == 3
+    day_strata_problem = next(p for p in problems if p.startswith("day_strata"))
+    assert "event_stratum" in day_strata_problem
+    assert "UNRESOLVED_DR-M6-F" in day_strata_problem
+    grid_samples_problem = next(p for p in problems
+                                if p.startswith("grid_samples"))
+    assert "k_policy" in grid_samples_problem
+    assert "UNRESOLVED_DR-M6-E" in grid_samples_problem
+    assert "crn_scope" in grid_samples_problem
+    seed_manifest_problem = next(p for p in problems
+                                 if p.startswith("seed_manifest"))
+    assert "k_policy" in seed_manifest_problem
+    assert "crn_scope" in seed_manifest_problem
+
+
+def test_formal_seal_admission_empty_day_strata_has_no_named_marker():
+    """An EMPTY day_strata (LOW-3: `bool(days) and ...`) is formal_sealable
+    =False with no UNRESOLVED marker anywhere inside it — the generic
+    refusal message must still fire (refusal never depends on being able to
+    explain itself)."""
+    empty_day_strata = handoff.build_day_strata({}, thetas=[0.5])
+    assert empty_day_strata["formal_sealable"] is False
+    problems = handoff.formal_seal_admission({"day_strata": empty_day_strata})
+    assert len(problems) == 1
+    assert "day_strata" in problems[0]
+    assert "not True" in problems[0]
+
+
+def test_formal_seal_admission_sorted_and_deterministic():
+    artifacts = {
+        "z_artifact": {"formal_sealable": False},
+        "a_artifact": {},
+    }
+    problems = handoff.formal_seal_admission(artifacts)
+    assert problems == sorted(problems)
+    assert len(problems) == 2
 
 
 # ---------------------------------------------------------------------------

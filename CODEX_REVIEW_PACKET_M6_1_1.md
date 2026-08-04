@@ -33,6 +33,10 @@ record 字段授权核查=全有冻结出处（§8:148/§10.1:167/180），非�
 - 六个结构化方法字段（除 event_na_mapping）今日无消费者——被 MED-1
   机器断言看守，裁决日必须同 commit 接线。
 - DAY_STRATA/GRID_SAMPLES 未入封存文件集（SEED_MANIFEST 已入）；
+  **［勘误 2026-08-05，M6.1.2］**：本行自 M6.1.2 起过期——
+  formal_seal_admission 接线后 SEED_MANIFEST **已被移出**封存集
+  （formal_sealable=False 即扣留，HANDOFF_ADMISSION.json 披露）；
+  本包其余内容仍如实描述其钉住的 ffb1647 时点；
   replay 测试为单层 fixture（DR-B/F 未裁前无真实层键，docstring 披露）。
 
 ## 验证主张（Codex 复算点）

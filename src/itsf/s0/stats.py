@@ -272,7 +272,7 @@ def _bootstrap_mean_ci_unchecked(series: Sequence[float], block_len: float,
             "ci_lo": ci_lo,
             "ci_hi": ci_hi,
             "n_boot": count,
-            "block_len": block,
+            "block_len": int(block) if block == int(block) else block,
         }
 
     los = [d["ci_lo"] for d in per_seed.values()]
@@ -317,5 +317,13 @@ def bootstrap_mean_ci(series: Sequence[float], block_len: float,
             f"research-path RNG may derive from; got {seeds}. A test that "
             "needs different seeds must call _bootstrap_mean_ci_unchecked "
             "directly instead of this public entry point.")
+    # M6.1.2 N9: a resample COUNT is integral by nature — refuse floats so
+    # 10000.0 can never masquerade as the frozen 10,000. The expected block
+    # LENGTH stays numeric (it parameterises a geometric distribution and
+    # stationary_bootstrap_indices accepts float by design); the payload
+    # gate separately pins the frozen values 5/21.
+    if isinstance(n_boot, bool) or not isinstance(n_boot, int):
+        raise ValueError("n_boot must be an int (frozen S0 sec.9: 10,000); "
+                         f"got {type(n_boot).__name__}")
     return _bootstrap_mean_ci_unchecked(series, block_len, n_boot=n_boot,
                                         ci_level=ci_level, master_seeds=seeds)

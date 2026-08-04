@@ -1,4 +1,4 @@
-# DECISION_REQUIRED_M6_1（六项方法裁决包；Fable 起草，Sol 立场并列，Aaron 裁决）
+# DECISION_REQUIRED_M6_1（**七项**方法裁决包，r3；Fable 起草，Sol 立场并列，Aaron 裁决）
 
 通用声明（M6.1.1-r2，审计后精确化）：并非全部机制已参数化——
 **六个结构化字段（spread_cost / volatility_regime / fp_allocation /
@@ -50,7 +50,8 @@ commit 落地；已参数化的是**阻断本身**：
   日间成本异质化。
 - **数据可得性**：全部来自已锁 spread_cost_table.csv；无新采购。
 - **conservation/fail-closed**：所选规则以字符串常量入
-  ResolvedS0Methods.spread_scalar_rule；scalars 派生函数配单测锁值。
+  ResolvedS0Methods.spread_cost（SpreadCostMethod.scalar_rule ＋
+  adverse_slippage_ticks ＋ adverse_semantics）；scalars 派生函数配单测锁值。
 - **计算成本**：A/B 一次性；C 每 fill 一次 dict 查找，可忽略。
 - **Fable 推荐**：B-i ＋ IR-7 Option i 为 Primary、Option ii 入
   sensitivity 通道（**接受 Sol 的 IR-7 立场**，撤回我先前"ii 为
@@ -74,7 +75,8 @@ commit 落地；已参数化的是**阻断本身**：
   **21 个此类 close**，窗口取严格早于 d 的最近 21 个合格收盘日；该定义
   同时喂 §2 描述轴与附录 A 分层——一旦裁定将影响附录 A 抽样与 MC 交接；15:44 与 settlement 备选，
   settlement 无数据=**data_unavailable**）；窗口=严格早于 d 的最近
-  20 个有官方收盘的实际 RTH 交易日（lag 终点 d−1，无前视）；
+  **21 个**有该 close 的实际 RTH 交易日（→ 20 个 return；lag 终点
+  d−1，无前视）；
   **跨 roll transition 的相邻收盘对**：Option r1=剔除该 return 并向
   前多取一日补窗；Option r2=照用（污染披露）。
 - **定界总体**（三分位阈值）：(a) 全 Development 一次性（**ex-post
@@ -83,9 +85,12 @@ commit 落地；已参数化的是**阻断本身**：
   §2 描述性分层可用 a/b；**附录 A 抽样若被要求 10:00 可观察须用
   c/d**——但附录 A 本质是事后可行性构造，Fable 认为可与 §2 共用
   a（幅度中性论证不依赖可观察性）；此点本身交裁。
-- **NA**：<20 个合格先行收盘或成分缺失 → vol_na **独立层**（不入
+- **NA**：**<21 个**合格先行 close（不足 20 个 return）或成分缺失 →
+  vol_na **独立层**（不入
   任何三分位、不删日；附录 A 分层含第四层 vol_na）。
-- **影响**：仅分层/描述轴；不触 Primary 标签与成本。
+- **实际影响（精确）**：本定义同时喂 §2 描述性稳定性轴 **与**附录 A
+  抽样分层键，故它改变网格选日与 MC 交接的 DAY_STRATA 层标签；
+  不触 Primary 标签、成本与 Oracle 定义。
 - **conservation**：全日集 = T1∪T2∪T3∪vol_na（机器断言）。
 - **Fable 推荐**：simple、ddof=1、official_close、r1 剔除补窗、
   定界=(a) 全 Dev（标 ex-post descriptive）、§2 与附录 A 共用同一
@@ -117,7 +122,8 @@ commit 落地；已参数化的是**阻断本身**：
 - **影响**：改变 D_FP 混合构成 → 网格 EV 区域形状；不触 Primary。
 - **Fable 推荐**：B。**Sol 立场**：暂倾向 A。
 - **分歧状态**：**unresolved_disagreement（正式登记）**，Aaron 裁。
-- 落地：IR；ResolvedS0Methods.fp_allocation_basis。
+- 落地：IR；ResolvedS0Methods.fp_allocation（FpAllocationMethod：
+  basis / weight_source / shortfall_rule）。
 
 ## DR-4（DR-M6-D）Primary bootstrap —— 分项裁决（每项独立勾选）
 
@@ -160,24 +166,28 @@ D4.7 CRN scope：θ 内 engine×scenario 共用重抽索引 vs 各自独立。
   MC_METHOD_SPEC §5（收敛四规则）。
 - **精确歧义**：K 未定义；stream 是否含 θ；收敛判据在 S0 侧的
   作用面。
-- **规模分列（M6.1.1）**：unique draws = K×3 seeds×63 cells；全组合
-  evaluations = 该数 × **2 θ** × 2 engines × 4 scenarios（θ 必须计入——
-  每 θ 网格独立）；K=200 时 unique≈37,800、evaluations≈604,800。
+- **规模分列（r3 更正）**：抽签总体随 θ 变（TP/FP 池按 θ 划分），
+  故 θ 计入 **unique draws**：unique = **2 θ × 3 seeds × 63 cells × K**
+  = K=200 时 **75,600**；engine×scenario 不改变选日、只改变每日 P&L，
+  故全组合 evaluations = 75,600 × 2 engines × 4 scenarios = **604,800**
+  次 P&L 汇总（非 604,800 次抽签）。
 - **提案（K=200 仅提案，未实现）**：K/seed/cell=200，k 从 **0**；
   RNG=PCG64 via default_rng(SeedSequence([master, GRID_TAG, θ_mil,
   q_mil, r_mil, k]))——**θ 入 stream**（避免跨 θ 相同抽签相关）；
   per-k 独立流 ⇒ K→2K 时前 K 个 repeat **天然前缀嵌套**；
-  规模：63 cells×3 seeds×200≈37,800 次分层抽样（合成 benchmark
-  于实现时报告，预估分钟级）；infeasible cell：K 全跳、照常全报；
+  规模：见上（75,600 次分层抽样；合成 benchmark 于实现时报告）；infeasible cell：K 全跳、照常全报；
   最大加倍 2 次（200→400→800），仍未收敛 →
   `infeasible_by_convergence` fail-closed 标记。
 - **收敛判据（MC §5 全四条，非仅离散度）**：verdict category 不变；
   关键分位变化 ≤ max($25,5%)；inner MCSE ≤ between-world SD 10%；
   三 master seeds 判定一致。S0 侧先报 realized 统计量跨 K 离散度，
   完整四条在 MC 接线处生效——K 政策须与 MC 共裁。
-- **CRN scope**（engine/scenario/platform/policy 轴复用或隔离）：
-  **未裁不得默认**；提案=engine/scenario 共用（可比）、platform/
-  policy 隔离（MC 侧）。
+- **CRN scope（r3 更正——非裁决项）**：MC_METHOD_SPEC §5 已**冻结**
+  "Common random numbers：跨政策/平台比较使用相同世界序列与相同抽样
+  流"。故 platform/policy 轴 CRN = **共用，冻结既定**，本包不再提交
+  Aaron 重裁；我先前"platform/policy 隔离"提案与冻结文本相悖，撤回。
+  仍未裁的只有 **S0 内 engine×scenario 的重抽索引是否共用**——该项
+  归 DR-4.7，不在本 DR 重复。
 - **Fable 推荐**：如上提案。**Sol 立场**：待表态。
 - **分歧状态**：unresolved。落地：IR＋MC spec 交叉引用。
 
@@ -202,20 +212,21 @@ D4.7 CRN scope：θ 内 engine×scenario 共用重抽索引 vs 各自独立。
   Σ层 = 全部 TP/FP 日（F3 除外）。
 - **Fable 推荐**：F1（词表零新增）。**Sol 立场**：待表态。
 - **分歧状态**：unresolved。落地：IR；
-  ResolvedS0Methods.event_na_stratum_rule。
+  ResolvedS0Methods.event_na_mapping。
 
 ---
 
 ## 汇总
 
-| DR | 字段 | Fable | Sol | 状态 |
+| DR | ResolvedS0Methods 字段 | Fable | Sol | 状态 |
 |---|---|---|---|---|
-| 1 | spread_scalar_rule＋adverse_slippage_final | B-i；IR-7=i 主+ii 敏感 | B 族；同 IR-7 | spread 子式待裁；IR-7 一致 |
-| 2 | volatility_regime | official_close/simple/ddof1/r1/全Dev ex-post/共用 | 待表态 | unresolved |
-| 3 | fp_allocation_basis | B | A | **unresolved_disagreement** |
-| 4 | bootstrap_population | 完整序列+n1+每seed10k+CRN共用 | 方向同 | 细目 unresolved |
-| 5 | grid_repeat_policy | K=200/θ入流/前缀嵌套/加倍2次 | 待表态 | unresolved |
-| 6 | event_na_stratum_rule | F1 五层 | 待表态 | unresolved |
+| 1 | spread_cost（scalar_rule＋adverse_slippage_ticks＋adverse_semantics） | B-i；IR-7=i 主+ii 敏感 | B 族；同 IR-7 | spread 子式 unresolved；IR-7 双方一致 |
+| 2 | volatility_regime（close_source/return_basis/ddof/roll_crossing_rule/tercile_reference/na_rule） | simple/ddof1/精确排期最后一分钟 close/r1 剔除补窗/全 Dev ex-post/共用 mapping | 待表态 | **unresolved**（子项未全定义） |
+| 3 | fp_allocation（basis/weight_source/shortfall_rule） | B | A | **unresolved_disagreement** |
+| 4 | bootstrap_method（population/na_day_rule/statistic/n_boot_per_seed/quoted_seed_rule/percentile_interpolation/crn_scope） | 完整序列＋n1＋每 seed 10k＋θ 内共用 | 方向同，细目待表态 | **unresolved**（D4.1-D4.7 逐项） |
+| 5 | grid_policy（k_per_seed/k_start_index/stream_includes_theta/convergence_rule/max_doublings） | K=200/k 从 0/θ 入流/加倍 2 次 | 待表态 | **unresolved**（CRN 跨政策平台已冻结，非裁决项） |
+| 6 | event_na_mapping | F1 五层 | 待表态 | **unresolved**（TEST_ONLY 合成映射已披露） |
+| 7 | stability_population | 双报（D_TP 条件＋完整合格序列） | 待表态 | **unresolved** |
 
 
 ## DR-7（DR-M6-G）stability 视图总体（新增，M6.1.1）

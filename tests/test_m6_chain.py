@@ -77,10 +77,18 @@ def _test_methods() -> C.ResolvedS0Methods:
         test_only=True)
 
 
+def _test_vol_axis(date: str) -> str:
+    """TEST_ONLY synthetic tercile assignment: deterministic 3-way split so
+    the resolved vol axis carries the full frozen stratum set (three
+    terciles + the NA bucket). Carries NO research meaning — the real
+    definition is DR-M6-B-v2, unruled."""
+    return ("T1", "T2", "T3")[int(date.replace("-", "")) % 3]
+
+
 def _test_config() -> C.StudyConfig:
     return C.derive_study_config(
         _test_methods(), spread_scalars=(0.5, 0.75, 0.75),
-        regime_of=lambda d: "R", vol_axis_of=lambda d: "T2")
+        regime_of=lambda d: "R", vol_axis_of=_test_vol_axis)
 
 
 _GOV = {"trial_id": "S0-T001", "authorized_commit": "a" * 40,
@@ -171,7 +179,7 @@ def test_event_na_blocks_without_ruled_mapping():
     m = _dc.replace(_test_methods(), event_na_mapping="UNRULED")
     cfg = C.derive_study_config(m, spread_scalars=(0.5, 0.75, 0.75),
                                 regime_of=lambda d: "R",
-                                vol_axis_of=lambda d: "T2")
+                                vol_axis_of=_test_vol_axis)
     r0 = ds.records[20]
     object.__setattr__(r0.features, "is_event_day", None) \
         if getattr(type(r0.features), "__dataclass_params__").frozen \
@@ -213,6 +221,15 @@ def test_e7_runner_a_to_f_production_builder_inside_stage_c(tmp_path):
     sealed = sorted(x.name for x in out.runs_dir.iterdir())
     assert "S0_REPORT.json" in sealed
     assert sum(1 for n in sealed if n.startswith("MC_HANDOFF_")) == 8
+    # M6.1.2: formal_sealable is CONSUMED — a not-sealable artifact is
+    # WITHHELD from the sealed set and its refusal is disclosed.
+    assert "SEED_MANIFEST.json" not in sealed
+    assert "HANDOFF_ADMISSION.json" in sealed
+    adm = json.loads((out.runs_dir / "HANDOFF_ADMISSION.json")
+                     .read_text("utf-8"))
+    assert adm["admitted"] == []
+    assert "SEED_MANIFEST.json" in adm["withheld"]
+    assert adm["withheld"]["SEED_MANIFEST.json"]
 
 
 def test_e7_unresolved_config_refused_in_stage_b_zero_exposure(tmp_path):
@@ -286,41 +303,159 @@ def test_no_invented_event_vocabulary_in_entrypoint():
     assert "none_or_na" not in src
 
 
-# --- MED-1 (M6.1.1 audit): mechanical ruling->consumer link -----------------
+# --- M6.1.2: BEHAVIOUR-level ruling->consumer probes (no source greps) ---
 
-# Field -> source patterns that must exist in the PRODUCTION sources the
-# moment the field is resolved. Empty list == no consumer wired YET; the
-# assertion below forces this map (and a real consumer) to be updated in
-# the SAME commit that lands a ruling — a resolved field with no wired
-# consumer turns the suite red.
-_METHOD_CONSUMERS: dict[str, list[str]] = {
-    "spread_cost": [],
-    "volatility_regime": [],
-    "fp_allocation": [],
-    "bootstrap_method": [],
-    "grid_policy": [],
-    "event_na_mapping": ["config.methods.event_na_mapping"],
-    "stability_population": [],
+def _probe_event_na_mapping():
+    """Observable behaviour difference when the ruled value changes: the
+    ruled mapping classifies a None F10 flag; any other value refuses.
+    Returns (ruled_ok: bool, other_refused: bool)."""
+    import dataclasses as _dc
+    mod = real_run_module()
+    if "m" not in _CACHE:
+        _CACHE["m"] = _market()
+    bars, ds = _CACHE["m"]
+    rec = next(r for r in ds.records if r.labels.d_open in (1, -1))
+    original = rec.features.is_event_day
+    setattr(rec.features, "is_event_day", None)
+    try:
+        ruled_ok = False
+        try:
+            mod.build_full_study_result(
+                ds, bars, config=_test_config(),
+                governance_meta=dict(_GOV), n_boot=40)
+            ruled_ok = True
+        except ValueError:
+            ruled_ok = False
+        other = _dc.replace(_test_methods(), event_na_mapping="OTHER_VALUE")
+        cfg = C.derive_study_config(
+            other, spread_scalars=(0.5, 0.75, 0.75),
+            regime_of=lambda d: "R", vol_axis_of=_test_vol_axis)
+        try:
+            mod.build_full_study_result(ds, bars, config=cfg,
+                                        governance_meta=dict(_GOV),
+                                        n_boot=40)
+            other_refused = False
+        except ValueError:
+            other_refused = True
+        return (ruled_ok, other_refused)
+    finally:
+        setattr(rec.features, "is_event_day", original)
+
+
+# field -> behaviour probe (None == NO consumer wired yet => PARTIAL).
+# A probe must observe a REAL output/behaviour difference, never a source
+# substring. Landing a ruling REQUIRES adding its probe here in the same
+# commit: the test below fails if a field is resolved in production while
+# its probe is still None.
+_METHOD_PROBES: dict[str, object] = {
+    "spread_cost": None,
+    "volatility_regime": None,
+    "fp_allocation": None,
+    "bootstrap_method": None,
+    "grid_policy": None,
+    "event_na_mapping": _probe_event_na_mapping,
+    "stability_population": None,
 }
 
 
-def test_every_resolved_method_field_has_a_wired_consumer():
-    mod = real_run_module()
+def test_method_probe_map_covers_every_field():
     import dataclasses as _dc
-    field_names = {f.name for f in _dc.fields(C.ResolvedS0Methods)
-                   if f.name != "test_only"}
-    assert set(_METHOD_CONSUMERS) == field_names
-    entry_src = (REPO / "scripts" / "s0_real_run.py").read_text(
-        encoding="utf-8")
+    names = {f.name for f in _dc.fields(C.ResolvedS0Methods)
+             if f.name != "test_only"}
+    assert set(_METHOD_PROBES) == names
+
+
+def test_resolved_fields_must_have_a_behaviour_probe():
+    """M6.1.2: a field RESOLVED in production with no behaviour probe is a
+    red — ruling, consumer and probe must land in ONE commit."""
+    mod = real_run_module()
     live = mod._resolved_methods()
-    for name, patterns in _METHOD_CONSUMERS.items():
-        resolved = getattr(live, name) is not None
-        if resolved:
-            assert patterns, (
-                f"{name} is RESOLVED but no consumer is wired/mapped — "
-                "ruling, consumer and this map must land in ONE commit")
-        for pat in patterns:
-            assert pat in entry_src, (name, pat)
+    for name, probe in _METHOD_PROBES.items():
+        if getattr(live, name) is not None:
+            assert probe is not None, (
+                f"{name} is RESOLVED but has no behaviour probe")
+
+
+def test_event_na_mapping_consumer_is_behaviourally_observable():
+    ruled_ok, other_refused = _probe_event_na_mapping()
+    assert ruled_ok is True
+    assert other_refused is True
+
+
+def test_unconsumed_method_fields_are_declared_partial():
+    """The six fields without consumers are UNRESOLVED in production, so no
+    silently-wrong method can run today (the PARTIAL status Codex asked to
+    be stated rather than claimed CLOSED)."""
+    mod = real_run_module()
+    live = mod._resolved_methods()
+    unconsumed = [n for n, p in _METHOD_PROBES.items() if p is None]
+    assert len(unconsumed) == 6
+    for name in unconsumed:
+        assert getattr(live, name) is None
+
+
+# --- M6.1.2: an ILLEGAL structured config can never make ready() true -----
+
+def _bad_methods(**over):
+    import dataclasses as _dc
+    return _dc.replace(_test_methods(), **over)
+
+
+def test_structurally_invalid_methods_are_refused_everywhere():
+    bad = _bad_methods(grid_policy=C.GridRepeatPolicy(
+        k_per_seed=0, k_start_index=0, stream_includes_theta=False,
+        convergence_rule="X", max_doublings=0))
+    assert any("k_per_seed" in p for p in bad.structural_problems())
+    with pytest.raises(ValueError, match="structurally invalid"):
+        C.derive_study_config(bad, spread_scalars=(0.5, 0.75, 0.75),
+                              regime_of=lambda d: "R",
+                              vol_axis_of=lambda d: "T")
+
+
+def test_wrong_type_method_value_is_refused():
+    bad = _bad_methods(spread_cost="B-i")          # str, not the dataclass
+    assert "spread_cost_not_a_SpreadCostMethod" in bad.structural_problems()
+    with pytest.raises(ValueError, match="structurally invalid"):
+        C.derive_study_config(bad, spread_scalars=(0.5, 0.75, 0.75),
+                              regime_of=lambda d: "R",
+                              vol_axis_of=lambda d: "T")
+
+
+def _non_test_only_config():
+    """A synthetic config with test_only=False, used ONLY to exercise the
+    structural/pending refusal branches that sit BEHIND the test_only
+    refusal in the production predicate. Every test using it asserts the
+    config is REFUSED — it never reaches a real computation."""
+    import dataclasses as _dc
+    return C.derive_study_config(
+        _dc.replace(_test_methods(), test_only=False),
+        spread_scalars=(0.5, 0.75, 0.75),
+        regime_of=lambda d: "R", vol_axis_of=_test_vol_axis)
+
+
+def test_injected_illegal_config_cannot_make_ready_true(monkeypatch):
+    """Defence in depth: even if an illegal config reached the cache (frozen
+    -dataclass bypass), revalidation at the point of use refuses it."""
+    mod = real_run_module()
+    cfg = _non_test_only_config()
+    object.__setattr__(cfg.methods, "grid_policy", C.GridRepeatPolicy(
+        k_per_seed=-5, k_start_index=0, stream_includes_theta=False,
+        convergence_rule="X", max_doublings=0))
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (cfg, "injected"))
+    got, why = mod.resolved_study_config()
+    assert got is None and "structurally invalid" in why
+    ok, why2 = mod.RealChain().ready()
+    assert ok is False
+
+
+def test_injected_partial_config_cannot_make_ready_true(monkeypatch):
+    mod = real_run_module()
+    cfg = _non_test_only_config()
+    object.__setattr__(cfg.methods, "bootstrap_method", None)
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (cfg, "injected"))
+    got, why = mod.resolved_study_config()
+    assert got is None and "pending method rulings" in why
+    assert mod.RealChain().ready()[0] is False
 
 
 # --- LOW-2 (M6.1.1 audit): _expected_governance independence ----------------
@@ -348,3 +483,59 @@ def test_empty_day_strata_is_not_sealable():
     from itsf.s0 import handoff as ho
     out = ho.build_day_strata({}, thetas=(0.5, 0.3))
     assert out["formal_sealable"] is False
+
+
+def test_e7_ready_then_compute_share_the_same_validated_config(monkeypatch):
+    """M6.1.2 E7: call ready() FIRST, then compute(), and prove both read
+    the SAME validated config instance (identity, not equality)."""
+    mod = real_run_module()
+    if "m" not in _CACHE:
+        _CACHE["m"] = _market()
+    bars, ds = _CACHE["m"]
+    cfg = _test_config()
+    seen: list = []
+
+    def fake_resolved():
+        seen.append(cfg)
+        return (cfg, "TEST_ONLY injected")
+
+    monkeypatch.setattr(mod, "resolved_study_config", fake_resolved)
+    chain = mod.RealChain()
+    monkeypatch.setattr(chain, "_ensure", lambda: (ds, None))
+    chain._bars = bars
+
+    ok, why = chain.ready()                      # explicit ready() first
+    assert ok is True, why
+    payload = chain.compute()                    # then compute()
+    assert len(seen) >= 2                        # both consulted the source
+    assert all(c is cfg for c in seen)           # identity, one instance
+    assert payload["disclosures"]["methods_test_only"] is True
+
+
+def test_a11_na_conservation_restatement_is_present_and_arithmetic():
+    """A11 (contract): the sealed report restates the NA conservation
+    evidence — totals, itemized reasons and the checker's verdict — and the
+    restated arithmetic must actually add up."""
+    d = _payload()["disclosures"]["na_conservation"]
+    assert d["conserved"] is True
+    assert d["reported_total_na"]
+    assert d["unregistered_reasons"] == [] and d["miscounted_columns"] == []
+    for col, total in d["reported_total_na"].items():
+        assert sum(d["itemized_reason_counts"][col].values()) == total
+    assert all(d["per_column_ok"].values())
+
+
+def test_formal_seal_admission_is_on_the_wire(monkeypatch):
+    """M6.1.2: if an artifact WERE sealable, it would be admitted — proving
+    the gate decides admission rather than a hardcoded exclusion."""
+    from itsf.s0 import handoff as ho
+    mod = real_run_module()
+    monkeypatch.setattr(ho, "build_seed_manifest",
+                        lambda: {"schema_version": ho.SCHEMA_VERSION,
+                                 "formal_sealable": True,
+                                 "seeds": list(RESEARCH_BOOTSTRAP_SEEDS)})
+    files = mod.render_s0_report(_payload(), expected_governance=dict(_GOV))
+    assert "SEED_MANIFEST.json" in files
+    adm = json.loads(files["HANDOFF_ADMISSION.json"])
+    assert adm["admitted"] == ["SEED_MANIFEST.json"]
+    assert adm["withheld"] == {}

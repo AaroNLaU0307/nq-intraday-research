@@ -195,7 +195,10 @@ def test_vol_resolved_conservation_ok_with_full_axis():
     view = _one_engine_scenario(pnl, meta, vol_axis=vol_axis)
     vol = view["vol_terciles"]
     assert vol["low"]["n"] == 3 and vol["high"]["n"] == 3
-    assert stability.VOL_NA_BUCKET not in vol
+    # M6.1.2: the NA bucket is part of the STABLE stratum shape — present
+    # but EMPTY when every date carries a label (the payload key set must
+    # not change with the data).
+    assert vol[stability.VOL_NA_BUCKET]["n"] == 0
     assert vol["conservation_ok"] is True
 
 

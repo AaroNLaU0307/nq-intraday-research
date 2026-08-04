@@ -55,8 +55,50 @@ from itsf.s0 import context as s0_context
 from itsf.s0 import gridmix as s0_gridmix
 from itsf.s0 import stability as s0_stability
 from itsf.s0 import stats as s0_stats
+from itsf.s0 import study as s0_study
 
 SCHEMA_VERSION = "m6.1-draft-1"
+
+
+# ===========================================================================
+# frozen axis locks (M6.1.1 S2 item 2 — Codex finding (b): "the θ/engine/
+# scenario/seed axes are not locked nor cross-checked against SEED_MANIFEST")
+# ===========================================================================
+# Every constant below is READ from its single-sourced owner rather than
+# retyped here, so this module cannot silently drift from the value the rest
+# of the codebase actually uses (the same discipline `build_seed_manifest`
+# already applies, by identity, to the seed tuple).
+ENGINES = s0_study.ENGINES              # frozen: S0 §7 (import study.ENGINES,
+                                        # never a local ("E1", "E2") copy)
+FROZEN_THETAS = s0_study.FROZEN_THETAS  # frozen: S0 §7 L133 (import
+                                        # study.FROZEN_THETAS, never a local
+                                        # (0.5, 0.3) copy)
+# frozen: S0 §6 cost-scenario grid (itsf.s0.costs.build_scenarios / frozen S0
+# SS6 "Base / Conservative / Stress / Severe"). No single importable tuple
+# constant exists upstream for this axis today (costs.build_scenarios returns
+# a name-keyed dict built from the same four literals) — this is the ONE
+# place it is spelled out, with its frozen citation, rather than re-typed at
+# every call site in this module.
+SCENARIOS = ("Base", "Conservative", "Stress", "Severe")
+# frozen: S0 §9 / Appendix A step 3 seeds {7,13,31}; identical object to
+# contracts.RESEARCH_BOOTSTRAP_SEEDS (never a local copy — IR DR-02).
+FROZEN_SEEDS = contracts.RESEARCH_BOOTSTRAP_SEEDS
+
+# ===========================================================================
+# REPLAY STATUS honesty (M6.1.1 S2 item 5 — Codex finding (e): "multi-stratum
+# replay must stay PARTIAL, never claimed CLOSED")
+# ===========================================================================
+# `build_grid_samples` today reconstructs a replay from day_strata's TP/FP
+# classification alone — a SINGLE stratum, because day_strata does not (yet)
+# carry gridmix's real `(year, volatility_regime, event_flag)` stratum key
+# (DR-M6-B / DR-M6-F both open). That gap must be MACHINE-VISIBLE, not just a
+# docstring sentence a reader might not reach: `build_grid_samples` output
+# always carries `"replay_status"`, and `REPLAY_STATUS_CLOSED` below is a
+# target this module is not yet able to emit (deliberately unreachable
+# today) — never write "CLOSED" as a status literally produced anywhere in
+# this file while that remains true.
+REPLAY_STATUS_PARTIAL_SINGLE_STRATUM = "PARTIAL_single_stratum_only"
+REPLAY_STATUS_CLOSED = "CLOSED_multi_stratum"
 
 
 # ===========================================================================
@@ -144,6 +186,13 @@ def _theta_key(theta: float) -> str:
     rather than imported so this schema-only module stays decoupled from the
     day-set-selection layer (`s0/study.py`)."""
     return f"theta_{theta:g}"
+
+
+# frozen theta AXIS LOCK (M6.1.1 S2 item 2): the only two keys any tp_fp_class
+# / run_meta["theta"] may ever carry, computed from the single-sourced
+# FROZEN_THETAS tuple above (never a second hand-written {"theta_0.5",
+# "theta_0.3"} literal set).
+_FROZEN_THETA_KEYS = frozenset(_theta_key(t) for t in FROZEN_THETAS)
 
 
 def _epoch_for_year(year: int) -> str:
@@ -373,10 +422,22 @@ def build_grid_samples(grid_output: Mapping[str, object],
 
     Returns
     -------
-    {"schema_version", "formal_sealable", "cells": {cell_key: {
-        "per_seed": {seed: {...}}, "infeasible_by_sample", "q_mil", "r_mil"}},
+    {"schema_version", "formal_sealable", "replay_status", "cells":
+        {cell_key: {"per_seed": {seed: {...}}, "infeasible_by_sample",
+                   "q_mil", "r_mil"}},
      "run_meta", "replay": {"stream_formula", "grid_stream_tag", "k_policy",
                            "crn_scope"}}
+
+    `replay_status` is ALWAYS `REPLAY_STATUS_PARTIAL_SINGLE_STRATUM` today
+    (M6.1.1 S2 item 5): this function replays from day_strata's per-theta
+    TP/FP classification alone, which is a single-stratum view (day_strata
+    carries no real `(year, volatility_regime, event_flag)` key while
+    DR-M6-B/DR-M6-F pend) — a fact this module discloses as DATA, not only as
+    a docstring sentence, so a caller/renderer can gate on it mechanically
+    rather than trusting prose. It feeds `formal_sealable` below alongside
+    the existing k_policy/crn_scope UNRESOLVED checks: this artifact cannot
+    become sealable merely by DR-M6-E/crn_scope resolving while the replay
+    itself is still single-stratum.
 
     `q_mil` / `r_mil` are recovered as `round(target_precision * 1000)` /
     `round(target_recall * 1000)` — the exact inverse of how `gridmix`
@@ -415,12 +476,15 @@ def build_grid_samples(grid_output: Mapping[str, object],
         "k_policy": _unresolved("DR-M6-E"),
         "crn_scope": str(UNRESOLVED),
     }
+    replay_status = REPLAY_STATUS_PARTIAL_SINGLE_STRATUM
     formal_sealable = not (_is_unresolved(replay["k_policy"])
-                          or _is_unresolved(replay["crn_scope"]))
+                          or _is_unresolved(replay["crn_scope"])
+                          or replay_status != REPLAY_STATUS_CLOSED)
 
     return {
         "schema_version": SCHEMA_VERSION,
         "formal_sealable": formal_sealable,
+        "replay_status": replay_status,
         "cells": cells,
         "run_meta": validated_run_meta,
         "replay": replay,
@@ -520,12 +584,223 @@ def build_handoff_manifest(files: Mapping[str, str]) -> dict[str, object]:
 
 
 # ===========================================================================
+# formal_seal_admission (M6.1.1 S2 item 3 — Codex finding (c): "formal_
+# sealable=False artifacts still enter the sealed set ... a dead flag with no
+# consumer is not acceptable: either the flag gates admission, or the
+# artifact leaves the formal sealing protocol")
+# ===========================================================================
+
+def _find_unresolved_markers(artifact: Mapping[str, object],
+                             ) -> dict[str, int]:
+    """Every DISTINCT `"key=value"` UNRESOLVED-marker leaf found anywhere
+    inside `artifact`, mapped to how many times it recurs (e.g. `days` holds
+    one `event_stratum` marker per date, but the message names it ONCE with
+    a multiplicity rather than repeating one line per date).
+
+    Recurses into nested Mappings only (the day/cell keyed dicts this module
+    builds); a list/tuple is walked element-wise so a marker inside one is
+    still found, but its own index never becomes part of the label (an
+    UNRESOLVED value is never itself a bare list/tuple element in this
+    module's shapes today, so this is a defensive completeness measure, not
+    a documented shape). The top-level `formal_sealable` key itself is
+    skipped — it is the VERDICT this function is deriving evidence for, not
+    evidence of its own.
+    """
+    counts: dict[str, int] = {}
+
+    def _walk(node: object) -> None:
+        if isinstance(node, Mapping):
+            for key, value in node.items():
+                if key == "formal_sealable":
+                    continue
+                if _is_unresolved(value):
+                    label = f"{key}={value!r}"
+                    counts[label] = counts.get(label, 0) + 1
+                else:
+                    _walk(value)
+        elif isinstance(node, (list, tuple)):
+            for item in node:
+                _walk(item)
+
+    _walk(artifact)
+    return counts
+
+
+def formal_seal_admission(artifacts: Mapping[str, Mapping]) -> list[str]:
+    """The CONSUMER `formal_sealable` lacked (M6.1.1 audit finding (c)): one
+    problem per artifact that is NOT admissible to a formal-sealed set,
+    naming the blocking UNRESOLVED marker(s), plus one for an artifact that
+    omits the flag entirely. Returns a (sorted, deterministic) list; an empty
+    list means every supplied artifact is admissible.
+
+    This function does not itself hold or mutate any "sealed set" — it is
+    the missing GATE the main agent's Stage-E renderer must call before
+    admitting an artifact: a name that appears in this function's non-empty
+    return value must NOT be added to whatever the renderer treats as
+    sealed. `formal_sealable=False` merely SITTING in the JSON, unread by
+    any caller, was exactly the dead-flag defect this closes.
+
+    Parameters
+    ----------
+    artifacts
+        artifact name -> the artifact's own dict (e.g. the outputs of
+        `build_day_strata` / `build_grid_samples` / `build_seed_manifest`,
+        or any other Mapping that carries a `"formal_sealable"` key at its
+        top level).
+
+    Admission rule, per artifact
+    -----------------------------
+    * `"formal_sealable"` key absent entirely -> a problem (a missing flag is
+      NOT a silent pass; there is no vocabulary in which "no flag" means
+      "sealable").
+    * `artifact["formal_sealable"] is not True` (False, 0, "true", any
+      non-bool-True value) -> a problem naming the UNRESOLVED marker(s) found
+      inside the artifact (via `_find_unresolved_markers`), or, when the
+      artifact holds none (e.g. it is merely empty), a generic refusal
+      message — refusal never depends on being able to explain itself.
+    * `artifact["formal_sealable"] is True` -> no problem; the artifact may
+      enter the sealed set.
+    """
+    problems: list[str] = []
+    for name in sorted(artifacts):
+        artifact = artifacts[name]
+        if "formal_sealable" not in artifact:
+            problems.append(
+                f"{name}: missing the 'formal_sealable' flag entirely — an "
+                "artifact with no flag at all cannot be admitted to the "
+                "sealed set (a dead/absent flag is never read as a pass)")
+            continue
+        sealable = artifact["formal_sealable"]
+        if sealable is not True:
+            markers = _find_unresolved_markers(artifact)
+            if markers:
+                blocking = ", ".join(
+                    f"{label} (x{count})" if count > 1 else label
+                    for label, count in sorted(markers.items()))
+                problems.append(
+                    f"{name}: formal_sealable={sealable!r} (not True) — "
+                    f"blocked by {blocking} — refused admission to the "
+                    "sealed set")
+            else:
+                problems.append(
+                    f"{name}: formal_sealable={sealable!r} (not True) — "
+                    "refused admission to the sealed set (no named "
+                    "UNRESOLVED marker was found; e.g. an empty artifact "
+                    "can be formal_sealable=False by construction)")
+    return sorted(problems)
+
+
+# ===========================================================================
 # E6e — verify_handoff_conservation
 # ===========================================================================
+
+# frozen: the record matrix's keys must be EXACTLY {ENGINES} x {SCENARIOS}
+# (M6.1.1 S2 item 1, Codex finding (a)); built once, from the single-sourced
+# ENGINES/SCENARIOS constants above, never re-typed at each check site.
+_REQUIRED_ENGINE_SCENARIO_CELLS = tuple(
+    (engine, scenario) for engine in ENGINES for scenario in SCENARIOS)
+
+
+def _check_theta_axis_lock(day_strata: Mapping[str, object],
+                           grid_samples: Mapping[str, object]) -> list[str]:
+    """THETA AXIS LOCK (M6.1.1 S2 item 2): every `tp_fp_class` key actually
+    present in `day_strata` and `grid_samples["run_meta"]["theta"]` (when
+    supplied) must lie within the frozen `FROZEN_THETAS` pair. Unconditional
+    — independent of whether a `seed_manifest` is supplied to
+    `verify_handoff_conservation` — because a rogue theta axis value is a
+    defect in its own right (neither `build_day_strata` nor
+    `build_grid_samples` reject an out-of-pair theta today, which is exactly
+    the gap this closes)."""
+    problems: list[str] = []
+    for date, row in day_strata.get("days", {}).items():
+        rogue = sorted(set(row.get("tp_fp_class", {})) - _FROZEN_THETA_KEYS)
+        for key in rogue:
+            problems.append(
+                f"{date}: day_strata tp_fp_class key {key!r} is not one of "
+                f"the frozen theta pair {sorted(_FROZEN_THETA_KEYS)} "
+                "(study.FROZEN_THETAS) — theta AXIS LOCK violated")
+    run_meta = grid_samples.get("run_meta")
+    if isinstance(run_meta, Mapping) and "theta" in run_meta:
+        key = _theta_key(float(run_meta["theta"]))
+        if key not in _FROZEN_THETA_KEYS:
+            problems.append(
+                f"grid_samples run_meta theta {run_meta['theta']!r} (key "
+                f"{key!r}) is not one of the frozen theta pair "
+                f"{sorted(_FROZEN_THETA_KEYS)} (study.FROZEN_THETAS) — theta "
+                "AXIS LOCK violated")
+    return problems
+
+
+def _check_record_matrix_shape(
+        record_dates_by_engine_scenario: Mapping[
+            str, Mapping[str, Sequence[str]]]) -> list[str]:
+    """The record matrix's KEYS must be EXACTLY the frozen {ENGINES} x
+    {SCENARIOS} 8 cells (M6.1.1 S2 item 1, Codex finding (a): "an empty or
+    partial record matrix passes" today). An empty matrix, a missing cell
+    and an extra/renamed cell are DISTINCT problems, each named explicitly —
+    never folded into one generic "matrix is wrong" message."""
+    if not record_dates_by_engine_scenario:
+        return [
+            "record matrix is EMPTY: the frozen matrix requires exactly "
+            f"the {len(_REQUIRED_ENGINE_SCENARIO_CELLS)} cells "
+            f"{_REQUIRED_ENGINE_SCENARIO_CELLS} ({ENGINES} x {SCENARIOS}) "
+            "and none were supplied"]
+    problems: list[str] = []
+    actual_cells = {(engine, scenario)
+                    for engine, scenarios in
+                    record_dates_by_engine_scenario.items()
+                    for scenario in scenarios}
+    required_cells = set(_REQUIRED_ENGINE_SCENARIO_CELLS)
+    for engine, scenario in sorted(required_cells - actual_cells):
+        problems.append(
+            f"record matrix missing required cell {engine}/{scenario} "
+            f"(the frozen matrix is {ENGINES} x {SCENARIOS})")
+    for engine, scenario in sorted(actual_cells - required_cells):
+        problems.append(
+            f"record matrix has an unrecognised cell {engine}/{scenario} — "
+            f"not one of the frozen {ENGINES} x {SCENARIOS} (an extra or "
+            "renamed engine/scenario is not accepted)")
+    return problems
+
+
+def _check_seed_axis_lock(grid_samples: Mapping[str, object],
+                          seed_manifest: Mapping[str, object]) -> list[str]:
+    """SEED_MANIFEST cross-verification (M6.1.1 S2 item 2): the seeds
+    `grid_samples`' per_seed maps actually carry, `seed_manifest`'s own
+    recorded research seeds, and the frozen seed tuple must ALL agree
+    exactly. Only invoked when the caller supplies a manifest — there is
+    nothing to cross-check against without one."""
+    problems: list[str] = []
+    frozen_seeds = set(FROZEN_SEEDS)
+    observed_seeds: set[int] = set()
+    for cell in grid_samples.get("cells", {}).values():
+        observed_seeds.update(cell.get("per_seed", {}).keys())
+    manifest_seeds = {int(s) for s in
+                      seed_manifest.get("research_bootstrap_seeds", ())}
+    if manifest_seeds != frozen_seeds:
+        problems.append(
+            f"seed_manifest['research_bootstrap_seeds'] "
+            f"{sorted(manifest_seeds)} != the frozen seed tuple "
+            f"{sorted(frozen_seeds)} (contracts.RESEARCH_BOOTSTRAP_SEEDS) — "
+            "seed AXIS LOCK violated")
+    if observed_seeds and observed_seeds != frozen_seeds:
+        problems.append(
+            f"grid_samples per_seed keys {sorted(observed_seeds)} != the "
+            f"frozen seed tuple {sorted(frozen_seeds)} (contracts."
+            "RESEARCH_BOOTSTRAP_SEEDS) — seed AXIS LOCK violated")
+    if observed_seeds and manifest_seeds and observed_seeds != manifest_seeds:
+        problems.append(
+            f"grid_samples per_seed keys {sorted(observed_seeds)} != "
+            f"seed_manifest['research_bootstrap_seeds'] "
+            f"{sorted(manifest_seeds)} — the grid samples and the seed "
+            "manifest disagree about which seeds were run")
+    return problems
+
 
 def verify_handoff_conservation(
         day_strata: Mapping[str, object], grid_samples: Mapping[str, object],
         record_dates_by_engine_scenario: Mapping[str, Mapping[str, Sequence[str]]],
+        seed_manifest: Mapping[str, object] | None = None,
         ) -> list[str]:
     """Cross-check the three handoff artifacts against each other. Returns a
     (sorted, deterministic) list of problem descriptions — empty means
@@ -533,6 +808,10 @@ def verify_handoff_conservation(
 
     Checks
     ------
+    0. THETA AXIS LOCK (M6.1.1 S2 item 2, unconditional — see
+       `_check_theta_axis_lock`): every tp_fp_class key in `day_strata` and
+       `grid_samples["run_meta"]["theta"]` must lie within the frozen
+       `FROZEN_THETAS` pair.
     1. every date appearing in a grid sample (any cell, any seed, TP or FP)
        is present in `day_strata`;
     1b. PER-THETA marker agreement: `grid_samples["run_meta"]["theta"]`
@@ -545,14 +824,30 @@ def verify_handoff_conservation(
        would have missed it.
     2. every date appearing in `record_dates_by_engine_scenario` (any engine
        x scenario) is present in `day_strata`;
-    3. BIDIRECTIONAL TP/FP <-> record coverage: every date `day_strata`
-       classifies TP or FP (for ANY requested theta) has a record for EVERY
-       engine x scenario in `record_dates_by_engine_scenario`, and
-       conversely every date that HAS a record for some engine x scenario is
-       TP/FP-classified in `day_strata` (never only `non_tradeable`).
+    3. RECORD MATRIX SHAPE (M6.1.1 S2 item 1, Codex finding (a) — see
+       `_check_record_matrix_shape`): `record_dates_by_engine_scenario`'s
+       keys must be EXACTLY the frozen {ENGINES} x {SCENARIOS} 8 cells; an
+       empty matrix, a missing cell and an extra/renamed cell are DISTINCT
+       problems.
+    4. BIDIRECTIONAL TP/FP <-> record coverage, checked against the FROZEN 8
+       cells (`_REQUIRED_ENGINE_SCENARIO_CELLS`) rather than merely whatever
+       happens to appear in the caller's own matrix — checking only the
+       caller's own keys is EXACTLY how an empty or partial matrix used to
+       pass this half of the check silently (Codex finding (a)): every date
+       `day_strata` classifies TP or FP (for ANY requested theta) must have
+       a record for EVERY one of the frozen 8 engine x scenario cells, and
+       conversely every date that HAS a record for some engine x scenario
+       actually present in the caller's matrix is TP/FP-classified in
+       `day_strata` (never only `non_tradeable`).
+    5. SEED_MANIFEST cross-verification (M6.1.1 S2 item 2, only when
+       `seed_manifest` is supplied — see `_check_seed_axis_lock`): the seeds
+       in grid_samples' per_seed maps, the manifest's own recorded seeds,
+       and the frozen seed tuple must all agree exactly.
     """
     problems: list[str] = []
     days = day_strata.get("days", {})
+
+    problems.extend(_check_theta_axis_lock(day_strata, grid_samples))
 
     grid_dates: set[str] = set()
     for cell in grid_samples.get("cells", {}).values():
@@ -598,11 +893,6 @@ def verify_handoff_conservation(
                             f"{theta_key} but day_strata classifies it "
                             f"{actual!r} for {theta_key}")
 
-    engine_scenarios = [(engine, scenario)
-                        for engine, scenarios in
-                        record_dates_by_engine_scenario.items()
-                        for scenario in scenarios]
-
     record_dates: set[str] = set()
     for engine, scenarios in record_dates_by_engine_scenario.items():
         for scenario, dates in scenarios.items():
@@ -612,13 +902,18 @@ def verify_handoff_conservation(
             problems.append(
                 f"{date}: has a record but is absent from day_strata")
 
+    problems.extend(
+        _check_record_matrix_shape(record_dates_by_engine_scenario))
+
     classified_dates = {
         date for date, row in days.items()
         if any(v in ("TP", "FP") for v in row.get("tp_fp_class", {}).values())
     }
 
+    # Checked against the FROZEN 8 cells, never the caller's own keys (see
+    # check 4 docstring above / Codex finding (a)).
     for date in sorted(classified_dates):
-        for engine, scenario in engine_scenarios:
+        for engine, scenario in _REQUIRED_ENGINE_SCENARIO_CELLS:
             engine_dates = record_dates_by_engine_scenario.get(engine, {})
             scenario_dates = set(engine_dates.get(scenario, ()))
             if date not in scenario_dates:
@@ -633,5 +928,8 @@ def verify_handoff_conservation(
                     problems.append(
                         f"{date}: has a record for {engine}/{scenario} but "
                         "is not TP/FP-classed in day_strata")
+
+    if seed_manifest is not None:
+        problems.extend(_check_seed_axis_lock(grid_samples, seed_manifest))
 
     return sorted(set(problems))

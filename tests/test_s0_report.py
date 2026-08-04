@@ -29,15 +29,19 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import importlib.util
 import json
 from collections.abc import Mapping
+from pathlib import Path
 
 import pytest
 from conftest import make_trade_path
 from test_s0_context import universe_of, weekdays
 
+from itsf.contracts import TradePathRecord
 from itsf.s0 import context as ctx_mod
 from itsf.s0 import costs, report
+from itsf.s0 import gridmix as m_gridmix
 from itsf.s0.dataset import ERA_ACTUAL, ERA_PROXY, build_s0_dataset
 from itsf.s0.stability import build_stability_views
 from itsf.s0.study import (
@@ -47,6 +51,8 @@ from itsf.s0.study import (
     build_study,
     theta_key,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 SCENARIOS = ("Base", "Conservative", "Stress", "Severe")
 BLOCKS = (5, 21)
@@ -109,14 +115,38 @@ def _plain(obj):
     return obj
 
 
+def _vol_axis_with_terciles_and_na(day_meta: dict) -> dict[str, str]:
+    """A vol_axis covering MOST (not all) of `day_meta`'s dates, spread over
+    THREE opaque tercile labels — so `build_stability_views`'s resolved
+    `vol_terciles` view carries the full mission-item-6 stratum set (three
+    terciles + the reserved `vol_na` bucket for the dates deliberately left
+    out here) against the REAL D_TP population, not a single-bucket fake.
+    `mod=5, rem=0` is a verified split (see the M6.1.2-S1 fixture-derivation
+    note in this module's docstring) that lands >=1 vol_na day and all
+    three labels inside BOTH frozen thetas' 16-day D_TP set for this
+    module's fixed synthetic market."""
+    labels = ("vol_lo", "vol_mid", "vol_hi")
+    out: dict[str, str] = {}
+    for i, d in enumerate(sorted(day_meta)):
+        if i % 5 == 0:
+            continue                      # left out on purpose -> vol_na
+        out[d] = labels[i % 3]
+    return out
+
+
 def _real_pieces() -> dict:
-    """Build ONE small synthetic S0Dataset + study + stability_views via the
-    REAL production functions, cached for the whole test session.
+    """Build ONE small synthetic S0Dataset + study + stability_views +
+    feasibility_grid via the REAL production functions, cached for the
+    whole test session.
 
     This is what makes oracle_daily/structural/frequency/sizing_outputs/
-    stability_views ACTUAL producer shapes rather than an invented
-    approximation (M6.1 finding: the old fixture faked A2 with a
-    pooled/by_era-only shape no real payload has ever produced).
+    stability_views/feasibility_grid ACTUAL producer shapes rather than an
+    invented approximation (M6.1 finding: the old fixture faked A2 with a
+    pooled/by_era-only shape no real payload has ever produced; M6.1.2-S1
+    finding: feasibility_grid was a single hand-written fake cell that bore
+    no relation to gridmix.py's real 63-point grid, and vol_terciles was
+    built from a single constant label so it could never carry the real
+    three-tercile-plus-vol_na stratum set).
     """
     if "study" not in _REAL_CACHE:
         dates = weekdays("2020-01-02", 46)
@@ -130,14 +160,33 @@ def _real_pieces() -> dict:
         day_meta = {r.trade_date: {"year": r.year, "era": r.era,
                                    "d_open": int(r.labels.d_open or 0)}
                     for r in ds.records}
+        vol_axis = _vol_axis_with_terciles_and_na(day_meta)
         stability_views = {
             t: build_stability_views(
-                study["per_theta"][t], day_meta,
-                vol_axis={d: "T2" for d in day_meta})
+                study["per_theta"][t], day_meta, vol_axis=vol_axis)
             for t in study["per_theta"]}
+
+        # feasibility_grid: PRODUCER-DERIVED (mission item 7) — call
+        # gridmix.build_grid on the REAL per-theta D_TP/D_FP populations
+        # (mirrors scripts/s0_real_run.py::build_full_study_result's own
+        # per-theta/engine/scenario loop, read-only reference), never a
+        # hand-written single-cell fake.
+        feasibility_grid: dict[str, dict] = {}
+        for t, tblock in study["per_theta"].items():
+            p = tblock["frequency"]["pooled"]["continuation_base_rate_p"]
+            for eng in ENGINES:
+                for scn in SCENARIOS:
+                    d_tp = tblock["d_tp"][eng][scn]
+                    d_fp = tblock["d_fp"][eng][scn]
+                    strata = {d: (d[:4], "R", "none")
+                             for d in {**d_tp, **d_fp}}
+                    feasibility_grid[f"{t}|{eng}|{scn}"] = m_gridmix.build_grid(
+                        d_tp, d_fp, strata, p)
+
         _REAL_CACHE["ds"] = ds
         _REAL_CACHE["study"] = study
         _REAL_CACHE["stability_views"] = stability_views
+        _REAL_CACHE["feasibility_grid"] = feasibility_grid
     return _REAL_CACHE
 
 
@@ -157,10 +206,12 @@ def _structural_from_ds(ds) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# hand-crafted cell builders — bootstrap_ci / feasibility_grid shapes are
-# fully pinned by stats.py / gridmix.py's own docstrings; a real 10,000-
-# resample run per cell would cost real compute for no extra fixture
-# fidelity, so these mirror the documented shape instead of calling in.
+# hand-crafted cell builders — bootstrap_ci shape is fully pinned by
+# stats.py's own docstring; a real 10,000-resample run per cell would cost
+# real compute for no extra fixture fidelity, so this mirrors the documented
+# shape instead of calling in. feasibility_grid is PRODUCER-DERIVED instead
+# (via gridmix.build_grid in `_real_pieces()`, mission item 7) — no
+# hand-written single-cell fake.
 # ---------------------------------------------------------------------------
 def _bootstrap_cell(block_len: int) -> dict:
     return {
@@ -178,13 +229,20 @@ def _bootstrap_cell(block_len: int) -> dict:
     }
 
 
-def _feasibility_cell() -> dict:
-    return {
-        "grid": {"q0.5|r0.5": {"seed7": {"n_selected": 4}}},
-        "n_tp_available": 16,
-        "n_fp_available": 16,
-        "method": "stratified (q,r) grid — frozen Appendix A, synthetic fixture",
-    }
+def _strkeys(obj):
+    """Recursively stringify non-str dict keys — mirrors scripts/
+    s0_real_run.py's own `_strkeys` (read-only reference): gridmix.py's
+    real `per_seed` dict is keyed by INT master seeds (7, 13, 31), and the
+    formal payload boundary (report._clean / to_formal_json) hard-rejects a
+    non-str dict key, so the REAL renderer always stringifies before a grid
+    ever reaches the formal side. Reproduced locally (never imported from
+    the main-agent-owned script) so this fixture matches what actually gets
+    sealed."""
+    if isinstance(obj, dict):
+        return {str(k): _strkeys(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_strkeys(v) for v in obj]
+    return obj
 
 
 _GOV = {
@@ -231,8 +289,8 @@ def _valid_payload() -> dict:
         for t in tkeys for e in ENGINES for s in SCENARIOS for b in BLOCKS
     }
     feasibility_grid = {
-        "cells": {f"{t}|{e}|{s}": _feasibility_cell()
-                 for t in tkeys for e in ENGINES for s in SCENARIOS},
+        "cells": {k: _strkeys(copy.deepcopy(v))
+                 for k, v in real["feasibility_grid"].items()},
         "regions": {"status": "pending_mc"},
     }
     mc_handoff_manifest = {
@@ -252,6 +310,16 @@ def _valid_payload() -> dict:
         "pending_method_decisions": [],
         "method_conventions": {
             "quoted_seed_convention": "first frozen seed (7)"},
+        # A11 na_conservation restatement (mission item 8). NO current
+        # producer populates this key — see report.py's docstring and this
+        # file's module docstring for the hand-off note; this fixture-only
+        # block exists purely so the VALID baseline payload can seal.
+        "na_conservation": {
+            "per_table_total_na": {
+                table: sum(row["na"] for row in fields.values())
+                for table, fields in ds.na_table["per_field"].items()},
+            "conservation_ok": True,
+        },
     }
     governance = copy.deepcopy(_GOV)
 
@@ -285,12 +353,25 @@ def _validate(payload):
     return report.validate_formal_payload(payload, expected_governance=gov)
 
 
+def _sealed_files_manifest(files: dict[str, str]) -> dict[str, object]:
+    """mission M6.1.2-S3 item 8: the `mc_handoff_manifest["sealed_files"]`
+    shape the real renderer stamps (scripts/s0_real_run.py::
+    render_s0_report) — {filename: {"sha256": <64hex>, "bytes": <int>}} for
+    every file in `files`, computed FROM those same bytes."""
+    return {name: {"sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
+                   "bytes": len(body.encode("utf-8"))}
+           for name, body in files.items()}
+
+
 def _sealed_fixture():
     """(files, payload): a REAL 8-file MC_HANDOFF bundle whose n_records,
     line count and sha256 all agree with `payload["mc_handoff_manifest"]
     ["counts"]`, and whose trade_date set on every file is EXACTLY the
     payload's own TP ∪ FP day universe (built from `record_to_formal_dict`
-    output, `cost_scenario` overridden to match each file)."""
+    output, `cost_scenario` overridden to match each file). Also carries the
+    `sealed_files`/`self_excluded` sub-keys (mission item 8) covering these
+    8 files — `self_excluded` names S0_REPORT.json, which this synthetic
+    fixture never builds, mirroring the real renderer's own shape."""
     payload = _valid_payload()
     universe = sorted({
         d for tcell in payload["oracle_daily"].values()
@@ -313,12 +394,15 @@ def _sealed_fixture():
             manifest_files[f"{eng}|{scn}"] = {
                 "file": name, "n_records": n,
                 "sha256": hashlib.sha256(body.encode("utf-8")).hexdigest()}
-    payload["mc_handoff_manifest"] = {"counts": counts, "files": manifest_files}
+    payload["mc_handoff_manifest"] = {
+        "counts": counts, "files": manifest_files,
+        "sealed_files": _sealed_files_manifest(files),
+        "self_excluded": ["S0_REPORT.json"]}
     return files, payload
 
 
 def _rewrite_sealed_file(files, payload, eng, scn, records, *,
-                        sync_counts=True):
+                        sync_counts=True, sync_sealed_files=True):
     """Rewrite one sealed MC_HANDOFF_<eng>_<scn>.jsonl body to hold exactly
     `records` (a list of already-formal-dict trade records) and refresh its
     manifest spec (n_records/sha256) to match the NEW body byte-for-byte.
@@ -327,7 +411,11 @@ def _rewrite_sealed_file(files, payload, eng, scn, records, *,
     `payload["mc_handoff_manifest"]["counts"][eng][scn]["n_records"]` to the
     new count, so a test isolates exactly ONE corruption at a time; a test
     that wants to deliberately create a counts-vs-lines conflict passes
-    `sync_counts=False` (or mutates counts itself)."""
+    `sync_counts=False` (or mutates counts itself). `sync_sealed_files=True`
+    (default) likewise refreshes `mc_handoff_manifest["sealed_files"]`
+    (mission item 8) so an UNRELATED mutation (e.g. a line-level corruption)
+    never also trips the item-8 reconciliation as incidental noise; a test
+    targeting item 8 itself passes `sync_sealed_files=False`."""
     name = f"MC_HANDOFF_{eng}_{scn}.jsonl"
     body = "\n".join(json.dumps(r, sort_keys=True) for r in records)
     files[name] = body
@@ -337,6 +425,225 @@ def _rewrite_sealed_file(files, payload, eng, scn, records, *,
     if sync_counts:
         payload["mc_handoff_manifest"]["counts"][eng][scn]["n_records"] = \
             len(records)
+    if sync_sealed_files:
+        sealed = payload["mc_handoff_manifest"].get("sealed_files")
+        if isinstance(sealed, dict) and name in sealed:
+            body_bytes = body.encode("utf-8")
+            sealed[name] = {
+                "sha256": hashlib.sha256(body_bytes).hexdigest(),
+                "bytes": len(body_bytes)}
+
+
+# ===========================================================================
+# M6.1.2-S1 — third refusal level: the REAL production renderer
+# (scripts/s0_real_run.py::render_s0_report), loaded read-only via
+# importlib.util.spec_from_file_location (the tests/test_s0_runner.py::
+# real_run_module idiom, replicated locally per this module's exclusive
+# file-scope boundary — never imported from another test module).
+# ===========================================================================
+_SCRIPT_CACHE: dict = {}
+
+
+def real_run_module():
+    """Import scripts/s0_real_run.py once (READ-ONLY: never written to by
+    this file). Mirrors tests/test_s0_runner.py::real_run_module exactly."""
+    if "mod" not in _SCRIPT_CACHE:
+        script = REPO_ROOT / "scripts" / "s0_real_run.py"
+        spec = importlib.util.spec_from_file_location("s0_real_run", script)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _SCRIPT_CACHE["mod"] = mod
+    return _SCRIPT_CACHE["mod"]
+
+
+def _mc_records_for_universe(universe: list[str]) -> dict[str, dict[str, list]]:
+    """dict[engine][scenario] -> list[TradePathRecord], one record per date
+    in `universe`, engine/cost_scenario set to match the file bucket EXACTLY
+    (render_s0_report's own validate_sealed_files call checks per-line
+    engine/cost_scenario identity, so a record built via
+    conftest.make_trade_path — which hardcodes cost_scenario="Conservative"
+    — would fail that check under any other scenario bucket)."""
+    out: dict[str, dict[str, list]] = {}
+    for eng in ENGINES:
+        out[eng] = {}
+        for scn in SCENARIOS:
+            out[eng][scn] = [
+                TradePathRecord(
+                    trade_date=d, engine=eng, cost_scenario=scn, direction=1,
+                    entry_ts=f"{d}T10:00:00-04:00",
+                    exit_ts=f"{d}T15:44:00-04:00",
+                    entry_fill=20000.0, exit_fill=20001.0,
+                    final_pnl_per_contract=1.0, sizing_anchor_usd=100.0,
+                    # mission M6.1.2-S3 item 2: mtm_close_pnl_1m/
+                    # mtm_adverse_pnl_1m are frozen §10.1 per-minute mark
+                    # series of an ACTUAL trade path and must be NON-EMPTY
+                    # (report._is_nonempty_number_list) — a bare
+                    # TradePathRecord() default (`[]`) is not a realistic
+                    # sealed line.
+                    mtm_close_pnl_1m=[1.0, 1.0], mtm_adverse_pnl_1m=[0.0, 0.0])
+                for d in universe]
+    return out
+
+
+def _real_render_result() -> dict:
+    """A FULL result dict shaped for scripts/s0_real_run.py::
+    render_s0_report: a 'study' marker key (render_s0_report only checks
+    its PRESENCE to select the real-payload code path), a 'records' key
+    (raw TradePathRecord instances, consumed by the renderer's own
+    record_to_formal_dict + JSONL serialization), and every FORMAL_SECTIONS
+    key from a fresh `_valid_payload()`. Mutating the SAME dotted path on
+    both this and a bare `_valid_payload()` lets a test prove refusal at the
+    validator level AND at the real-renderer level from one mutation
+    (mission item 9)."""
+    payload = _valid_payload()
+    universe = sorted({
+        d for tcell in payload["oracle_daily"].values()
+        for d in (*tcell["day_universe"]["tp_days"],
+                 *tcell["day_universe"]["fp_days"])})
+    result = dict(payload)
+    result["study"] = True
+    result["records"] = _mc_records_for_universe(universe)
+    return result
+
+
+def _assert_real_renderer_refuses(result: dict) -> None:
+    with pytest.raises(ValueError):
+        real_run_module().render_s0_report(
+            result, expected_governance=result["governance"])
+
+
+# ---------------------------------------------------------------------------
+# dotted-path get/set — navigates dict keys AND list indices identically, so
+# one mutation function can target e.g. ("sizing_outputs", theta, "rows",
+# "E1", "Base", 0) (a list element) exactly like a plain dict path.
+# ---------------------------------------------------------------------------
+def _get_path(d, path):
+    for key in path:
+        d = d[key]
+    return d
+
+
+def _set_path(d, path, value) -> None:
+    for key in path[:-1]:
+        d = d[key]
+    d[path[-1]] = value
+
+
+def _assert_leaf_family_refused(path: tuple, expected_prefix: str,
+                                mutated_value) -> None:
+    """One mutation class for one required-leaf FAMILY (mission items 2 + 9):
+    apply `mutated_value` at `path` on a fresh valid payload AND a fresh
+    real-render result, and prove refusal at BOTH the validator level
+    (a problem starting with `expected_prefix`) and the real production
+    renderer level (render_s0_report raises ValueError)."""
+    payload = _valid_payload()
+    _set_path(payload, path, mutated_value)
+    problems = _validate(payload)
+    assert any(p.startswith(expected_prefix) for p in problems), (
+        path, mutated_value, problems)
+
+    result = _real_render_result()
+    _set_path(result, path, mutated_value)
+    _assert_real_renderer_refuses(result)
+
+
+def _assert_mutation_refused(mutate_fn, expected_prefix: str) -> list[str]:
+    """General-purpose two-level refusal proof (mission item 9) for a
+    mutation that is NOT a single dotted-path leaf swap (day-universe
+    invariants, sealed-file-only checks, feasibility-grid inner-point
+    surgery, ...): `mutate_fn(d)` mutates `d` IN PLACE. Applied once to a
+    fresh `_valid_payload()` (asserting a problem starting with
+    `expected_prefix`) and once to a fresh `_real_render_result()`
+    (asserting the real production renderer raises). Returns the
+    payload-level problems for any additional caller assertions."""
+    payload = _valid_payload()
+    mutate_fn(payload)
+    problems = _validate(payload)
+    assert any(p.startswith(expected_prefix) for p in problems), problems
+
+    result = _real_render_result()
+    mutate_fn(result)
+    _assert_real_renderer_refuses(result)
+    return problems
+
+
+# Every required-leaf FAMILY exercised with the mission's three mutation
+# classes (None / wrong-type / opaque-garbage-dict). `T0` is THETAS[0]
+# ("theta_0.3") — any frozen theta works identically since both are fully
+# reported; a fixed representative keeps the parametrize grid readable.
+T0 = THETAS[0]
+_WRONG_TYPE = ["wrong", "type"]                 # a list where a mapping/str
+                                                # is expected — cheap, generic
+_GARBAGE_DICT = {"junk": 1}                     # structurally-plausible-
+                                                # looking but content-empty
+
+_LEAF_FAMILIES = [
+    ("structural_funnel_counts",
+     ("structural", "funnel_counts"), "structural_funnel_counts_incomplete"),
+    ("structural_na_table",
+     ("structural", "na_table"), "structural_na_table_incomplete"),
+    ("structural_label_anchor_availability",
+     ("structural", "label_anchor_availability"),
+     "structural_label_anchor_availability_incomplete"),
+    ("structural_eras",
+     ("structural", "eras"), "structural_eras_incomplete"),
+    ("structural_groups",
+     ("structural", "groups"), "structural_groups_incomplete"),
+    ("day_universe",
+     ("oracle_daily", T0, "day_universe"), "day_universe_"),
+    ("oracle_daily_executable_cell",
+     ("oracle_daily", T0, "executable", "E1", "Base"),
+     "oracle_daily_executable"),
+    ("theoretical_oracle_cell",
+     ("theoretical_oracle", T0), "theoretical_oracle"),
+    ("e2_worst_days_cell",
+     ("e2_worst_days", T0, "Base"), "e2_worst_days_"),
+    ("frequency_pooled_cell",
+     ("frequency", T0, "pooled"), "frequency_cell_incomplete"),
+    ("sizing_row",
+     ("sizing_outputs", T0, "rows", "E1", "Base", 0),
+     "sizing_outputs_row_incomplete"),
+    ("stability_epoch_cell",
+     ("stability_views", T0, "E1", "Base", "epochs", "2010-2013"),
+     "stability_views_cell_incomplete"),
+    ("stability_vol_terciles_block",
+     ("stability_views", T0, "E1", "Base", "vol_terciles"),
+     "stability_views_vol"),
+    ("feasibility_cell",
+     ("feasibility_grid", "cells", f"{T0}|E1|Base"),
+     "feasibility_grid_cell_incomplete"),
+    ("bootstrap_cell",
+     ("bootstrap_ci", f"{T0}|E1|Base|block5"), "bootstrap_ci"),
+    ("governance_frozen_hashes",
+     ("governance", "frozen_hashes"), "governance_frozen_hash"),
+    ("mc_handoff_counts_cell",
+     ("mc_handoff_manifest", "counts", "E1", "Base"),
+     "mc_handoff_manifest_counts"),
+    ("disclosures_na_conservation",
+     ("disclosures", "na_conservation"), "disclosures_na_conservation"),
+    ("era_axis_axes",
+     ("era_axis", "axes"), "era_axis_axes_incomplete"),
+]
+
+
+@pytest.mark.parametrize("name,path,prefix", _LEAF_FAMILIES,
+                         ids=[f"{n}_none" for n, _p, _pf in _LEAF_FAMILIES])
+def test_leaf_family_set_to_none_is_refused(name, path, prefix):
+    _assert_leaf_family_refused(path, prefix, None)
+
+
+@pytest.mark.parametrize("name,path,prefix", _LEAF_FAMILIES,
+                         ids=[f"{n}_wrong_type" for n, _p, _pf
+                             in _LEAF_FAMILIES])
+def test_leaf_family_wrong_type_is_refused(name, path, prefix):
+    _assert_leaf_family_refused(path, prefix, _WRONG_TYPE)
+
+
+@pytest.mark.parametrize("name,path,prefix", _LEAF_FAMILIES,
+                         ids=[f"{n}_garbage_dict" for n, _p, _pf
+                             in _LEAF_FAMILIES])
+def test_leaf_family_garbage_dict_is_refused(name, path, prefix):
+    _assert_leaf_family_refused(path, prefix, dict(_GARBAGE_DICT))
 
 
 # ===========================================================================
@@ -469,6 +776,21 @@ def test_valid_payload_serializes_through_to_formal_json():
     assert json.loads(text) == payload
 
 
+def test_real_render_result_seals_via_the_real_production_renderer():
+    """Sanity anchor for every mutation test's THIRD refusal level (mission
+    item 9): the UNMUTATED `_real_render_result()` fixture must actually
+    seal end-to-end through scripts/s0_real_run.py's real `render_s0_report`
+    (full split_envelope -> validate_formal_payload (x2) -> JSONL
+    serialization -> validate_sealed_files chain) — proving every mutation
+    test's "the real renderer refuses" assertion is meaningful and not
+    vacuously true because the baseline never sealed in the first place."""
+    result = _real_render_result()
+    files = real_run_module().render_s0_report(
+        result, expected_governance=result["governance"])
+    assert "S0_REPORT.json" in files
+    assert sum(1 for n in files if n.startswith("MC_HANDOFF_")) == 8
+
+
 def test_validate_formal_payload_rejects_non_dict():
     assert report.validate_formal_payload(["not", "a", "dict"]) == \
         ["payload_not_dict"]
@@ -519,6 +841,71 @@ def test_day_universe_missing_is_flagged():
     assert f"day_universe_missing:{tkey}" in problems
 
 
+# --- A2 day_universe HARD invariants (mission item 3): n_tp/n_fp COUNT
+# identity, no duplicate day in either list, the TP/FP partition disjoint,
+# and cross-theta population identity — each a DISTINCT problem code, each
+# proven refused at both the validator AND the real-renderer level.
+T1 = THETAS[1]
+
+
+def test_day_universe_n_tp_count_mismatch_is_flagged():
+    def _mutate(d):
+        d["oracle_daily"][T0]["day_universe"]["n_tp"] += 1
+    _assert_mutation_refused(_mutate, f"day_universe_count_mismatch:{T0}:n_tp")
+
+
+def test_day_universe_n_fp_count_mismatch_is_flagged():
+    def _mutate(d):
+        d["oracle_daily"][T0]["day_universe"]["n_fp"] += 1
+    _assert_mutation_refused(_mutate, f"day_universe_count_mismatch:{T0}:n_fp")
+
+
+def test_day_universe_tp_days_duplicate_is_flagged():
+    def _mutate(d):
+        du = d["oracle_daily"][T0]["day_universe"]
+        du["tp_days"].append(du["tp_days"][0])
+        du["n_tp"] += 1                       # isolate: count identity holds
+    _assert_mutation_refused(
+        _mutate, f"day_universe_duplicate_days:{T0}:tp_days")
+
+
+def test_day_universe_fp_days_duplicate_is_flagged():
+    def _mutate(d):
+        du = d["oracle_daily"][T0]["day_universe"]
+        du["fp_days"].append(du["fp_days"][0])
+        du["n_fp"] += 1
+    _assert_mutation_refused(
+        _mutate, f"day_universe_duplicate_days:{T0}:fp_days")
+
+
+def test_day_universe_tp_fp_overlap_is_flagged():
+    def _mutate(d):
+        du = d["oracle_daily"][T0]["day_universe"]
+        du["fp_days"].append(du["tp_days"][0])
+        du["n_fp"] += 1
+    _assert_mutation_refused(_mutate, f"day_universe_tp_fp_overlap:{T0}")
+
+
+def test_day_universe_cross_theta_population_mismatch_is_flagged():
+    """The union tp∪fp must be IDENTICAL across the two frozen thetas — only
+    the partition may move. Adding a day to ONE theta's population (not
+    merely re-partitioning it) breaks that identity."""
+    def _mutate(d):
+        du = d["oracle_daily"][T0]["day_universe"]
+        du["tp_days"] = du["tp_days"] + ["1999-01-04"]
+        du["n_tp"] += 1
+    _assert_mutation_refused(
+        _mutate, "day_universe_cross_theta_population_mismatch")
+
+
+def test_day_universe_date_format_invalid_is_flagged():
+    def _mutate(d):
+        du = d["oracle_daily"][T0]["day_universe"]
+        du["tp_days"] = [du["tp_days"][0].replace("-", "/")] + du["tp_days"][1:]
+    _assert_mutation_refused(
+        _mutate, f"day_universe_date_format_invalid:{T0}:tp_days")
+
+
 # --- A2 executable matrix: E1/E2 x 4 scenarios, UNCONDITIONAL ---------------
 def test_oracle_daily_executable_cell_missing_is_flagged():
     payload = _valid_payload()
@@ -526,6 +913,41 @@ def test_oracle_daily_executable_cell_missing_is_flagged():
     del payload["oracle_daily"][tkey]["executable"]["E1"]["Base"]
     problems = _validate(payload)
     assert f"oracle_daily_executable_missing:{tkey}|E1|Base" in problems
+
+
+# --- A2 ORACLE EXECUTABLE deep real structure (mission item 5): pooled +
+# by_era{PROXY,ACTUAL} + per-day (date, USD) pairs, against the REAL
+# study.py `_series_block`/`_by_era_and_pooled` shape.
+def test_oracle_daily_executable_drop_pooled_is_flagged():
+    def _mutate(d):
+        del d["oracle_daily"][T0]["executable"]["E1"]["Base"]["pooled"]
+    _assert_mutation_refused(_mutate, f"series_block_missing:{T0}|E1|Base|pooled")
+
+
+def test_oracle_daily_executable_drop_one_era_is_flagged():
+    def _mutate(d):
+        del d["oracle_daily"][T0]["executable"]["E1"]["Base"]["by_era"][
+            ERA_PROXY]
+    _assert_mutation_refused(
+        _mutate, f"oracle_daily_executable_by_era_missing:{T0}|E1|Base")
+
+
+def test_oracle_daily_executable_corrupt_daily_date_key_is_flagged():
+    def _mutate(d):
+        series = d["oracle_daily"][T0]["executable"]["E1"]["Base"]["pooled"][
+            "daily_pnl_usd"]
+        series[0] = ["not-a-date", series[0][1]]
+    _assert_mutation_refused(
+        _mutate, f"series_block_date_invalid:{T0}|E1|Base|pooled")
+
+
+def test_oracle_daily_executable_corrupt_daily_value_is_flagged():
+    def _mutate(d):
+        series = d["oracle_daily"][T0]["executable"]["E1"]["Base"]["pooled"][
+            "daily_pnl_usd"]
+        series[0] = [series[0][0], "not-a-number"]
+    _assert_mutation_refused(
+        _mutate, f"series_block_value_invalid:{T0}|E1|Base|pooled")
 
 
 # --- A1 structural: funnel + F10 dual + na_table + label anchors + eras/groups
@@ -650,6 +1072,48 @@ def test_stability_views_cell_incomplete_is_flagged():
               for p in problems)
 
 
+# --- R5/A2b: conservation_ok must be LITERALLY True on every partitioning
+# axis (mission item 6) — previously only the axis's KEY SET was checked,
+# never the flag's own value.
+_STABILITY_AXES_FOR_CONSERVATION = (
+    "epochs", "by_year", "leave_one_year_out", "by_direction", "vol_terciles")
+
+
+@pytest.mark.parametrize("axis", _STABILITY_AXES_FOR_CONSERVATION)
+def test_stability_conservation_ok_false_is_flagged(axis):
+    def _mutate(d):
+        d["stability_views"][T0]["E1"]["Base"][axis]["conservation_ok"] = False
+    _assert_mutation_refused(
+        _mutate, f"stability_views_conservation_not_true:{T0}|E1|Base|{axis}")
+
+
+# --- A2b vol_terciles RESOLVED shape: the three opaque-vocabulary terciles
+# PLUS the reserved vol_na bucket, each a full _cell (mission item 6).
+def test_stability_vol_terciles_missing_stratum_is_flagged():
+    def _mutate(d):
+        vol = d["stability_views"][T0]["E1"]["Base"]["vol_terciles"]
+        tercile_keys = sorted(set(vol) - {"vol_na", "conservation_ok"})
+        del vol[tercile_keys[0]]
+    _assert_mutation_refused(
+        _mutate, f"stability_views_vol_tercile_count:{T0}|E1|Base")
+
+
+def test_stability_vol_tercile_bucket_missing_cell_field_is_flagged():
+    def _mutate(d):
+        vol = d["stability_views"][T0]["E1"]["Base"]["vol_terciles"]
+        tercile_keys = sorted(set(vol) - {"vol_na", "conservation_ok"})
+        del vol[tercile_keys[0]]["n_positive"]
+    _assert_mutation_refused(
+        _mutate, f"stability_views_cell_incomplete:{T0}|E1|Base|vol_terciles")
+
+
+def test_stability_vol_na_bucket_missing_is_flagged():
+    def _mutate(d):
+        vol = d["stability_views"][T0]["E1"]["Base"]["vol_terciles"]
+        del vol["vol_na"]
+    _assert_mutation_refused(_mutate, f"stability_views_vol_na_missing:{T0}|E1|Base")
+
+
 # --- R7: governance ----------------------------------------------------------
 def test_governance_short_commit_is_flagged():
     payload = _valid_payload()
@@ -748,6 +1212,85 @@ def test_r8_flags_dataset_key_anywhere_in_the_tree():
     payload["structural"]["dataset"] = {"leaked": True}
     problems = report.validate_formal_payload(payload)
     assert any(p.startswith("dataset_key_present:") for p in problems)
+
+
+# ===========================================================================
+# Appendix A FEASIBILITY GRID — the FULL frozen 63-point (q, r) grid inside
+# every cells[...]["grid"] (mission item 7), not just the outer
+# {grid, n_tp_available, n_fp_available, method} field set.
+# ===========================================================================
+def _feasible_point_key(cell: dict) -> str:
+    """First (q, r) grid-point key in `cell["grid"]` that is NOT
+    infeasible_by_sample — one that actually carries a real per_seed
+    selection (an infeasible point legitimately has none)."""
+    for k, v in cell["grid"].items():
+        if not v["infeasible_by_sample"]:
+            return k
+    raise AssertionError("fixture has no feasible grid point")
+
+
+def test_feasibility_grid_62_cells_is_flagged():
+    """Dropping ONE of the 63 frozen (q, r) grid points must be caught —
+    the OUTER {grid, n_tp_available, ...} field set alone would miss this."""
+    def _mutate(d):
+        cell = d["feasibility_grid"]["cells"][f"{T0}|E1|Base"]
+        del cell["grid"][_feasible_point_key(cell)]
+    _assert_mutation_refused(
+        _mutate, f"feasibility_grid_point_missing:{T0}|E1|Base:")
+
+
+def test_feasibility_grid_cell_missing_a_seed_is_flagged():
+    def _mutate(d):
+        cell = d["feasibility_grid"]["cells"][f"{T0}|E1|Base"]
+        pk = _feasible_point_key(cell)
+        del cell["grid"][pk]["per_seed"]["13"]
+    _assert_mutation_refused(
+        _mutate, f"feasibility_grid_point_seeds:{T0}|E1|Base:")
+
+
+def test_feasibility_grid_seed_entry_missing_realized_is_flagged():
+    def _mutate(d):
+        cell = d["feasibility_grid"]["cells"][f"{T0}|E1|Base"]
+        pk = _feasible_point_key(cell)
+        del cell["grid"][pk]["per_seed"]["7"]["realized_precision"]
+    _assert_mutation_refused(
+        _mutate, f"feasibility_grid_seed_entry_incomplete:{T0}|E1|Base:")
+
+
+def test_feasibility_grid_infeasible_flag_absent_is_flagged():
+    def _mutate(d):
+        cell = d["feasibility_grid"]["cells"][f"{T0}|E1|Base"]
+        pk = _feasible_point_key(cell)
+        del cell["grid"][pk]["infeasible_by_sample"]
+    _assert_mutation_refused(
+        _mutate,
+        f"feasibility_grid_point_infeasible_flag_missing:{T0}|E1|Base:")
+
+
+# ===========================================================================
+# A11 disclosures.na_conservation (mission item 8): the contract's "NA 守恒
+# 复述". NOT populated by any current producer — see this module's docstring
+# / the final hand-off note for the exact producer change needed.
+# ===========================================================================
+def test_disclosures_na_conservation_missing_is_flagged():
+    def _mutate(d):
+        del d["disclosures"]["na_conservation"]
+    _assert_mutation_refused(_mutate, "disclosures_na_conservation_missing")
+
+
+def test_disclosures_na_conservation_totals_invalid_is_flagged():
+    def _mutate(d):
+        d["disclosures"]["na_conservation"]["per_table_total_na"] = {
+            "features": "not-a-number"}
+    _assert_mutation_refused(
+        _mutate, "disclosures_na_conservation_totals_invalid")
+
+
+def test_disclosures_na_conservation_flag_not_true_is_flagged():
+    def _mutate(d):
+        d["disclosures"]["na_conservation"]["conservation_ok"] = False
+    _assert_mutation_refused(
+        _mutate, "disclosures_na_conservation_flag_not_true")
 
 
 # ===========================================================================
@@ -863,6 +1406,34 @@ def test_validate_sealed_files_extra_trade_date_is_flagged():
               and "1999-01-04" in p for p in problems)
 
 
+def test_validate_sealed_files_empty_universe_with_nonempty_file_is_flagged():
+    """Mission item 4: the per-file date-set comparison is UNCONDITIONAL —
+    even when the payload's day universe is EMPTY (every theta's tp_days/
+    fp_days lists empty), a file that still carries a date must be flagged,
+    never silently skipped by a stale `if universe:` short-circuit."""
+    payload = _valid_payload()
+    for tcell in payload["oracle_daily"].values():
+        tcell["day_universe"]["tp_days"] = []
+        tcell["day_universe"]["fp_days"] = []
+        tcell["day_universe"]["n_tp"] = 0
+        tcell["day_universe"]["n_fp"] = 0
+
+    line = json.dumps(dict(report.record_to_formal_dict(
+        make_trade_path([1.0, 2.0], date="2020-01-02", engine="E1")),
+        cost_scenario="Base"), sort_keys=True)
+    name = "MC_HANDOFF_E1_Base.jsonl"
+    files = {name: line}
+    payload["mc_handoff_manifest"] = {
+        "counts": payload["mc_handoff_manifest"]["counts"],
+        "files": {"E1|Base": {
+            "file": name, "n_records": 1,
+            "sha256": hashlib.sha256(line.encode("utf-8")).hexdigest()}},
+    }
+    problems = report.validate_sealed_files(files, payload)
+    assert any(p.startswith("sealed_file_extra_trade_dates:E1|Base:")
+              and "2020-01-02" in p for p in problems)
+
+
 def test_validate_sealed_files_replaced_trade_date_same_count_is_flagged():
     """Same total record count, one trade_date swapped for another — a
     count-only check (manifest n_records == line count == payload counts)
@@ -958,3 +1529,387 @@ def test_post_injection_corruption_caught_by_second_validate_call():
               for p in sealed_problems)
     assert any(p.startswith("sealed_file_counts_mismatch:E1|Base")
               for p in sealed_problems)
+
+
+# ===========================================================================
+# M6.1.2-S3 — closing the "presence + type + self-reported boolean, never
+# RE-DERIVED" defect class the adversarial audit found in the seal gate.
+# Every mutation below is proven refused at the validator level AND at the
+# real production renderer level (scripts/s0_real_run.py::render_s0_report,
+# loaded read-only via `real_run_module()`), per `_assert_mutation_refused`
+# / the item-2/item-8 analogues defined alongside their tests.
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# item 1 — STABILITY CONSERVATION RE-DERIVED, never merely read off the
+# axis's own self-reported "conservation_ok" flag (stability.py slices ONE
+# theta's D_TP series; sum(cell["n"]) over every REAL bucket of epochs/
+# by_direction/vol_terciles(resolved)/by_year must equal that theta's
+# day_universe["n_tp"], and leave_one_year_out must satisfy loyo[y]["n"] ==
+# n_tp - by_year[y]["n"] for every year — see report.py's new docstring).
+# ---------------------------------------------------------------------------
+def _real_stability_bucket_key(axis: dict) -> str:
+    """First non-bookkeeping (real) bucket key in a stability_views axis."""
+    for k in axis:
+        if k not in ("conservation_ok", "status", "reason"):
+            return k
+    raise AssertionError(f"axis has no real bucket: {axis}")
+
+
+def test_stability_conservation_inflated_cell_n_is_flagged():
+    """Mutation: inflated cell n — conservation_ok stays True (self-
+    reported); only a RE-DERIVED sum catches this."""
+    def _mutate(d):
+        epochs = d["stability_views"][T0]["E1"]["Base"]["epochs"]
+        bucket = _real_stability_bucket_key(epochs)
+        epochs[bucket]["n"] += 1
+    _assert_mutation_refused(
+        _mutate,
+        f"stability_views_conservation_recompute_mismatch:{T0}|E1|Base|"
+        "epochs")
+
+
+def test_stability_conservation_all_cells_zeroed_is_flagged():
+    """Mutation: all cells n=0 (with a non-empty universe) — conservation_ok
+    stays True."""
+    def _mutate(d):
+        by_dir = d["stability_views"][T0]["E1"]["Base"]["by_direction"]
+        for k, v in by_dir.items():
+            if k != "conservation_ok":
+                v["n"] = 0
+    _assert_mutation_refused(
+        _mutate,
+        f"stability_views_conservation_recompute_mismatch:{T0}|E1|Base|"
+        "by_direction")
+
+
+def test_stability_conservation_deleted_bucket_is_flagged():
+    """Mutation: deleted bucket — by_year's own real bucket removed."""
+    def _mutate(d):
+        by_year = d["stability_views"][T0]["E1"]["Base"]["by_year"]
+        bucket = _real_stability_bucket_key(by_year)
+        del by_year[bucket]
+    _assert_mutation_refused(
+        _mutate,
+        f"stability_views_conservation_recompute_mismatch:{T0}|E1|Base|"
+        "by_year")
+
+
+def test_stability_conservation_axis_reduced_to_flag_only_is_flagged():
+    """Mutation: axis reduced to only the conservation_ok flag — refused
+    even though the flag itself says True."""
+    def _mutate(d):
+        d["stability_views"][T0]["E1"]["Base"]["vol_terciles"] = {
+            "conservation_ok": True}
+    _assert_mutation_refused(
+        _mutate,
+        f"stability_views_conservation_recompute_mismatch:{T0}|E1|Base|"
+        "vol_terciles")
+
+
+def test_stability_loyo_recompute_mismatch_is_flagged():
+    """leave_one_year_out is NOT a partition — its own re-derived identity
+    (loyo[y]["n"] == n_tp - by_year[y]["n"]) is checked independently of the
+    partitioning axes above."""
+    def _mutate(d):
+        loyo = d["stability_views"][T0]["E1"]["Base"]["leave_one_year_out"]
+        year = _real_stability_bucket_key(loyo)
+        loyo[year]["n"] += 1
+    _assert_mutation_refused(
+        _mutate, f"stability_views_loyo_recompute_mismatch:{T0}|E1|Base|")
+
+
+# ---------------------------------------------------------------------------
+# item 2 — SEALED-RECORD LEAF TYPES: validate_sealed_files previously
+# checked the per-line field SET only; a numeric string ("20000.0", "1")
+# now must be refused. Proven at both `validate_sealed_files` (a sealed
+# JSONL line, via `_sealed_fixture()`) AND the real renderer (mutating the
+# raw TradePathRecord BEFORE `record_to_formal_dict`/`json.dumps` — the
+# exact path the real renderer always takes, so the corruption is
+# introduced the way the real renderer would produce it, never by
+# hand-editing a payload dict section).
+# ---------------------------------------------------------------------------
+def _assert_sealed_line_mutation_refused(mutate_line_fn, mutate_record_fn,
+                                         expected_prefix: str) -> list[str]:
+    files, payload = _sealed_fixture()
+    name = "MC_HANDOFF_E1_Base.jsonl"
+    lines = [json.loads(l) for l in files[name].splitlines()]
+    mutate_line_fn(lines[0])
+    _rewrite_sealed_file(files, payload, "E1", "Base", lines)
+    problems = report.validate_sealed_files(files, payload)
+    assert any(p.startswith(expected_prefix) for p in problems), problems
+
+    result = _real_render_result()
+    mutate_record_fn(result["records"]["E1"]["Base"][0])
+    _assert_real_renderer_refuses(result)
+    return problems
+
+
+def test_sealed_file_line_numeric_string_entry_fill_is_flagged():
+    _assert_sealed_line_mutation_refused(
+        lambda line: line.__setitem__("entry_fill", "20000.0"),
+        lambda rec: setattr(rec, "entry_fill", "20000.0"),
+        "sealed_file_line_field_type_invalid:E1|Base:0:entry_fill")
+
+
+def test_sealed_file_line_numeric_string_direction_is_flagged():
+    _assert_sealed_line_mutation_refused(
+        lambda line: line.__setitem__("direction", "1"),
+        lambda rec: setattr(rec, "direction", "1"),
+        "sealed_file_line_field_type_invalid:E1|Base:0:direction")
+
+
+def test_sealed_file_line_direction_out_of_range_is_flagged():
+    _assert_sealed_line_mutation_refused(
+        lambda line: line.__setitem__("direction", 0),
+        lambda rec: setattr(rec, "direction", 0),
+        "sealed_file_line_field_type_invalid:E1|Base:0:direction")
+
+
+def test_sealed_file_line_empty_mtm_list_is_flagged():
+    _assert_sealed_line_mutation_refused(
+        lambda line: line.__setitem__("mtm_close_pnl_1m", []),
+        lambda rec: setattr(rec, "mtm_close_pnl_1m", []),
+        "sealed_file_line_field_type_invalid:E1|Base:0:mtm_close_pnl_1m")
+
+
+def test_sealed_file_line_bool_field_wrong_type_is_flagged():
+    _assert_sealed_line_mutation_refused(
+        lambda line: line.__setitem__("stop_triggered", "true"),
+        lambda rec: setattr(rec, "stop_triggered", "true"),
+        "sealed_file_line_field_type_invalid:E1|Base:0:stop_triggered")
+
+
+# ---------------------------------------------------------------------------
+# item 3 — THETA NESTING: D_TP(theta_0.5) must be a SUBSET of D_TP(theta_
+# 0.3) over the SAME day population (frozen App A / S0 §7 L133 — raising
+# theta can only shrink the continuation-event set). Mutation: swap one
+# day's class between thetas (moved from theta_0.3's tp_days into its
+# fp_days) while its OWN counts/disjointness stay self-consistent — only the
+# CROSS-theta nesting property breaks.
+# ---------------------------------------------------------------------------
+def test_day_universe_theta_nesting_violation_is_flagged():
+    def _mutate(day):
+        du_hi = day["oracle_daily"][T1]["day_universe"]     # theta_0.5
+        du_lo = day["oracle_daily"][T0]["day_universe"]      # theta_0.3
+        victim = du_hi["tp_days"][0]
+        du_lo["tp_days"] = [d for d in du_lo["tp_days"] if d != victim]
+        du_lo["fp_days"] = du_lo["fp_days"] + [victim]
+        du_lo["n_tp"] -= 1
+        du_lo["n_fp"] += 1
+    _assert_mutation_refused(_mutate, "day_universe_theta_nesting_violation")
+
+
+# ---------------------------------------------------------------------------
+# item 4 — A11 RECONCILIATION: disclosures.na_conservation.per_table_
+# total_na[t] must equal the ACTUAL sum derivable from structural.na_table's
+# per_field na counts, never merely be a well-typed non-negative int on its
+# own.
+# ---------------------------------------------------------------------------
+def test_disclosures_na_conservation_total_mismatch_is_flagged():
+    def _mutate(d):
+        totals = d["disclosures"]["na_conservation"]["per_table_total_na"]
+        totals["features"] = totals["features"] + 1
+    _assert_mutation_refused(
+        _mutate, "disclosures_na_conservation_total_mismatch:features")
+
+
+# ---------------------------------------------------------------------------
+# item 5 — SERIES-BLOCK SELF-CONSISTENCY for every series block (oracle_
+# daily executable pooled/by-era, theoretical_oracle): set(series dates) is
+# a subset of the theta's TP UNION FP; n == len(series); sum_usd/mean_usd
+# match the ACTUAL pair values.
+# ---------------------------------------------------------------------------
+def test_oracle_daily_series_block_ghost_date_is_flagged():
+    def _mutate(d):
+        series = d["oracle_daily"][T0]["executable"]["E1"]["Base"]["pooled"][
+            "daily_pnl_usd"]
+        series.append(["1999-01-04", 1.0])
+    _assert_mutation_refused(
+        _mutate, f"series_block_ghost_date:{T0}|E1|Base|pooled:1999-01-04")
+
+
+def test_oracle_daily_series_block_n_mismatch_is_flagged():
+    def _mutate(d):
+        block = d["oracle_daily"][T0]["executable"]["E1"]["Base"]["pooled"]
+        block["n"] = block["n"] + 1
+    _assert_mutation_refused(
+        _mutate, f"series_block_n_mismatch:{T0}|E1|Base|pooled")
+
+
+def test_oracle_daily_series_block_sum_usd_mismatch_is_flagged():
+    def _mutate(d):
+        block = d["oracle_daily"][T0]["executable"]["E1"]["Base"]["pooled"]
+        block["sum_usd"] = block["sum_usd"] + 12345.0
+    _assert_mutation_refused(
+        _mutate, f"series_block_sum_usd_mismatch:{T0}|E1|Base|pooled")
+
+
+def test_oracle_daily_series_block_mean_usd_mismatch_is_flagged():
+    def _mutate(d):
+        block = d["oracle_daily"][T0]["executable"]["E1"]["Base"]["pooled"]
+        block["mean_usd"] = (block["mean_usd"] or 0.0) + 999.0
+    _assert_mutation_refused(
+        _mutate, f"series_block_mean_usd_mismatch:{T0}|E1|Base|pooled")
+
+
+def test_theoretical_oracle_series_block_ghost_date_is_flagged():
+    def _mutate(d):
+        series = d["theoretical_oracle"][T0]["pooled"]["daily_usd"]
+        series.append(["1999-01-04", 1.0])
+    _assert_mutation_refused(
+        _mutate,
+        f"series_block_ghost_date:theoretical_oracle|{T0}|pooled:1999-01-04")
+
+
+# ---------------------------------------------------------------------------
+# item 6 — EMPTY-STUDY FLOOR + SIZING NON-EMPTINESS.
+# ---------------------------------------------------------------------------
+def test_day_universe_empty_universe_never_seals():
+    """Mutation: zeroed universe — n_tp == n_fp == 0 with empty lists."""
+    def _mutate(d):
+        du = d["oracle_daily"][T0]["day_universe"]
+        du["tp_days"] = []
+        du["fp_days"] = []
+        du["n_tp"] = 0
+        du["n_fp"] = 0
+    _assert_mutation_refused(_mutate, f"day_universe_empty_universe:{T0}")
+
+
+def test_sizing_outputs_rows_emptied_is_flagged():
+    """Mutation: emptied rows — study.py's real producer relation is ONE row
+    per TP-day trade for that theta (len(rows[eng][scn]) == n_tp); an
+    emptied list breaks that identity even though n_tp itself is untouched."""
+    def _mutate(d):
+        d["sizing_outputs"][T0]["rows"]["E1"]["Base"] = []
+    _assert_mutation_refused(
+        _mutate, f"sizing_outputs_rows_count_mismatch:{T0}|E1|Base")
+
+
+# ---------------------------------------------------------------------------
+# item 7 — INFEASIBLE GRID POINTS: when infeasible_by_sample is True,
+# per_seed must be absent or empty (gridmix.py's `_grid_point` never
+# populates one once a point is marked infeasible).
+# ---------------------------------------------------------------------------
+def test_feasibility_grid_infeasible_point_with_fabricated_per_seed_is_flagged():
+    def _mutate(d):
+        cell = d["feasibility_grid"]["cells"][f"{T0}|E1|Base"]
+        pk = _feasible_point_key(cell)
+        point = cell["grid"][pk]
+        point["infeasible_by_sample"] = True
+        fabricated = copy.deepcopy(point["per_seed"]["7"])
+        point["per_seed"] = {"7": fabricated}
+    _assert_mutation_refused(
+        _mutate,
+        f"feasibility_grid_infeasible_point_has_per_seed:{T0}|E1|Base:")
+
+
+# ---------------------------------------------------------------------------
+# item 8 — SEALED-FILE COMPLETENESS: mc_handoff_manifest["sealed_files"]
+# (every written file except the self-excluded S0_REPORT.json) must
+# reconcile against the ACTUAL `files` bytes.
+# ---------------------------------------------------------------------------
+def test_sealed_files_manifest_missing_key_is_flagged():
+    files, payload = _sealed_fixture()
+    del payload["mc_handoff_manifest"]["sealed_files"]
+    problems = report.validate_sealed_files(files, payload)
+    assert "sealed_files_manifest_missing" in problems
+
+
+def test_sealed_files_manifest_sha256_mismatch_is_flagged():
+    files, payload = _sealed_fixture()
+    name = "MC_HANDOFF_E1_Base.jsonl"
+    payload["mc_handoff_manifest"]["sealed_files"][name]["sha256"] = "f" * 64
+    problems = report.validate_sealed_files(files, payload)
+    assert any(p.startswith(f"sealed_files_manifest_sha256_mismatch:{name}")
+              for p in problems)
+
+
+def test_sealed_files_manifest_bytes_mismatch_is_flagged():
+    files, payload = _sealed_fixture()
+    name = "MC_HANDOFF_E1_Base.jsonl"
+    payload["mc_handoff_manifest"]["sealed_files"][name]["bytes"] += 1
+    problems = report.validate_sealed_files(files, payload)
+    assert any(p.startswith(f"sealed_files_manifest_bytes_mismatch:{name}")
+              for p in problems)
+
+
+def test_sealed_files_manifest_entry_missing_file_is_flagged():
+    files, payload = _sealed_fixture()
+    payload["mc_handoff_manifest"]["sealed_files"]["GHOST.json"] = {
+        "sha256": "a" * 64, "bytes": 1}
+    problems = report.validate_sealed_files(files, payload)
+    assert any(p.startswith(
+        "sealed_files_manifest_entry_missing_file:GHOST.json")
+              for p in problems)
+
+
+def test_sealed_files_manifest_extra_planted_file_is_flagged():
+    """An un-hashed / un-registered file sitting in `files` (never routed
+    through the manifest at all) is refused — not just files the OLD
+    8-key {engine}|{scenario} manifest already knew to look at."""
+    files, payload = _sealed_fixture()
+    files["PLANTED.json"] = "{}"
+    problems = report.validate_sealed_files(files, payload)
+    assert any(p.startswith("sealed_files_manifest_incomplete:")
+              and "PLANTED.json" in p for p in problems)
+
+
+def test_sealed_files_manifest_corruption_on_real_renderer_output_is_flagged():
+    """The 'real renderer refuses' proof for item 8: `sealed_files` is
+    COMPUTED BY the renderer from the exact bytes it seals (scripts/
+    s0_real_run.py::render_s0_report), so it is self-consistent by
+    construction and cannot be driven wrong through any caller-supplied
+    INPUT — there is no payload mutation that reaches the renderer's own
+    internal sealed_files computation. The faithful equivalent instead
+    renders for REAL, then corrupts ONE entry of the manifest's
+    `sealed_files` the renderer itself just computed (the same tampering an
+    attacker would attempt on the sealed artifact), and confirms
+    `validate_sealed_files` refuses it — using the REAL renderer's actual
+    production output as the base, a strictly stronger anchor than the
+    synthetic `_sealed_fixture()` alone."""
+    result = _real_render_result()
+    files = real_run_module().render_s0_report(
+        result, expected_governance=result["governance"])
+    payload = json.loads(files["S0_REPORT.json"])
+    assert report.validate_sealed_files(files, payload) == []      # sanity
+
+    name = next(iter(payload["mc_handoff_manifest"]["sealed_files"]))
+    payload["mc_handoff_manifest"]["sealed_files"][name]["sha256"] = "f" * 64
+    problems = report.validate_sealed_files(files, payload)
+    assert any(p.startswith(f"sealed_files_manifest_sha256_mismatch:{name}")
+              for p in problems)
+
+
+# ===========================================================================
+# NON-BLOCKING hardening (cheap): funnel monotonicity, era_axis duplicate
+# rejection, bootstrap n_boot/block_len strict-int typing.
+# ===========================================================================
+def test_structural_funnel_counts_non_monotonic_is_flagged():
+    def _mutate(d):
+        fc = d["structural"]["funnel_counts"]
+        fc["L2_regular_full_session_candidates"] = \
+            fc["L1_observed_rth_days"] + 1
+    _assert_mutation_refused(_mutate, "structural_funnel_counts_not_monotonic")
+
+
+def test_era_axis_axes_duplicate_is_flagged():
+    def _mutate(d):
+        axes = d["era_axis"]["axes"]
+        d["era_axis"]["axes"] = list(axes) + [axes[0]]
+    _assert_mutation_refused(_mutate, "era_axis_axes_duplicate")
+
+
+def test_bootstrap_ci_n_boot_float_type_is_flagged():
+    def _mutate(d):
+        key = next(iter(d["bootstrap_ci"]))
+        d["bootstrap_ci"][key]["per_seed"]["7"]["n_boot"] = float(
+            report.FROZEN_N_BOOT)
+    _assert_mutation_refused(_mutate, "bootstrap_ci_n_boot:")
+
+
+def test_bootstrap_ci_block_len_float_type_is_flagged():
+    def _mutate(d):
+        key = next(k for k in d["bootstrap_ci"] if k.endswith("block5"))
+        d["bootstrap_ci"][key]["per_seed"]["7"]["block_len"] = 5.0
+    _assert_mutation_refused(_mutate, "bootstrap_ci_block_len:")

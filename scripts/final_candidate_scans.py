@@ -34,6 +34,19 @@ finding-specific waiver:
       added its itsf.mc.bootstrap import; a hand-verified count goes stale
       silently, so the walker recomputes the real answer at scan time
       instead.)
+      (M6.1.2 S2, Codex finding (d): the walker used to add ONLY the exact
+      dotted names an `import`/`from...import` statement spells out, which
+      MISSED every parent-package `__init__.py` — importing
+      itsf.mc.bootstrap really executes itsf/__init__.py and
+      itsf/mc/__init__.py too (CPython import semantics), even though no
+      import statement on that path ever names "itsf" or "itsf.mc" as a
+      bare dotted name. `production_import_closure()` now adds every
+      ancestor package of each resolved name via `_ancestor_packages()`, so
+      both init files are IN the closure and scanned like any other
+      production file; an isolated scratch-repo mutation test proves a
+      marker planted in itsf/mc/__init__.py now goes RED while
+      itsf/mc/account.py and itsf/mc/orchestrator.py — still genuinely
+      unreached — stay exempt.)
   E5  A line that QUOTES a marker in order to forbid it is a guard, not a
       placeholder: negative assertions (`... "NotImplementedError" not in
       src`) and the SAN.6 gate docstring that names it.
@@ -122,6 +135,25 @@ def _ast_imported_module_names(py_path: pathlib.Path) -> set[str]:
     return names
 
 
+def _ancestor_packages(module: str) -> list[str]:
+    """Every strict ancestor PACKAGE of dotted `module`, root first:
+    "itsf.mc.bootstrap" -> ["itsf", "itsf.mc"]; "itsf" -> [] (no ancestor).
+
+    CPython import semantics: importing a dotted submodule ALWAYS imports
+    (and therefore executes) every ancestor package's `__init__.py` FIRST —
+    `import itsf.mc.bootstrap` runs `itsf/__init__.py`, then
+    `itsf/mc/__init__.py`, then `itsf/mc/bootstrap.py` — even when no
+    `import` statement anywhere spells out the ancestor as a bare name (a
+    lone `from itsf.mc.bootstrap import X` never names "itsf" or "itsf.mc"
+    on their own). A closure built purely from the literal dotted names an
+    `ast`-level walk finds therefore MISSES real, executed parent-package
+    files (M6.1.1 S2 item 4 / Codex finding (d)): this is what closes that
+    gap.
+    """
+    parts = module.split(".")
+    return [".".join(parts[:i]) for i in range(1, len(parts))]
+
+
 def production_import_closure(entry: pathlib.Path, src_root: pathlib.Path,
                               ) -> dict[str, pathlib.Path]:
     """dotted itsf.** module name -> resolved file, for every itsf module
@@ -130,6 +162,21 @@ def production_import_closure(entry: pathlib.Path, src_root: pathlib.Path,
     replaces a stale hand-verified claim with a walker that recomputes the
     real answer at scan time, and is what src/itsf/mc/'s placeholder
     exemption is now derived from instead of a blanket path prefix.
+
+    M6.1.1 S2 item 4 (Codex finding (d)): for every dotted name an import
+    statement names, EVERY ancestor package of that name is added to the
+    closure too (via `_ancestor_packages`), not just the exact name spelled
+    out in the source — because CPython really executes each ancestor
+    package's `__init__.py` at import time regardless of whether any source
+    line ever names it directly. Concretely: `itsf.s0.stats` says
+    `from itsf.mc.bootstrap import stationary_bootstrap_indices`, which by
+    itself only names "itsf.mc.bootstrap" (and the bogus joined
+    "itsf.mc.bootstrap.stationary_bootstrap_indices"); "itsf" and "itsf.mc"
+    are never spelled out anywhere on this import path, yet both
+    `itsf/__init__.py` and `itsf/mc/__init__.py` are real, executed files —
+    so both are now walked (and their own imports followed, transitively)
+    exactly like any other reached file, and neither keeps a placeholder
+    exemption it does not deserve.
     """
     closure: dict[str, pathlib.Path] = {}
     frontier: list[pathlib.Path] = [entry]
@@ -140,12 +187,15 @@ def production_import_closure(entry: pathlib.Path, src_root: pathlib.Path,
             continue
         walked.add(path)
         for name in _ast_imported_module_names(path):
-            resolved = _module_file(name, src_root)
-            if resolved is None:
-                continue
-            closure.setdefault(name, resolved)
-            if resolved not in walked:
-                frontier.append(resolved)
+            # the exact dotted name AND every ancestor package it implies —
+            # see the docstring above / _ancestor_packages.
+            for candidate in (*_ancestor_packages(name), name):
+                resolved = _module_file(candidate, src_root)
+                if resolved is None:
+                    continue
+                closure.setdefault(candidate, resolved)
+                if resolved not in walked:
+                    frontier.append(resolved)
     return closure
 
 

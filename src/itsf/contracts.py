@@ -6,6 +6,7 @@ Field semantics mirror frozen S0 §10.1 / MC spec — do not reinterpret.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 # --- MNQ instrument constants (CME) ----------------------------------------
@@ -101,6 +102,99 @@ class ResolvedS0Methods:
     def fully_resolved(self) -> bool:
         return not self.pending_fields()
 
+    def structural_problems(self) -> list[str]:
+        """M6.1.2 — TYPE + BASIC-INVARIANT validation of the resolved
+        values. This NEVER adopts, ranks or narrows an unruled research
+        choice: it only rejects values that are the wrong TYPE or are
+        structurally impossible (empty rule name, negative repeat count,
+        non-finite slippage, ...). A structurally invalid config must be
+        unable to make RealChain.ready() true.
+        """
+        import math as _math
+        problems: list[str] = []
+
+        def _str(owner: str, name: str, value) -> None:
+            if not isinstance(value, str) or not value.strip():
+                problems.append(f"{owner}.{name}_not_a_nonempty_str")
+
+        def _int(owner: str, name: str, value, *, minimum: int) -> None:
+            if isinstance(value, bool) or not isinstance(value, int):
+                problems.append(f"{owner}.{name}_not_an_int")
+            elif value < minimum:
+                problems.append(f"{owner}.{name}_below_{minimum}")
+
+        def _bool(owner: str, name: str, value) -> None:
+            if not isinstance(value, bool):
+                problems.append(f"{owner}.{name}_not_a_bool")
+
+        expected = {
+            "spread_cost": SpreadCostMethod,
+            "volatility_regime": VolatilityRegimeMethod,
+            "fp_allocation": FpAllocationMethod,
+            "bootstrap_method": BootstrapMethod,
+            "grid_policy": GridRepeatPolicy,
+        }
+        for name, cls in expected.items():
+            value = getattr(self, name)
+            if value is not None and not isinstance(value, cls):
+                problems.append(f"{name}_not_a_{cls.__name__}")
+
+        if isinstance(self.spread_cost, SpreadCostMethod):
+            _str("spread_cost", "scalar_rule", self.spread_cost.scalar_rule)
+            _str("spread_cost", "adverse_semantics",
+                 self.spread_cost.adverse_semantics)
+            ticks = self.spread_cost.adverse_slippage_ticks
+            if not isinstance(ticks, Mapping) or not ticks:
+                problems.append("spread_cost.adverse_slippage_ticks_not_a_"
+                                "nonempty_mapping")
+            else:
+                for key, val in ticks.items():
+                    if not isinstance(key, str):
+                        problems.append("spread_cost.adverse_slippage_ticks_"
+                                        "key_not_a_str")
+                    if (isinstance(val, bool)
+                            or not isinstance(val, (int, float))
+                            or not _math.isfinite(float(val))
+                            or float(val) < 0.0):
+                        problems.append("spread_cost.adverse_slippage_ticks_"
+                                        f"value_invalid:{key}")
+
+        if isinstance(self.volatility_regime, VolatilityRegimeMethod):
+            v = self.volatility_regime
+            for name in ("close_source", "return_basis", "roll_crossing_rule",
+                         "tercile_reference", "na_rule"):
+                _str("volatility_regime", name, getattr(v, name))
+            _int("volatility_regime", "ddof", v.ddof, minimum=0)
+
+        if isinstance(self.fp_allocation, FpAllocationMethod):
+            for name in ("basis", "weight_source", "shortfall_rule"):
+                _str("fp_allocation", name, getattr(self.fp_allocation, name))
+
+        if isinstance(self.bootstrap_method, BootstrapMethod):
+            b = self.bootstrap_method
+            for name in ("population", "na_day_rule", "statistic",
+                         "quoted_seed_rule", "percentile_interpolation",
+                         "crn_scope"):
+                _str("bootstrap_method", name, getattr(b, name))
+            _bool("bootstrap_method", "n_boot_per_seed", b.n_boot_per_seed)
+
+        if isinstance(self.grid_policy, GridRepeatPolicy):
+            g = self.grid_policy
+            _int("grid_policy", "k_per_seed", g.k_per_seed, minimum=1)
+            _int("grid_policy", "k_start_index", g.k_start_index, minimum=0)
+            _int("grid_policy", "max_doublings", g.max_doublings, minimum=0)
+            _bool("grid_policy", "stream_includes_theta",
+                  g.stream_includes_theta)
+            _str("grid_policy", "convergence_rule", g.convergence_rule)
+
+        if self.event_na_mapping is not None:
+            _str("methods", "event_na_mapping", self.event_na_mapping)
+        if self.stability_population is not None:
+            _str("methods", "stability_population", self.stability_population)
+        if not isinstance(self.test_only, bool):
+            problems.append("methods.test_only_not_a_bool")
+        return problems
+
 
 @dataclass(frozen=True)
 class StudyConfig:
@@ -120,11 +214,25 @@ class StudyConfig:
     def __post_init__(self):
         # LOW-1 (M6.1.1 audit): the "derived-only" claim is ENFORCED —
         # direct construction with pending methods raises exactly like
-        # derive_study_config would.
+        # derive_study_config would. M6.1.2: a STRUCTURALLY invalid set of
+        # resolved values is refused here too, so no illegal config can
+        # exist anywhere (and therefore cannot make ready() true).
         pend = self.methods.pending_fields()
         if pend:
             raise ValueError("StudyConfig: pending method rulings: "
                              + ", ".join(pend))
+        bad = self.methods.structural_problems()
+        if bad:
+            raise ValueError("StudyConfig: structurally invalid methods: "
+                             + ", ".join(bad))
+        for name in ("regime_of", "vol_axis_of"):
+            if not callable(getattr(self, name)):
+                raise ValueError(f"StudyConfig: {name} must be callable")
+        scal = self.spread_scalars
+        if (not isinstance(scal, tuple) or len(scal) != 3
+                or any(isinstance(v, bool) or not isinstance(v, (int, float))
+                       for v in scal)):
+            raise ValueError("StudyConfig: spread_scalars must be 3 numbers")
 
 
 def derive_study_config(methods: ResolvedS0Methods, *,
@@ -143,6 +251,10 @@ def derive_study_config(methods: ResolvedS0Methods, *,
     if pend:
         raise ValueError("derive_study_config: pending method rulings: "
                          + ", ".join(pend))
+    bad = methods.structural_problems()
+    if bad:
+        raise ValueError("derive_study_config: structurally invalid "
+                         "methods: " + ", ".join(bad))
     return StudyConfig(methods=methods, spread_scalars=tuple(spread_scalars),
                        regime_of=regime_of, vol_axis_of=vol_axis_of)
 

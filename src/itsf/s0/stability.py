@@ -238,7 +238,11 @@ def _vol_axis(pnl: Mapping[str, float],
                 f"vol_axis[{date!r}] == {VOL_NA_BUCKET!r} collides with the "
                 "reserved bucket this module uses for dates ABSENT from "
                 "vol_axis — pick a different label")
-    buckets: dict[str, list[tuple[str, float]]] = {}
+    # M6.1.2: the NA bucket is part of the STABLE stratum shape — always
+    # emitted (empty when every day carries a label) so the sealed payload
+    # never changes key set with the data, and a reader can always see that
+    # the NA layer was accounted for.
+    buckets: dict[str, list[tuple[str, float]]] = {VOL_NA_BUCKET: []}
     for date, value in pnl.items():
         label = vol_axis[date] if date in vol_axis else VOL_NA_BUCKET
         buckets.setdefault(label, []).append((date, value))

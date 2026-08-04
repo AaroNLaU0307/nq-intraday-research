@@ -44,7 +44,7 @@ ATTEMPTS_ROOT = REPO / "attempts"
 # Baseline collected-test count at the SA-6 audit commit. The pytest gate
 # requires the suite to still COLLECT at least this many tests, so a muted
 # or filtered run cannot satisfy the gate with a handful of tests (F-09).
-MIN_COLLECTED_TESTS = 782                  # M6.1: floor = current suite
+MIN_COLLECTED_TESTS = 926                  # M6.1: floor = current suite
 
 # External read-only tooling (packet §9 gate 4). Invoked as a subprocess;
 # the tool itself only reads repository files.
@@ -900,11 +900,52 @@ def render_s0_report(result, *, expected_governance=None) -> dict[str, str]:
                     "file": name, "n_records": len(recs),
                     "sha256": hashlib.sha256(
                         body.encode("utf-8")).hexdigest()}
-        files["SEED_MANIFEST.json"] = ho.dumps_canonical(
-            ho.build_seed_manifest())
+        # M6.1.2 (Codex S2-3): the `formal_sealable` flags are now CONSUMED.
+        # An artifact that is not sealable is WITHHELD from the sealed set —
+        # it is never sealed while carrying a False flag — and the refusal
+        # is itself recorded in a sealed admission record, so the withheld
+        # state is disclosed rather than silent.
+        candidates = {"SEED_MANIFEST.json": ho.build_seed_manifest()}
+        admitted: dict[str, object] = {}
+        withheld: dict[str, list[str]] = {}
+        for fname, artifact in candidates.items():
+            probs = ho.formal_seal_admission({fname: artifact})
+            (withheld if probs else admitted)[fname] = probs or artifact
+        for fname, artifact in admitted.items():
+            files[fname] = ho.dumps_canonical(artifact)
+        files["HANDOFF_ADMISSION.json"] = ho.dumps_canonical({
+            "schema_version": ho.SCHEMA_VERSION,
+            "admitted": sorted(admitted),
+            "withheld": dict(sorted(withheld.items())),
+            "note": ("artifacts whose formal_sealable flag is not True are "
+                     "WITHHELD from the sealed set pending the DR-M6 "
+                     "rulings; DAY_STRATA / GRID_SAMPLES are not built by "
+                     "this renderer yet (schema skeletons in "
+                     "src/itsf/s0/handoff.py)"),
+        })
+        files["S0_REPORT.md"] = "\n".join([
+            "# S0 FORMAL REPORT (sealed at Stage E)", "",
+            "- formal payload: S0_REPORT.json (single sealed release)",
+            "- MC handoff records: MC_HANDOFF_<engine>_<scenario>.jsonl",
+            "- handoff admission: HANDOFF_ADMISSION.json (which handoff "
+            "artifacts were admitted / withheld and why)",
+            "- DAY_STRATA/GRID_SAMPLES/SEED_MANIFEST: NOT part of the "
+            "sealed set while formal_sealable is False (DR-M6 rulings "
+            "pending); schema skeletons in src/itsf/s0/handoff.py"])
         formal = dict(formal)
+        # M6.1.2 (audit N18): EVERY file this renderer writes carries an
+        # integrity entry — an extra planted file, or a sealed file with
+        # no hash, is refused. S0_REPORT.json is SELF-EXCLUDED because it
+        # carries the manifest (same discipline as the runinfra JSONL
+        # hash chain); Stage F's chain seal covers it.
         formal["mc_handoff_manifest"] = {
-            **formal["mc_handoff_manifest"], "files": file_manifest}
+            **formal["mc_handoff_manifest"], "files": file_manifest,
+            "sealed_files": {
+                name: {"sha256": hashlib.sha256(
+                           body.encode("utf-8")).hexdigest(),
+                       "bytes": len(body.encode("utf-8"))}
+                for name, body in sorted(files.items())},
+            "self_excluded": ["S0_REPORT.json"]}
         # M6.1.1 S1 two-call contract: the FULL payload validation runs
         # AGAIN after manifest injection (a payload that only becomes
         # invalid post-injection must still refuse to seal).
@@ -924,13 +965,6 @@ def render_s0_report(result, *, expected_governance=None) -> dict[str, str]:
         if post:
             raise ValueError("sealed-file verification failed: "
                              + "; ".join(post))
-        files["S0_REPORT.md"] = "\n".join([
-            "# S0 FORMAL REPORT (sealed at Stage E)", "",
-            "- formal payload: S0_REPORT.json (single sealed release)",
-            "- MC handoff records: MC_HANDOFF_<engine>_<scenario>.jsonl",
-            "- seed manifest: SEED_MANIFEST.json",
-            "- DAY_STRATA/GRID_SAMPLES: wired after the DR-M6 rulings "
-            "(schema skeletons in src/itsf/s0/handoff.py)"])
         return files
     raise ValueError(
         "render_s0_report: refusing non-study payload — the legacy "
@@ -954,6 +988,27 @@ from itsf.contracts import StudyConfig    # noqa: E402 (after sys.path setup)
 _CONFIG_CACHE: dict = {}
 
 
+def _validated_config(cfg, why: str):
+    """M6.1.2: the production path may only ever hand out a config that
+    passes REVALIDATION at the point of use — a config that became
+    test_only, structurally invalid or partially-resolved by any route
+    (cache injection, frozen-dataclass bypass, ...) is refused here, so an
+    illegal config can never make ready() true."""
+    if cfg is None:
+        return (None, why)
+    if not isinstance(cfg, StudyConfig):
+        return (None, "config is not a StudyConfig instance")
+    if getattr(cfg.methods, "test_only", False):
+        return (None, "test_only config refused on the production path")
+    pend = cfg.methods.pending_fields()
+    if pend:
+        return (None, "pending method rulings: " + ", ".join(pend))
+    bad = cfg.methods.structural_problems()
+    if bad:
+        return (None, "structurally invalid methods: " + ", ".join(bad))
+    return (cfg, why)
+
+
 def resolved_study_config() -> tuple[StudyConfig | None, str]:
     """Shared readiness/compute predicate (E1/M6.1.1). ready() and
     compute() consume the SAME cached immutable instance — ready=False and
@@ -961,9 +1016,7 @@ def resolved_study_config() -> tuple[StudyConfig | None, str]:
     (production path) even if one were cached."""
     if "cfg" in _CONFIG_CACHE:
         cfg, why = _CONFIG_CACHE["cfg"]
-        if cfg is not None and cfg.methods.test_only:
-            return (None, "test_only config refused on the production path")
-        return (cfg, why)
+        return _validated_config(cfg, why)
     pend = _resolved_methods().pending_fields()
     if pend:
         out = (None, "pending method rulings: " + ", ".join(pend))
@@ -1013,6 +1066,41 @@ def make_day_inputs(ds, bars_by_date):
             or_low=float(obs["low"].min()),
             d_open=int(r.labels.d_open))
     return out
+
+
+def _na_conservation_block(structural) -> dict:
+    """A11 NA-conservation restatement for the sealed report.
+
+    Re-runs the SAME production checker Stage D uses (runinfra.
+    check_na_conservation) over the itemized reasons and the independently
+    reported totals, and restates both plus the verdict — so the formal
+    report carries the conservation evidence, not merely a claim.
+    """
+    from itsf.s0 import runinfra as _ri
+    counts = structural["na_reason_counts"]
+    totals = structural["reported_total_na"]
+    res = _ri.check_na_conservation(counts, reported_total_na=totals)
+    per_table: dict[str, int] = {"features": 0, "labels": 0}
+    for col, n in totals.items():
+        table = col.split(".", 1)[0]
+        if table in per_table:
+            per_table[table] += int(n)
+    return {
+        # contract §A11 minimal shape (report.validate_formal_payload)
+        "per_table_total_na": per_table,
+        "conservation_ok": bool(res.ok),
+        # richer evidence (superset of the minimal shape)
+        "conserved": bool(res.ok),
+        "reported_total_na": {k: int(v) for k, v in totals.items()},
+        "itemized_reason_counts": {
+            col: {reason: int(n) for reason, n in reasons.items()}
+            for col, reasons in counts.items()},
+        "checker": "itsf.s0.runinfra.check_na_conservation "
+                   "(APPROVED_NA_REASONS not a parameter; totals mandatory)",
+        "per_column_ok": {k: bool(v) for k, v in res.per_column_ok.items()},
+        "unregistered_reasons": list(res.unregistered_reasons),
+        "miscounted_columns": list(res.miscounted_columns),
+    }
 
 
 def _strkeys(obj):
@@ -1139,6 +1227,11 @@ def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
                 "under MNQ multiplier + 2025Q1 friction — NOT a tradeable "
                 "MNQ history (frozen §6).")},
         "disclosures": {
+            # A11 (contract): the NA-conservation RESTATEMENT — the same
+            # itemized reasons/totals Stage D verifies, restated in the
+            # sealed report so a reader can re-add them without the
+            # internal envelope.
+            "na_conservation": _na_conservation_block(structural),
             "untradeable": study["untradeable_disclosure"],
             # single truth source: DERIVED from ResolvedS0Methods (empty by
             # construction — derive_study_config refuses pending methods)

@@ -216,6 +216,58 @@ def test_scanner_flags_reachable_marker_but_exempts_deferred_stub(
     assert "src/itsf/mc/account.py" not in out
 
 
+def test_import_closure_includes_parent_package_init_files(tmp_path):
+    """M6.1.1 S2 item 4 (Codex finding (d)): importing itsf.mc.bootstrap
+    EXECUTES itsf/__init__.py and itsf/mc/__init__.py as a side effect of
+    CPython's import machinery — even though no import statement anywhere
+    on the scripts/s0_real_run.py path ever spells out "itsf" or "itsf.mc"
+    as a bare name (itsf.s0.stats says
+    `from itsf.mc.bootstrap import stationary_bootstrap_indices`, which
+    names only "itsf.mc.bootstrap"). Both ancestor package files must be IN
+    the closure now, alongside bootstrap.py itself."""
+    scratch = _make_scratch_repo(tmp_path)
+    closure = fcs.production_import_closure(
+        scratch / "scripts" / "s0_real_run.py", scratch / "src")
+    closure_files = {p.relative_to(scratch).as_posix()
+                     for p in closure.values()}
+    assert "src/itsf/mc/bootstrap.py" in closure_files
+    assert "src/itsf/__init__.py" in closure_files
+    assert "src/itsf/mc/__init__.py" in closure_files
+
+
+def test_scanner_flags_marker_in_parent_package_init_but_still_excludes_stubs(
+        tmp_path, capsys):
+    """ISOLATED mutation test (scratch git repo under tmp_path, never the
+    real repo — same discipline as
+    `test_scanner_flags_reachable_marker_but_exempts_deferred_stub` above):
+    a forbidden marker planted in itsf/mc/__init__.py — a parent PACKAGE
+    file, not a leaf module anything explicitly imports — must still turn
+    the scanner RED (exit 1), proving finding (d)'s fix actually reaches
+    parent-package files rather than only the leaf modules literal import
+    statements name. mc/account.py and mc/orchestrator.py (still genuinely
+    unreached from scripts/s0_real_run.py) stay exempt even though this test
+    plants the SAME marker in them too."""
+    scratch = _make_scratch_repo(tmp_path)
+    _plant_marker(scratch / "src" / "itsf" / "mc" / "__init__.py")
+    _plant_marker(scratch / "src" / "itsf" / "mc" / "account.py")
+    _plant_marker(scratch / "src" / "itsf" / "mc" / "orchestrator.py")
+
+    closure = fcs.production_import_closure(
+        scratch / "scripts" / "s0_real_run.py", scratch / "src")
+    closure_files = {p.relative_to(scratch).as_posix()
+                     for p in closure.values()}
+    assert "src/itsf/mc/__init__.py" in closure_files
+    assert "src/itsf/mc/account.py" not in closure_files
+    assert "src/itsf/mc/orchestrator.py" not in closure_files
+
+    exit_code = fcs.main(scratch)
+    out = capsys.readouterr().out
+    assert exit_code == 1
+    assert "src/itsf/mc/__init__.py" in out
+    assert "src/itsf/mc/account.py" not in out
+    assert "src/itsf/mc/orchestrator.py" not in out
+
+
 # ---------------------------------------------------------------------------
 # account: sizing policies and integer caps
 # ---------------------------------------------------------------------------
