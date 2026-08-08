@@ -1,10 +1,14 @@
-# DECISION_REQUIRED_M6_1（**七项**方法裁决包，r3；Fable 起草，Sol 立场并列，Aaron 裁决）
+# DECISION_REQUIRED_M6_1（**八项**方法裁决包，r5；Fable 起草，Sol 立场并列，Aaron 裁决）
 
-通用声明（M6.1.1-r2，审计后精确化）：并非全部机制已参数化——
-**六个结构化字段（spread_cost / volatility_regime / fp_allocation /
-bootstrap_method / grid_policy / stability_population）今日无消费者**，
+通用声明（M6.1.1-r2，审计后精确化；r5 按 M6.1.3 盲审 G7 修正计数）：
+并非全部机制已参数化——
+**七个结构化字段（spread_cost / volatility_regime / fp_allocation /
+bootstrap_method / grid_policy / stability_population /
+worst_day_estimator）今日无消费者**，
 其未裁前行为硬编码于被调方（IR-7 暂用 adverse、FP 基准 A、D_TP 子序列
-bootstrap、K=1、D_TP 条件 stability 总体）；唯一被消费的是
+bootstrap、K=1、D_TP 条件 stability 总体；worst_day_estimator 今日仅翻转
+estimator_status 状态串（fail-closed 封存门），并不选择估计器，故仍计为
+无消费者）；唯一被消费的是
 event_na_mapping（scripts/s0_real_run.py 事件层显式阻断点）；
 消费者接线由 test_m6_chain 的 ruling→consumer 机器断言强制与裁决同
 commit 落地；已参数化的是**阻断本身**：
@@ -251,3 +255,22 @@ D4.7 CRN scope：θ 内 engine×scenario 共用重抽索引 vs 各自独立。
 
 四字段均有冻结文本出处，**不构成对 §10.1 schema 的未授权扩展**；
 如 Codex 异议任一条，按其条目单开 DECISION_REQUIRED。
+
+## DR-8（DR-M6-H，M6.1.3 新增）E2 最差日 P1/P5 样本分位估计量
+
+- **frozen source**：S0 §7 表（"强制报告最差日 P1/P5"——**未命名任何
+  估计量**）；stats/report 源码自述 numpy `method="linear"` 仅为
+  engineering convention。
+- **授权核查（M6.1.3 实查）**：冻结文本与全部已批 IR 均无分位估计量
+  批准（IR-21 的 percentile_rank 是 Y6 排名公式，非样本分位估计量；
+  DR-4.6 的 linear 本就标"待正式确认"）——"代码存在/报告已披露"
+  不构成授权。
+- **候选**：linear（numpy 默认，现披露）；lower/higher（保守方向可
+  论证）；median_unbiased 等。**本轮不推荐、不采用**。
+- **机制**：ResolvedS0Methods.worst_day_estimator（第八字段，None=
+  pending）；producer 依此发 estimator_status；validator 对
+  unresolved 拒封存（worst_day_estimator_unresolved）；TEST_ONLY
+  合成值显式隔离、生产拒收。
+- **影响**：仅 E2 最差日报告统计量；不触样本/NA/成本/Oracle。
+  与 DR-4.6（bootstrap CI 插值）为**相邻但独立**两面，可同批裁。
+- **Fable/Sol 立场**：均待 cross-critique 后表态。落地：IR。

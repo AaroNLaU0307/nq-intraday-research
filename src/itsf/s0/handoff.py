@@ -626,19 +626,390 @@ def _find_unresolved_markers(artifact: Mapping[str, object],
     return counts
 
 
+def _marker_problems(type_name: str, artifact: Mapping[str, object]
+                     ) -> list[str]:
+    """`_find_unresolved_markers`'s findings, formatted as admission-message
+    fragments prefixed by the RECOGNIZED artifact type (never the caller's
+    own artifact NAME, which `formal_seal_admission` already prefixes onto
+    the final message — this keeps a marker fragment identical regardless of
+    which name a caller happens to register the same artifact shape under)."""
+    problems: list[str] = []
+    for label, count in sorted(_find_unresolved_markers(artifact).items()):
+        suffix = f" (x{count})" if count > 1 else ""
+        problems.append(f"{type_name}: UNRESOLVED marker {label}{suffix}")
+    return problems
+
+
+def _schema_check(label: str, mapping: object, required_keys: frozenset[str],
+                  ) -> list[str]:
+    """Full schema fidelity: `mapping`'s key SET must be EXACTLY
+    `required_keys` — missing and extra fields are DISTINCT, both-named
+    problems, never folded into one generic "shape is wrong" message (same
+    discipline `_check_record_matrix_shape` already applies to the engine ×
+    scenario matrix)."""
+    if not isinstance(mapping, Mapping):
+        return [f"{label}: expected a mapping, got "
+                f"{type(mapping).__name__}"]
+    actual = set(mapping)
+    missing = sorted(required_keys - actual)
+    extra = sorted(actual - required_keys)
+    problems: list[str] = []
+    if missing:
+        problems.append(f"{label}: missing field(s) {missing}")
+    if extra:
+        problems.append(f"{label}: unexpected extra field(s) {extra}")
+    return problems
+
+
+def _is_strict_int(value: object) -> bool:
+    """True iff `value` is a genuine `int` — never `bool` (which subclasses
+    `int`), `float` (not even 7.0), or a numeric string. Used everywhere a
+    seed is read in the acceptance path below; NO `int()` coercion is ever
+    applied to a seed anywhere in this module — a wrongly-typed seed is a
+    refusal, never silently normalised into the type it should have been."""
+    return type(value) is int
+
+
+# ===========================================================================
+# per-artifact-TYPE schema recognition (M6.1.3 S2 — admission must validate
+# ARTIFACT CONTENT, never trust `formal_sealable=True`)
+# ===========================================================================
+# Distinguishing top-level keys for each of the three real builder shapes
+# (`build_day_strata` / `build_grid_samples` / `build_seed_manifest` — read
+# directly off those functions' own `return {...}` literals above, never
+# retyped as a second, driftable copy). A bare shell like
+# `{"formal_sealable": True}` matches NONE of these marker sets and is
+# therefore UNRECOGNIZED — the "bare shell" refusal case falls out of type
+# recognition itself rather than needing its own special-cased branch.
+_TYPE_MARKER_KEYS: dict[str, frozenset[str]] = {
+    "day_strata": frozenset({"days", "ordering"}),
+    "grid_samples": frozenset({"cells", "replay", "replay_status"}),
+    "seed_manifest": frozenset({"research_bootstrap_seeds", "stream_tags",
+                                "quoted_seed_convention",
+                                "engineering_seed_note"}),
+}
+
+
+def _recognize_artifact_type(artifact: object) -> str | None:
+    """Which of the three real handoff shapes `artifact` LOOKS LIKE, by
+    top-level key overlap with `_TYPE_MARKER_KEYS` — or `None` when it
+    matches none (or ties between two), which the caller treats as an
+    unrecognized/unadmittable schema regardless of any flag it carries."""
+    if not isinstance(artifact, Mapping):
+        return None
+    keys = set(artifact)
+    scores = {t: len(keys & markers)
+             for t, markers in _TYPE_MARKER_KEYS.items()}
+    best = max(scores.values())
+    if best == 0:
+        return None
+    winners = [t for t, s in scores.items() if s == best]
+    if len(winners) != 1:
+        return None
+    return winners[0]
+
+
+# --- day_strata --------------------------------------------------------
+
+_DAY_STRATA_TOP_FIELDS = frozenset(
+    {"schema_version", "ordering", "formal_sealable", "days"})
+_DAY_ROW_FIELDS = frozenset(
+    {"micro_execution_era", "stability_epoch", "year", "d_open",
+     "event_flag_final", "event_na", "event_stratum", "vol_status",
+     "tp_fp_class"})
+
+
+def _validate_day_strata_content(artifact: Mapping[str, object]
+                                 ) -> list[str]:
+    """Recompute day_strata sealability from its own content — full schema
+    fidelity (top level + every day row), known-vocabulary checks on the
+    fields that HAVE a frozen vocabulary, and any UNRESOLVED marker anywhere
+    (today: `event_stratum`, always, per DR-M6-F — see module docstring)."""
+    problems = _schema_check("day_strata", artifact, _DAY_STRATA_TOP_FIELDS)
+    days = artifact.get("days")
+    if not isinstance(days, Mapping):
+        problems.append(f"day_strata.days: expected a mapping, got "
+                        f"{type(days).__name__}")
+    else:
+        if not days:
+            problems.append(
+                "day_strata.days is EMPTY — an empty artifact is never "
+                "sealable (vacuous truth refused)")
+        for date, row in days.items():
+            label = f"day_strata.days[{date!r}]"
+            problems.extend(_schema_check(label, row, _DAY_ROW_FIELDS))
+            if not isinstance(row, Mapping):
+                continue
+            if "d_open" in row and row["d_open"] not in (-1, 0, 1):
+                problems.append(
+                    f"{label}: d_open {row['d_open']!r} not in (-1, 0, 1)")
+            if "event_flag_final" in row:
+                eff = row["event_flag_final"]
+                if eff is not None and eff not in _EVENT_FLAG_VALUES:
+                    problems.append(
+                        f"{label}: event_flag_final {eff!r} is not a known "
+                        "F10 value or None")
+            if "tp_fp_class" in row:
+                tp_fp = row["tp_fp_class"]
+                if isinstance(tp_fp, Mapping):
+                    bad = {k: v for k, v in tp_fp.items()
+                          if v not in _TP_FP_VALUES}
+                    if bad:
+                        problems.append(
+                            f"{label}: tp_fp_class has non-TP/FP/"
+                            f"non_tradeable value(s) {bad}")
+                else:
+                    problems.append(f"{label}: tp_fp_class must be a "
+                                    "mapping")
+    problems.extend(_marker_problems("day_strata", artifact))
+    return problems
+
+
+# --- grid_samples --------------------------------------------------------
+
+_GRID_SAMPLES_TOP_FIELDS = frozenset(
+    {"schema_version", "formal_sealable", "replay_status", "cells",
+     "run_meta", "replay"})
+_GRID_CELL_FIELDS = frozenset(
+    {"per_seed", "infeasible_by_sample", "q_mil", "r_mil"})
+_GRID_PER_SEED_FIELDS = frozenset(
+    {"tp_dates", "fp_dates", "markers", "realized_precision",
+     "realized_recall", "target_precision", "target_recall"})
+_GRID_RUN_META_FIELDS = frozenset(_REQUIRED_RUN_META)
+_GRID_REPLAY_FIELDS = frozenset(
+    {"stream_formula", "grid_stream_tag", "k_policy", "crn_scope"})
+
+
+def _seed_set_from_manifest(manifest: Mapping[str, object]) -> set[int] | None:
+    """The manifest's OWN declared seed set, or `None` when it is not a
+    cleanly strict-int sequence (in which case the manifest already carries
+    its own defect and there is nothing usable to cross-check a grid cell
+    against)."""
+    raw = manifest.get("research_bootstrap_seeds")
+    if (isinstance(raw, Sequence) and not isinstance(raw, (str, bytes))
+            and all(_is_strict_int(s) for s in raw)):
+        return set(raw)
+    return None
+
+
+def _validate_grid_samples_content(
+        artifact: Mapping[str, object],
+        seed_manifest_artifacts: Sequence[Mapping[str, object]] = (),
+        ) -> list[str]:
+    """Recompute grid_samples sealability from its own content: full schema
+    fidelity at every nesting level (top level, run_meta, replay, each cell,
+    each per-seed block), the theta/engine/scenario AXIS LOCK against the
+    single-sourced FROZEN_THETAS/ENGINES/SCENARIOS (exact equality — no
+    tolerance on theta), replay_status must be CLOSED (never PARTIAL,
+    regardless of the artifact's own flag), an empty grid is never sealable,
+    EVERY feasible cell's own per_seed key set must equal the frozen
+    {7, 13, 31} — checked per cell, never merely the union across cells —
+    seed keys are refused unless strictly `int` (no bool/float/numeric-string,
+    no `int()` coercion anywhere here), and, when one or more seed_manifest
+    artifacts are ALSO supplied in this call, each feasible cell's seed set
+    is cross-checked against every supplied manifest's own declared seeds.
+    """
+    problems = _schema_check("grid_samples", artifact,
+                             _GRID_SAMPLES_TOP_FIELDS)
+
+    if "replay_status" in artifact:
+        replay_status = artifact["replay_status"]
+        if replay_status != REPLAY_STATUS_CLOSED:
+            problems.append(
+                f"grid_samples.replay_status {replay_status!r} != "
+                f"{REPLAY_STATUS_CLOSED!r} — a PARTIAL (or any other "
+                "non-CLOSED) replay status is never sealable, regardless of "
+                "the artifact's own formal_sealable flag")
+
+    run_meta = artifact.get("run_meta")
+    if "run_meta" in artifact:
+        problems.extend(_schema_check("grid_samples.run_meta", run_meta,
+                                      _GRID_RUN_META_FIELDS))
+        if isinstance(run_meta, Mapping):
+            if "theta" in run_meta:
+                theta_value = run_meta["theta"]
+                if isinstance(theta_value, bool) or theta_value not in FROZEN_THETAS:
+                    problems.append(
+                        f"grid_samples.run_meta.theta {theta_value!r} is "
+                        "not EXACTLY one of study.FROZEN_THETAS "
+                        f"{FROZEN_THETAS} (exact float equality against the "
+                        "frozen values — no tolerance; e.g. 0.5000001 is "
+                        "refused)")
+            if "engine" in run_meta and run_meta["engine"] not in ENGINES:
+                problems.append(
+                    f"grid_samples.run_meta.engine {run_meta['engine']!r} "
+                    f"is not one of the frozen {ENGINES} — unknown or "
+                    "renamed engine")
+            if "scenario" in run_meta and run_meta["scenario"] not in SCENARIOS:
+                problems.append(
+                    f"grid_samples.run_meta.scenario "
+                    f"{run_meta['scenario']!r} is not one of the frozen "
+                    f"{SCENARIOS} — unknown scenario")
+
+    replay = artifact.get("replay")
+    if "replay" in artifact:
+        problems.extend(_schema_check("grid_samples.replay", replay,
+                                      _GRID_REPLAY_FIELDS))
+        if isinstance(replay, Mapping) and "grid_stream_tag" in replay:
+            if replay["grid_stream_tag"] != s0_gridmix.GRID_STREAM_TAG:
+                problems.append(
+                    "grid_samples.replay.grid_stream_tag "
+                    f"{replay['grid_stream_tag']!r} != the recomputed "
+                    f"gridmix.GRID_STREAM_TAG {s0_gridmix.GRID_STREAM_TAG!r}")
+
+    cells = artifact.get("cells")
+    if "cells" in artifact:
+        if not isinstance(cells, Mapping):
+            problems.append(f"grid_samples.cells: expected a mapping, got "
+                            f"{type(cells).__name__}")
+        else:
+            if not cells:
+                problems.append(
+                    "grid_samples.cells is EMPTY — an empty grid is never "
+                    "sealable")
+            frozen_seed_set = set(FROZEN_SEEDS)
+            manifest_seed_sets = [
+                s for s in (_seed_set_from_manifest(m)
+                           for m in seed_manifest_artifacts)
+                if s is not None]
+            for cell_key, cell in sorted(cells.items()):
+                label = f"grid_samples.cells[{cell_key!r}]"
+                problems.extend(_schema_check(label, cell, _GRID_CELL_FIELDS))
+                if not isinstance(cell, Mapping):
+                    continue
+                if ("infeasible_by_sample" in cell
+                        and not isinstance(cell["infeasible_by_sample"], bool)):
+                    problems.append(
+                        f"{label}.infeasible_by_sample must be a bool, got "
+                        f"{cell['infeasible_by_sample']!r}")
+                for millis_key in ("q_mil", "r_mil"):
+                    if millis_key in cell and not _is_strict_int(cell[millis_key]):
+                        problems.append(
+                            f"{label}.{millis_key} must be a strict int, "
+                            f"got {cell[millis_key]!r}")
+                per_seed = cell.get("per_seed")
+                if "per_seed" not in cell:
+                    continue
+                if not isinstance(per_seed, Mapping):
+                    problems.append(f"{label}.per_seed: expected a mapping, "
+                                    f"got {type(per_seed).__name__}")
+                    continue
+                if cell.get("infeasible_by_sample") is True:
+                    if per_seed:
+                        problems.append(
+                            f"{label}: infeasible_by_sample is True but "
+                            "per_seed is not empty")
+                    continue
+                seed_keys = list(per_seed)
+                bad_seeds = [s for s in seed_keys if not _is_strict_int(s)]
+                if bad_seeds:
+                    problems.append(
+                        f"{label}.per_seed has non-strict-int seed key(s) "
+                        f"{bad_seeds!r} — bool/float/numeric-string seeds "
+                        "are refused, never coerced with int()")
+                else:
+                    seed_set = set(seed_keys)
+                    if seed_set != frozen_seed_set:
+                        problems.append(
+                            f"{label}.per_seed keys {sorted(seed_set)} != "
+                            f"the frozen seed set {sorted(frozen_seed_set)} "
+                            "— THIS cell's own seed set is incomplete "
+                            "(checked per cell, never merely the union "
+                            "across cells)")
+                    for manifest_set in manifest_seed_sets:
+                        if seed_set != manifest_set:
+                            problems.append(
+                                f"{label}.per_seed keys "
+                                f"{sorted(seed_set)} != the supplied "
+                                "SEED_MANIFEST artifact's "
+                                f"research_bootstrap_seeds "
+                                f"{sorted(manifest_set)} — per-cell "
+                                "cross-check against the seed manifest "
+                                "failed")
+                for seed, block in per_seed.items():
+                    block_label = f"{label}.per_seed[{seed!r}]"
+                    problems.extend(_schema_check(block_label, block,
+                                                  _GRID_PER_SEED_FIELDS))
+
+    problems.extend(_marker_problems("grid_samples", artifact))
+    return problems
+
+
+# --- seed_manifest ---------------------------------------------------------
+
+_SEED_MANIFEST_TOP_FIELDS = frozenset(
+    {"schema_version", "formal_sealable", "research_bootstrap_seeds",
+     "quoted_seed_convention", "stream_tags", "k_policy", "crn_scope",
+     "engineering_seed_note"})
+_STREAM_TAGS_FIELDS = frozenset({"stats_stream_tag", "grid_stream_tag"})
+
+
+def _validate_seed_manifest_content(artifact: Mapping[str, object]
+                                    ) -> list[str]:
+    """SEED_MANIFEST must be REBUILDABLE from formal content (M6.1.3 S2 item
+    4): the seeds are recomputed from `contracts.RESEARCH_BOOTSTRAP_SEEDS`,
+    the stream tags from `stats.STATS_STREAM_TAG` / `gridmix.GRID_STREAM_TAG`
+    — the exact same single-sourced constants `build_seed_manifest` itself
+    reads — and a manifest whose fields disagree with that recomputation is
+    refused regardless of its own `formal_sealable` flag. k_policy/crn_scope
+    have no closed recomputation to check VALUE-equality against (DR-M6-E /
+    crn_scope are genuinely open — see module docstring); their STATUS is
+    still recomputed the same way every other UNRESOLVED marker in this
+    module is (`_marker_problems` below), so a manifest cannot claim
+    resolution by merely omitting a flag."""
+    problems = _schema_check("seed_manifest", artifact,
+                             _SEED_MANIFEST_TOP_FIELDS)
+
+    if "research_bootstrap_seeds" in artifact:
+        seeds = artifact["research_bootstrap_seeds"]
+        if not isinstance(seeds, Sequence) or isinstance(seeds, (str, bytes)):
+            problems.append("seed_manifest.research_bootstrap_seeds must be "
+                            "a sequence")
+        else:
+            bad_seeds = [s for s in seeds if not _is_strict_int(s)]
+            if bad_seeds:
+                problems.append(
+                    "seed_manifest.research_bootstrap_seeds has non-strict-"
+                    f"int entrie(s) {bad_seeds!r} — bool/float/numeric-"
+                    "string seeds are refused, never coerced with int()")
+            elif list(seeds) != list(contracts.RESEARCH_BOOTSTRAP_SEEDS):
+                problems.append(
+                    f"seed_manifest.research_bootstrap_seeds {list(seeds)} "
+                    "!= the recomputed contracts.RESEARCH_BOOTSTRAP_SEEDS "
+                    f"{list(contracts.RESEARCH_BOOTSTRAP_SEEDS)} — REBUILT "
+                    "from the single source of truth, never trusted "
+                    "verbatim")
+
+    if "stream_tags" in artifact:
+        stream_tags = artifact["stream_tags"]
+        problems.extend(_schema_check("seed_manifest.stream_tags",
+                                      stream_tags, _STREAM_TAGS_FIELDS))
+        if isinstance(stream_tags, Mapping):
+            expected_tags = {"stats_stream_tag": s0_stats.STATS_STREAM_TAG,
+                             "grid_stream_tag": s0_gridmix.GRID_STREAM_TAG}
+            for key, expected in expected_tags.items():
+                if key in stream_tags and stream_tags[key] != expected:
+                    problems.append(
+                        f"seed_manifest.stream_tags[{key!r}] "
+                        f"{stream_tags[key]!r} != the recomputed {expected!r} "
+                        "(single-sourced from its owning module's constant)")
+
+    problems.extend(_marker_problems("seed_manifest", artifact))
+    return problems
+
+
 def formal_seal_admission(artifacts: Mapping[str, Mapping]) -> list[str]:
-    """The CONSUMER `formal_sealable` lacked (M6.1.1 audit finding (c)): one
-    problem per artifact that is NOT admissible to a formal-sealed set,
-    naming the blocking UNRESOLVED marker(s), plus one for an artifact that
-    omits the flag entirely. Returns a (sorted, deterministic) list; an empty
-    list means every supplied artifact is admissible.
+    """The CONSUMER `formal_sealable` lacked (M6.1.1 audit finding (c)) —
+    now a per-artifact-TYPE schema + semantic validator that RECOMPUTES
+    sealability from CONTENT and never trusts the artifact's own
+    `formal_sealable` flag (M6.1.3 S2). Returns a (sorted, deterministic)
+    list of problem descriptions, one per artifact that is NOT admissible;
+    an empty list means every supplied artifact is admissible.
 
     This function does not itself hold or mutate any "sealed set" — it is
-    the missing GATE the main agent's Stage-E renderer must call before
-    admitting an artifact: a name that appears in this function's non-empty
-    return value must NOT be added to whatever the renderer treats as
-    sealed. `formal_sealable=False` merely SITTING in the JSON, unread by
-    any caller, was exactly the dead-flag defect this closes.
+    the GATE the main agent's Stage-E renderer must call before admitting an
+    artifact: a name that appears in this function's non-empty return value
+    must NOT be added to whatever the renderer treats as sealed.
 
     Parameters
     ----------
@@ -650,43 +1021,89 @@ def formal_seal_admission(artifacts: Mapping[str, Mapping]) -> list[str]:
 
     Admission rule, per artifact
     -----------------------------
-    * `"formal_sealable"` key absent entirely -> a problem (a missing flag is
-      NOT a silent pass; there is no vocabulary in which "no flag" means
-      "sealable").
-    * `artifact["formal_sealable"] is not True` (False, 0, "true", any
-      non-bool-True value) -> a problem naming the UNRESOLVED marker(s) found
-      inside the artifact (via `_find_unresolved_markers`), or, when the
-      artifact holds none (e.g. it is merely empty), a generic refusal
-      message — refusal never depends on being able to explain itself.
-    * `artifact["formal_sealable"] is True` -> no problem; the artifact may
-      enter the sealed set.
+    1. `"formal_sealable"` key absent entirely (or the artifact is not a
+       mapping at all) -> a problem; a missing flag is NEVER a silent pass.
+    2. Otherwise the artifact's TYPE is recognized from its own top-level key
+       shape (`_recognize_artifact_type`: day_strata / grid_samples /
+       seed_manifest, by the SAME shapes `build_day_strata` /
+       `build_grid_samples` / `build_seed_manifest` actually produce). A
+       shape matching none of the three real schemas — including a bare
+       `{"formal_sealable": True}` shell — is UNRECOGNIZED and is its own
+       content problem, independent of the flag.
+    3. The recognized type's full content is independently validated
+       (`_validate_day_strata_content` / `_validate_grid_samples_content` /
+       `_validate_seed_manifest_content`): full schema fidelity at every
+       nesting level (missing AND extra fields are distinct problems),
+       known-vocabulary/axis-lock checks (theta exact-equality against
+       FROZEN_THETAS, engine/scenario against ENGINES/SCENARIOS, seeds
+       strictly `int` and exactly `{7, 13, 31}` PER CELL), replay_status
+       must be CLOSED, an empty days/cells collection is never sealable, and
+       any UNRESOLVED marker anywhere is its own problem. This yields a
+       RECOMPUTED verdict (sealable iff zero content problems) that is
+       compared against the artifact's OWN flag:
+       * flag is `True` and the recomputed verdict is sealable -> admitted,
+         no problem.
+       * flag is `True` but the recomputed verdict is NOT sealable -> a
+         CONTRADICTION problem (the flag lied) naming every content problem
+         found.
+       * flag is anything other than `True` -> refused, naming every
+         content problem found (or a generic refusal when recomputation
+         independently found none — a flag that is not exactly `True` is
+         never read as a pass regardless).
     """
+    seed_manifest_artifacts = [
+        a for a in artifacts.values()
+        if isinstance(a, Mapping) and _recognize_artifact_type(a)
+        == "seed_manifest"]
+
     problems: list[str] = []
     for name in sorted(artifacts):
         artifact = artifacts[name]
-        if "formal_sealable" not in artifact:
+        if not isinstance(artifact, Mapping) or "formal_sealable" not in artifact:
             problems.append(
                 f"{name}: missing the 'formal_sealable' flag entirely — an "
                 "artifact with no flag at all cannot be admitted to the "
                 "sealed set (a dead/absent flag is never read as a pass)")
             continue
         sealable = artifact["formal_sealable"]
-        if sealable is not True:
-            markers = _find_unresolved_markers(artifact)
-            if markers:
-                blocking = ", ".join(
-                    f"{label} (x{count})" if count > 1 else label
-                    for label, count in sorted(markers.items()))
+
+        artifact_type = _recognize_artifact_type(artifact)
+        if artifact_type == "day_strata":
+            content_problems = _validate_day_strata_content(artifact)
+        elif artifact_type == "grid_samples":
+            content_problems = _validate_grid_samples_content(
+                artifact, seed_manifest_artifacts)
+        elif artifact_type == "seed_manifest":
+            content_problems = _validate_seed_manifest_content(artifact)
+        else:
+            content_problems = [
+                "does not match any recognized artifact schema (day_strata "
+                "/ grid_samples / seed_manifest) — a formal_sealable flag "
+                "with no matching content shape is never, on its own, "
+                "evidence of sealability"]
+        recomputed_sealable = not content_problems
+
+        if sealable is True:
+            if not recomputed_sealable:
+                joined = "; ".join(content_problems)
+                problems.append(
+                    f"{name}: formal_sealable=True but the content, "
+                    f"recomputed independently, is NOT sealable — "
+                    f"CONTRADICTION: {joined}")
+        else:
+            if content_problems:
+                joined = "; ".join(content_problems)
                 problems.append(
                     f"{name}: formal_sealable={sealable!r} (not True) — "
-                    f"blocked by {blocking} — refused admission to the "
+                    f"blocked by: {joined} — refused admission to the "
                     "sealed set")
             else:
                 problems.append(
                     f"{name}: formal_sealable={sealable!r} (not True) — "
-                    "refused admission to the sealed set (no named "
-                    "UNRESOLVED marker was found; e.g. an empty artifact "
-                    "can be formal_sealable=False by construction)")
+                    "refused admission to the sealed set (recomputing the "
+                    "content independently found no defect either, but a "
+                    "flag that is not exactly True is never read as a "
+                    "pass)")
     return sorted(problems)
 
 

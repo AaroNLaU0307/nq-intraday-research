@@ -90,6 +90,12 @@ class ResolvedS0Methods:
     grid_policy: GridRepeatPolicy | None = None        # DR-M6-E
     event_na_mapping: str | None = None                # DR-M6-F
     stability_population: str | None = None            # DR-M6-G
+    # DR-M6-H (M6.1.3 M-1): frozen §7 mandates the E2 worst-day P1/P5
+    # REPORT but names no sample-quantile estimator; numpy linear is an
+    # UNAPPROVED engineering convention (verified: no frozen text or
+    # approved IR names an estimator). None == pending -> formal sealing
+    # fail-closes on worst_day_estimator_unresolved.
+    worst_day_estimator: str | None = None             # DR-M6-H
     test_only: bool = False
 
     def pending_fields(self) -> tuple[str, ...]:
@@ -191,6 +197,11 @@ class ResolvedS0Methods:
             _str("methods", "event_na_mapping", self.event_na_mapping)
         if self.stability_population is not None:
             _str("methods", "stability_population", self.stability_population)
+        # M6.1.3 fix-round (blind-audit F4): the 8th field gets the SAME
+        # structural gate as the other string rulings — '' / 42 / {} are
+        # refused here, while the VALUE semantics stay pending DR-M6-H.
+        if self.worst_day_estimator is not None:
+            _str("methods", "worst_day_estimator", self.worst_day_estimator)
         if not isinstance(self.test_only, bool):
             problems.append("methods.test_only_not_a_bool")
         return problems
@@ -229,10 +240,30 @@ class StudyConfig:
             if not callable(getattr(self, name)):
                 raise ValueError(f"StudyConfig: {name} must be callable")
         scal = self.spread_scalars
+        import math as _math
         if (not isinstance(scal, tuple) or len(scal) != 3
                 or any(isinstance(v, bool) or not isinstance(v, (int, float))
+                       or not _math.isfinite(float(v)) or float(v) < 0.0
                        for v in scal)):
-            raise ValueError("StudyConfig: spread_scalars must be 3 numbers")
+            raise ValueError("StudyConfig: spread_scalars must be 3 finite "
+                             "non-negative numbers")
+        # M6.1.3 M-2 ordering constraint — PROOF CHAIN (this is a TYPE-level
+        # invariant, NOT an approval of any A/B/C, RTH/trade-window,
+        # cross-slot reduction or fill-minute scheme; Stress is outside this
+        # triple):
+        #   frozen S0 §6 field semantics: Base uses the period MEDIAN
+        #   spread, Conservative uses P90, Severe uses P95 of the SAME
+        #   legal spread population
+        #   -> StudyConfig tuple positional semantics: (median, p90, p95)
+        #      (consumed positionally by costs.build_scenarios)
+        #   -> quantiles of one population are monotone: Q50 <= Q90 <= Q95
+        #   -> every candidate reduction under DR-1 (A-i/A-ii/B-i/B-ii/C)
+        #      preserves that pointwise order.
+        m, p90, p95 = (float(v) for v in scal)
+        if not (0.0 <= m <= p90 <= p95):
+            raise ValueError("StudyConfig: spread_scalars must satisfy "
+                             "0 <= median <= P90 <= P95 (frozen §6 quantile "
+                             "semantics; see proof chain in source)")
 
 
 def derive_study_config(methods: ResolvedS0Methods, *,

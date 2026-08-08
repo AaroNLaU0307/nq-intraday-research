@@ -71,6 +71,53 @@ through onto disk or explains, in a flat list of strings, exactly why not.
 No real data is loaded here and nothing in this file consumes researcher
 exposure; every function is a pure transform/check over plain Python
 objects supplied by the caller.
+
+M6.1.3-S1 hardening (closing the "trust the tree's own claims" class at
+this boundary): (1) a module-level SCHEMA MATRIX for every A1-A12 section
+(§1e below) — an UNKNOWN key inside a section is now a problem
+(`*_unknown_key`), with the allowed set traced to the real producer
+function that emits it, never guessed; this includes the top-level payload
+itself (an extra key beyond `FORMAL_SECTIONS` was previously invisible to
+R1). (2) Appendix A grid hardening: n_tp_target/n_fp_target/F_expected are
+RECOMPUTED via gridmix's own frozen arithmetic
+(`floor_n_tp`/`n_fp_for`/`f_expected`, F == p*r*N/q against the SAME theta's
+`frequency.pooled.continuation_base_rate_p`), realized_precision/recall/
+n_tp_actual/n_fp_actual are recomputed from each seed's own tp_dates/
+fp_dates, an infeasible point must carry `infeasible_reason`, and the
+per-seed field set is the FULL real 13-key `_seed_report` shape (was a
+6-key required subset). (3) bootstrap_ci: "mean" is now leaf-typed AND
+cross-seed-consistency-checked (all three seeds resample the same series,
+so their sample mean can never differ), and an optional "quoted" block, if
+present, must equal `per_seed[7]` verbatim. (4) P1 <= P5 is now checked as
+a numeric-ordering invariant everywhere a worst-day percentile pair
+appears — independent of, and never approving, the disclosed-but-
+UNAPPROVED numpy linear-interpolation ESTIMATOR itself (DR-M6-H). (5) A4
+e2_worst_days now carries a mandatory `estimator_status`; sealing REQUIRES
+it read exactly "resolved" — the real producer's default posture (DR-M6-H
+open, no config resolves `worst_day_estimator`) emits
+"unresolved_DR-M6-H", and this boundary fail-closes on it
+(`worst_day_estimator_unresolved`) rather than silently sealing an
+unapproved P1/P5 estimator into a formal release. (6) `validate_sealed_
+files`' `self_excluded` is capped to the module-internal frozen constant
+`_ALLOWED_SELF_EXCLUDED = ("S0_REPORT.json",)` — a payload naming anything
+else there no longer buys a bypass around the item-8 completeness
+reconciliation (and a non-list self_excluded degrades to a problem instead
+of silently iterating as a string of characters). (7) `reconcile_with_
+internal(internal, formal) -> list[str]` — a NEW pure function (not wired
+into any sealing gate by this module) that cross-checks the formal payload
+against the RAW internal producer envelope (`scripts/s0_real_run.py::
+build_full_study_result`'s own return dict — dataset/records/study, never
+`split_envelope`'s "internal" half, which drops "study"): stability_views
+per-bucket stats recomputed from `study[...]["d_tp"]` + a day_meta derived
+from `internal["dataset"].records`; oracle_daily executable series values
+compared against that same `d_tp` series; mc_handoff_manifest record
+counts against `len(records[eng][scn])`; na_conservation totals against
+`internal["reported_total_na"]`. Requires "study"/"records" (dataset/
+reported_total_na unlock two further checks each) — passing the FORMAL
+payload itself as `internal` can never vacuously succeed, since none of
+those keys are ever `FORMAL_SECTIONS` members. See tests/test_s0_report.py
+for the exact fixture-derivation and the cross-field-synchronized-
+tampering worked example these hardenings close.
 """
 from __future__ import annotations
 
@@ -235,6 +282,21 @@ def _is_date_str(v) -> bool:
     return isinstance(v, str) and bool(_DATE_RE.match(v))
 
 
+def _is_date_str_list(v) -> bool:
+    """frozen: Appendix A — gridmix.py `_seed_report`'s tp_dates/fp_dates:
+    a list of ISO date strings (possibly empty — a seed may legitimately
+    select zero days from one side)."""
+    return isinstance(v, list) and all(_is_date_str(x) for x in v)
+
+
+def _is_nonneg_int_mapping(v) -> bool:
+    """frozen: Appendix A — gridmix.py `_seed_report`'s allocation_tp/
+    allocation_fp: stratum-key -> non-negative selected-day count."""
+    return (isinstance(v, dict)
+            and all(isinstance(k, str) for k in v)
+            and all(_is_int(n) and n >= 0 for n in v.values()))
+
+
 def _check_field_types(d, type_map: Mapping[str, object], path: str,
                        problems: list[str]) -> None:
     """Leaf-level VALUE type check for a dict already known to carry (a
@@ -293,14 +355,26 @@ _FEASIBILITY_CELL_FIELD_TYPES: Mapping[str, object] = {
 
 # frozen: Appendix A — real gridmix.py `_seed_report` per-seed field set +
 # per-field types (the "day-marker summary" is the real `day_markers` list).
+# M6.1.3-S1 (mission item 1): extended from the original 6-field REQUIRED
+# subset to the FULL real 13-key `_seed_report` shape — a real producer
+# field silently unchecked (tp_dates/fp_dates/n_tp_actual/n_fp_actual/
+# mixture_mean_pnl/allocation_tp/allocation_fp) is exactly as much a
+# "trust the tree's own claims" gap as an unknown key sailing through.
 _GRID_SEED_FIELDS: tuple[str, ...] = (
     "target_precision", "target_recall", "realized_precision",
-    "realized_recall", "day_markers", "F_expected")
+    "realized_recall", "day_markers", "F_expected",
+    "tp_dates", "fp_dates", "n_tp_actual", "n_fp_actual",
+    "mixture_mean_pnl", "allocation_tp", "allocation_fp")
 _GRID_SEED_FIELD_TYPES: Mapping[str, object] = {
     "target_precision": _is_number, "target_recall": _is_number,
     "realized_precision": _is_number_or_none,
     "realized_recall": _is_number_or_none,
     "day_markers": _is_list, "F_expected": _is_number,
+    "tp_dates": _is_date_str_list, "fp_dates": _is_date_str_list,
+    "n_tp_actual": _is_int, "n_fp_actual": _is_int,
+    "mixture_mean_pnl": _is_number_or_none,
+    "allocation_tp": _is_nonneg_int_mapping,
+    "allocation_fp": _is_nonneg_int_mapping,
 }
 
 # frozen: Appendix A — the FULL frozen (q, r) grid, DERIVED from gridmix's
@@ -310,6 +384,14 @@ _GRID_SEED_FIELD_TYPES: Mapping[str, object] = {
 _FEASIBILITY_GRID_POINT_KEYS: frozenset[str] = frozenset(
     f"q{q_mil / 1000:.2f}_r{r_mil / 1000:.2f}"
     for q_mil in gridmix.Q_GRID_MILLIS for r_mil in gridmix.R_GRID_MILLIS)
+# mission item 3 — the exact (q_mil, r_mil) INTEGER millis a grid-point key
+# was built from, DERIVED the same way (never re-parsed from the string),
+# so a recompute of n_tp_target/n_fp_target/F_expected can call gridmix's
+# OWN frozen arithmetic (`floor_n_tp`/`n_fp_for`/`f_expected`) rather than
+# trusting the point's self-reported numbers.
+_FEASIBILITY_GRID_KEY_TO_MILLIS: Mapping[str, tuple[int, int]] = {
+    f"q{q_mil / 1000:.2f}_r{r_mil / 1000:.2f}": (q_mil, r_mil)
+    for q_mil in gridmix.Q_GRID_MILLIS for r_mil in gridmix.R_GRID_MILLIS}
 
 # frozen: S0 §7 — real study.py `_series_block` scalar-field types (the
 # per-day (date, USD) pair LIST itself is checked separately, since its key
@@ -374,6 +456,186 @@ _SEALED_RECORD_FIELD_TYPES: Mapping[str, object] = {
     "stop_triggered": _is_bool, "sizing_anchor_usd": _is_number,
     "ambiguous_stop_vs_floor": _is_bool,
 }
+
+
+# ---------------------------------------------------------------------------
+# 1d. M6.1.3-S1 mission item 5(c) — P1 <= P5 numeric ordering.
+#
+# This is a STRUCTURAL/NUMERIC sanity invariant of any real percentile pair
+# (the 1st percentile of a distribution can never exceed its 5th), and is
+# checked independently of, and is NEVER a proxy for, approving numpy's
+# linear-interpolation ESTIMATOR itself — `PERCENTILE_METHOD = "linear"`
+# (study.py / stability.py) remains an UNAPPROVED engineering convention
+# pending the DR-M6-H ruling (mission item 5(a)/(b) below); this boundary
+# never describes it as frozen or approved.
+# ---------------------------------------------------------------------------
+def _check_p1_le_p5(pct, path: str, problems: list[str]) -> None:
+    if not isinstance(pct, dict):
+        return
+    p1, p5 = pct.get("P1"), pct.get("P5")
+    if _is_number(p1) and _is_number(p5) and p1 > p5:
+        problems.append(f"percentile_p1_gt_p5:{path}:{p1}>{p5}")
+
+
+# ---------------------------------------------------------------------------
+# 1e. M6.1.3-S1 mission item 1 — SCHEMA MATRIX: for every A1-A12 section
+#     (+ A2b stability_views) the EXACT set of keys the REAL producer
+#     (scripts/s0_real_run.py::build_full_study_result and the
+#     src/itsf/s0/{study,stability,gridmix,stats,dataset}.py functions it
+#     calls, all READ to confirm this — never guessed) is ever seen to emit
+#     at each documented nesting level. Every constant below is traceable to
+#     the producer function/return statement named in its comment — a
+#     DOCUMENTED allowance, per mission item 1: "UNKNOWN keys inside a
+#     section = problem (fail-closed), with a documented allowance ONLY for
+#     keys the producer genuinely emits."
+#
+#     `_check_no_unknown_keys` is deliberately an ALLOWED-SUPERSET check
+#     (a key OUTSIDE `allowed` = problem), never a full equality check:
+#     several constants below include keys that are ALLOWED but not
+#     independently REQUIRED elsewhere by this module (e.g. disclosures'
+#     "methods_test_only", na_conservation's richer evidence fields, A9's
+#     pre-/post-manifest-injection union) — this boundary's job is to catch
+#     an UNDOCUMENTED key smuggled in (a cross-field-tampering vector,
+#     mission item 7), never to re-litigate which subset is mandatory (that
+#     stays each existing rule's own job).
+# ---------------------------------------------------------------------------
+def _check_no_unknown_keys(d, allowed, path: str, problems: list[str], *,
+                           code: str) -> None:
+    """`d`'s key set must be a SUBSET of `allowed`. No-ops on a non-dict `d`
+    — the caller's own type/presence check already reports that defect;
+    this only ever adds an unknown-key problem on a dict whose key set
+    exceeds the documented allowance."""
+    if not isinstance(d, dict):
+        return
+    extra = sorted(set(d) - set(allowed))
+    if extra:
+        problems.append(f"{code}:{path}:{extra}")
+
+
+# A1 structural — s0_real_run.py build_full_study_result's own
+# `_strkeys({...})` literal (7 keys == _STRUCTURAL_REQUIRED_KEYS).
+_STRUCTURAL_ALLOWED_KEYS: frozenset[str] = frozenset(_STRUCTURAL_REQUIRED_KEYS)
+# dataset.py `build_na_table`'s real top-level return (6 keys: population,
+# per_field, direction, diagnostics, totals_by_reason, checks).
+_NA_TABLE_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "population", "per_field", "direction", "diagnostics",
+    "totals_by_reason", "checks"})
+_LABEL_ANCHOR_ROW_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "available_days", "unavailable_days"})
+
+# A2 oracle_daily — s0_real_run.py: {"day_universe":..., "executable":...}.
+_ORACLE_DAILY_CELL_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "day_universe", "executable"})
+# study.py `build_study`'s per-theta `universe` dict — the FULL real
+# day_universe shape (12 keys).
+_DAY_UNIVERSE_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "theta", "n_directional_tradeable", "n_trade_constructible",
+    "n_untradeable_disclosed", "n_tp", "n_fp", "n_tp_labelled",
+    "n_fp_labelled", "tp_days", "fp_days", "conservation", "definition"})
+# study.py: executable[engine][name] = {**_by_era_and_pooled(...),
+# "worst_day_report": {...}} -> {"pooled", "by_era", "worst_day_report"}.
+_EXECUTABLE_CELL_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "pooled", "by_era", "worst_day_report"})
+# study.py's A2 (executable) worst_day_report block — NO estimator_status
+# here (that field is an A4/e2_worst_days-only addition; see below).
+_EXEC_WORST_DAY_REPORT_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "frozen_mandatory", "percentile_estimator", "pooled", "by_era"})
+# study.py `_series_block` (both oracle_daily's "daily_pnl_usd" and
+# theoretical_oracle's "daily_usd" variants — the value_key varies, the
+# scalar-field set does not).
+_SERIES_BLOCK_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "n", "sum_usd", "mean_usd", "min_usd", "max_usd",
+    "worst_day_pnl_percentiles", "daily_pnl_usd", "daily_usd"})
+
+# A3 theoretical_oracle — study.py: {"scenario", "note",
+# **_by_era_and_pooled(...)}.
+_THEORETICAL_ORACLE_CELL_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "scenario", "note", "pooled", "by_era"})
+
+# A4 e2_worst_days — s0_real_run.py: {**worst_day_report,
+# "estimator_status"} — the SAME 4 study.py worst_day_report keys PLUS the
+# M6.1.3-S1 estimator-status addition (mission item 5).
+_E2_WORST_DAYS_CELL_ALLOWED_KEYS: frozenset[str] = frozenset(
+    _EXEC_WORST_DAY_REPORT_ALLOWED_KEYS | {"estimator_status"})
+# frozen: S0 §7 table — DR-M6-H governs the P1/P5 estimator ruling; a
+# formal payload must say the estimator question is RESOLVED to seal.
+_ESTIMATOR_STATUS_RESOLVED = "resolved"
+
+# A5 sizing_outputs — s0_real_run.py: {"rows", "coverage"}.
+_SIZING_OUTPUTS_CELL_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "rows", "coverage"})
+# study.py `_coverage()` (3 keys) and its `by_budget_usd[budget]` row.
+_SIZING_COVERAGE_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "n_trades", "note", "by_budget_usd"})
+_SIZING_COVERAGE_BUDGET_ROW_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "n_covered", "fraction"})
+
+# A6 frequency — study.py `_frequency_block` (5 keys).
+_FREQUENCY_CELL_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "denominator_definition", "note", "pooled", "by_era", "by_year"})
+
+# A2b stability_views — stability.py `_engine_scenario_view` (5 keys).
+_STABILITY_ENGINE_SCENARIO_CELL_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "epochs", "by_year", "leave_one_year_out", "by_direction",
+    "vol_terciles"})
+
+# A7 bootstrap_ci — stats.py `bootstrap_mean_ci`'s real return shape.
+_BOOTSTRAP_CELL_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "per_seed", "convergence", "quoted_seed", "quoted", "method"})
+# stats.py per_seed[seed] entry (5 keys — "mean" was previously unchecked).
+_BOOTSTRAP_SEED_ENTRY_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "mean", "ci_lo", "ci_hi", "n_boot", "block_len"})
+
+# A8 feasibility_grid — one (q, r) grid point, BOTH the feasible and the
+# infeasible_by_sample shape (gridmix.py `_grid_point`); the infeasible
+# variant adds exactly one key ("infeasible_reason") on top of the same
+# base 7.
+_GRID_POINT_BASE_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "target_precision", "target_recall", "n_tp_target", "n_fp_target",
+    "F_expected", "infeasible_by_sample", "per_seed"})
+_GRID_POINT_ALLOWED_KEYS: frozenset[str] = frozenset(
+    _GRID_POINT_BASE_ALLOWED_KEYS | {"infeasible_reason"})
+
+# A9 mc_handoff_manifest — the TWO-CALL contract's union: pre-injection
+# {"counts"} and post-injection {"counts", "files", "sealed_files",
+# "self_excluded"} (validate_formal_payload must accept BOTH calls, see
+# its docstring's two-call contract).
+_MC_HANDOFF_MANIFEST_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "counts", "files", "sealed_files", "self_excluded"})
+_MC_HANDOFF_COUNTS_CELL_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "n_records"})
+_MC_HANDOFF_FILES_ENTRY_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "file", "n_records", "sha256"})
+_MC_HANDOFF_SEALED_FILES_ENTRY_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "sha256", "bytes"})
+# mission item 6 — sealed_files self-exclusion: the ONLY file this
+# renderer is ever entitled to omit from `sealed_files` is the report
+# itself (it carries the manifest, so it cannot hash itself; Stage F's
+# chain seal covers it separately). A `self_excluded` list naming anything
+# else is refused, never silently honoured as a bypass around the item-8
+# completeness reconciliation.
+_ALLOWED_SELF_EXCLUDED: frozenset[str] = frozenset({"S0_REPORT.json"})
+
+# A10 era_axis — s0_real_run.py (2 keys).
+_ERA_AXIS_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "axes", "counterfactual_disclosure"})
+
+# A11 disclosures — s0_real_run.py build_full_study_result (5 keys).
+_DISCLOSURES_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "na_conservation", "untradeable", "pending_method_decisions",
+    "methods_test_only", "method_conventions"})
+# s0_real_run.py `_na_conservation_block`'s real return (9 keys — the
+# CONTRACT's minimal shape is only 2 of these; the rest is disclosed
+# evidence this boundary ALLOWS but does not itself require).
+_NA_CONSERVATION_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "per_table_total_na", "conservation_ok", "conserved",
+    "reported_total_na", "itemized_reason_counts", "checker",
+    "per_column_ok", "unregistered_reasons", "miscounted_columns"})
+
+# A12 governance — RealChain.compute() / _expected_governance() (5 keys).
+_GOVERNANCE_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "trial_id", "authorized_commit", "engineering_seed", "frozen_hashes",
+    "registry_sequence_snapshot"})
 
 
 # ---------------------------------------------------------------------------
@@ -602,6 +864,8 @@ def _check_series_block(block, path: str, problems: list[str], *,
         if field not in block:
             problems.append(f"series_block_field_missing:{path}.{field}")
     _check_field_types(block, _SERIES_BLOCK_SCALAR_TYPES, path, problems)
+    _check_no_unknown_keys(block, _SERIES_BLOCK_ALLOWED_KEYS, path, problems,
+                           code="series_block_unknown_key")
     series = block.get(value_key)
     if not isinstance(series, list):
         problems.append(f"series_block_series_missing:{path}.{value_key}")
@@ -660,6 +924,7 @@ def _check_series_block(block, path: str, problems: list[str], *,
     wpp = block.get("worst_day_pnl_percentiles")
     if isinstance(wpp, dict) and not {"P1", "P5"} <= set(wpp):
         problems.append(f"series_block_percentiles_incomplete:{path}")
+    _check_p1_le_p5(wpp, path, problems)
 
 
 def _check_executable_cell(cell, path: str, problems: list[str], *,
@@ -675,6 +940,8 @@ def _check_executable_cell(cell, path: str, problems: list[str], *,
     if not isinstance(cell, dict) or not cell:
         problems.append(f"oracle_daily_executable_missing:{path}")
         return
+    _check_no_unknown_keys(cell, _EXECUTABLE_CELL_ALLOWED_KEYS, path,
+                           problems, code="oracle_daily_executable_unknown_key")
     _check_series_block(cell.get("pooled"), f"{path}|pooled", problems,
                         allowed_dates=allowed_dates)
     by_era = cell.get("by_era")
@@ -688,9 +955,15 @@ def _check_executable_cell(cell, path: str, problems: list[str], *,
     if not isinstance(wdr, dict):
         problems.append(f"oracle_daily_worst_day_report_missing:{path}")
         return
+    _check_no_unknown_keys(wdr, _EXEC_WORST_DAY_REPORT_ALLOWED_KEYS,
+                           f"{path}|worst_day_report", problems,
+                           code="oracle_daily_worst_day_report_unknown_key")
     pooled_pct = wdr.get("pooled")
     if not isinstance(pooled_pct, dict) or not {"P1", "P5"} <= set(pooled_pct):
         problems.append(f"oracle_daily_worst_day_report_pooled:{path}")
+    else:
+        _check_p1_le_p5(pooled_pct, f"{path}|worst_day_report|pooled",
+                        problems)
     era_pct = wdr.get("by_era")
     if not isinstance(era_pct, dict) or not set(_ERAS) <= set(era_pct):
         problems.append(f"oracle_daily_worst_day_report_by_era:{path}")
@@ -701,18 +974,58 @@ def _check_executable_cell(cell, path: str, problems: list[str], *,
                     or not {"P1", "P5"} <= set(cell_pct)):
                 problems.append(
                     f"oracle_daily_worst_day_report_by_era:{path}|{era}")
+            else:
+                _check_p1_le_p5(
+                    cell_pct, f"{path}|worst_day_report|by_era|{era}",
+                    problems)
 
 
-def _check_feasibility_cell(cval, path: str, problems: list[str]) -> None:
+def _frequency_pooled_p(payload, tkey: str) -> float | None:
+    """`payload["frequency"][tkey]["pooled"]["continuation_base_rate_p"]`,
+    or None on ANY malformed shape along the way (never raises) — the same
+    base rate `s0_real_run.py::build_full_study_result` feeds into
+    `gridmix.build_grid` for this theta (mission item 3: F == p*r*N/q must
+    be recomputed against the SAME p the real producer used, not a
+    grid-cell's own self-reported number)."""
+    freq = payload.get("frequency") if isinstance(payload, dict) else None
+    tcell = freq.get(tkey) if isinstance(freq, dict) else None
+    pooled = tcell.get("pooled") if isinstance(tcell, dict) else None
+    p = pooled.get("continuation_base_rate_p") if isinstance(pooled, dict) \
+        else None
+    return p if _is_number(p) else None
+
+
+def _check_feasibility_cell(cval, path: str, problems: list[str], *,
+                            base_rate_p: float | None = None) -> None:
     """Deep leaf check for one `feasibility_grid.cells[theta|engine|scenario]`
     entry against the REAL gridmix.py `build_grid` return shape: the FULL
     frozen 63-point (q, r) grid (mission item 7) — not just the outer
-    {grid, n_tp_available, n_fp_available, method} field set."""
+    {grid, n_tp_available, n_fp_available, method} field set.
+
+    M6.1.3-S1 (mission item 3): RECOMPUTE, not trust — n_tp_target/
+    n_fp_target are re-derived from gridmix's OWN frozen arithmetic
+    (`floor_n_tp`/`n_fp_for`) against the cell's own `n_tp_available`;
+    `F_expected` is re-derived via `F == p*r*N/q` (gridmix's `f_expected`,
+    frozen App-A formula) whenever `base_rate_p` is supplied (the caller
+    reads it from `payload["frequency"][theta]["pooled"][
+    "continuation_base_rate_p"]` — this function never trusts the grid
+    cell's own reported precision/recall as its OWN base rate); every
+    feasible point's `realized_precision`/`realized_recall`/n_tp_actual/
+    n_fp_actual are re-derived from `len(tp_dates)`/`len(fp_dates)`, never
+    read as given. `base_rate_p=None` (the base rate itself was unresolvable
+    elsewhere) skips ONLY the F-formula recompute, never the rest.
+    """
     if (not isinstance(cval, dict)
             or not set(_FEASIBILITY_CELL_FIELDS) <= set(cval)):
         problems.append(f"feasibility_grid_cell_incomplete:{path}")
         return
     _check_field_types(cval, _FEASIBILITY_CELL_FIELD_TYPES, path, problems)
+    _check_no_unknown_keys(cval, _FEASIBILITY_CELL_FIELDS, path, problems,
+                           code="feasibility_grid_cell_unknown_key")
+    n_tp_avail = cval.get("n_tp_available")
+    n_fp_avail = cval.get("n_fp_available")
+    n_tp_avail_ok = _is_int(n_tp_avail) and n_tp_avail >= 0
+    n_fp_avail_ok = _is_int(n_fp_avail) and n_fp_avail >= 0
     grid = cval.get("grid")
     if not isinstance(grid, dict):
         problems.append(f"feasibility_grid_inner_missing:{path}")
@@ -728,6 +1041,45 @@ def _check_feasibility_cell(cval, path: str, problems: list[str]) -> None:
             problems.append(
                 f"feasibility_grid_point_infeasible_flag_missing:{path}:{k}")
             continue
+        _check_no_unknown_keys(point, _GRID_POINT_ALLOWED_KEYS,
+                               f"{path}:{k}", problems,
+                               code="feasibility_grid_point_unknown_key")
+        q_mil, r_mil = _FEASIBILITY_GRID_KEY_TO_MILLIS[k]
+        q, r = q_mil / 1000.0, r_mil / 1000.0
+        for field, expected in (("target_precision", q),
+                                ("target_recall", r)):
+            got = point.get(field)
+            if _is_number(got) and not math.isclose(
+                    got, expected, rel_tol=1e-9, abs_tol=1e-9):
+                problems.append(
+                    f"feasibility_grid_point_target_mismatch:{path}:{k}:"
+                    f"{field}:{got}!={expected}")
+        n_tp_target_expected = (gridmix.floor_n_tp(r_mil, n_tp_avail)
+                                if n_tp_avail_ok else None)
+        n_tp_target = point.get("n_tp_target")
+        if (n_tp_target_expected is not None and _is_int(n_tp_target)
+                and n_tp_target != n_tp_target_expected):
+            problems.append(
+                f"feasibility_grid_point_n_tp_target_mismatch:{path}:{k}:"
+                f"{n_tp_target}!={n_tp_target_expected}")
+        n_fp_target_expected = (
+            gridmix.n_fp_for(n_tp_target_expected, q_mil)
+            if n_tp_target_expected is not None else None)
+        n_fp_target = point.get("n_fp_target")
+        if (n_fp_target_expected is not None and _is_int(n_fp_target)
+                and n_fp_target != n_fp_target_expected):
+            problems.append(
+                f"feasibility_grid_point_n_fp_target_mismatch:{path}:{k}:"
+                f"{n_fp_target}!={n_fp_target_expected}")
+        if base_rate_p is not None:
+            f_expected_val = gridmix.f_expected(
+                base_rate_p, r, q, gridmix.N_YEAR_TRADING_DAYS)
+            f_got = point.get("F_expected")
+            if (_is_number(f_got) and not math.isclose(
+                    f_got, f_expected_val, rel_tol=1e-9, abs_tol=1e-9)):
+                problems.append(
+                    f"feasibility_grid_point_f_expected_mismatch:{path}:{k}:"
+                    f"{f_got}!={f_expected_val}")
         if point["infeasible_by_sample"] is True:
             # frozen: S0 Appendix A — an infeasible point is still REPORTED
             # in full but carries no per-seed selection (gridmix.py's
@@ -743,6 +1095,14 @@ def _check_feasibility_cell(cval, path: str, problems: list[str]) -> None:
             if per_seed not in (None, {}):
                 problems.append(
                     f"feasibility_grid_infeasible_point_has_per_seed:"
+                    f"{path}:{k}")
+            # mission item 3 — "infeasible schema exact with NO selections":
+            # the ONE extra key an infeasible point carries over the base 7
+            # must itself be present (an infeasible point with no stated
+            # reason is a disclosure gap, not a passable "extra field").
+            if "infeasible_reason" not in point:
+                problems.append(
+                    f"feasibility_grid_infeasible_point_reason_missing:"
                     f"{path}:{k}")
             continue
         per_seed = point.get("per_seed")
@@ -763,10 +1123,66 @@ def _check_feasibility_cell(cval, path: str, problems: list[str]) -> None:
                 problems.append(
                     f"feasibility_grid_seed_entry_incomplete:"
                     f"{path}:{k}:{seed}")
-            else:
-                _check_field_types(
-                    entry, _GRID_SEED_FIELD_TYPES, f"{path}:{k}:{seed}",
-                    problems)
+                continue
+            _check_field_types(
+                entry, _GRID_SEED_FIELD_TYPES, f"{path}:{k}:{seed}",
+                problems)
+            _check_no_unknown_keys(
+                entry, _GRID_SEED_FIELDS, f"{path}:{k}:{seed}", problems,
+                code="feasibility_grid_seed_entry_unknown_key")
+            # mission item 3 — RECOMPUTE realized_precision/realized_recall
+            # from the actual selection counts, never trust the reported
+            # figure: n_tp_actual/n_fp_actual must equal the len() of the
+            # entry's OWN tp_dates/fp_dates, and realized_precision/recall
+            # are re-derived from those counts against n_tp_available.
+            tp_dates, fp_dates = entry.get("tp_dates"), entry.get("fp_dates")
+            n_tp_actual, n_fp_actual = (entry.get("n_tp_actual"),
+                                        entry.get("n_fp_actual"))
+            if (isinstance(tp_dates, list) and _is_int(n_tp_actual)
+                    and n_tp_actual != len(tp_dates)):
+                problems.append(
+                    f"feasibility_grid_seed_n_tp_actual_mismatch:{path}:{k}:"
+                    f"{seed}:{n_tp_actual}!={len(tp_dates)}")
+            if (isinstance(fp_dates, list) and _is_int(n_fp_actual)
+                    and n_fp_actual != len(fp_dates)):
+                problems.append(
+                    f"feasibility_grid_seed_n_fp_actual_mismatch:{path}:{k}:"
+                    f"{seed}:{n_fp_actual}!={len(fp_dates)}")
+            if isinstance(tp_dates, list) and isinstance(fp_dates, list):
+                total = len(tp_dates) + len(fp_dates)
+                expected_precision = (
+                    (len(tp_dates) / total) if total else None)
+                got_precision = entry.get("realized_precision")
+                precision_ok = (
+                    (expected_precision is None and got_precision is None)
+                    or (expected_precision is not None
+                        and _is_number(got_precision)
+                        and math.isclose(got_precision, expected_precision,
+                                         rel_tol=1e-9, abs_tol=1e-9)))
+                if not precision_ok:
+                    problems.append(
+                        "feasibility_grid_seed_realized_precision_mismatch:"
+                        f"{path}:{k}:{seed}:"
+                        f"{got_precision}!={expected_precision}")
+                if n_tp_avail_ok and n_tp_avail:
+                    expected_recall = len(tp_dates) / n_tp_avail
+                    got_recall = entry.get("realized_recall")
+                    if (_is_number(got_recall) and not math.isclose(
+                            got_recall, expected_recall, rel_tol=1e-9,
+                            abs_tol=1e-9)):
+                        problems.append(
+                            "feasibility_grid_seed_realized_recall_mismatch:"
+                            f"{path}:{k}:{seed}:"
+                            f"{got_recall}!={expected_recall}")
+            if base_rate_p is not None:
+                f_expected_val = gridmix.f_expected(
+                    base_rate_p, r, q, gridmix.N_YEAR_TRADING_DAYS)
+                f_got = entry.get("F_expected")
+                if (_is_number(f_got) and not math.isclose(
+                        f_got, f_expected_val, rel_tol=1e-9, abs_tol=1e-9)):
+                    problems.append(
+                        "feasibility_grid_seed_f_expected_mismatch:"
+                        f"{path}:{k}:{seed}:{f_got}!={f_expected_val}")
 
 
 def _stability_axis_n_sum(axis: object) -> int | None:
@@ -842,6 +1258,12 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
             problems.append(f"wrong_type:{key}")
         elif not payload[key]:
             problems.append(f"empty_section:{key}")
+    # mission item 1 — an UNDOCUMENTED top-level key (never a FORMAL_
+    # SECTIONS member) previously sailed through this loop unnoticed: it
+    # only ever iterated FORMAL_SECTIONS itself and never checked for an
+    # extra.
+    _check_no_unknown_keys(payload, FORMAL_SECTIONS, "$", problems,
+                           code="unknown_top_level_section")
     if problems:
         # deeper rules assume every section exists and is a non-empty dict;
         # fail closed on the coarse defect rather than risk KeyError noise.
@@ -867,6 +1289,9 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
         if not isinstance(du, dict):
             problems.append(f"day_universe_missing:{tkey}")
             continue
+        _check_no_unknown_keys(du, _DAY_UNIVERSE_ALLOWED_KEYS,
+                               f"oracle_daily.{tkey}.day_universe", problems,
+                               code="day_universe_unknown_key")
         for field in ("n_tp", "n_fp"):
             v = du.get(field)
             if not isinstance(v, int) or isinstance(v, bool) or v < 0:
@@ -967,6 +1392,9 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
     # shape — frozen S0 §7).
     for tkey in tkeys:
         tcell = payload["oracle_daily"].get(tkey)
+        _check_no_unknown_keys(tcell, _ORACLE_DAILY_CELL_ALLOWED_KEYS,
+                               f"oracle_daily.{tkey}", problems,
+                               code="oracle_daily_cell_unknown_key")
         ex = tcell.get("executable") if isinstance(tcell, dict) else None
         if not isinstance(ex, dict):
             problems.append(f"oracle_daily_executable_missing:{tkey}")
@@ -991,6 +1419,8 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
     for key in _STRUCTURAL_REQUIRED_KEYS:
         if key not in st:
             problems.append(f"structural_missing:{key}")
+    _check_no_unknown_keys(st, _STRUCTURAL_ALLOWED_KEYS, "structural",
+                           problems, code="structural_unknown_key")
     # NOTE (M6.1.2-S1 fix): each check below used to be gated `if v is not
     # None and (...)`, which meant a required sub-key literally present but
     # set to None (or any other falsy-but-not-dict value) sailed through
@@ -1032,6 +1462,9 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
     else:
         if not _is_int(nat.get("population")):
             problems.append("leaf_type_invalid:structural.na_table.population")
+        _check_no_unknown_keys(nat, _NA_TABLE_ALLOWED_KEYS,
+                               "structural.na_table", problems,
+                               code="na_table_unknown_key")
         for table in ("features", "labels"):
             rows = per_field.get(table)
             if not isinstance(rows, dict):
@@ -1046,6 +1479,10 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
                         row, _NA_TABLE_FIELD_ROW_TYPES,
                         f"structural.na_table.per_field.{table}.{field}",
                         problems)
+                    _check_no_unknown_keys(
+                        row, _NA_TABLE_FIELD_ROW_TYPES,
+                        f"structural.na_table.per_field.{table}.{field}",
+                        problems, code="na_table_row_unknown_key")
     laa = st.get("label_anchor_availability")
     if not isinstance(laa, dict) or not set(_LABEL_ANCHOR_KEYS) <= set(laa):
         problems.append("structural_label_anchor_availability_incomplete")
@@ -1058,6 +1495,11 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
                 problems.append(
                     f"leaf_type_invalid:structural.label_anchor_"
                     f"availability.{label}")
+            elif isinstance(row, dict):
+                _check_no_unknown_keys(
+                    row, _LABEL_ANCHOR_ROW_ALLOWED_KEYS,
+                    f"structural.label_anchor_availability.{label}",
+                    problems, code="label_anchor_row_unknown_key")
     er = st.get("eras")
     if not isinstance(er, dict) or not set(_ERAS) <= set(er):
         problems.append("structural_eras_incomplete")
@@ -1099,6 +1541,8 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
         if not isinstance(cell, dict):
             problems.append(f"bootstrap_ci_cell_type:{key}")
             continue
+        _check_no_unknown_keys(cell, _BOOTSTRAP_CELL_ALLOWED_KEYS, key,
+                               problems, code="bootstrap_ci_cell_unknown_key")
         per_seed = cell.get("per_seed")
         # Key TYPE is deliberately not pinned: stats.bootstrap_mean_ci's
         # native return uses int seed keys, but a sealed (JSON-safe) payload
@@ -1118,6 +1562,7 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
             problems.append(f"bootstrap_ci_seeds:{key}")
         if cell.get("quoted_seed") != 7:
             problems.append(f"bootstrap_ci_quoted_seed:{key}")
+        seed_means: dict[int, object] = {}
         for seed in (7, 13, 31):
             entry = None
             if isinstance(per_seed, dict):
@@ -1125,6 +1570,22 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
             if not isinstance(entry, dict):
                 problems.append(f"bootstrap_ci_seed_entry:{key}:{seed}")
                 continue
+            _check_no_unknown_keys(
+                entry, _BOOTSTRAP_SEED_ENTRY_ALLOWED_KEYS, f"{key}:{seed}",
+                problems, code="bootstrap_ci_seed_entry_unknown_key")
+            # mission item 3 — stats.py's "mean" is the SAMPLE mean of the
+            # underlying series, computed ONCE and copied VERBATIM into
+            # every seed's dict (`_bootstrap_mean_ci_unchecked`: `sample_
+            # mean = float(values.mean())` outside the per-seed loop) —
+            # previously entirely unchecked (not even leaf-typed). A
+            # fabricated per-seed mean that silently DIFFERS from its
+            # siblings is refused below, once every seed's entry has been
+            # collected.
+            mean_val = entry.get("mean")
+            if not _is_number(mean_val):
+                problems.append(f"bootstrap_ci_mean_invalid:{key}:{seed}")
+            else:
+                seed_means[seed] = mean_val
             # non-blocking hardening: n_boot/block_len must be an actual int
             # — `10000 == 10000.0` in Python, so a bare `!=` value check lets
             # a FLOAT-typed n_boot/block_len (e.g. n_boot=10000.0) sail
@@ -1146,6 +1607,29 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
                 and math.isfinite(lo) and math.isfinite(hi) and lo <= hi)
             if not bounds_ok:
                 problems.append(f"bootstrap_ci_bounds:{key}:{seed}")
+        # mission item 3 — cross-seed RECOMPUTE: all three seeds resample
+        # the SAME input series, so their "mean" entries must be identical
+        # (not merely each individually well-typed) — a per-seed value that
+        # silently drifts from its siblings is exactly the "self-reported
+        # number, never re-derived" defect class this closes.
+        if len(seed_means) > 1:
+            distinct = {round(v, 9) for v in seed_means.values()}
+            if len(distinct) > 1:
+                problems.append(
+                    f"bootstrap_ci_mean_cross_seed_mismatch:{key}:"
+                    f"{sorted(seed_means.items())}")
+        quoted = cell.get("quoted")
+        if quoted is not None:
+            # mission item 3 — "quoted" restates per_seed[quoted_seed]
+            # VERBATIM (stats.py: `"quoted": per_seed[quoted_seed]`); a
+            # payload that carries a "quoted" block inconsistent with its
+            # own per_seed[7] entry is refused, never merely leaf-typed.
+            entry_7 = None
+            if isinstance(per_seed, dict):
+                entry_7 = per_seed.get(7, per_seed.get("7"))
+            if (isinstance(quoted, dict) and isinstance(entry_7, dict)
+                    and quoted != entry_7):
+                problems.append(f"bootstrap_ci_quoted_mismatch:{key}")
         conv = cell.get("convergence")
         if (not isinstance(conv, dict)
                 or not {"max_abs_ci_lo_diff", "max_abs_ci_hi_diff"}
@@ -1167,8 +1651,18 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
         if not isinstance(to_cell, dict):
             problems.append(f"theoretical_oracle_missing:{tkey}")
             continue
+        _check_no_unknown_keys(
+            to_cell, _THEORETICAL_ORACLE_CELL_ALLOWED_KEYS,
+            f"theoretical_oracle|{tkey}", problems,
+            code="theoretical_oracle_unknown_key")
         if to_cell.get("scenario") != BASE_SCENARIO_NAME:
             problems.append(f"theoretical_oracle_scenario:{tkey}")
+        # M6.1.3 fix-round (blind-audit A52): the ECONOMIC-UPPER-BOUND-ONLY
+        # disclosure note is CONTENT, not decoration — a blanked/non-str
+        # note silently drops the frozen §7 caveat and is refused.
+        note = to_cell.get("note")
+        if not isinstance(note, str) or not note.strip():
+            problems.append(f"theoretical_oracle_note_invalid:{tkey}")
         _check_series_block(to_cell.get("pooled"),
                             f"theoretical_oracle|{tkey}|pooled", problems,
                             value_key="daily_usd",
@@ -1192,6 +1686,9 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
         if not isinstance(freq, dict):
             problems.append(f"frequency_missing:{tkey}")
             continue
+        _check_no_unknown_keys(freq, _FREQUENCY_CELL_ALLOWED_KEYS,
+                               f"frequency|{tkey}", problems,
+                               code="frequency_cell_unknown_key")
         pooled = freq.get("pooled")
         if (not isinstance(pooled, dict)
                 or not set(_FREQUENCY_CELL_FIELDS) <= set(pooled)):
@@ -1199,6 +1696,9 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
         else:
             _check_field_types(pooled, _FREQUENCY_CELL_FIELD_TYPES,
                                f"frequency|{tkey}|pooled", problems)
+            _check_no_unknown_keys(
+                pooled, _FREQUENCY_CELL_FIELDS, f"frequency|{tkey}|pooled",
+                problems, code="frequency_leaf_cell_unknown_key")
         by_era = freq.get("by_era")
         if not isinstance(by_era, dict) or not set(_ERAS) <= set(by_era):
             problems.append(f"frequency_by_era_missing:{tkey}")
@@ -1213,6 +1713,10 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
                     _check_field_types(
                         cell, _FREQUENCY_CELL_FIELD_TYPES,
                         f"frequency|{tkey}|by_era|{era}", problems)
+                    _check_no_unknown_keys(
+                        cell, _FREQUENCY_CELL_FIELDS,
+                        f"frequency|{tkey}|by_era|{era}", problems,
+                        code="frequency_leaf_cell_unknown_key")
         by_year = freq.get("by_year")
         if not isinstance(by_year, dict) or not by_year:
             problems.append(f"frequency_by_year_missing:{tkey}")
@@ -1226,6 +1730,10 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
                     _check_field_types(
                         cell, _FREQUENCY_CELL_FIELD_TYPES,
                         f"frequency|{tkey}|by_year|{y}", problems)
+                    _check_no_unknown_keys(
+                        cell, _FREQUENCY_CELL_FIELDS,
+                        f"frequency|{tkey}|by_year|{y}", problems,
+                        code="frequency_leaf_cell_unknown_key")
 
     for tkey in tkeys:
         for scn in _SCENARIOS:
@@ -1235,10 +1743,17 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
             if not isinstance(cell, dict):
                 problems.append(f"e2_worst_days_missing:{tkey}|{scn}")
                 continue
+            _check_no_unknown_keys(
+                cell, _E2_WORST_DAYS_CELL_ALLOWED_KEYS,
+                f"e2_worst_days|{tkey}|{scn}", problems,
+                code="e2_worst_days_unknown_key")
             pooled = cell.get("pooled")
             if (not isinstance(pooled, dict) or "P1" not in pooled
                     or "P5" not in pooled):
                 problems.append(f"e2_worst_days_pooled:{tkey}|{scn}")
+            else:
+                _check_p1_le_p5(pooled, f"e2_worst_days|{tkey}|{scn}|pooled",
+                                problems)
             by_era = cell.get("by_era")
             if (not isinstance(by_era, dict)
                     or sorted(by_era) != sorted(_ERAS)):
@@ -1250,9 +1765,37 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
                             or "P1" not in era_cell or "P5" not in era_cell):
                         problems.append(
                             f"e2_worst_days_by_era_p1p5:{tkey}|{scn}|{era}")
+                    else:
+                        _check_p1_le_p5(
+                            era_cell,
+                            f"e2_worst_days|{tkey}|{scn}|by_era|{era}",
+                            problems)
+
+            # mission item 5(b) — P1/P5 GOVERNANCE (M-1, mandatory): the
+            # numpy linear-interpolation percentile estimator is an
+            # UNAPPROVED engineering convention pending the DR-M6-H ruling
+            # (frozen §7 mandates only THAT a P1/P5 report exist, never
+            # which estimator computes it) — a formal report must carry an
+            # explicit `estimator_status` on every E2 worst-day cell, and
+            # sealing REQUIRES it read EXACTLY "resolved". While DR-M6-H
+            # pends, the producer emits "unresolved_DR-M6-H"
+            # (scripts/s0_real_run.py build_full_study_result) and this
+            # boundary fail-closes on it — never a silent pass, and never a
+            # comment anywhere in this module describing "linear" as frozen
+            # or approved.
+            status = cell.get("estimator_status")
+            if status is None and "estimator_status" not in cell:
+                problems.append(
+                    f"e2_worst_days_estimator_status_missing:{tkey}|{scn}")
+            elif status != _ESTIMATOR_STATUS_RESOLVED:
+                problems.append(
+                    f"worst_day_estimator_unresolved:{tkey}|{scn}:{status!r}")
 
     for tkey in tkeys:
         cell = payload["sizing_outputs"].get(tkey, {})
+        _check_no_unknown_keys(cell, _SIZING_OUTPUTS_CELL_ALLOWED_KEYS,
+                               f"sizing_outputs|{tkey}", problems,
+                               code="sizing_outputs_cell_unknown_key")
         for label in ("rows", "coverage"):
             block = cell.get(label) if isinstance(cell, dict) else None
             if not isinstance(block, dict):
@@ -1295,11 +1838,21 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
                                     row, _SIZING_ROW_FIELD_TYPES,
                                     f"sizing_outputs|{tkey}|{eng}|{scn}|"
                                     f"rows[{i}]", problems)
+                                _check_no_unknown_keys(
+                                    row, _SIZING_ROW_FIELDS,
+                                    f"sizing_outputs|{tkey}|{eng}|{scn}|"
+                                    f"rows[{i}]", problems,
+                                    code="sizing_outputs_row_unknown_key")
                 if isinstance(cov_block, dict):
                     eng_cov = cov_block.get(eng)
                     cov = (eng_cov.get(scn)
                           if isinstance(eng_cov, dict) else None)
                     if isinstance(cov, dict):
+                        _check_no_unknown_keys(
+                            cov, _SIZING_COVERAGE_ALLOWED_KEYS,
+                            f"sizing_outputs|{tkey}|{eng}|{scn}|coverage",
+                            problems,
+                            code="sizing_outputs_coverage_unknown_key")
                         by_budget = cov.get("by_budget_usd")
                         if (not isinstance(by_budget, dict)
                                 or not set(_COVERAGE_BUDGETS)
@@ -1307,6 +1860,16 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
                             problems.append(
                                 f"sizing_outputs_coverage_incomplete:"
                                 f"{tkey}|{eng}|{scn}")
+                        else:
+                            for budget, row in by_budget.items():
+                                _check_no_unknown_keys(
+                                    row,
+                                    _SIZING_COVERAGE_BUDGET_ROW_ALLOWED_KEYS,
+                                    f"sizing_outputs|{tkey}|{eng}|{scn}|"
+                                    f"coverage|by_budget_usd|{budget}",
+                                    problems,
+                                    code="sizing_outputs_coverage_budget_"
+                                        "unknown_key")
 
     # mission M6.1.2-S3 item 6b — SIZING NON-EMPTINESS via the REAL producer
     # relation: study.py builds `sizing_rows[engine][scenario]` as ONE row
@@ -1356,6 +1919,10 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
                     problems.append(
                         f"stability_views_missing:{tkey}|{eng}|{scn}")
                     continue
+                _check_no_unknown_keys(
+                    cell, _STABILITY_ENGINE_SCENARIO_CELL_ALLOWED_KEYS,
+                    f"stability_views|{tkey}|{eng}|{scn}", problems,
+                    code="stability_views_cell_unknown_key")
                 epochs = cell.get("epochs")
                 # structural extras allowed: outside_epochs bucket (days
                 # beyond the three frozen epochs, disclosed not dropped)
@@ -1456,6 +2023,11 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
                                 bval, _STABILITY_CELL_FIELD_TYPES,
                                 f"stability_views|{tkey}|{eng}|{scn}|"
                                 f"{axis_name}|{bkey}", problems)
+                            _check_no_unknown_keys(
+                                bval, _STABILITY_CELL_FIELDS,
+                                f"stability_views|{tkey}|{eng}|{scn}|"
+                                f"{axis_name}|{bkey}", problems,
+                                code="stability_views_cell_field_unknown_key")
 
     # mission M6.1.2-S3 item 1 — STABILITY CONSERVATION RE-DERIVED, never
     # merely read off the axis's own self-reported "conservation_ok" flag.
@@ -1546,6 +2118,8 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
     # NAMES (never a superset/subset/renamed key), `counterfactual_
     # disclosure` a non-empty disclosure string.
     ea = payload["era_axis"]
+    _check_no_unknown_keys(ea, _ERA_AXIS_ALLOWED_KEYS, "era_axis", problems,
+                           code="era_axis_unknown_key")
     axes = ea.get("axes")
     if not isinstance(axes, list) or set(axes) != set(_ERAS):
         problems.append("era_axis_axes_incomplete")
@@ -1563,6 +2137,9 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
     # problems (a validator that treats "absent" and "empty" the same way
     # can't tell "nothing pends" from "the producer forgot to disclose").
     disclosures = payload["disclosures"]
+    _check_no_unknown_keys(disclosures, _DISCLOSURES_ALLOWED_KEYS,
+                           "disclosures", problems,
+                           code="disclosures_unknown_key")
     if "pending_method_decisions" not in disclosures:
         problems.append("pending_method_decisions_missing")
     elif disclosures["pending_method_decisions"]:
@@ -1578,6 +2155,9 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
     if not isinstance(nac, dict):
         problems.append("disclosures_na_conservation_missing")
     else:
+        _check_no_unknown_keys(nac, _NA_CONSERVATION_ALLOWED_KEYS,
+                               "disclosures.na_conservation", problems,
+                               code="na_conservation_unknown_key")
         totals = nac.get("per_table_total_na")
         totals_ok = (isinstance(totals, dict)
                     and set(_NA_CONSERVATION_TABLES) <= set(totals)
@@ -1587,6 +2167,25 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
             problems.append("disclosures_na_conservation_totals_invalid")
         if nac.get("conservation_ok") is not True:
             problems.append("disclosures_na_conservation_flag_not_true")
+        # M6.1.3 fix-round (blind-audit A56): the richer evidence keys,
+        # WHEN PRESENT, must agree with the flag — conservation_ok=True
+        # next to a non-empty unregistered_reasons / miscounted_columns
+        # (or a false conserved / any false per_column_ok cell) is a
+        # self-contradiction, never a pass.
+        if nac.get("conservation_ok") is True:
+            for key in ("unregistered_reasons", "miscounted_columns"):
+                if key in nac and nac[key]:
+                    problems.append(
+                        "disclosures_na_conservation_contradiction:" + key)
+            if "conserved" in nac and nac["conserved"] is not True:
+                problems.append(
+                    "disclosures_na_conservation_contradiction:conserved")
+            pco = nac.get("per_column_ok")
+            if pco is not None and (
+                    not isinstance(pco, dict)
+                    or any(v is not True for v in pco.values())):
+                problems.append("disclosures_na_conservation_contradiction:"
+                                "per_column_ok")
 
         # mission M6.1.2-S3 item 4 — A11 RECONCILIATION: `per_table_total_
         # na[t]` is a RESTATEMENT of structural.na_table's own per-field NA
@@ -1621,6 +2220,8 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
 
     # R7 — governance.
     gov = payload["governance"]
+    _check_no_unknown_keys(gov, _GOVERNANCE_ALLOWED_KEYS, "governance",
+                           problems, code="governance_unknown_key")
     trial_id = gov.get("trial_id")
     if not isinstance(trial_id, str) or not trial_id:
         problems.append("governance_trial_id")
@@ -1666,6 +2267,10 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
     # this payload seals, see the two-call contract in this function's
     # docstring) is never inspected and never rejected, so this validator
     # is safe to call again on the manifest-injected payload.
+    _check_no_unknown_keys(
+        payload["mc_handoff_manifest"], _MC_HANDOFF_MANIFEST_ALLOWED_KEYS,
+        "mc_handoff_manifest", problems,
+        code="mc_handoff_manifest_unknown_key")
     counts = payload["mc_handoff_manifest"].get("counts")
     if not isinstance(counts, dict):
         problems.append("mc_handoff_manifest_counts_missing")
@@ -1683,6 +2288,10 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
                 if not isinstance(n, int) or isinstance(n, bool) or n < 0:
                     problems.append(
                         f"mc_handoff_manifest_counts_invalid:{eng}|{scn}")
+                _check_no_unknown_keys(
+                    cell, _MC_HANDOFF_COUNTS_CELL_ALLOWED_KEYS,
+                    f"mc_handoff_manifest.counts.{eng}.{scn}", problems,
+                    code="mc_handoff_manifest_counts_cell_unknown_key")
 
     # R10 — feasibility_grid: exact (theta, engine, scenario) cell coverage
     # (frozen: Appendix A grid) + per-cell field completeness against the
@@ -1700,7 +2309,14 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
         for k in sorted(actual_cells - expected_cells):
             problems.append(f"feasibility_grid_extra:{k}")
         for k in sorted(expected_cells & actual_cells):
-            _check_feasibility_cell(cells[k], k, problems)
+            # mission item 3 — F == p*r*N/q recompute needs the SAME theta's
+            # continuation base rate; read defensively (a malformed/missing
+            # frequency section is its own problem, reported elsewhere, and
+            # never crashes this lookup — see `_frequency_pooled_p`).
+            tkey_for_cell = k.split("|", 1)[0]
+            _check_feasibility_cell(
+                cells[k], k, problems,
+                base_rate_p=_frequency_pooled_p(payload, tkey_for_cell))
     if fg.get("regions", {}).get("status") != "pending_mc":
         problems.append("feasibility_grid_regions_not_pending_mc")
 
@@ -1950,7 +2566,34 @@ def validate_sealed_files(files: Mapping[str, str], payload, *,
     if not isinstance(sealed_files, dict):
         problems.append("sealed_files_manifest_missing")
     else:
-        self_excluded = set(manifest.get("self_excluded") or [])
+        # mission item 6 — self-exclusion is a MODULE-INTERNAL frozen
+        # constant (`_ALLOWED_SELF_EXCLUDED`), never taken verbatim off the
+        # payload: `set(manifest.get("self_excluded") or [])` on a
+        # non-list value (e.g. a bare string) previously exploded into a
+        # set of CHARACTERS rather than filenames, and — worse — ANY name
+        # a payload chose to list here silently bypassed the completeness
+        # reconciliation below (a planted "PLANTED.txt" entered into
+        # self_excluded would never need a sealed_files entry at all). Both
+        # are refused now: a non-list/non-str-elements self_excluded is
+        # its own problem and contributes NO exclusions, and a self_
+        # excluded name outside the one frozen allowance is refused
+        # outright.
+        self_excluded_raw = manifest.get("self_excluded")
+        if self_excluded_raw is None:
+            self_excluded_raw = []
+        if (not isinstance(self_excluded_raw, list)
+                or any(not isinstance(x, str) for x in self_excluded_raw)):
+            problems.append("sealed_files_self_excluded_type")
+            self_excluded: set[str] = set()
+        else:
+            self_excluded = set(self_excluded_raw)
+            disallowed = sorted(self_excluded - _ALLOWED_SELF_EXCLUDED)
+            if disallowed:
+                problems.append(
+                    f"sealed_files_self_excluded_not_allowed:{disallowed}")
+                # fail closed: an illegally-named exclusion buys NO bypass
+                # of the completeness reconciliation below.
+                self_excluded = self_excluded & _ALLOWED_SELF_EXCLUDED
         for fname, spec in sealed_files.items():
             if fname not in files:
                 problems.append(
@@ -1971,5 +2614,395 @@ def validate_sealed_files(files: Mapping[str, str], payload, *,
         if uncovered:
             problems.append(
                 "sealed_files_manifest_incomplete:" + ",".join(uncovered))
+
+    return problems
+
+
+# ---------------------------------------------------------------------------
+# 6. reconcile_with_internal — M6.1.3-S1 mission item 4: cross-check the
+#    FORMAL payload against the INTERNAL producer envelope — the dict
+#    scripts/s0_real_run.py::build_full_study_result actually RETURNS
+#    (dataset/na_reason_counts/reported_total_na/records/study, PLUS every
+#    FORMAL_SECTIONS key, all in ONE dict). `split_envelope`'s own
+#    "internal" half additionally DROPS "study" (never a member of
+#    `_INTERNAL_KEYS`, never a member of `FORMAL_SECTIONS` — it is simply
+#    discarded by that function) — a caller wiring this in must pass the
+#    RAW compute_result, or an equivalent dict that still carries "study",
+#    never `split_envelope(...)`'s own "internal" output.
+#
+#    NOT wired into any sealing gate here (main-agent renderer work, see
+#    this module's docstring). A pure function, always returns a problem
+#    list, and NEVER raises on a malformed tree — the same fail-closed
+#    discipline as validate_formal_payload/validate_sealed_files.
+# ---------------------------------------------------------------------------
+# The two internal-only keys whose ABSENCE is itself a problem (mission
+# item 4: "require internal-only keys like records/study; their absence =
+# problem" — so passing the FORMAL payload itself as `internal` can never
+# vacuously succeed, since neither key is ever a FORMAL_SECTIONS member).
+_RECONCILE_REQUIRED_INTERNAL_KEYS: tuple[str, ...] = ("study", "records")
+
+# frozen: S0 §2 — the three stability epoch boundaries stability.py's
+# EPOCHS tuple encodes (inclusive on both ends). Duplicated as DATA here
+# rather than imported — stability.py's EPOCHS/ALL_EPOCH_LABELS are
+# private module constants this boundary does not reach into — so the
+# stability recompute below can bucket by year without trusting
+# stability.py's own bucketing to be the thing under test.
+_RECONCILE_EPOCH_RANGES: tuple[tuple[str, int, int], ...] = (
+    ("2010-2013", 2010, 2013),
+    ("2014-2017", 2014, 2017),
+    ("2018-2021", 2018, 2021),
+)
+_RECONCILE_OUTSIDE_EPOCHS = "outside_epochs"
+_RECONCILE_ALL_EPOCH_LABELS: tuple[str, ...] = tuple(
+    label for label, _lo, _hi in _RECONCILE_EPOCH_RANGES
+) + (_RECONCILE_OUTSIDE_EPOCHS,)
+_RECONCILE_DIRECTION_KEY_OF: Mapping[int, str] = {1: "+1", -1: "-1"}
+
+
+def _reconcile_epoch_of_year(year: int) -> str:
+    for label, lo, hi in _RECONCILE_EPOCH_RANGES:
+        if lo <= year <= hi:
+            return label
+    return _RECONCILE_OUTSIDE_EPOCHS
+
+
+def _derive_day_meta_from_dataset(dataset_obj):
+    """`internal["dataset"]` (a live S0Dataset-shaped object, or any duck-
+    typed stand-in exposing the same `.records` shape) -> date -> {"year",
+    "era", "d_open"}, EXACTLY as scripts/s0_real_run.py's
+    build_full_study_result derives its own `day_meta` local (`{r.
+    trade_date: {"year": r.year, "era": r.era, "d_open": int(r.labels.
+    d_open or 0)} for r in ds.records}`) — this boundary never invents its
+    own notion of what a "day" is. Returns None (never raises) on any
+    malformed shape at any level."""
+    records = getattr(dataset_obj, "records", None)
+    if records is None:
+        return None
+    out: dict[str, dict[str, object]] = {}
+    try:
+        for r in records:
+            trade_date = r.trade_date
+            if not isinstance(trade_date, str):
+                return None
+            d_open = r.labels.d_open
+            out[trade_date] = {
+                "year": r.year, "era": r.era,
+                "d_open": int(d_open) if d_open is not None else 0,
+            }
+    except (AttributeError, TypeError, ValueError):
+        return None
+    return out
+
+
+def _recompute_cell_stats(pairs: list[tuple[str, float]]) -> dict[str, object]:
+    """The n/sum_usd/mean_usd/best_day/worst_day/n_positive/n_negative/
+    n_zero subset of stability.py's `_cell()` shape — deliberately EXCLUDES
+    `worst_day_pnl_percentiles`: P1/P5 depend on the disclosed-but-
+    UNAPPROVED numpy linear-interpolation estimator (mission item 5), and
+    recomputing those here (with the same estimator) would silently bake
+    approval of that convention into a "recompute-not-trust" check rather
+    than testing it — this reconciliation stays to the estimator-free
+    fields."""
+    vals = [v for _d, v in pairs]
+    n = len(vals)
+    total = sum(vals) if vals else 0.0
+    return {
+        "n": n, "sum_usd": total,
+        "mean_usd": (total / n) if n else None,
+        "best_day": max(vals) if vals else None,
+        "worst_day": min(vals) if vals else None,
+        "n_positive": sum(1 for v in vals if v > 0),
+        "n_negative": sum(1 for v in vals if v < 0),
+        "n_zero": sum(1 for v in vals if v == 0.0),
+    }
+
+
+def _reconcile_compare_bucket(expected: dict, actual, path: str,
+                              problems: list[str]) -> None:
+    if not isinstance(actual, dict):
+        problems.append(f"reconcile_stability_bucket_missing:{path}")
+        return
+    for field in ("n", "n_positive", "n_negative", "n_zero"):
+        if actual.get(field) != expected[field]:
+            problems.append(
+                f"reconcile_stability_value_mismatch:{path}.{field}:"
+                f"{actual.get(field)}!={expected[field]}")
+    for field in ("sum_usd", "mean_usd", "best_day", "worst_day"):
+        exp_v, act_v = expected[field], actual.get(field)
+        ok = ((exp_v is None and act_v is None)
+              or (exp_v is not None and _is_number(act_v)
+                  and math.isclose(act_v, exp_v, rel_tol=1e-9, abs_tol=1e-9)))
+        if not ok:
+            problems.append(
+                f"reconcile_stability_value_mismatch:{path}.{field}:"
+                f"{act_v}!={exp_v}")
+
+
+def _reconcile_stability_cell(pnl_map, day_meta, cell_f, path: str,
+                              problems: list[str]) -> None:
+    """Bucket `pnl_map` (date -> usd — study.py's `per_theta[theta]["d_tp"]
+    [engine][scenario]`) by epoch/year/direction using `day_meta`,
+    RECOMPUTE each bucket's descriptive stats, and compare against the
+    formal payload's OWN declared `stability_views` cell — the exact
+    recompute `_check_series_block`'s docstring says the formal payload
+    ALONE cannot support (it carries no per-bucket daily series), only
+    possible here because `internal["study"]` + `internal["dataset"]`
+    supply the raw materials the formal side never does. `leave_one_year_
+    out`/`vol_terciles` are OUT of this function's scope: LOYO's cross-
+    check already lives at the formal-only boundary (`stability_views_loyo_
+    recompute_mismatch`) and vol_terciles' vocabulary/axis (DR-M6-B) is not
+    derivable from `day_meta` alone."""
+    if not isinstance(pnl_map, dict) or not isinstance(cell_f, dict):
+        problems.append(f"reconcile_stability_missing:{path}")
+        return
+    epoch_buckets: dict[str, list[tuple[str, float]]] = {
+        label: [] for label in _RECONCILE_ALL_EPOCH_LABELS}
+    year_buckets: dict[str, list[tuple[str, float]]] = {}
+    dir_buckets: dict[str, list[tuple[str, float]]] = {"+1": [], "-1": []}
+    missing_meta: list[str] = []
+    for d, v in pnl_map.items():
+        meta = day_meta.get(d)
+        if not isinstance(meta, dict) or not _is_number(v):
+            missing_meta.append(d)
+            continue
+        try:
+            year_int = int(meta["year"])
+            d_open = int(meta["d_open"])
+        except (KeyError, TypeError, ValueError):
+            missing_meta.append(d)
+            continue
+        epoch_buckets[_reconcile_epoch_of_year(year_int)].append(
+            (d, float(v)))
+        year_buckets.setdefault(str(meta["year"]), []).append((d, float(v)))
+        dkey = _RECONCILE_DIRECTION_KEY_OF.get(d_open)
+        if dkey is not None:
+            dir_buckets[dkey].append((d, float(v)))
+    if missing_meta:
+        # a PARTIAL recompute (some dates silently excluded) would be
+        # worse than no recompute at all — it would give false confidence
+        # that the remaining buckets are trustworthy while quietly
+        # ignoring a day_meta gap; refuse the whole cell instead.
+        problems.append(
+            f"reconcile_stability_day_meta_missing:{path}:"
+            f"{sorted(missing_meta)[:5]}")
+        return
+
+    epochs_f = cell_f.get("epochs")
+    for epoch_label, pairs in epoch_buckets.items():
+        _reconcile_compare_bucket(
+            _recompute_cell_stats(pairs),
+            epochs_f.get(epoch_label) if isinstance(epochs_f, dict) else None,
+            f"{path}|epochs|{epoch_label}", problems)
+
+    by_year_f = cell_f.get("by_year")
+    for year_key, pairs in year_buckets.items():
+        _reconcile_compare_bucket(
+            _recompute_cell_stats(pairs),
+            by_year_f.get(year_key) if isinstance(by_year_f, dict) else None,
+            f"{path}|by_year|{year_key}", problems)
+
+    by_dir_f = cell_f.get("by_direction")
+    for dkey, pairs in dir_buckets.items():
+        _reconcile_compare_bucket(
+            _recompute_cell_stats(pairs),
+            by_dir_f.get(dkey) if isinstance(by_dir_f, dict) else None,
+            f"{path}|by_direction|{dkey}", problems)
+
+
+def _reconcile_oracle_series(pnl_map, series_f, path: str,
+                             problems: list[str]) -> None:
+    """study.py's `d_tp[engine][scenario]` (date -> usd — EXACTLY the
+    source dict `executable[engine][scenario]`'s pooled pairs are built
+    from: `pairs = [(d, pnl[d]) for d in tp_days]` and `d_tp[engine][name]
+    = {d: pnl[d] for d in tp_days}` share the identical pnl values,
+    s0/study.py `build_study`) against the formal payload's OWN declared
+    pooled (date, usd) series — a byte-identical POPULATION and VALUE
+    cross-check against the internal source, never merely the schema/
+    percentile-key check that already exists at the payload-only boundary
+    (`_check_series_block`)."""
+    if not isinstance(pnl_map, dict) or not isinstance(series_f, list):
+        problems.append(f"reconcile_oracle_series_missing:{path}")
+        return
+    f_map: dict[str, float] = {}
+    for pair in series_f:
+        if (isinstance(pair, list) and len(pair) == 2
+                and _is_date_str(pair[0]) and _is_number(pair[1])):
+            f_map[pair[0]] = float(pair[1])
+    if set(f_map) != set(pnl_map):
+        problems.append(f"reconcile_oracle_series_date_set_mismatch:{path}")
+        return
+    for d, v in pnl_map.items():
+        if not _is_number(v):
+            continue
+        fv = f_map.get(d)
+        if fv is None or not math.isclose(fv, float(v), rel_tol=1e-9,
+                                          abs_tol=1e-9):
+            problems.append(
+                f"reconcile_oracle_series_value_mismatch:{path}:{d}:"
+                f"{fv}!={v}")
+
+
+def reconcile_with_internal(internal, formal) -> list[str]:
+    """Cross-check the FORMAL payload against the INTERNAL producer
+    envelope — the dict `scripts/s0_real_run.py::build_full_study_result`
+    actually returns (dataset/na_reason_counts/reported_total_na/records/
+    study, plus every FORMAL_SECTIONS key, ALL in the same dict). Pass the
+    RAW compute_result (or an equivalent superset) here, never the output
+    of `split_envelope(...)`'s own "internal" half — that deliberately
+    drops "study" (never a member of `_INTERNAL_KEYS`, never a member of
+    `FORMAL_SECTIONS`), which several checks below need.
+
+    `internal` MUST carry, at minimum:
+      "study"   — the dict `itsf.s0.study.build_study(...)` returns (the
+                  per-theta `d_tp` series this function recomputes from);
+      "records" — {engine: {scenario: [TradePathRecord, ...]}}, the same
+                  §10.1 atomic handoff the sealed JSONL files are built
+                  from.
+    Their absence is ITSELF a problem (`reconcile_missing_internal_key:
+    <key>`), by design (mission item 4): passing the FORMAL payload as
+    `internal` can NEVER vacuously succeed — the formal side never carries
+    either key, so both problems fire immediately and every check that
+    depends on them is skipped rather than silently "passing".
+
+    `internal["dataset"]` (a live S0Dataset-shaped object exposing a
+    `.records` tuple of day rows with `.trade_date`/`.year`/`.era`/
+    `.labels.d_open`) and `internal["reported_total_na"]` are likewise
+    flagged (same problem code) when absent — they unlock the stability-
+    recompute and na_conservation checks respectively; when either is
+    missing, only ITS OWN dependent check is skipped, never the others.
+
+    Checks performed (mission item 4's "at minimum" list):
+      1. stability_views per-bucket n/sum_usd/mean_usd/best_day/worst_day/
+         n_positive/n_negative/n_zero, RECOMPUTED from `study["per_theta"]
+         [theta]["d_tp"][engine][scenario]` bucketed by epoch/year/
+         direction (day_meta derived from `internal["dataset"]`), compared
+         against the formal `stability_views` cell;
+      2. oracle_daily executable POOLED series values == study's own
+         per-theta `d_tp[engine][scenario]` series — population AND value;
+      3. mc_handoff_manifest record counts == len(records[engine]
+         [scenario]);
+      4. disclosures.na_conservation.per_table_total_na vs
+         `internal["reported_total_na"]` summed by table prefix — the SAME
+         Stage-D adapter counts the real `_na_conservation_block` itself
+         reads, re-summed independently here rather than trusted.
+
+    Never raises: every branch degrades to a problem string on a
+    malformed/missing shape at any nesting level — the same fail-closed
+    discipline as `validate_formal_payload`/`validate_sealed_files`. NOT
+    wired into any sealing gate by this module (main-agent renderer work).
+    """
+    problems: list[str] = []
+    if not isinstance(internal, dict):
+        return ["internal_not_dict"]
+    if not isinstance(formal, dict):
+        return ["formal_not_dict"]
+
+    study = internal.get("study")
+    if not isinstance(study, dict):
+        problems.append("reconcile_missing_internal_key:study")
+        study = None
+    records = internal.get("records")
+    if not isinstance(records, dict):
+        problems.append("reconcile_missing_internal_key:records")
+        records = None
+    reported_total_na = internal.get("reported_total_na")
+    if not isinstance(reported_total_na, dict):
+        problems.append("reconcile_missing_internal_key:reported_total_na")
+        reported_total_na = None
+    dataset_obj = internal.get("dataset")
+    if dataset_obj is None:
+        problems.append("reconcile_missing_internal_key:dataset")
+        day_meta = None
+    else:
+        day_meta = _derive_day_meta_from_dataset(dataset_obj)
+        if day_meta is None:
+            problems.append("reconcile_dataset_records_malformed")
+
+    # --- 1 + 2: per-theta study cross-checks (oracle series + stability) --
+    if study is not None:
+        per_theta = study.get("per_theta")
+        oracle_daily_f = formal.get("oracle_daily")
+        stability_f = formal.get("stability_views")
+        if isinstance(per_theta, dict):
+            for tkey, tblock in per_theta.items():
+                if not isinstance(tblock, dict):
+                    continue
+                d_tp = tblock.get("d_tp")
+                if not isinstance(d_tp, dict):
+                    continue
+                tcell_f = (oracle_daily_f.get(tkey)
+                          if isinstance(oracle_daily_f, dict) else None)
+                ex_f = (tcell_f.get("executable")
+                       if isinstance(tcell_f, dict) else None)
+                stab_t_f = (stability_f.get(tkey)
+                           if isinstance(stability_f, dict) else None)
+                for eng, scn_map in d_tp.items():
+                    if not isinstance(scn_map, dict):
+                        continue
+                    eng_f = ex_f.get(eng) if isinstance(ex_f, dict) else None
+                    eng_stab_f = (stab_t_f.get(eng)
+                                 if isinstance(stab_t_f, dict) else None)
+                    for scn, pnl_map in scn_map.items():
+                        cell_f = (eng_f.get(scn)
+                                 if isinstance(eng_f, dict) else None)
+                        pooled_f = (cell_f.get("pooled")
+                                   if isinstance(cell_f, dict) else None)
+                        series_f = (pooled_f.get("daily_pnl_usd")
+                                   if isinstance(pooled_f, dict) else None)
+                        _reconcile_oracle_series(
+                            pnl_map, series_f,
+                            f"oracle_daily|{tkey}|{eng}|{scn}", problems)
+
+                        if day_meta is not None:
+                            cell_stab_f = (
+                                eng_stab_f.get(scn)
+                                if isinstance(eng_stab_f, dict) else None)
+                            _reconcile_stability_cell(
+                                pnl_map, day_meta, cell_stab_f,
+                                f"stability_views|{tkey}|{eng}|{scn}",
+                                problems)
+
+    # --- 3: record counts ---------------------------------------------------
+    if records is not None:
+        mh = formal.get("mc_handoff_manifest")
+        counts = mh.get("counts") if isinstance(mh, dict) else None
+        for eng, by_scn in records.items():
+            if not isinstance(by_scn, dict):
+                continue
+            for scn, recs in by_scn.items():
+                if not isinstance(recs, (list, tuple)):
+                    continue
+                actual_n = len(recs)
+                eng_c = counts.get(eng) if isinstance(counts, dict) else None
+                scn_c = eng_c.get(scn) if isinstance(eng_c, dict) else None
+                reported = (scn_c.get("n_records")
+                           if isinstance(scn_c, dict) else None)
+                if reported != actual_n:
+                    problems.append(
+                        f"reconcile_record_count_mismatch:{eng}|{scn}:"
+                        f"{reported}!={actual_n}")
+
+    # --- 4: na_conservation vs the Stage-D adapter counts -------------------
+    if reported_total_na is not None:
+        per_table = {"features": 0, "labels": 0}
+        for col, n in reported_total_na.items():
+            if not isinstance(col, str) or "." not in col or not _is_int(n):
+                continue
+            table = col.split(".", 1)[0]
+            if table in per_table:
+                per_table[table] += n
+        disclosures_f = formal.get("disclosures")
+        nac_f = (disclosures_f.get("na_conservation")
+                if isinstance(disclosures_f, dict) else None)
+        totals_f = (nac_f.get("per_table_total_na")
+                   if isinstance(nac_f, dict) else None)
+        if not isinstance(totals_f, dict):
+            problems.append("reconcile_na_conservation_missing")
+        else:
+            for table in ("features", "labels"):
+                if totals_f.get(table) != per_table[table]:
+                    problems.append(
+                        f"reconcile_na_conservation_mismatch:{table}:"
+                        f"{totals_f.get(table)}!={per_table[table]}")
 
     return problems

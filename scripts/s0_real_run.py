@@ -44,7 +44,7 @@ ATTEMPTS_ROOT = REPO / "attempts"
 # Baseline collected-test count at the SA-6 audit commit. The pytest gate
 # requires the suite to still COLLECT at least this many tests, so a muted
 # or filtered run cannot satisfy the gate with a handful of tests (F-09).
-MIN_COLLECTED_TESTS = 926                  # M6.1: floor = current suite
+MIN_COLLECTED_TESTS = 1141                  # M6.1.3 fix-round-2: floor=suite
 
 # External read-only tooling (packet §9 gate 4). Invoked as a subprocess;
 # the tool itself only reads repository files.
@@ -865,6 +865,30 @@ def stage_c_result(ds):
             "reported_total_na": totals}
 
 
+def _partition_admission(candidates, all_probs):
+    """M6.1.3 fix-round-2 (blind-audit N1b): per-name attribution of the
+    batched formal_seal_admission problems. The '{name}: ' prefix scheme
+    is only injective while no candidate name embeds the delimiter —
+    enforced here, so a colliding name can never misattribute another
+    artifact's refusal reasons into the sealed admission record. Any
+    problem string attributable to no candidate fails the render closed."""
+    bad = sorted(n for n in candidates if ": " in n)
+    if bad:
+        raise ValueError("candidate artifact names must not contain the "
+                         "': ' attribution delimiter: " + ", ".join(bad))
+    stray = [p for p in all_probs
+             if not any(p.startswith(f"{n}: ") for n in candidates)]
+    if stray:
+        raise ValueError("admission problems not attributable to any "
+                         "candidate artifact: " + "; ".join(stray))
+    admitted: dict[str, object] = {}
+    withheld: dict[str, list[str]] = {}
+    for fname, artifact in candidates.items():
+        probs = [p for p in all_probs if p.startswith(f"{fname}: ")]
+        (withheld if probs else admitted)[fname] = probs or artifact
+    return admitted, withheld
+
+
 def render_s0_report(result, *, expected_governance=None) -> dict[str, str]:
     """Stage-E sealed release: the FORMAL S0 report, whole-document only
     (packet §7 — nothing here reaches a log line).
@@ -886,6 +910,15 @@ def render_s0_report(result, *, expected_governance=None) -> dict[str, str]:
         if problems:
             raise ValueError("report contract violations: "
                              + "; ".join(problems))
+        # M6.1.3 (main-4): INDEPENDENT reconciliation of the formal payload
+        # against the internal producer envelope — `result` is the RAW
+        # build_full_study_result dict (carries "study"/"records"), never
+        # the formal payload passed back to itself (reconcile_with_internal
+        # rejects that shape as missing internal keys).
+        rec = rep.reconcile_with_internal(result, formal)
+        if rec:
+            raise ValueError("internal reconciliation failed: "
+                             + "; ".join(rec))
         files: dict[str, str] = {}
         file_manifest: dict[str, object] = {}
         for eng, by_scn in result["records"].items():
@@ -906,11 +939,13 @@ def render_s0_report(result, *, expected_governance=None) -> dict[str, str]:
         # is itself recorded in a sealed admission record, so the withheld
         # state is disclosed rather than silent.
         candidates = {"SEED_MANIFEST.json": ho.build_seed_manifest()}
-        admitted: dict[str, object] = {}
-        withheld: dict[str, list[str]] = {}
-        for fname, artifact in candidates.items():
-            probs = ho.formal_seal_admission({fname: artifact})
-            (withheld if probs else admitted)[fname] = probs or artifact
+        # M6.1.3 fix-round (blind-audit D44/F9): ONE admission call over
+        # the WHOLE candidate set — formal_seal_admission's cross-artifact
+        # checks (grid per-cell seeds vs the seed manifest) only see
+        # artifacts supplied in the SAME call, so the earlier per-file
+        # loop made that check unreachable in production.
+        admitted, withheld = _partition_admission(
+            candidates, ho.formal_seal_admission(candidates))
         for fname, artifact in admitted.items():
             files[fname] = ho.dumps_canonical(artifact)
         files["HANDOFF_ADMISSION.json"] = ho.dumps_canonical({
@@ -982,10 +1017,21 @@ def _resolved_methods():
 PENDING_METHOD_DECISIONS: tuple[str, ...] = _resolved_methods().pending_fields()
 
 
-from itsf.contracts import StudyConfig    # noqa: E402 (after sys.path setup)
+from itsf.contracts import (StudyConfig,          # noqa: E402
+                            ResolvedS0Methods as _RSM)
 
 
 _CONFIG_CACHE: dict = {}
+
+
+def _approved_injectables():
+    """M6.1.3 fix-round (blind-audit F3): the production source of the
+    DERIVED StudyConfig inputs — spread_scalars per the ruled DR-1
+    reduction, the ruled regime/vol mappings — read from locked artifacts
+    once those rulings land. None until then (fail closed): no cached
+    config can claim its injectables came from an approved source that
+    does not exist yet."""
+    return None
 
 
 def _validated_config(cfg, why: str):
@@ -998,14 +1044,50 @@ def _validated_config(cfg, why: str):
         return (None, why)
     if not isinstance(cfg, StudyConfig):
         return (None, "config is not a StudyConfig instance")
+    # M6.1.3 fix-round (blind-audit E6; ordering per N3): TYPE PIN before
+    # ANY read of cfg.methods — `!=` dispatches to the left operand and
+    # even an attribute read can execute a foreign property, so no
+    # attacker code may run inside this gate.
+    if type(cfg.methods) is not _RSM:
+        return (None, "config.methods is not a ResolvedS0Methods — "
+                      "equality is never delegated to a foreign methods "
+                      "type")
     if getattr(cfg.methods, "test_only", False):
         return (None, "test_only config refused on the production path")
+    # M6.1.3 (main-1): the cache is NEVER a method source — a cached config
+    # is honoured only while it remains IDENTICAL to a fresh read of the
+    # approved method source. With all rulings pending, no resolved config
+    # can match, so a cache injection is refused here regardless of its own
+    # internal consistency.
+    if cfg.methods != _resolved_methods():
+        return (None, "config does not match the fresh approved method "
+                      "source — cache is not a method source")
+    # M6.1.3 fix-round (blind-audit F3): the fresh-source binding covers
+    # the DERIVED injectables too, not only `methods` — a cached config
+    # whose methods match cannot smuggle its own spread_scalars / regime /
+    # vol mappings past the gate. No approved injectable source exists
+    # while DR-1/DR-2 pend, so this fails closed today by construction.
+    inj = _approved_injectables()
+    if inj is None:
+        return (None, "no approved injectable source (spread_scalars / "
+                      "regime_of / vol_axis_of) exists yet — a cached "
+                      "config cannot be its own injectable source")
+    # M6.1.3 fix-round-2 (blind-audit N4c): a malformed injectable source
+    # must fail CLOSED with a reason, never fail open by exception.
+    if not isinstance(inj, dict):
+        return (None, "approved injectable source malformed — fail closed")
+    from itsf.contracts import derive_study_config as _derive
+    if cfg != _derive(_resolved_methods(), **inj):
+        return (None, "config does not match a fresh derivation from the "
+                      "approved sources — cache is not a config source")
     pend = cfg.methods.pending_fields()
     if pend:
         return (None, "pending method rulings: " + ", ".join(pend))
     bad = cfg.methods.structural_problems()
     if bad:
         return (None, "structurally invalid methods: " + ", ".join(bad))
+    if not callable(cfg.regime_of) or not callable(cfg.vol_axis_of):
+        return (None, "config callables invalid")
     return (cfg, why)
 
 
@@ -1203,8 +1285,15 @@ def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
         "theoretical_oracle": {t: study["per_theta"][t]["theoretical_oracle"]
                                for t in study["per_theta"]},
         "e2_worst_days": {
-            t: {scn: study["per_theta"][t]["executable"]["E2"][scn]
-                ["worst_day_report"] for scn in study["scenarios_used"]}
+            t: {scn: {**study["per_theta"][t]["executable"]["E2"][scn]
+                      ["worst_day_report"],
+                      # DR-M6-H: the P1/P5 estimator is UNAPPROVED until
+                      # Aaron rules — sealing fail-closes on unresolved.
+                      "estimator_status":
+                          ("resolved"
+                           if config.methods.worst_day_estimator is not None
+                           else "unresolved_DR-M6-H")}
+                for scn in study["scenarios_used"]}
             for t in study["per_theta"]},
         "sizing_outputs": {t: {"rows": study["per_theta"][t]["sizing_rows"],
                                "coverage":

@@ -74,6 +74,7 @@ def _test_methods() -> C.ResolvedS0Methods:
             convergence_rule="TEST_ONLY", max_doublings=0),
         event_na_mapping="five_stratum",
         stability_population="TEST_ONLY",
+        worst_day_estimator="TEST_ONLY",
         test_only=True)
 
 
@@ -126,7 +127,7 @@ def test_derive_config_refuses_pending_methods():
                               spread_scalars=(1, 1, 1),
                               regime_of=lambda d: "R",
                               vol_axis_of=lambda d: "T")
-    assert len(C.ResolvedS0Methods().pending_fields()) == 7
+    assert len(C.ResolvedS0Methods().pending_fields()) == 8
 
 
 def test_studyconfig_has_no_pending_field():
@@ -250,20 +251,51 @@ def test_e7_unresolved_config_refused_in_stage_b_zero_exposure(tmp_path):
 
 
 def test_ready_true_implies_compute_has_no_wiring_error(monkeypatch):
-    """M6.1.1 E7 invariant: with the SAME cached config instance, ready=True
-    means compute cannot raise a wiring/config error (synthetic ensure)."""
+    """M6.1.3 E7: monkeypatch ONLY the method SOURCE (never the resolver) —
+    the real resolver, cache and point-of-use validation all run. Synthetic
+    resolved methods must carry test_only=False to pass the production
+    seam; the config still never touches real data (ensure is synthetic).
+    """
+    import dataclasses as _dc
     mod = real_run_module()
     if "m" not in _CACHE:
         _CACHE["m"] = _market()
     bars, ds = _CACHE["m"]
-    cfg = _test_config()
-    monkeypatch.setattr(mod, "resolved_study_config",
-                        lambda: (cfg, "TEST_ONLY injected"))
-    chain = mod.RealChain()
-    monkeypatch.setattr(chain, "_ensure", lambda: (ds, None))
-    chain._bars = bars
-    payload = chain.compute()             # must not raise wiring/config
-    assert payload["disclosures"]["methods_test_only"] is True
+    synthetic = _dc.replace(_test_methods(), test_only=False)
+    monkeypatch.setattr(mod, "_resolved_methods", lambda: synthetic)
+    mod._CONFIG_CACHE.clear()
+    try:
+        # derivation is unimplemented even when resolved -> resolver reports
+        # fail-closed; ready() and compute() must AGREE via the same seam.
+        cfg, why = mod.resolved_study_config()
+        assert cfg is None and "not implemented" in why
+        chain = mod.RealChain()
+        ok, why2 = chain.ready()
+        assert ok is False and "not implemented" in why2
+        import pytest as _pt
+        with _pt.raises(RuntimeError, match="not implemented"):
+            chain.compute()
+        assert chain._ds is None
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+def test_cache_injection_of_resolved_config_is_refused_vs_fresh_source(
+        monkeypatch):
+    """M6.1.3 main-1/2: the cache is not a method source — a non-test_only
+    'fully resolved' config injected into the cache mismatches the fresh
+    all-pending method source and is refused at the point of use."""
+    import dataclasses as _dc
+    mod = real_run_module()
+    cfg = C.derive_study_config(
+        _dc.replace(_test_methods(), test_only=False),
+        spread_scalars=(0.5, 0.75, 0.75),
+        regime_of=lambda d: "R", vol_axis_of=_test_vol_axis)
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (cfg, "injected"))
+    got, why = mod.resolved_study_config()
+    assert got is None
+    assert "fresh approved method source" in why
+    assert mod.RealChain().ready()[0] is False
 
 
 # --- DR-02: engineering-seed isolation --------------------------------------
@@ -355,6 +387,7 @@ _METHOD_PROBES: dict[str, object] = {
     "grid_policy": None,
     "event_na_mapping": _probe_event_na_mapping,
     "stability_population": None,
+    "worst_day_estimator": None,
 }
 
 
@@ -383,13 +416,15 @@ def test_event_na_mapping_consumer_is_behaviourally_observable():
 
 
 def test_unconsumed_method_fields_are_declared_partial():
-    """The six fields without consumers are UNRESOLVED in production, so no
-    silently-wrong method can run today (the PARTIAL status Codex asked to
-    be stated rather than claimed CLOSED)."""
+    """The SEVEN fields without consumers are UNRESOLVED in production, so
+    no silently-wrong method can run today (the PARTIAL status Codex asked
+    to be stated rather than claimed CLOSED). worst_day_estimator counts as
+    unconsumed: today it only flips the estimator_status string (fail-closed
+    gate) — it does not yet SELECT the estimator."""
     mod = real_run_module()
     live = mod._resolved_methods()
     unconsumed = [n for n, p in _METHOD_PROBES.items() if p is None]
-    assert len(unconsumed) == 6
+    assert len(unconsumed) == 7
     for name in unconsumed:
         assert getattr(live, name) is None
 
@@ -410,6 +445,167 @@ def test_structurally_invalid_methods_are_refused_everywhere():
         C.derive_study_config(bad, spread_scalars=(0.5, 0.75, 0.75),
                               regime_of=lambda d: "R",
                               vol_axis_of=lambda d: "T")
+
+
+def test_worst_day_estimator_gets_the_same_structural_gate():
+    """M6.1.3 fix-round (blind-audit F4): the 8th field is structurally
+    validated like every other string ruling — '' / 42 / {} are refused;
+    the VALUE semantics stay pending DR-M6-H."""
+    for bad_value in ("", "   ", 42, {}):
+        bad = _bad_methods(worst_day_estimator=bad_value)
+        assert any("worst_day_estimator" in p
+                   for p in bad.structural_problems()), repr(bad_value)
+        with pytest.raises(ValueError, match="structurally invalid"):
+            C.derive_study_config(bad, spread_scalars=(0.5, 0.75, 0.75),
+                                  regime_of=lambda d: "R",
+                                  vol_axis_of=lambda d: "T")
+
+
+def test_duck_typed_methods_object_cannot_reach_ready(monkeypatch):
+    """M6.1.3 fix-round (blind-audit E6): a StudyConfig smuggling a foreign
+    methods object whose __eq__ always matches (and whose pending/structural
+    probes lie) is refused by the TYPE PIN — `!=` dispatches to the left
+    operand, so equality is never delegated to attacker code."""
+    mod = real_run_module()
+
+    class _Duck:
+        test_only = False
+
+        def __eq__(self, other):
+            return True
+
+        def __ne__(self, other):
+            return False
+
+        def __hash__(self):
+            return 0
+
+        def pending_fields(self):
+            return ()
+
+        def structural_problems(self):
+            return []
+
+    cfg = object.__new__(C.StudyConfig)
+    object.__setattr__(cfg, "methods", _Duck())
+    object.__setattr__(cfg, "spread_scalars", (0.5, 0.75, 0.75))
+    object.__setattr__(cfg, "regime_of", lambda d: "R")
+    object.__setattr__(cfg, "vol_axis_of", lambda d: "T")
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (cfg, "injected"))
+    got, why = mod.resolved_study_config()
+    assert got is None
+    assert "ResolvedS0Methods" in why
+
+
+def test_matching_methods_cannot_smuggle_foreign_injectables(monkeypatch):
+    """M6.1.3 fix-round (blind-audit F3): even with every ruling landed
+    (simulated approved source), a cache-injected config whose METHODS
+    match cannot supply its own spread_scalars / regime / vol mappings —
+    the injectables must come from an approved locked source, which does
+    not exist yet (fail closed)."""
+    import dataclasses as _dc
+    mod = real_run_module()
+    approved = _dc.replace(_test_methods(), test_only=False)
+    monkeypatch.setattr(mod, "_resolved_methods", lambda: approved)
+    cfg = C.derive_study_config(approved, spread_scalars=(0.0, 0.0, 0.0),
+                                regime_of=lambda d: "R",
+                                vol_axis_of=lambda d: "T")
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (cfg, "injected"))
+    got, why = mod.resolved_study_config()
+    assert got is None
+    assert "injectable" in why
+
+
+def test_methods_with_raising_test_only_property_cannot_break_the_gate(
+        monkeypatch):
+    """M6.1.3 fix-round-2 (blind-audit N3): the type pin runs before ANY
+    read of cfg.methods — a foreign object whose test_only is a raising
+    property must be REFUSED with a reason, never allowed to raise out of
+    the validation gate."""
+    mod = real_run_module()
+
+    class _Bomb:
+        @property
+        def test_only(self):
+            raise RuntimeError("attacker code ran inside the gate")
+
+    cfg = object.__new__(C.StudyConfig)
+    object.__setattr__(cfg, "methods", _Bomb())
+    object.__setattr__(cfg, "spread_scalars", (0.5, 0.75, 0.75))
+    object.__setattr__(cfg, "regime_of", lambda d: "R")
+    object.__setattr__(cfg, "vol_axis_of", lambda d: "T")
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (cfg, "injected"))
+    got, why = mod.resolved_study_config()      # must NOT raise
+    assert got is None
+    assert "ResolvedS0Methods" in why
+
+
+def test_malformed_injectable_source_fails_closed(monkeypatch):
+    """M6.1.3 fix-round-2 (blind-audit N4c): a non-mapping injectable
+    source fails CLOSED with a reason — never a TypeError escaping the
+    gate (fail-open-by-exception)."""
+    import dataclasses as _dc
+    mod = real_run_module()
+    approved = _dc.replace(_test_methods(), test_only=False)
+    monkeypatch.setattr(mod, "_resolved_methods", lambda: approved)
+    monkeypatch.setattr(mod, "_approved_injectables", lambda: "nonsense")
+    cfg = C.derive_study_config(approved, spread_scalars=(0.5, 0.75, 0.75),
+                                regime_of=lambda d: "R",
+                                vol_axis_of=lambda d: "T")
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (cfg, "injected"))
+    got, why = mod.resolved_study_config()      # must NOT raise
+    assert got is None
+    assert "malformed" in why
+
+
+def test_injectable_binding_compares_callables_by_identity(monkeypatch):
+    """M6.1.3 fix-round-2 (blind-audit N4a/N4b pin): the derivation-
+    equality gate is satisfiable ONLY by a config derived from the SAME
+    callable objects the approved source hands out — equivalent-but-
+    distinct callables are refused (StudyConfig compares functions by
+    identity). Weakening this to semantic comparison would reopen F3, so
+    this test pins the fail-closed behaviour AND documents that a future
+    _approved_injectables must return stable callable objects."""
+    import dataclasses as _dc
+    mod = real_run_module()
+    approved = _dc.replace(_test_methods(), test_only=False)
+    monkeypatch.setattr(mod, "_resolved_methods", lambda: approved)
+    inj = {"spread_scalars": (0.5, 0.75, 0.75),
+           "regime_of": lambda d: "R", "vol_axis_of": lambda d: "T"}
+    monkeypatch.setattr(mod, "_approved_injectables", lambda: dict(inj))
+    lookalike = C.derive_study_config(
+        approved, spread_scalars=(0.5, 0.75, 0.75),
+        regime_of=lambda d: "R", vol_axis_of=lambda d: "T")
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (lookalike, "injected"))
+    got, why = mod.resolved_study_config()
+    assert got is None
+    assert "fresh derivation" in why
+    genuine = C.derive_study_config(approved, **inj)
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (genuine, "derived"))
+    got2, _ = mod.resolved_study_config()
+    assert got2 is genuine                      # gate is not dead code
+
+
+def test_admission_attribution_delimiter_names_are_refused():
+    """M6.1.3 fix-round-2 (blind-audit N1b): a candidate name embedding
+    the ': ' delimiter would make the prefix attribution non-injective —
+    another artifact's refusal reasons could be misattributed into the
+    sealed admission record — so such names are refused outright."""
+    mod = real_run_module()
+    with pytest.raises(ValueError, match="attribution delimiter"):
+        mod._partition_admission(
+            {"SM.json": {}, "SM.json: shadow": {}}, [])
+
+
+def test_admission_attribution_partitions_and_fails_closed_on_stray():
+    mod = real_run_module()
+    admitted, withheld = mod._partition_admission(
+        {"A.json": {"x": 1}, "B.json": {"y": 2}},
+        ["B.json: broken content"])
+    assert admitted == {"A.json": {"x": 1}}
+    assert withheld == {"B.json": ["B.json: broken content"]}
+    with pytest.raises(ValueError, match="not attributable"):
+        mod._partition_admission({"A.json": {}}, ["C.json: orphan problem"])
 
 
 def test_wrong_type_method_value_is_refused():
@@ -443,7 +639,12 @@ def test_injected_illegal_config_cannot_make_ready_true(monkeypatch):
         convergence_rule="X", max_doublings=0))
     monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (cfg, "injected"))
     got, why = mod.resolved_study_config()
-    assert got is None and "structurally invalid" in why
+    # M6.1.3: the fresh-source identity check fires FIRST (a corrupted
+    # injected config can never match the live method source) — strictly
+    # stronger than reaching the structural branch. The structural branch
+    # itself is pinned by test_structurally_invalid_methods_are_refused_
+    # everywhere via derive_study_config.
+    assert got is None and "fresh approved method source" in why
     ok, why2 = mod.RealChain().ready()
     assert ok is False
 
@@ -454,7 +655,8 @@ def test_injected_partial_config_cannot_make_ready_true(monkeypatch):
     object.__setattr__(cfg.methods, "bootstrap_method", None)
     monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (cfg, "injected"))
     got, why = mod.resolved_study_config()
-    assert got is None and "pending method rulings" in why
+    assert got is None and ("fresh approved method source" in why
+                            or "pending method rulings" in why)
     assert mod.RealChain().ready()[0] is False
 
 
@@ -530,12 +732,41 @@ def test_formal_seal_admission_is_on_the_wire(monkeypatch):
     the gate decides admission rather than a hardcoded exclusion."""
     from itsf.s0 import handoff as ho
     mod = real_run_module()
+    def _test_only_sealable_manifest():
+        # M6.1.3: admission RECOMPUTES sealability from content — the
+        # fixture must be the REAL full-schema manifest with its open
+        # markers overridden by explicit TEST_ONLY values (never a bare
+        # fake dict, which the new admission rightly refuses).
+        import copy
+        m = copy.deepcopy(_REAL_MANIFEST)
+        def _resolve(obj):
+            if isinstance(obj, dict):
+                return {k: _resolve(v) for k, v in obj.items()}
+            if isinstance(obj, str) and ("UNRESOLVED" in obj
+                                         or "PARTIAL" in obj):
+                return "TEST_ONLY"
+            return obj
+        m = _resolve(m)
+        m["formal_sealable"] = True
+        return m
+
+    _REAL_MANIFEST = ho.build_seed_manifest()
     monkeypatch.setattr(ho, "build_seed_manifest",
-                        lambda: {"schema_version": ho.SCHEMA_VERSION,
-                                 "formal_sealable": True,
-                                 "seeds": list(RESEARCH_BOOTSTRAP_SEEDS)})
+                        _test_only_sealable_manifest)
+    # M6.1.3 fix-round (blind-audit D44/F9): admission must be ONE call
+    # over the WHOLE candidate set — per-file calls make the cross-artifact
+    # checks (grid seeds vs seed manifest) unreachable in production.
+    calls: list[list[str]] = []
+    _real_admission = ho.formal_seal_admission
+
+    def _spy(artifacts):
+        calls.append(sorted(artifacts))
+        return _real_admission(artifacts)
+
+    monkeypatch.setattr(ho, "formal_seal_admission", _spy)
     files = mod.render_s0_report(_payload(), expected_governance=dict(_GOV))
     assert "SEED_MANIFEST.json" in files
     adm = json.loads(files["HANDOFF_ADMISSION.json"])
     assert adm["admitted"] == ["SEED_MANIFEST.json"]
     assert adm["withheld"] == {}
+    assert calls == [["SEED_MANIFEST.json"]]

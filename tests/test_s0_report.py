@@ -31,6 +31,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+import types
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -270,8 +271,22 @@ def _valid_payload() -> dict:
         for t in tkeys
     }
     e2_worst_days = {
-        t: {scn: copy.deepcopy(study["per_theta"][t]["executable"]["E2"][scn]
-                              ["worst_day_report"])
+        t: {scn: {
+                **copy.deepcopy(
+                    study["per_theta"][t]["executable"]["E2"][scn]
+                    ["worst_day_report"]),
+                # mission item 5 (P1/P5 GOVERNANCE): DR-M6-H (the P1/P5
+                # estimator ruling) is still OPEN — no current producer
+                # module resolves it. scripts/s0_real_run.py's real
+                # build_full_study_result already emits this field
+                # conditioned on `config.methods.worst_day_estimator`; this
+                # TEST_ONLY "resolved" is a FIXTURE-ONLY stand-in so the
+                # valid baseline payload can seal, never a claim that DR-M6-H
+                # is actually ruled. See test_worst_day_estimator_unresolved_
+                # is_flagged for the fail-closed refusal path this same
+                # fixture proves.
+                "estimator_status": "resolved",  # TEST_ONLY
+            }
            for scn in SCENARIOS}
         for t in tkeys
     }
@@ -486,24 +501,22 @@ def _mc_records_for_universe(universe: list[str]) -> dict[str, dict[str, list]]:
 
 
 def _real_render_result() -> dict:
-    """A FULL result dict shaped for scripts/s0_real_run.py::
-    render_s0_report: a 'study' marker key (render_s0_report only checks
-    its PRESENCE to select the real-payload code path), a 'records' key
-    (raw TradePathRecord instances, consumed by the renderer's own
-    record_to_formal_dict + JSONL serialization), and every FORMAL_SECTIONS
-    key from a fresh `_valid_payload()`. Mutating the SAME dotted path on
-    both this and a bare `_valid_payload()` lets a test prove refusal at the
-    validator level AND at the real-renderer level from one mutation
-    (mission item 9)."""
-    payload = _valid_payload()
-    universe = sorted({
-        d for tcell in payload["oracle_daily"].values()
-        for d in (*tcell["day_universe"]["tp_days"],
-                 *tcell["day_universe"]["fp_days"])})
-    result = dict(payload)
-    result["study"] = True
-    result["records"] = _mc_records_for_universe(universe)
-    return result
+    """M6.1.3 integration: the renderer now RECONCILES the formal payload
+    against the internal producer envelope, so this fixture must BE a real
+    producer result — formal sections deep-copied (per-test mutation
+    isolation), internal envelope shared read-only. A hand-built formal-
+    only dict can no longer seal (that is the point of the wiring)."""
+    import copy
+    from test_m6_chain import _payload
+    src = _payload()
+    shared = ("dataset", "study", "na_reason_counts",
+              "reported_total_na")            # read-only sharing
+    out = {k: (v if k in shared else copy.deepcopy(v))
+           for k, v in src.items() if k != "records"}
+    # records are mutable dataclass instances (no DataFrames): per-test
+    # deepcopy so a mutation test can never contaminate the shared cache.
+    out["records"] = copy.deepcopy(src["records"])
+    return out
 
 
 def _assert_real_renderer_refuses(result: dict) -> None:
@@ -1762,6 +1775,26 @@ def test_theoretical_oracle_series_block_ghost_date_is_flagged():
         f"series_block_ghost_date:theoretical_oracle|{T0}|pooled:1999-01-04")
 
 
+def test_theoretical_oracle_blanked_note_is_flagged():
+    """M6.1.3 fix-round (blind-audit A52): the ECONOMIC-UPPER-BOUND-ONLY
+    note is content — blanking it silently drops the frozen §7 caveat."""
+    def _mutate(d):
+        d["theoretical_oracle"][T0]["note"] = "   "
+    _assert_mutation_refused(
+        _mutate, f"theoretical_oracle_note_invalid:{T0}")
+
+
+def test_na_conservation_flag_contradicting_evidence_is_flagged():
+    """M6.1.3 fix-round (blind-audit A56): conservation_ok=True next to a
+    non-empty unregistered_reasons is a self-contradiction, never a pass."""
+    def _mutate(d):
+        nac = d["disclosures"]["na_conservation"]
+        nac["unregistered_reasons"] = ["F5_gap::mystery_reason"]
+    _assert_mutation_refused(
+        _mutate,
+        "disclosures_na_conservation_contradiction:unregistered_reasons")
+
+
 # ---------------------------------------------------------------------------
 # item 6 — EMPTY-STUDY FLOOR + SIZING NON-EMPTINESS.
 # ---------------------------------------------------------------------------
@@ -1913,3 +1946,643 @@ def test_bootstrap_ci_block_len_float_type_is_flagged():
         key = next(k for k in d["bootstrap_ci"] if k.endswith("block5"))
         d["bootstrap_ci"][key]["per_seed"]["7"]["block_len"] = 5.0
     _assert_mutation_refused(_mutate, "bootstrap_ci_block_len:")
+
+
+# ===========================================================================
+# M6.1.3-S1 mission item 1 — SCHEMA MATRIX: an UNKNOWN key inside any A1-A12
+# section (or a well-known nested cell) must be refused, with the allowance
+# ALWAYS a documented superset of the REAL producer shape (`_valid_payload`
+# already IS that real shape for every producer-derived section, so adding
+# one smuggled key on top of an otherwise-valid payload is a clean, isolated
+# mutation — the positive baseline is already proven clean by
+# `test_valid_payload_has_no_problems`).
+# ===========================================================================
+_GHOST_KEY = "__ghost_unknown_key__"
+
+
+def _add_ghost_key(path):
+    def _mutate(d):
+        _get_path(d, path)[_GHOST_KEY] = "smuggled"
+    return _mutate
+
+
+_UNKNOWN_KEY_FAMILIES = [
+    ("structural", ("structural",), "structural_unknown_key"),
+    ("na_table", ("structural", "na_table"), "na_table_unknown_key"),
+    ("label_anchor_row",
+     ("structural", "label_anchor_availability", "y_cont"),
+     "label_anchor_row_unknown_key"),
+    ("day_universe", ("oracle_daily", T0, "day_universe"),
+     "day_universe_unknown_key"),
+    ("oracle_daily_cell", ("oracle_daily", T0),
+     "oracle_daily_cell_unknown_key"),
+    ("oracle_daily_executable_cell",
+     ("oracle_daily", T0, "executable", "E1", "Base"),
+     "oracle_daily_executable_unknown_key"),
+    ("series_block",
+     ("oracle_daily", T0, "executable", "E1", "Base", "pooled"),
+     "series_block_unknown_key"),
+    ("oracle_daily_worst_day_report",
+     ("oracle_daily", T0, "executable", "E1", "Base", "worst_day_report"),
+     "oracle_daily_worst_day_report_unknown_key"),
+    ("theoretical_oracle_cell", ("theoretical_oracle", T0),
+     "theoretical_oracle_unknown_key"),
+    ("e2_worst_days_cell", ("e2_worst_days", T0, "Base"),
+     "e2_worst_days_unknown_key"),
+    ("sizing_outputs_cell", ("sizing_outputs", T0),
+     "sizing_outputs_cell_unknown_key"),
+    ("sizing_row", ("sizing_outputs", T0, "rows", "E1", "Base", 0),
+     "sizing_outputs_row_unknown_key"),
+    ("sizing_coverage", ("sizing_outputs", T0, "coverage", "E1", "Base"),
+     "sizing_outputs_coverage_unknown_key"),
+    ("sizing_coverage_budget_row",
+     ("sizing_outputs", T0, "coverage", "E1", "Base", "by_budget_usd", "50"),
+     "sizing_outputs_coverage_budget_unknown_key"),
+    ("frequency_cell", ("frequency", T0), "frequency_cell_unknown_key"),
+    ("frequency_pooled_leaf", ("frequency", T0, "pooled"),
+     "frequency_leaf_cell_unknown_key"),
+    ("frequency_by_era_leaf", ("frequency", T0, "by_era", ERA_PROXY),
+     "frequency_leaf_cell_unknown_key"),
+    ("stability_views_cell", ("stability_views", T0, "E1", "Base"),
+     "stability_views_cell_unknown_key"),
+    ("stability_views_cell_field",
+     ("stability_views", T0, "E1", "Base", "epochs", "2010-2013"),
+     "stability_views_cell_field_unknown_key"),
+    ("bootstrap_ci_cell", ("bootstrap_ci", f"{T0}|E1|Base|block5"),
+     "bootstrap_ci_cell_unknown_key"),
+    ("feasibility_grid_cell",
+     ("feasibility_grid", "cells", f"{T0}|E1|Base"),
+     "feasibility_grid_cell_unknown_key"),
+    ("era_axis", ("era_axis",), "era_axis_unknown_key"),
+    ("disclosures", ("disclosures",), "disclosures_unknown_key"),
+    ("na_conservation", ("disclosures", "na_conservation"),
+     "na_conservation_unknown_key"),
+    ("governance", ("governance",), "governance_unknown_key"),
+    ("mc_handoff_manifest", ("mc_handoff_manifest",),
+     "mc_handoff_manifest_unknown_key"),
+    ("mc_handoff_counts_cell",
+     ("mc_handoff_manifest", "counts", "E1", "Base"),
+     "mc_handoff_manifest_counts_cell_unknown_key"),
+]
+
+
+@pytest.mark.parametrize("name,path,code", _UNKNOWN_KEY_FAMILIES,
+                         ids=[n for n, _p, _c in _UNKNOWN_KEY_FAMILIES])
+def test_unknown_key_family_is_refused(name, path, code):
+    problems = _assert_mutation_refused(_add_ghost_key(path), f"{code}:")
+    assert any(_GHOST_KEY in p for p in problems), (name, problems)
+
+
+def test_top_level_unknown_section_is_flagged():
+    """`split_envelope` filters the real renderer's input down to
+    FORMAL_SECTIONS before it ever reaches `validate_formal_payload`, so an
+    extra TOP-LEVEL key can never survive to be exercised through the real-
+    renderer path — this is a validator-only proof, unlike every other
+    unknown-key family above."""
+    payload = _valid_payload()
+    payload["ghost_section"] = {"x": 1}
+    problems = _validate(payload)
+    assert any(p.startswith("unknown_top_level_section:") for p in problems)
+
+
+def test_bootstrap_ci_seed_entry_unknown_key_is_flagged():
+    def _mutate(d):
+        key = f"{T0}|E1|Base|block5"
+        d["bootstrap_ci"][key]["per_seed"]["7"][_GHOST_KEY] = 1
+    _assert_mutation_refused(_mutate, "bootstrap_ci_seed_entry_unknown_key:")
+
+
+def test_feasibility_grid_point_unknown_key_is_flagged():
+    def _mutate(d):
+        cell = d["feasibility_grid"]["cells"][f"{T0}|E1|Base"]
+        pk = _feasible_point_key(cell)
+        cell["grid"][pk][_GHOST_KEY] = 1
+    _assert_mutation_refused(_mutate, "feasibility_grid_point_unknown_key:")
+
+
+def test_feasibility_grid_seed_entry_unknown_key_is_flagged():
+    def _mutate(d):
+        cell = d["feasibility_grid"]["cells"][f"{T0}|E1|Base"]
+        pk = _feasible_point_key(cell)
+        cell["grid"][pk]["per_seed"]["7"][_GHOST_KEY] = 1
+    _assert_mutation_refused(
+        _mutate, "feasibility_grid_seed_entry_unknown_key:")
+
+
+# ===========================================================================
+# mission item 3 — RECOMPUTE-NOT-TRUST extensions.
+# ===========================================================================
+def test_feasibility_grid_point_n_tp_target_mismatch_is_flagged():
+    def _mutate(d):
+        cell = d["feasibility_grid"]["cells"][f"{T0}|E1|Base"]
+        pk = _feasible_point_key(cell)
+        cell["grid"][pk]["n_tp_target"] += 1
+    _assert_mutation_refused(
+        _mutate, f"feasibility_grid_point_n_tp_target_mismatch:{T0}|E1|Base:")
+
+
+def test_feasibility_grid_point_n_fp_target_mismatch_is_flagged():
+    def _mutate(d):
+        cell = d["feasibility_grid"]["cells"][f"{T0}|E1|Base"]
+        pk = _feasible_point_key(cell)
+        cell["grid"][pk]["n_fp_target"] += 1
+    _assert_mutation_refused(
+        _mutate, f"feasibility_grid_point_n_fp_target_mismatch:{T0}|E1|Base:")
+
+
+def test_feasibility_grid_point_f_expected_mismatch_is_flagged():
+    def _mutate(d):
+        cell = d["feasibility_grid"]["cells"][f"{T0}|E1|Base"]
+        pk = _feasible_point_key(cell)
+        cell["grid"][pk]["F_expected"] += 1000.0
+    _assert_mutation_refused(
+        _mutate, f"feasibility_grid_point_f_expected_mismatch:{T0}|E1|Base:")
+
+
+def test_feasibility_grid_point_target_precision_mismatch_is_flagged():
+    def _mutate(d):
+        cell = d["feasibility_grid"]["cells"][f"{T0}|E1|Base"]
+        pk = _feasible_point_key(cell)
+        cell["grid"][pk]["target_precision"] += 0.5
+    _assert_mutation_refused(
+        _mutate, f"feasibility_grid_point_target_mismatch:{T0}|E1|Base:")
+
+
+def test_feasibility_grid_seed_realized_precision_mismatch_is_flagged():
+    def _mutate(d):
+        cell = d["feasibility_grid"]["cells"][f"{T0}|E1|Base"]
+        pk = _feasible_point_key(cell)
+        cell["grid"][pk]["per_seed"]["7"]["realized_precision"] = 0.123456
+    _assert_mutation_refused(
+        _mutate,
+        f"feasibility_grid_seed_realized_precision_mismatch:{T0}|E1|Base:")
+
+
+def test_feasibility_grid_seed_realized_recall_mismatch_is_flagged():
+    def _mutate(d):
+        cell = d["feasibility_grid"]["cells"][f"{T0}|E1|Base"]
+        pk = _feasible_point_key(cell)
+        cell["grid"][pk]["per_seed"]["7"]["realized_recall"] = 0.123456
+    _assert_mutation_refused(
+        _mutate,
+        f"feasibility_grid_seed_realized_recall_mismatch:{T0}|E1|Base:")
+
+
+def test_feasibility_grid_seed_n_tp_actual_mismatch_is_flagged():
+    def _mutate(d):
+        cell = d["feasibility_grid"]["cells"][f"{T0}|E1|Base"]
+        pk = _feasible_point_key(cell)
+        cell["grid"][pk]["per_seed"]["7"]["n_tp_actual"] += 1
+    _assert_mutation_refused(
+        _mutate, f"feasibility_grid_seed_n_tp_actual_mismatch:{T0}|E1|Base:")
+
+
+def test_feasibility_grid_seed_f_expected_mismatch_is_flagged():
+    def _mutate(d):
+        cell = d["feasibility_grid"]["cells"][f"{T0}|E1|Base"]
+        pk = _feasible_point_key(cell)
+        cell["grid"][pk]["per_seed"]["7"]["F_expected"] += 1000.0
+    _assert_mutation_refused(
+        _mutate, f"feasibility_grid_seed_f_expected_mismatch:{T0}|E1|Base:")
+
+
+def test_feasibility_grid_infeasible_point_reason_missing_is_flagged():
+    """"infeasible schema exact with NO selections" (mission item 3): the
+    ONE extra key an infeasible point carries over the base 7 must itself
+    be present — flipping a feasible point to infeasible_by_sample=True
+    with per_seed cleared but no `infeasible_reason` is a disclosure gap,
+    not a passable shape (mirrors the existing "fabricated per_seed on an
+    infeasible point" test's technique, the opposite direction)."""
+    def _mutate(d):
+        cell = d["feasibility_grid"]["cells"][f"{T0}|E1|Base"]
+        pk = _feasible_point_key(cell)
+        point = cell["grid"][pk]
+        point["infeasible_by_sample"] = True
+        point["per_seed"] = {}
+    _assert_mutation_refused(
+        _mutate,
+        f"feasibility_grid_infeasible_point_reason_missing:{T0}|E1|Base:")
+
+
+def test_percentile_p1_gt_p5_in_series_block_is_flagged():
+    """mission item 5(c): P1 <= P5 is a numeric-ordering sanity invariant,
+    independent of the (unapproved) percentile ESTIMATOR itself."""
+    def _mutate(d):
+        pooled = d["oracle_daily"][T0]["executable"]["E1"]["Base"]["pooled"]
+        pooled["worst_day_pnl_percentiles"] = {"P1": 10.0, "P5": -5.0}
+    _assert_mutation_refused(
+        _mutate, f"percentile_p1_gt_p5:{T0}|E1|Base|pooled")
+
+
+def test_percentile_p1_gt_p5_in_e2_worst_days_is_flagged():
+    def _mutate(d):
+        d["e2_worst_days"][T0]["Base"]["pooled"] = {"P1": 10.0, "P5": -5.0}
+    _assert_mutation_refused(
+        _mutate, f"percentile_p1_gt_p5:e2_worst_days|{T0}|Base|pooled")
+
+
+def test_bootstrap_ci_mean_invalid_type_is_flagged():
+    def _mutate(d):
+        key = next(iter(d["bootstrap_ci"]))
+        d["bootstrap_ci"][key]["per_seed"]["7"]["mean"] = "not-a-number"
+    _assert_mutation_refused(_mutate, "bootstrap_ci_mean_invalid:")
+
+
+def test_bootstrap_ci_mean_cross_seed_mismatch_is_flagged():
+    """stats.py's "mean" is the SAMPLE mean of the underlying series,
+    computed ONCE and copied VERBATIM into every seed's dict — three seeds
+    resampling the SAME series can never disagree on it."""
+    def _mutate(d):
+        key = next(iter(d["bootstrap_ci"]))
+        d["bootstrap_ci"][key]["per_seed"]["13"]["mean"] = 999.0
+    _assert_mutation_refused(_mutate, "bootstrap_ci_mean_cross_seed_mismatch:")
+
+
+def test_bootstrap_ci_quoted_mismatch_is_flagged():
+    def _mutate(d):
+        key = next(iter(d["bootstrap_ci"]))
+        d["bootstrap_ci"][key]["quoted"] = {
+            "mean": 999.0, "ci_lo": 0.0, "ci_hi": 1.0,
+            "n_boot": report.FROZEN_N_BOOT, "block_len": 5}
+    _assert_mutation_refused(_mutate, "bootstrap_ci_quoted_mismatch:")
+
+
+# ===========================================================================
+# mission item 5 — P1/P5 GOVERNANCE: estimator_status must exist and read
+# EXACTLY "resolved" to seal; DR-M6-H pending -> the real producer's own
+# "unresolved_DR-M6-H" fail-closes here, never a silent pass.
+# ===========================================================================
+def test_worst_day_estimator_status_missing_is_flagged():
+    def _mutate(d):
+        del d["e2_worst_days"][T0]["Base"]["estimator_status"]
+    _assert_mutation_refused(
+        _mutate, f"e2_worst_days_estimator_status_missing:{T0}|Base")
+
+
+def test_worst_day_estimator_unresolved_is_flagged():
+    """The REAL producer's DEFAULT posture, not a hypothetical: scripts/
+    s0_real_run.py build_full_study_result emits exactly this string
+    ("unresolved_DR-M6-H") whenever `config.methods.worst_day_estimator`
+    is None — which it is by default (contracts.ResolvedS0Methods) until
+    Aaron rules DR-M6-H. Sealing must fail-closed on it."""
+    def _mutate(d):
+        d["e2_worst_days"][T0]["Base"]["estimator_status"] = \
+            "unresolved_DR-M6-H"
+    problems = _assert_mutation_refused(
+        _mutate, f"worst_day_estimator_unresolved:{T0}|Base:")
+    assert (f"worst_day_estimator_unresolved:{T0}|Base:"
+           "'unresolved_DR-M6-H'") in problems
+
+
+# ===========================================================================
+# mission item 6 — sealed_files self-exclusion: the ONLY allowed name is
+# the module-internal frozen constant ("S0_REPORT.json",).
+# ===========================================================================
+def test_self_excluded_disallowed_name_is_flagged():
+    files, payload = _sealed_fixture()
+    payload["mc_handoff_manifest"]["self_excluded"] = [
+        "S0_REPORT.json", "PLANTED.txt"]
+    files["PLANTED.txt"] = "{}"
+    problems = report.validate_sealed_files(files, payload)
+    assert any(p.startswith("sealed_files_self_excluded_not_allowed:")
+              and "PLANTED.txt" in p for p in problems)
+    # the disallowed name buys NO bypass: PLANTED.txt still needs its own
+    # sealed_files integrity entry, which it never got here.
+    assert any(p.startswith("sealed_files_manifest_incomplete:")
+              and "PLANTED.txt" in p for p in problems)
+
+
+def test_self_excluded_wrong_type_is_flagged():
+    files, payload = _sealed_fixture()
+    payload["mc_handoff_manifest"]["self_excluded"] = "S0_REPORT.json"
+    problems = report.validate_sealed_files(files, payload)
+    assert "sealed_files_self_excluded_type" in problems
+
+
+# ===========================================================================
+# mission item 2 — NEVER-CRASH: validate_formal_payload / validate_sealed_
+# files / reconcile_with_internal must degrade to a problem-string list on
+# ANY malformed JSON-like tree, at EVERY level (None/str/list/int where a
+# dict is expected) — never an AttributeError/KeyError/TypeError escaping.
+# ===========================================================================
+_MALFORMED_TREES = [
+    None,
+    "a bare string",
+    123,
+    12.5,
+    True,
+    [],
+    ["a", "list", "not", "a", "dict"],
+    {},
+    {"structural": None},
+    {"structural": "not a dict"},
+    {"structural": []},
+    {"structural": {"funnel_counts": None}},
+    {"structural": {"funnel_counts": "x"}},
+    {"structural": {"na_table": {"per_field": "x"}}},
+    {"oracle_daily": None},
+    {"oracle_daily": {"theta_0.5": None}},
+    {"oracle_daily": {"theta_0.5": "x"}},
+    {"oracle_daily": {"theta_0.5": {"day_universe": "x", "executable": []}}},
+    {"oracle_daily": {"theta_0.5": {"day_universe": {"tp_days": "x",
+                                                      "fp_days": None}}}},
+    {"stability_views": {"theta_0.5": {"E1": {"Base": {"epochs": "x"}}}}},
+    {"bootstrap_ci": {"k": None}},
+    {"bootstrap_ci": {"k": {"per_seed": "x"}}},
+    {"bootstrap_ci": {"k": {"per_seed": {"7": "x"}, "quoted_seed": 7}}},
+    {"feasibility_grid": {"cells": {"k": {"grid": "x"}}}},
+    {"feasibility_grid": {"cells": {"k": {"grid": {"q0.35_r0.20": "x"}}}}},
+    {"feasibility_grid": {"cells": {"k": {
+        "grid": {"q0.35_r0.20": {"per_seed": {"7": "x"}}}}}}},
+    {"mc_handoff_manifest": {"counts": "x"}},
+    {"mc_handoff_manifest": {"counts": {"E1": None}}},
+    {"mc_handoff_manifest": {"self_excluded": "S0_REPORT.json"}},
+    {"mc_handoff_manifest": {"sealed_files": "not a dict"}},
+    {"disclosures": {"na_conservation": "x"}},
+    {"governance": []},
+    {"era_axis": {"axes": "x"}},
+    {k: [1, 2, {"nested": {"deep": [None, "x", 1.0]}}]
+     for k in report.FORMAL_SECTIONS},
+]
+
+
+@pytest.mark.parametrize(
+    "tree", _MALFORMED_TREES,
+    ids=[f"tree_{i}" for i in range(len(_MALFORMED_TREES))])
+def test_validate_formal_payload_never_crashes(tree):
+    problems = report.validate_formal_payload(copy.deepcopy(tree))
+    assert isinstance(problems, list)
+    assert all(isinstance(p, str) for p in problems)
+
+
+@pytest.mark.parametrize(
+    "tree", _MALFORMED_TREES,
+    ids=[f"tree_{i}" for i in range(len(_MALFORMED_TREES))])
+def test_validate_sealed_files_never_crashes(tree):
+    problems = report.validate_sealed_files({"a.jsonl": "not json"},
+                                            copy.deepcopy(tree))
+    assert isinstance(problems, list)
+    assert all(isinstance(p, str) for p in problems)
+
+
+@pytest.mark.parametrize(
+    "tree", _MALFORMED_TREES,
+    ids=[f"tree_{i}" for i in range(len(_MALFORMED_TREES))])
+def test_reconcile_with_internal_never_crashes(tree):
+    problems = report.reconcile_with_internal(copy.deepcopy(tree),
+                                              copy.deepcopy(tree))
+    assert isinstance(problems, list)
+    assert all(isinstance(p, str) for p in problems)
+
+
+_RECONCILE_MALFORMED_TREES = [
+    {"study": "not a dict"},
+    {"study": {"per_theta": "not a dict"}},
+    {"study": {"per_theta": {"theta_0.5": None}}},
+    {"study": {"per_theta": {"theta_0.5": {"d_tp": "x"}}}},
+    {"study": {"per_theta": {"theta_0.5": {"d_tp": {"E1": "x"}}}}},
+    {"records": "not a dict"},
+    {"records": {"E1": None}},
+    {"records": {"E1": {"Base": "not a list"}}},
+    {"reported_total_na": "not a dict"},
+    {"reported_total_na": {"features.f1": "not an int"}},
+    {"dataset": object()},
+    {"dataset": "not an object"},
+]
+
+
+@pytest.mark.parametrize(
+    "tree", _RECONCILE_MALFORMED_TREES,
+    ids=[f"reconcile_tree_{i}" for i in range(len(_RECONCILE_MALFORMED_TREES))])
+def test_reconcile_with_internal_malformed_internal_never_crashes(tree):
+    problems = report.reconcile_with_internal(tree, _valid_payload())
+    assert isinstance(problems, list)
+    assert all(isinstance(p, str) for p in problems)
+
+
+# ===========================================================================
+# M6.1.3-S1 mission item 4 — reconcile_with_internal(internal, formal): the
+# NEW pure function that cross-checks the FORMAL payload against the raw
+# INTERNAL producer envelope (dataset/records/study — the dict scripts/
+# s0_real_run.py::build_full_study_result actually returns, never split_
+# envelope's own "internal" half, which drops "study").
+# ===========================================================================
+def _internal_envelope() -> dict:
+    """The RAW internal producer envelope reconcile_with_internal expects,
+    built from the SAME cached `_real_pieces()` ds/study that
+    `_valid_payload()`'s formal side is derived from — so a FRESH
+    (internal, formal) pair reconciles cleanly by construction (mission
+    item 7's "prove the unmutated positive passes first" discipline)."""
+    real = _real_pieces()
+    ds, study = real["ds"], real["study"]
+    reported_total_na = {
+        f"{table}.{field}": row["na"]
+        for table, fields in ds.na_table["per_field"].items()
+        for field, row in fields.items()}
+    return {"dataset": ds, "study": study, "records": study["records"],
+           "reported_total_na": reported_total_na}
+
+
+def test_reconcile_with_internal_valid_pair_has_no_problems():
+    internal = _internal_envelope()
+    formal = _valid_payload()
+    assert _validate(formal) == []          # positive-first (mission item 7)
+    assert report.reconcile_with_internal(internal, formal) == []
+
+
+def test_reconcile_with_internal_rejects_non_dict_internal():
+    assert report.reconcile_with_internal(["not", "a", "dict"], {}) == \
+        ["internal_not_dict"]
+
+
+def test_reconcile_with_internal_rejects_non_dict_formal():
+    assert report.reconcile_with_internal({}, ["not", "a", "dict"]) == \
+        ["formal_not_dict"]
+
+
+def test_reconcile_with_internal_formal_as_internal_cannot_vacuously_succeed():
+    """mission item 4: passing the FORMAL payload itself as `internal` must
+    NEVER vacuously succeed — "study"/"records"/"reported_total_na"/
+    "dataset" are never FORMAL_SECTIONS members, so all four are reported
+    missing immediately."""
+    formal = _valid_payload()
+    problems = report.reconcile_with_internal(formal, formal)
+    assert "reconcile_missing_internal_key:study" in problems
+    assert "reconcile_missing_internal_key:records" in problems
+    assert "reconcile_missing_internal_key:reported_total_na" in problems
+    assert "reconcile_missing_internal_key:dataset" in problems
+
+
+def test_reconcile_with_internal_missing_study_is_flagged():
+    internal = _internal_envelope()
+    del internal["study"]
+    problems = report.reconcile_with_internal(internal, _valid_payload())
+    assert "reconcile_missing_internal_key:study" in problems
+
+
+def test_reconcile_with_internal_missing_records_is_flagged():
+    internal = _internal_envelope()
+    del internal["records"]
+    problems = report.reconcile_with_internal(internal, _valid_payload())
+    assert "reconcile_missing_internal_key:records" in problems
+
+
+def test_reconcile_with_internal_missing_reported_total_na_is_flagged():
+    internal = _internal_envelope()
+    del internal["reported_total_na"]
+    problems = report.reconcile_with_internal(internal, _valid_payload())
+    assert "reconcile_missing_internal_key:reported_total_na" in problems
+
+
+def test_reconcile_with_internal_missing_dataset_is_flagged():
+    internal = _internal_envelope()
+    del internal["dataset"]
+    problems = report.reconcile_with_internal(internal, _valid_payload())
+    assert "reconcile_missing_internal_key:dataset" in problems
+
+
+def test_reconcile_dataset_records_malformed_is_flagged():
+    internal = _internal_envelope()
+    internal["dataset"] = types.SimpleNamespace(records=[object()])
+    problems = report.reconcile_with_internal(internal, _valid_payload())
+    assert "reconcile_dataset_records_malformed" in problems
+
+
+def test_reconcile_oracle_series_value_mismatch_is_flagged():
+    internal = _internal_envelope()
+    formal = _valid_payload()
+    series = formal["oracle_daily"][T0]["executable"]["E1"]["Base"]["pooled"][
+        "daily_pnl_usd"]
+    series[0] = [series[0][0], series[0][1] + 999.0]
+    problems = report.reconcile_with_internal(internal, formal)
+    assert any(p.startswith(
+        f"reconcile_oracle_series_value_mismatch:oracle_daily|{T0}|E1|Base")
+        for p in problems)
+
+
+def test_reconcile_oracle_series_date_set_mismatch_is_flagged():
+    internal = _internal_envelope()
+    formal = _valid_payload()
+    series = formal["oracle_daily"][T0]["executable"]["E1"]["Base"]["pooled"][
+        "daily_pnl_usd"]
+    series.pop()
+    problems = report.reconcile_with_internal(internal, formal)
+    assert any(p.startswith(
+        "reconcile_oracle_series_date_set_mismatch:"
+        f"oracle_daily|{T0}|E1|Base") for p in problems)
+
+
+def test_reconcile_stability_value_mismatch_is_flagged():
+    internal = _internal_envelope()
+    formal = _valid_payload()
+    epochs = formal["stability_views"][T0]["E1"]["Base"]["epochs"]
+    epoch_label = next(k for k in epochs if k != "conservation_ok")
+    epochs[epoch_label]["sum_usd"] = epochs[epoch_label]["sum_usd"] + 12345.0
+    problems = report.reconcile_with_internal(internal, formal)
+    assert any(p.startswith(
+        "reconcile_stability_value_mismatch:"
+        f"stability_views|{T0}|E1|Base|epochs|{epoch_label}.sum_usd")
+        for p in problems)
+
+
+def test_reconcile_stability_day_meta_missing_is_flagged():
+    internal = _internal_envelope()
+    victim_date = next(iter(
+        internal["study"]["per_theta"][T0]["d_tp"]["E1"]["Base"]))
+    ds = internal["dataset"]
+    internal["dataset"] = types.SimpleNamespace(
+        records=[r for r in ds.records if r.trade_date != victim_date])
+    formal = _valid_payload()
+    problems = report.reconcile_with_internal(internal, formal)
+    assert any(p.startswith("reconcile_stability_day_meta_missing:")
+              for p in problems)
+
+
+def test_reconcile_record_count_mismatch_is_flagged():
+    # NOTE: `_real_pieces()`/`_internal_envelope()`'s "records" is the
+    # SHARED, session-cached `study["records"]` object (`_valid_payload()`
+    # itself reads `len(study["records"][e][s])` to build mc_handoff_
+    # manifest.counts) — mutating it IN PLACE would corrupt every other
+    # test's baseline for the rest of the session. Build fresh per-engine/
+    # scenario LIST copies (never touching the cached list objects
+    # themselves) before appending the duplicate record, and capture
+    # `formal` BEFORE constructing the mutated copy so its counts reflect
+    # the untouched cache.
+    formal = _valid_payload()
+    internal = _internal_envelope()
+    internal["records"] = {
+        eng: {scn: list(recs) for scn, recs in by_scn.items()}
+        for eng, by_scn in internal["records"].items()}
+    internal["records"]["E1"]["Base"].append(
+        internal["records"]["E1"]["Base"][0])
+    problems = report.reconcile_with_internal(internal, formal)
+    assert any(p.startswith("reconcile_record_count_mismatch:E1|Base:")
+              for p in problems)
+
+
+def test_reconcile_na_conservation_mismatch_is_flagged():
+    internal = _internal_envelope()
+    formal = _valid_payload()
+    formal["disclosures"]["na_conservation"]["per_table_total_na"][
+        "features"] += 1
+    problems = report.reconcile_with_internal(internal, formal)
+    assert any(p.startswith("reconcile_na_conservation_mismatch:features:")
+              for p in problems)
+
+
+def test_reconcile_na_conservation_missing_when_block_absent_is_flagged():
+    internal = _internal_envelope()
+    formal = _valid_payload()
+    del formal["disclosures"]["na_conservation"]
+    problems = report.reconcile_with_internal(internal, formal)
+    assert "reconcile_na_conservation_missing" in problems
+
+
+# ---------------------------------------------------------------------------
+# mission item 7 — CROSS-FIELD synchronized tampering: a mutation that
+# keeps the FORMAL payload internally self-consistent (validate_formal_
+# payload sees no contradiction) by updating every dependent field
+# together, so ONLY a comparison against the INTERNAL source of truth
+# (reconcile_with_internal) can catch it. Proven positive-first (mission
+# item 7): the unmutated payload passes validate_formal_payload BEFORE and
+# AFTER the synchronized edit.
+# ---------------------------------------------------------------------------
+def test_reconcile_catches_cross_field_synchronized_value_tampering():
+    internal = _internal_envelope()
+    formal = _valid_payload()
+    assert _validate(formal) == []          # positive-first
+
+    delta = 4321.0
+    for eng in ENGINES:
+        for scn in SCENARIOS:
+            exec_cell = formal["oracle_daily"][T0]["executable"][eng][scn]
+            pooled = exec_cell["pooled"]
+            victim_date = pooled["daily_pnl_usd"][0][0]
+            for block in (pooled, *exec_cell["by_era"].values()):
+                # the victim date belongs to exactly ONE era bucket (plus
+                # pooled, which holds every date) — only touch sum_usd/
+                # mean_usd for a block that ACTUALLY carries the date, so
+                # an unrelated (possibly empty, n==0) era bucket is left
+                # untouched rather than divided by zero.
+                found = False
+                for pair in block["daily_pnl_usd"]:
+                    if pair[0] == victim_date:
+                        pair[1] = pair[1] + delta
+                        found = True
+                if found:
+                    block["sum_usd"] = block["sum_usd"] + delta
+                    block["mean_usd"] = block["sum_usd"] / block["n"]
+
+    # the FORMAL payload alone is still internally self-consistent (n/sum/
+    # mean recomputed together, the tampered value stays inside the
+    # payload's own claimed day population) — validate_formal_payload
+    # cannot see this by construction.
+    assert _validate(formal) == []
+
+    # ...but reconcile_with_internal compares the payload's claim against
+    # internal["study"]'s own d_tp series — the actual source of truth —
+    # and sees the discrepancy immediately.
+    problems = report.reconcile_with_internal(internal, formal)
+    assert any(p.startswith(
+        f"reconcile_oracle_series_value_mismatch:oracle_daily|{T0}|")
+        for p in problems)

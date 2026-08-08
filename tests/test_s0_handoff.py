@@ -858,16 +858,9 @@ def test_conservation_matching_seed_manifest_adds_no_problems():
 
 # ---------------------------------------------------------------------------
 # formal_seal_admission (M6.1.1 S2 item 3, Codex finding (c): a dead
-# `formal_sealable` flag with no consumer — this IS the consumer)
+# `formal_sealable` flag with no consumer — this IS the consumer; M6.1.3 S2:
+# admission must validate ARTIFACT CONTENT, never trust formal_sealable=True)
 # ---------------------------------------------------------------------------
-
-def test_formal_seal_admission_all_sealable_is_empty():
-    artifacts = {
-        "a": {"formal_sealable": True},
-        "b": {"formal_sealable": True, "nested": {"x": 1}},
-    }
-    assert handoff.formal_seal_admission(artifacts) == []
-
 
 def test_formal_seal_admission_missing_flag_entirely_is_a_problem():
     problems = handoff.formal_seal_admission({"no_flag": {"some_key": 1}})
@@ -904,23 +897,29 @@ def test_formal_seal_admission_todays_real_builders_all_refused():
     assert "k_policy" in grid_samples_problem
     assert "UNRESOLVED_DR-M6-E" in grid_samples_problem
     assert "crn_scope" in grid_samples_problem
+    # replay_status is ALSO always PARTIAL today (M6.1.1 S2 item 5) — the
+    # content-recomputed refusal names it too, not only the k_policy/
+    # crn_scope markers.
+    assert "replay_status" in grid_samples_problem
+    assert handoff.REPLAY_STATUS_PARTIAL_SINGLE_STRATUM in grid_samples_problem
     seed_manifest_problem = next(p for p in problems
                                  if p.startswith("seed_manifest"))
     assert "k_policy" in seed_manifest_problem
     assert "crn_scope" in seed_manifest_problem
 
 
-def test_formal_seal_admission_empty_day_strata_has_no_named_marker():
+def test_formal_seal_admission_empty_day_strata_is_refused():
     """An EMPTY day_strata (LOW-3: `bool(days) and ...`) is formal_sealable
-    =False with no UNRESOLVED marker anywhere inside it — the generic
-    refusal message must still fire (refusal never depends on being able to
-    explain itself)."""
+    =False; the content-recomputed refusal now names the CONCRETE reason
+    (days is empty) rather than falling back to a marker-less generic
+    message."""
     empty_day_strata = handoff.build_day_strata({}, thetas=[0.5])
     assert empty_day_strata["formal_sealable"] is False
     problems = handoff.formal_seal_admission({"day_strata": empty_day_strata})
     assert len(problems) == 1
     assert "day_strata" in problems[0]
     assert "not True" in problems[0]
+    assert "EMPTY" in problems[0]
 
 
 def test_formal_seal_admission_sorted_and_deterministic():
@@ -931,6 +930,392 @@ def test_formal_seal_admission_sorted_and_deterministic():
     problems = handoff.formal_seal_admission(artifacts)
     assert problems == sorted(problems)
     assert len(problems) == 2
+
+
+# ---------------------------------------------------------------------------
+# formal_seal_admission — TEST_ONLY positive (sealable) fixtures
+#
+# day_strata's event_stratum (DR-M6-F), grid_samples'/seed_manifest's
+# replay.k_policy / crn_scope (DR-M6-E / crn_scope) and grid_samples'
+# replay_status (multi-stratum replay) are ALL hardwired UNRESOLVED/PARTIAL
+# by their real builders, with NO supported parameter to resolve them (see
+# handoff.py's module docstring). Per the M6.1.3 S2 brief: build the REAL
+# artifact via the real builder (full schema fidelity, real per-cell seed
+# sets from the real gridmix/build_grid pipeline) and then override ONLY
+# those hardwired leaves to an explicit, clearly-named TEST_ONLY-resolved
+# value — never a minimal/fake shape. "First prove positives pass, then
+# mutate."
+# ---------------------------------------------------------------------------
+
+def _sealable_day_strata_artifact():
+    day_rows = {
+        "2019-06-03": _day_row(),
+        "2019-06-04": _day_row(event_flag_final="CPI"),
+    }
+    out = handoff.build_day_strata(day_rows, thetas=[0.5])
+    days = {d: dict(row) for d, row in out["days"].items()}
+    for row in days.values():
+        row["event_stratum"] = "TEST_ONLY_resolved_stratum"   # not UNRESOLVED*
+    return {**out, "days": days, "formal_sealable": True}
+
+
+def _sealable_grid_samples_artifact(theta=0.5, engine="E1", scenario="Base"):
+    d_tp, d_fp, strata = _fabricated_grid_populations()
+    grid_output = gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=0.4,
+                                     q_grid=[0.50], r_grid=[0.50])
+    samples = handoff.build_grid_samples(
+        grid_output,
+        run_meta=_run_meta(theta=theta, engine=engine, scenario=scenario))
+    replay = dict(samples["replay"])
+    replay["k_policy"] = "TEST_ONLY_resolved_k_policy"
+    replay["crn_scope"] = "TEST_ONLY_resolved_crn_scope"
+    return {**samples, "replay": replay,
+           "replay_status": handoff.REPLAY_STATUS_CLOSED,
+           "formal_sealable": True}
+
+
+def _sealable_seed_manifest_artifact():
+    manifest = dict(handoff.build_seed_manifest())
+    manifest["k_policy"] = "TEST_ONLY_resolved_k_policy"
+    manifest["crn_scope"] = "TEST_ONLY_resolved_crn_scope"
+    manifest["formal_sealable"] = True
+    return manifest
+
+
+def test_positive_sealable_day_strata_is_admitted():
+    artifact = _sealable_day_strata_artifact()
+    assert handoff.formal_seal_admission({"day_strata": artifact}) == []
+
+
+def test_positive_sealable_grid_samples_is_admitted():
+    artifact = _sealable_grid_samples_artifact()
+    # sanity: the real gridmix pipeline really did produce a full {7,13,31}
+    # per-cell seed set (never faked in this fixture)
+    cell = artifact["cells"]["q0.50_r0.50"]
+    assert set(cell["per_seed"]) == {7, 13, 31}
+    assert handoff.formal_seal_admission({"grid_samples": artifact}) == []
+
+
+def test_positive_sealable_seed_manifest_is_admitted():
+    artifact = _sealable_seed_manifest_artifact()
+    assert handoff.formal_seal_admission({"seed_manifest": artifact}) == []
+
+
+def test_positive_all_three_types_together_are_admitted():
+    """The three real handoff artifact types, all TEST_ONLY-resolved to
+    sealable, supplied in ONE call — proves the per-artifact-TYPE
+    recognition dispatches each to its own validator correctly rather than
+    accidentally cross-applying one type's rules to another."""
+    artifacts = {
+        "day_strata": _sealable_day_strata_artifact(),
+        "grid_samples": _sealable_grid_samples_artifact(),
+        "seed_manifest": _sealable_seed_manifest_artifact(),
+    }
+    assert handoff.formal_seal_admission(artifacts) == []
+
+
+def test_positive_grid_samples_cross_checked_against_matching_seed_manifest():
+    """Task 3: a feasible cell's seed set is cross-checked PER CELL against
+    a supplied SEED_MANIFEST artifact when both are supplied — agreement is
+    silent (no problem)."""
+    artifacts = {
+        "grid_samples": _sealable_grid_samples_artifact(),
+        "seed_manifest": _sealable_seed_manifest_artifact(),
+    }
+    assert handoff.formal_seal_admission(artifacts) == []
+
+
+# ---------------------------------------------------------------------------
+# formal_seal_admission — mutation battery (every refusal the M6.1.3 S2
+# brief names explicitly, each proven REFUSED even though formal_sealable
+# is (mutated to) True — CONTRADICTION path)
+# ---------------------------------------------------------------------------
+
+def test_bare_shell_with_true_flag_is_a_contradiction():
+    """A bare `{"formal_sealable": True}` shell (and one with an arbitrary
+    extra "nested" key) matches NONE of the three real artifact schemas —
+    refused as a CONTRADICTION, never trusted just because the flag says
+    True."""
+    artifacts = {
+        "a": {"formal_sealable": True},
+        "b": {"formal_sealable": True, "nested": {"x": 1}},
+    }
+    problems = handoff.formal_seal_admission(artifacts)
+    assert len(problems) == 2
+    for p in problems:
+        assert "CONTRADICTION" in p
+        assert "does not match any recognized artifact schema" in p
+
+
+def test_unresolved_marker_with_true_flag_is_a_contradiction():
+    """A sealable-shaped day_strata mutated to re-introduce ONE real
+    UNRESOLVED marker (even with formal_sealable forced True) is refused —
+    "any UNRESOLVED marker anywhere" is checked regardless of the flag."""
+    artifact = _sealable_day_strata_artifact()
+    days = dict(artifact["days"])
+    one_date = next(iter(days))
+    mutated_row = dict(days[one_date])
+    mutated_row["event_stratum"] = handoff._unresolved("DR-M6-F")
+    days[one_date] = mutated_row
+    artifact = {**artifact, "days": days}
+    problems = handoff.formal_seal_admission({"day_strata": artifact})
+    assert len(problems) == 1
+    assert "CONTRADICTION" in problems[0]
+    assert "event_stratum" in problems[0]
+    assert "UNRESOLVED_DR-M6-F" in problems[0]
+
+
+def test_replay_status_partial_with_true_flag_is_refused():
+    """replay_status PARTIAL is refused even with formal_sealable forced
+    True (M6.1.1 S2 item 5 discipline extended into the admission gate)."""
+    artifact = dict(_sealable_grid_samples_artifact())
+    artifact["replay_status"] = handoff.REPLAY_STATUS_PARTIAL_SINGLE_STRATUM
+    problems = handoff.formal_seal_admission({"grid_samples": artifact})
+    assert len(problems) == 1
+    assert "CONTRADICTION" in problems[0]
+    assert "replay_status" in problems[0]
+    assert handoff.REPLAY_STATUS_PARTIAL_SINGLE_STRATUM in problems[0]
+
+
+def test_missing_and_extra_top_level_fields_are_both_refused():
+    missing = dict(_sealable_day_strata_artifact())
+    del missing["ordering"]
+    problems = handoff.formal_seal_admission({"day_strata": missing})
+    assert len(problems) == 1
+    assert "missing field" in problems[0]
+    assert "ordering" in problems[0]
+
+    extra = dict(_sealable_day_strata_artifact())
+    extra["bogus_extra_field"] = 1
+    problems = handoff.formal_seal_admission({"day_strata": extra})
+    assert len(problems) == 1
+    assert "extra field" in problems[0]
+    assert "bogus_extra_field" in problems[0]
+
+
+def test_missing_theta_engine_scenario_individually_refused():
+    for key in ("theta", "engine", "scenario"):
+        artifact = dict(_sealable_grid_samples_artifact())
+        run_meta = dict(artifact["run_meta"])
+        del run_meta[key]
+        artifact["run_meta"] = run_meta
+        problems = handoff.formal_seal_admission({"grid_samples": artifact})
+        assert len(problems) == 1, key
+        assert "run_meta" in problems[0] and "missing field" in problems[0]
+        assert key in problems[0]
+
+
+def test_wrong_seeds_missing_one_seed_in_a_cell_refused():
+    artifact = dict(_sealable_grid_samples_artifact())
+    cells = dict(artifact["cells"])
+    cell = dict(cells["q0.50_r0.50"])
+    per_seed = dict(cell["per_seed"])
+    del per_seed[31]
+    cell["per_seed"] = per_seed
+    cells["q0.50_r0.50"] = cell
+    artifact["cells"] = cells
+    problems = handoff.formal_seal_admission({"grid_samples": artifact})
+    assert len(problems) == 1
+    assert "CONTRADICTION" in problems[0]
+    assert "seed set is incomplete" in problems[0]
+
+
+def test_per_cell_seed_sets_incomplete_even_though_union_is_complete():
+    """Two feasible cells whose UNION of per-seed keys is exactly
+    {7, 13, 31}, but each cell INDIVIDUALLY is missing one — refused,
+    because the check is per cell, never the union."""
+    artifact = dict(_sealable_grid_samples_artifact())
+    cells = dict(artifact["cells"])
+    base_cell = cells["q0.50_r0.50"]
+    cell_a = dict(base_cell)
+    per_seed_a = {s: v for s, v in base_cell["per_seed"].items() if s != 31}
+    cell_a["per_seed"] = per_seed_a
+    cell_b = dict(base_cell)
+    per_seed_b = {s: v for s, v in base_cell["per_seed"].items() if s != 7}
+    cell_b["per_seed"] = per_seed_b
+    artifact["cells"] = {"q0.50_r0.50": cell_a, "q0.35_r0.20": cell_b}
+    problems = handoff.formal_seal_admission({"grid_samples": artifact})
+    assert len(problems) == 1
+    assert problems[0].count("seed set is incomplete") == 2
+
+
+def test_seed_keys_wrong_type_never_coerced():
+    """bool / float / numeric-string seed keys are refused outright — never
+    silently coerced through int() into the seed they merely resemble."""
+    for bad_seed_31 in (31.0, "31", True):
+        artifact = dict(_sealable_grid_samples_artifact())
+        cells = dict(artifact["cells"])
+        cell = dict(cells["q0.50_r0.50"])
+        per_seed = {s: v for s, v in cell["per_seed"].items() if s != 31}
+        per_seed[bad_seed_31] = cell["per_seed"][31]
+        cell["per_seed"] = per_seed
+        cells["q0.50_r0.50"] = cell
+        artifact["cells"] = cells
+        problems = handoff.formal_seal_admission({"grid_samples": artifact})
+        assert len(problems) == 1, bad_seed_31
+        assert "non-strict-int" in problems[0], bad_seed_31
+
+
+def test_seed_manifest_seed_wrong_type_never_coerced():
+    for bad_seeds in ([7, 13, 31.0], [7, 13, "31"], [7, 13, True]):
+        artifact = dict(_sealable_seed_manifest_artifact())
+        artifact["research_bootstrap_seeds"] = bad_seeds
+        problems = handoff.formal_seal_admission({"seed_manifest": artifact})
+        assert len(problems) == 1, bad_seeds
+        assert "non-strict-int" in problems[0], bad_seeds
+
+
+def test_approximate_theta_refused_exact_equality_no_tolerance():
+    artifact = dict(_sealable_grid_samples_artifact())
+    run_meta = dict(artifact["run_meta"])
+    run_meta["theta"] = 0.5000001
+    artifact["run_meta"] = run_meta
+    problems = handoff.formal_seal_admission({"grid_samples": artifact})
+    assert len(problems) == 1
+    assert "CONTRADICTION" in problems[0]
+    assert "not EXACTLY one of study.FROZEN_THETAS" in problems[0]
+    # the exact frozen value is still fine (control)
+    artifact2 = dict(_sealable_grid_samples_artifact())
+    assert artifact2["run_meta"]["theta"] == 0.5
+    assert handoff.formal_seal_admission({"grid_samples": artifact2}) == []
+
+
+def test_unknown_scenario_refused():
+    artifact = dict(_sealable_grid_samples_artifact())
+    run_meta = dict(artifact["run_meta"])
+    run_meta["scenario"] = "Extreme"
+    artifact["run_meta"] = run_meta
+    problems = handoff.formal_seal_admission({"grid_samples": artifact})
+    assert len(problems) == 1
+    assert "unknown scenario" in problems[0]
+    assert "Extreme" in problems[0]
+
+
+def test_renamed_engine_refused():
+    artifact = dict(_sealable_grid_samples_artifact())
+    run_meta = dict(artifact["run_meta"])
+    run_meta["engine"] = "E9"
+    artifact["run_meta"] = run_meta
+    problems = handoff.formal_seal_admission({"grid_samples": artifact})
+    assert len(problems) == 1
+    assert "unknown or renamed engine" in problems[0]
+    assert "E9" in problems[0]
+
+
+def test_extra_empty_engine_and_empty_grid_both_named():
+    """A grid_samples claiming the already-deleted third engine ("E3" —
+    study.py: "ENGINES = (E1, E2)  # frozen: S0 SS7 (E3 deleted)") with no
+    cells at all: both the unknown-engine axis violation AND the empty-grid
+    violation are named in the same refusal."""
+    artifact = dict(_sealable_grid_samples_artifact())
+    run_meta = dict(artifact["run_meta"])
+    run_meta["engine"] = "E3"
+    artifact["run_meta"] = run_meta
+    artifact["cells"] = {}
+    problems = handoff.formal_seal_admission({"grid_samples": artifact})
+    assert len(problems) == 1
+    assert "CONTRADICTION" in problems[0]
+    assert "E3" in problems[0] and "unknown or renamed engine" in problems[0]
+    assert "cells is EMPTY" in problems[0]
+
+
+def test_empty_grid_refused():
+    artifact = dict(_sealable_grid_samples_artifact())
+    artifact["cells"] = {}
+    problems = handoff.formal_seal_admission({"grid_samples": artifact})
+    assert len(problems) == 1
+    assert "cells is EMPTY" in problems[0]
+
+
+def test_wrong_seeds_in_seed_manifest_refused():
+    artifact = dict(_sealable_seed_manifest_artifact())
+    artifact["research_bootstrap_seeds"] = [7, 13, 99]
+    problems = handoff.formal_seal_admission({"seed_manifest": artifact})
+    assert len(problems) == 1
+    assert "CONTRADICTION" in problems[0]
+    assert "research_bootstrap_seeds" in problems[0]
+
+
+def test_reordered_seeds_in_seed_manifest_refused():
+    """Order is part of REBUILDABLE content too: the manifest's seeds must
+    equal contracts.RESEARCH_BOOTSTRAP_SEEDS as an ordered list, not merely
+    as a set (the FIRST seed is the quoted-interval convention)."""
+    artifact = dict(_sealable_seed_manifest_artifact())
+    artifact["research_bootstrap_seeds"] = [13, 7, 31]
+    problems = handoff.formal_seal_admission({"seed_manifest": artifact})
+    assert len(problems) == 1
+    assert "research_bootstrap_seeds" in problems[0]
+
+
+def test_wrong_stream_tag_in_seed_manifest_refused():
+    artifact = dict(_sealable_seed_manifest_artifact())
+    artifact["stream_tags"] = {**artifact["stream_tags"],
+                               "grid_stream_tag": 1234}
+    problems = handoff.formal_seal_admission({"seed_manifest": artifact})
+    assert len(problems) == 1
+    assert "stream_tags" in problems[0] and "1234" in problems[0]
+
+
+def test_seed_manifest_missing_and_extra_fields_refused():
+    missing = dict(_sealable_seed_manifest_artifact())
+    del missing["quoted_seed_convention"]
+    problems = handoff.formal_seal_admission({"seed_manifest": missing})
+    assert len(problems) == 1
+    assert "missing field" in problems[0]
+    assert "quoted_seed_convention" in problems[0]
+
+    extra = dict(_sealable_seed_manifest_artifact())
+    extra["bogus"] = 1
+    problems = handoff.formal_seal_admission({"seed_manifest": extra})
+    assert len(problems) == 1
+    assert "extra field" in problems[0]
+    assert "bogus" in problems[0]
+
+
+def test_grid_samples_cross_checked_against_disagreeing_seed_manifest():
+    """Task 3: even a grid_samples whose OWN per-cell seeds are exactly
+    {7, 13, 31} is refused when a SUPPLIED seed_manifest disagrees — the
+    cross-check is against the manifest actually supplied in this call, not
+    only against the frozen constant."""
+    grid_samples = _sealable_grid_samples_artifact()
+    rogue_manifest = dict(_sealable_seed_manifest_artifact())
+    rogue_manifest["research_bootstrap_seeds"] = [7, 13, 99]
+    problems = handoff.formal_seal_admission({
+        "grid_samples": grid_samples, "seed_manifest": rogue_manifest})
+    assert len(problems) == 2
+    grid_problem = next(p for p in problems if p.startswith("grid_samples"))
+    assert "cross-check against the seed manifest failed" in grid_problem
+    manifest_problem = next(p for p in problems if p.startswith("seed_manifest"))
+    assert "research_bootstrap_seeds" in manifest_problem
+
+
+def test_renamed_cell_flagged_within_a_full_engine_scenario_battery():
+    """A full E1/E2 x {Base,Conservative,Stress,Severe} battery of sealable
+    grid_samples artifacts (8 cells, mirroring the frozen matrix
+    verify_handoff_conservation enforces on the record side) all admit
+    cleanly; renaming ONE artifact's engine to an unrecognised value is
+    caught on exactly that one artifact, independent of the rest of the
+    battery."""
+    battery = {
+        f"grid_samples_{engine}_{scenario}":
+            _sealable_grid_samples_artifact(engine=engine, scenario=scenario)
+        for engine in handoff.ENGINES for scenario in handoff.SCENARIOS
+    }
+    assert len(battery) == 8
+    assert handoff.formal_seal_admission(battery) == []
+
+    renamed_key = "grid_samples_E1_Base"
+    mutated = dict(battery)
+    artifact = dict(mutated[renamed_key])
+    run_meta = dict(artifact["run_meta"])
+    run_meta["engine"] = "E9"
+    artifact["run_meta"] = run_meta
+    mutated[renamed_key] = artifact
+
+    problems = handoff.formal_seal_admission(mutated)
+    assert len(problems) == 1
+    assert problems[0].startswith(renamed_key)
+    assert "E9" in problems[0]
 
 
 # ---------------------------------------------------------------------------
