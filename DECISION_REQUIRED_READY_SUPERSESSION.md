@@ -184,6 +184,33 @@ M6.1.7 未新铸任何研究 DR 编号、未追加任何 registry 事件、未�
 | `EXPOSURE_LEDGER.md` sha256 | `394813431d879555b7504d2501c40123368d67a517359e056692eb6b0f6bc9e6`（未改动） |
 | `runs/` | 不存在；S0-T001 未消耗 |
 
+### 5.3 M6.1.8 事实更正（2026-08-09，`FABLE_MEASURED`）
+
+上表的「当前 HEAD＝`185e47f7`」「commit 距离＝8」「M6.1.7 自身无 commit」
+**三项均已过期**（原表保留不删）。重测：
+
+| 事实 | 现值 |
+|---|---|
+| 上一候选 commit | **`bdc060cefa0eac4351c9c7bc82784e2527391943`**（M6.1.7 入库） |
+| `git rev-list --count 6cb7eb71..HEAD` | **9** |
+| 其中带码候选里程碑 | **7**（＋M6.1.7） |
+| registry / exposure / `runs/` | **完全不变**：`de63b3d6…b440`、`394813431d8…bc9e6`、`runs/` 不存在，13 条事件，0 条存活授权 |
+
+**队列长度仍恰为两组，M6.1.8 亦不新增方法裁决。** 但 §5.2.1 已记录的两个
+**真实运行前**事项在本轮有状态变化，二者**都不是方法裁决、都不阻断
+Strategy Council**：
+
+- **H-1**（守卫日志自锁）——M6.1.7 时列为 OPEN，**M6.1.8 已修复**（工程一致性
+  修复，无需 Aaron 方法裁决；详见 `CODEX_REVIEW_PACKET_M6_1_8.md`）。
+- **L-5**（`runs/` 位于同步中的 OneDrive 树）——**维持 OPEN**，本轮
+  **不实施任何缓解**：不加白名单、不忽略未知条目、不弱化 exact-set 磁盘证明、
+  不擅自改输出根。状态为
+  `L5_STATUS=OPERATIONS_REQUIRED_BEFORE_REAL_S0`，
+  `BLOCKS_STRATEGY_COUNCIL=NO`，`BLOCKS_REAL_RUN=YES`。
+  建议 `RECOMMENDATION=DEDICATED_LOCAL_NON_SYNCED_RUN_ROOT`——
+  **输出根变更须经 Aaron 明确批准后另轮实施**，本轮仅记录。
+  它是否构成第三个队列组，仍**未裁决**（与 D-4 同样悬置）。
+
 **§2「问题」与 §3 三个选项、§4「未裁期间维持现状」——本轮一字未动，
 继续原封成立。** 新 HEAD 的出现（行 11 之后已 8 个 commit）只是**加强**
 了 §2 所述的可读性风险，不改变其性质，也不构成对 Option A/B/C 的任何倾向。

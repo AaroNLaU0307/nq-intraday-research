@@ -30,6 +30,7 @@ from itsf.s0.runner import (
     RunnerDeps,
     S0Runner,
     append_registry_event_line,
+    artifact_log_id,
     classify_exception,
 )
 
@@ -891,7 +892,7 @@ def test_pytest_gate_floor_is_the_audit_baseline():
     """SA-10 N3: the floor tracks the CURRENT suite, closing the
     silent-collection-drop headroom."""
     mod = real_run_module()
-    assert mod.MIN_COLLECTED_TESTS == 2205
+    assert mod.MIN_COLLECTED_TESTS == 2220
 
 
 # ===========================================================================
@@ -1996,8 +1997,13 @@ def test_hash_chain_records_the_digest_of_those_exact_bytes(tmp_path):
 
 
 def test_stage_e_logs_the_same_digest_it_chained(tmp_path):
-    """The guarded `file=<name> sha256=<64hex>` log line is the third place
-    a digest is published; it must agree with the other two."""
+    """The guarded `file=<id> sha256=<64hex>` log line is the third place a
+    digest is published; it must agree with the other two.
+
+    M6.1.8 S1 (H-1): the IDENTIFIER in that line is now the artifact's
+    opaque ordinal in the write order, not its name. The DIGEST — which is
+    what this test is about — is unchanged and is still the same number the
+    chain recorded."""
     sink: list[str] = []
     deps, _, _ = make_deps(tmp_path, gates=[ok_gate()],
                            renderer=lambda result, prepared: {
@@ -2007,7 +2013,13 @@ def test_stage_e_logs_the_same_digest_it_chained(tmp_path):
     assert out.ok is True
     digest = runinfra.hashlib.sha256(
         MULTILINE_ARTIFACT.encode("utf-8")).hexdigest()
-    assert f"file=S0_REPORT.md sha256={digest}" in sink
+    assert f"file={artifact_log_id(1)} sha256={digest}" in sink
+    # and the manifest still carries the REAL name against that digest
+    records = [json.loads(ln) for ln in
+               (out.runs_dir / "manifest.jsonl").read_text("utf-8").splitlines()
+               if ln.strip()]
+    assert [(r["relative_path"], r["file_sha256"]) for r in records
+            if r["record_type"] == "file"] == [("S0_REPORT.md", digest)]
 
 
 # =========================================================================
@@ -2293,3 +2305,391 @@ def test_runner_source_wires_the_two_argument_render_call():
     for shim in ("import inspect", "inspect.signature", "getfullargspec",
                  "co_argcount", "except TypeError"):
         assert shim not in module_source, shim
+
+
+# =========================================================================
+# M6.1.8 S1 — defect H-1: the Stage-E artifact log line burned real runs
+#
+# THE DEFECT. Eight of the ten official sealed artifact names are
+# `MC_HANDOFF_<engine>_<scenario>.jsonl` over the frozen engine axis
+# `("E1", "E2")`, and `runinfra._FORBIDDEN_VOCAB_RE` matches `e1`/`e2`
+# case-insensitively. The Stage-E log line used to interpolate the real
+# name, so the production guarded logger refused eight lines per run;
+# `_safe_log` banked each refusal in `_log_errors`, whose next inspection
+# was at Stage F. A run therefore sealed every artifact correctly,
+# completed Stage E, and was then killed at Stage F with gate='log_guard',
+# exposure already consumed. It fires on any run that reaches Stage-E
+# artifact recording without having failed earlier for another reason.
+#
+# THE FRAMING. The guard rejection is a FALSE POSITIVE. These names are
+# run-invariant structural constants fixed by the frozen contract's
+# engine x scenario matrix, identical in every run and carrying zero
+# data-derived information; the guard (SA-6 F-04) exists to stop
+# Stage-C-derived VALUES from reaching logs. The fix is a WORKAROUND that
+# respects a guard vocabulary this lane is not authorized to edit — not
+# the correction of a real leak, and nothing here implies the names were
+# ever dangerous. The opaque ordinal is informationally EQUIVALENT to the
+# name it replaces (the write order is fixed and documented), which is
+# fine precisely because the names carry no information — it must not be
+# described as hiding anything.
+#
+# The existing suite missed all of this because every renderer fixture in
+# it emitted guard-safe names such as "S0_REPORT.md" / "a.txt".
+# =========================================================================
+
+# The frozen engine x scenario matrix, spelled out here rather than imported
+# so this pin is INDEPENDENT of the constants the production renderer uses.
+# Cross-checked against itsf.s0.study.ENGINES / itsf.s0.handoff.SCENARIOS by
+# `test_h1_official_artifact_name_fixture_matches_the_frozen_axes`.
+_H1_ENGINES = ("E1", "E2")
+_H1_SCENARIOS = ("Base", "Conservative", "Stress", "Severe")
+
+# The ten official sealed artifact names, in the production write order
+# (scripts/s0_real_run.py: the engine x scenario handoff files, then
+# HANDOFF_ADMISSION.json, then S0_REPORT.md).
+OFFICIAL_SEALED_ARTIFACTS: tuple[str, ...] = tuple(
+    f"MC_HANDOFF_{eng}_{scn}.jsonl"
+    for eng in _H1_ENGINES for scn in _H1_SCENARIOS
+) + ("HANDOFF_ADMISSION.json", "S0_REPORT.md")
+
+# Synthetic bodies: multi-line, distinct per artifact, zero research content.
+_H1_BODIES: dict[str, str] = {
+    name: f"synthetic body for slot {i}\nline two\n"
+    for i, name in enumerate(OFFICIAL_SEALED_ARTIFACTS)
+}
+
+
+def _h1_renderer(result, prepared):
+    """Stage-E renderer emitting the OFFICIAL names, in the official order."""
+    return dict(_H1_BODIES)
+
+
+def _h1_digest(name: str) -> str:
+    return runinfra.hashlib.sha256(
+        _H1_BODIES[name].encode("utf-8")).hexdigest()
+
+
+def _h1_manifest_file_records(runs_dir: Path):
+    records = [json.loads(ln) for ln in
+               (runs_dir / "manifest.jsonl").read_text("utf-8").splitlines()
+               if ln.strip()]
+    return [r for r in records if r["record_type"] == "file"]
+
+
+def test_h1_official_artifact_name_fixture_matches_the_frozen_axes():
+    """The fixture above is only evidence if it is the REAL matrix."""
+    from itsf.s0 import handoff as _handoff
+    from itsf.s0 import study as _study
+    assert tuple(_study.ENGINES) == _H1_ENGINES
+    assert tuple(_handoff.SCENARIOS) == _H1_SCENARIOS
+    assert len(OFFICIAL_SEALED_ARTIFACTS) == 10
+    assert len(set(OFFICIAL_SEALED_ARTIFACTS)) == 10
+    # and the production renderer builds the handoff names this exact way
+    script = (REPO / "scripts" / "s0_real_run.py").read_text("utf-8")
+    assert 'name = f"MC_HANDOFF_{eng}_{scn}.jsonl"' in script
+
+
+def test_h1_preimage_real_names_are_refused_by_the_production_guard():
+    """The defect's preimage, re-measured here rather than asserted: in the
+    OLD log form, 8 of the 10 official names are refused by
+    `runinfra.validate_log_event` and 2 pass. This is what made a fully
+    sealed run die at Stage F. It also pins that the fix did NOT relax the
+    guard: if this test ever passes 10/10, someone edited
+    `_FORBIDDEN_VOCAB`, which M6.1.8 S1 forbids."""
+    refused, passed = [], []
+    for name in OFFICIAL_SEALED_ARTIFACTS:
+        message = f"file={name} sha256={_h1_digest(name)}"
+        try:
+            runinfra.validate_log_event(message)
+            passed.append(name)
+        except runinfra.LogLeakError:
+            refused.append(name)
+    assert refused == [f"MC_HANDOFF_{eng}_{scn}.jsonl"
+                       for eng in _H1_ENGINES for scn in _H1_SCENARIOS]
+    assert passed == ["HANDOFF_ADMISSION.json", "S0_REPORT.md"]
+    # the guard vocabulary itself is untouched by this milestone
+    assert "e1" in runinfra._FORBIDDEN_VOCAB
+    assert "e2" in runinfra._FORBIDDEN_VOCAB
+
+
+def test_h1_every_official_artifact_passes_the_guard_in_its_new_log_form():
+    """Requirement 1: all ten official names, in the form the runner now
+    emits, pass the PRODUCTION guard `runinfra.validate_log_event`."""
+    for position, name in enumerate(OFFICIAL_SEALED_ARTIFACTS, start=1):
+        message = f"file={artifact_log_id(position)} sha256={_h1_digest(name)}"
+        runinfra.validate_log_event(message)         # raises on refusal
+        # explicitly against the file-hash schema, not merely "some schema"
+        runinfra.validate_log_event(message, schema="file_hash")
+
+
+def test_h1_opaque_id_is_zero_padded_and_order_derived_only():
+    """The id encodes the WRITE ORDER and nothing else — no engine, no
+    scenario, no theta, no cost, no result."""
+    assert artifact_log_id(1) == "artifact_0001"
+    assert artifact_log_id(10) == "artifact_0010"
+    assert artifact_log_id(9999) == "artifact_9999"
+    # pure function of the ordinal: same input, same output, no run state
+    assert artifact_log_id(3) == artifact_log_id(3)
+    source = inspect.getsource(sys.modules[S0Runner.__module__])
+    for banned in ("engine", "scenario", "theta"):
+        assert f"artifact_log_id({banned}" not in source
+
+
+@pytest.mark.parametrize("wiring", ["bare_validator", "sinking_wrapper"])
+def test_h1_full_run_with_official_artifact_names_completes(tmp_path, wiring):
+    """THE REGRESSION THAT WOULD HAVE CAUGHT H-1. A full A->F run through
+    the REAL S0Runner, with the official artifact names and the production
+    log guard wired, must reach COMPLETED."""
+    sink: list[str] = []
+    log = (runinfra.validate_log_event if wiring == "bare_validator"
+           else guarded_logger(sink))
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()],
+                                b_checks=[GateCheck("b1",
+                                                    lambda: (True, "ok"))],
+                                integrity=[lambda r: (True, "ok")],
+                                renderer=_h1_renderer, log=log)
+    out = S0Runner(deps).run()
+    assert out.ok is True, f"H-1 regression: {out.failed_gate}"
+    assert out.failed_gate == ""
+    assert out.terminal_stage == RunStage.F_SEALED
+    assert out.exposure_consumed is True
+    assert out.stages_completed == ("A_PRECHECK", "B_LOAD_VALIDATE",
+                                    "C_COMPUTE", "D_INTEGRITY", "E_REPORT",
+                                    "F_SEALED")
+    assert [e for e, _ in events] == ["RUN_STARTED", "COMPLETED"]
+    # all ten artifacts are on disk with the renderer's exact bytes
+    for name in OFFICIAL_SEALED_ARTIFACTS:
+        assert (out.runs_dir / name).read_bytes() == \
+            _H1_BODIES[name].encode("utf-8")
+
+
+def test_h1_artifact_log_lines_carry_only_the_opaque_id_and_a_digest(tmp_path):
+    """Every artifact line the logger RECEIVES is `file=artifact_NNNN
+    sha256=<64hex>` — no E1/E2, no other forbidden vocabulary anywhere in
+    any line the run emitted."""
+    sink: list[str] = []
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()],
+                           renderer=_h1_renderer, log=guarded_logger(sink))
+    out = S0Runner(deps).run()
+    assert out.ok is True
+
+    file_lines = [m for m in sink if m.startswith("file=")]
+    assert len(file_lines) == len(OFFICIAL_SEALED_ARTIFACTS)
+    expected = [f"file={artifact_log_id(i)} sha256={_h1_digest(name)}"
+                for i, name in enumerate(OFFICIAL_SEALED_ARTIFACTS, start=1)]
+    assert file_lines == expected
+
+    # The IDENTIFIER token is where a name would have leaked; it must not
+    # contain e1/e2 at all, in any case. (The 64-hex digest is checked
+    # separately below: `e1` occurs there as an ordinary hex substring, which
+    # is exactly why the production guard is a word-boundary regex and not a
+    # substring test — asserting a bare `"e1" not in message` here would be a
+    # test that cannot pass for reasons unrelated to the defect.)
+    for message in file_lines:
+        token = message.split(" ", 1)[0].removeprefix("file=")
+        lowered = token.lower()
+        assert "e1" not in lowered and "e2" not in lowered, token
+        assert token in {artifact_log_id(i) for i in
+                         range(1, len(OFFICIAL_SEALED_ARTIFACTS) + 1)}
+
+    for message in sink:
+        # no real artifact name survived into any log line
+        for name in OFFICIAL_SEALED_ARTIFACTS:
+            assert name not in message
+        # no forbidden vocabulary anywhere, by the PRODUCTION regex — which
+        # is the same test the guard itself applies, `e1`/`e2` included
+        assert runinfra._FORBIDDEN_VOCAB_RE.search(message) is None, message
+        runinfra.validate_log_event(message)
+
+
+def test_h1_manifest_keeps_real_names_digests_and_order(tmp_path):
+    """Requirement 3: the manifest is EVIDENCE and is untouched — real
+    names, real digests, existing order — and the digest it records is the
+    digest of the bytes actually on disk."""
+    sink: list[str] = []
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()],
+                           renderer=_h1_renderer, log=guarded_logger(sink))
+    out = S0Runner(deps).run()
+    assert out.ok is True
+
+    files = _h1_manifest_file_records(out.runs_dir)
+    assert [r["relative_path"] for r in files] == list(
+        OFFICIAL_SEALED_ARTIFACTS)
+    for record, name in zip(files, OFFICIAL_SEALED_ARTIFACTS):
+        assert record["file_sha256"] == _h1_digest(name)
+        assert record["file_sha256"] == runinfra.hashlib.sha256(
+            (out.runs_dir / name).read_bytes()).hexdigest()
+    # the opaque log id appears NOWHERE in the sealed manifest bytes
+    manifest_text = (out.runs_dir / "manifest.jsonl").read_text("utf-8")
+    for position in range(1, len(OFFICIAL_SEALED_ARTIFACTS) + 1):
+        assert artifact_log_id(position) not in manifest_text
+    # and the logged digests are exactly the chained digests, in order
+    assert [m.split("sha256=")[1] for m in sink if m.startswith("file=")] == \
+        [r["file_sha256"] for r in files]
+
+
+def test_h1_log_errors_is_empty_after_a_successful_run(tmp_path):
+    """Nothing was banked and silently carried: a clean run ends with an
+    EMPTY `_log_errors`, so no checkpoint anywhere had anything to find."""
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()],
+                           b_checks=[GateCheck("b1", lambda: (True, "ok"))],
+                           integrity=[lambda r: (True, "ok")],
+                           renderer=_h1_renderer,
+                           log=guarded_logger([]))
+    runner = S0Runner(deps)
+    out = runner.run()
+    assert out.ok is True
+    assert runner._log_errors == []
+
+
+def test_h1_stage_e_log_defect_is_attributed_to_stage_e(tmp_path):
+    """The ATTRIBUTION half. With a logger that refuses only `file=` lines,
+    the failure is now reported against E_REPORT (stage did not close), not
+    against F_SEALED.
+
+    This is explicitly NOT the fix: both checkpoints are post-exposure, so
+    `exposure_consumed` is True either way and the trial burns either way —
+    only the reported stage changes."""
+    def refuses_file_lines(message: str) -> None:
+        if message.startswith("file="):
+            raise runinfra.LogLeakError("synthetic Stage-E refusal")
+
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()],
+                                renderer=_h1_renderer,
+                                log=refuses_file_lines)
+    out = S0Runner(deps).run()
+    assert out.ok is False
+    assert out.terminal_stage == RunStage.E_REPORT
+    assert out.failed_gate == "log_guard"
+    assert out.exposure_consumed is True              # unchanged: post-exposure
+    assert "E_REPORT" not in out.stages_completed
+    assert "D_INTEGRITY" in out.stages_completed
+    assert [e for e, _ in events] == ["RUN_STARTED", "FAILED"]
+    # artifacts and manifest are RETAINED for adjudication
+    assert len(_h1_manifest_file_records(out.runs_dir)) == len(
+        OFFICIAL_SEALED_ARTIFACTS)
+    assert (out.runs_dir / "RUN_FAILURE_REPORT.md").exists()
+
+
+@pytest.mark.parametrize("seam", ["prepare_compute", "post_write_verify",
+                                  "pre_exposure_recheck"])
+def test_h1_unwired_critical_seam_still_refuses_before_exposure(tmp_path,
+                                                                seam):
+    """UNCHANGED BEHAVIOUR pin. The M6.1.8 checkpoint move must not have
+    dragged any fail-closed wiring check across the exposure boundary: an
+    unwired critical callback still refuses PRE-exposure — no runs dir, no
+    RUN_STARTED, trial not burned."""
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()],
+                                renderer=_h1_renderer)
+    object.__setattr__(deps, seam, None)
+    out = S0Runner(deps).run()
+    assert out.ok is False
+    assert out.exposure_consumed is False
+    assert out.failure_kind == "pre_run_attempt"
+    assert out.terminal_stage == RunStage.B_LOAD_VALIDATE
+    assert [e for e, _ in events] == ["PRE_RUN_ATTEMPT_FAILURE"]
+    assert not Path(deps.config.runs_dir).exists()
+
+
+# --- completeness pin -----------------------------------------------------
+# A fix that is only LOCALLY correct is not a fix. `:519` was claimed to be
+# the only log emission carrying a variable payload; the test below makes
+# that claim CHECKABLE at source level instead of asserted, by walking every
+# `self._safe_log(...)` call in the module and proving each one interpolates
+# nothing but RunStage enum values (plus fixed status literals) — with a
+# single, named exception: the artifact line, which may interpolate only the
+# opaque ordinal and the digest.
+
+_H1_ALLOWED_STAGE_EXPRS = frozenset({
+    "RunStage.A_PRECHECK.value", "RunStage.B_LOAD_VALIDATE.value",
+    "RunStage.C_COMPUTE.value", "RunStage.D_INTEGRITY.value",
+    "RunStage.E_REPORT.value", "RunStage.F_SEALED.value",
+    "stage.value",                       # the RunStage parameter of _fail_*
+})
+_H1_ALLOWED_STAGE_LITERALS = frozenset({
+    "stage=", " status=start", " status=end", " status=fail", " status=pass",
+})
+_H1_ALLOWED_ARTIFACT_EXPRS = frozenset({"artifact_log_id(position)", "digest"})
+_H1_ALLOWED_ARTIFACT_LITERALS = frozenset({"file=", " sha256="})
+_H1_SAFE_LOG_CALL_COUNT = 15             # pin: a NEW log call must be reviewed
+
+
+def _h1_safe_log_calls():
+    """Every `self._safe_log(...)` in runner.py as
+    (enclosing_function_name, literal_parts, interpolated_exprs)."""
+    import ast
+    module = sys.modules[S0Runner.__module__]
+    tree = ast.parse(inspect.getsource(module))
+    owner: dict[int, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for child in ast.walk(node):
+                owner.setdefault(id(child), node.name)
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        fn = node.func
+        if not (isinstance(fn, ast.Attribute) and fn.attr == "_safe_log"
+                and isinstance(fn.value, ast.Name) and fn.value.id == "self"):
+            continue
+        assert len(node.args) == 1 and not node.keywords, ast.dump(node)
+        arg = node.args[0]
+        assert isinstance(arg, ast.JoinedStr), (
+            "a _safe_log argument that is not an f-string literal cannot be "
+            f"reviewed statically: {ast.unparse(arg)}")
+        literals = [p.value for p in arg.values
+                    if isinstance(p, ast.Constant)]
+        exprs = [ast.unparse(p.value) for p in arg.values
+                 if isinstance(p, ast.FormattedValue)]
+        # no format-spec / conversion trickery on the way to the logger
+        assert all(p.conversion == -1 and p.format_spec is None
+                   for p in arg.values
+                   if isinstance(p, ast.FormattedValue)), ast.unparse(arg)
+        found.append((owner.get(id(node), "<module>"), literals, exprs))
+    return found
+
+
+def test_h1_completeness_only_record_artifacts_logs_a_variable_payload():
+    """COMPLETENESS PIN. Prove `:519` was the ONLY log emission with a
+    variable payload: every other `self._safe_log` call in runner.py
+    interpolates nothing but RunStage enum values and fixed status
+    literals."""
+    calls = _h1_safe_log_calls()
+    assert len(calls) == _H1_SAFE_LOG_CALL_COUNT, (
+        f"the number of _safe_log call sites changed ({len(calls)} != "
+        f"{_H1_SAFE_LOG_CALL_COUNT}); a new log emission must be reviewed "
+        f"against the H-1 finding and this pin updated deliberately")
+
+    variable = [c for c in calls
+                if not set(c[2]) <= _H1_ALLOWED_STAGE_EXPRS]
+    assert len(variable) == 1, (
+        "exactly one log emission may carry a variable payload; found "
+        + repr([(fn, exprs) for fn, _, exprs in variable]))
+
+    fn_name, literals, exprs = variable[0]
+    assert fn_name == "_record_artifacts", fn_name
+    assert set(exprs) <= _H1_ALLOWED_ARTIFACT_EXPRS, exprs
+    assert set(literals) <= _H1_ALLOWED_ARTIFACT_LITERALS, literals
+    # the artifact NAME is not among them — that is the H-1 fix
+    assert "name" not in exprs
+
+    for fn_name, literals, exprs in calls:
+        if fn_name == "_record_artifacts":
+            continue
+        assert set(exprs) <= _H1_ALLOWED_STAGE_EXPRS, (fn_name, exprs)
+        assert set(literals) <= _H1_ALLOWED_STAGE_LITERALS, (fn_name, literals)
+
+
+def test_h1_log_errors_checkpoint_follows_record_artifacts():
+    """The attribution checkpoint is where the brief put it: immediately
+    after `_record_artifacts`, before Stage E is marked complete."""
+    source = inspect.getsource(S0Runner.run)
+    after = source.split("self._record_artifacts(", 1)[1]
+    idx_check = after.index("if self._log_errors:")
+    idx_stage_done = after.index(
+        "self._stages_done.append(RunStage.E_REPORT.value)")
+    assert idx_check < idx_stage_done
+    checkpoint = after[idx_check:idx_stage_done]
+    assert '"log_guard"' in checkpoint
+    assert "RunStage.E_REPORT" in checkpoint

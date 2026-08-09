@@ -108,6 +108,35 @@ M6.1.7 S1 — BYTE FIDELITY AT STAGE E + THE POST-WRITE VERIFICATION SEAM.
       prepared object is *meaningful* is the application's business, not a
       generic lifecycle component's. A falsy prepared object (empty tuple,
       empty mapping, 0) is forwarded to `compute` unchanged.
+
+M6.1.8 S1 — defect H-1: the Stage-E artifact LOG LINE burned real runs.
+
+  Eight of the ten official sealed artifact names are
+  `MC_HANDOFF_<engine>_<scenario>.jsonl` over the frozen engine axis
+  `("E1", "E2")`, and `runinfra._FORBIDDEN_VOCAB_RE` matches `e1`/`e2`
+  case-insensitively. Logging the real name therefore made the production
+  guarded logger refuse every one of those eight lines; `_safe_log` banked
+  the refusals and the next inspection of `_log_errors` was at Stage F, so
+  the run sealed correctly, finished Stage E, and then died at Stage F with
+  gate='log_guard' and the trial id already consumed.
+
+  Two changes, in that order of importance:
+    (1) THE FIX. The log line carries an opaque ordinal derived only from
+        the fixed write order (`file=artifact_0001 sha256=<digest>`); see
+        `artifact_log_id` and `_record_artifacts`, which also record why
+        this is a workaround for a guard FALSE POSITIVE (the names are
+        run-invariant structural constants, not Stage-C values) and not the
+        correction of a real leak. The guard vocabulary is NOT edited, `e1`
+        / `e2` are NOT whitelisted, and no artifact is renamed.
+    (2) ATTRIBUTION ONLY. `_log_errors` is now checked immediately after
+        `_record_artifacts`, so a Stage-E log defect is reported against
+        Stage E. Both that checkpoint and the Stage-F one are
+        post-exposure: this changes where a failure is reported, never
+        whether the trial burns.
+
+  Everything evidentiary is untouched: the manifest keeps the real names,
+  the real digests and the existing order; the disk bytes, the hash chain
+  and the formal report are byte-identical to before.
 """
 from __future__ import annotations
 
@@ -128,6 +157,14 @@ STAGE_ORDER = (RunStage.A_PRECHECK, RunStage.B_LOAD_VALIDATE,
 
 MANIFEST_NAME = "manifest.jsonl"
 HALF_TRANSITION_NAME = "HALF_TRANSITION.md"
+
+# M6.1.8 S1 (H-1). The Stage-E artifact LOG LINE identifies each artifact by
+# its ordinal in the fixed write order instead of by name. See
+# `artifact_log_id` and `_record_artifacts` for the full rationale; the
+# manifest, the on-disk bytes, the hash chain and the formal report all keep
+# the REAL names and are untouched by this.
+ARTIFACT_LOG_ID_PREFIX = "artifact_"
+ARTIFACT_LOG_ID_WIDTH = 4
 
 # SA-6 F-27: the failure report's `exception_type` must come from a real
 # isinstance test on the caught exception, never from parsing an error
@@ -161,6 +198,30 @@ def make_incident_id(*parts: object) -> str:
 
 def _sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def artifact_log_id(position: int) -> str:
+    """Opaque, run-invariant identifier for the `position`-th artifact of a
+    Stage-E write (1-based, in the renderer's fixed write order).
+
+    M6.1.8 S1 (H-1). It is derived from the WRITE ORDER and from nothing
+    else: not the engine, not the scenario, not theta, not a cost model, not
+    any Stage-C result. Two runs of the same frozen contract produce the same
+    sequence of ids, because the write order is itself part of the contract.
+
+    This id is used ONLY in the Stage-E log line. The manifest record, the
+    file on disk, the hash chain and the formal report all keep the real
+    artifact name; see `_record_artifacts`.
+
+    It is NOT a redaction and must not be described as one. The write order
+    is fixed and documented, so `artifact_0001` is informationally equivalent
+    to the name it replaces — anyone with the contract can map one to the
+    other. That is fine precisely because the names carry no information to
+    hide (see `_record_artifacts` for why), and it is the reason this id is
+    honest rather than obscuring: nothing is being concealed from a reader of
+    the log, the line is simply written in a vocabulary the guard accepts.
+    """
+    return f"{ARTIFACT_LOG_ID_PREFIX}{position:0{ARTIFACT_LOG_ID_WIDTH}d}"
 
 
 @dataclass(frozen=True)
@@ -506,17 +567,70 @@ class S0Runner:
         not by coincidence. Stage F then re-derives the same digest from
         disk, which is a genuine cross-check precisely because the write
         path performs no translation of any kind.
+
+        M6.1.8 S1 — defect H-1: the LOG LINE now names each artifact by its
+        ordinal in the write order (`artifact_0001`), not by its filename.
+        The manifest keeps the real name; only the log line changed.
+
+        WHY, stated exactly, because the review packet says the same and the
+        two must agree. This is a WORKAROUND for a FALSE POSITIVE, not the
+        correction of a real leak:
+
+          * The measured behaviour. `runinfra._FORBIDDEN_VOCAB_RE` matches
+            `e1`/`e2` case-insensitively, and eight of the ten official
+            sealed artifact names are `MC_HANDOFF_<engine>_<scenario>.jsonl`
+            over the frozen engine axis `("E1", "E2")`. Logging those names
+            therefore made `runinfra.validate_log_event` raise LogLeakError
+            once per artifact. `_safe_log` records such a rejection instead
+            of raising, and before this milestone the next `_log_errors`
+            inspection was at Stage F — so a run sealed every artifact
+            correctly, completed Stage E, and was then killed at Stage F
+            with gate='log_guard' and the trial id already burned. It fires
+            on any run that reaches Stage-E artifact recording without
+            having failed earlier for another reason.
+
+          * Why it is a false positive. The guard (SA-6 F-04) exists to stop
+            Stage-C-derived VALUES from reaching logs. These names are not
+            values: they are run-invariant structural constants fixed by the
+            frozen contract's engine x scenario matrix. They are byte-
+            identical in every run of this study, they are already written
+            in the git-tracked spec, and they carry exactly zero data-
+            derived information. Nothing about them was ever dangerous, and
+            nothing here should be read as conceding that it was.
+
+          * Why the workaround rather than the correction. The correction
+            would be to narrow the guard's vocabulary so a structural
+            constant is not mistaken for a research value. `_FORBIDDEN_VOCAB`
+            is not this lane's to edit and is deliberately over-broad
+            ("宁可误杀"), so the guard vocabulary is respected as-is and the
+            emitting side is changed instead. `e1`/`e2` stay forbidden, no
+            whitelist is added, and no artifact is renamed.
+
+          * What the opaque id does and does not do. It is informationally
+            equivalent to the name it replaces: the write order is fixed and
+            documented, so the mapping is public. It hides nothing, and must
+            not be presented as hiding anything. It is acceptable precisely
+            because the names carry no information — replacing one
+            zero-information token with another zero-information token costs
+            the log nothing.
         """
         manifest = runs_dir / MANIFEST_NAME
         tail = self._chain_tail(manifest)
-        for name, data in written:
+        for position, (name, data) in enumerate(written, start=1):
+            # ONE digest value, used for both publications, so the number in
+            # the manifest and the number in the log cannot diverge.
+            digest = _sha256_bytes(data)
             tail = self._append_chain_record(manifest, {
                 "record_type": "file",
                 "stage": stage.value,
+                # the REAL name, unchanged — the manifest is evidence
                 "relative_path": name,
-                "file_sha256": _sha256_bytes(data),
+                "file_sha256": digest,
                 "previous_record_hash": tail})
-            self._safe_log(f"file={name} sha256={_sha256_bytes(data)}")
+            # the OPAQUE ordinal — log only (H-1); `name` is deliberately
+            # not interpolated here and must not be reintroduced.
+            self._safe_log(
+                f"file={artifact_log_id(position)} sha256={digest}")
         self._append_chain_record(manifest, {
             "record_type": "stage_seal",
             "stage": stage.value,
@@ -765,6 +879,30 @@ class S0Runner:
         except Exception as exc:                     # noqa: BLE001
             return self._fail_run(RunStage.E_REPORT, rdir, "render_report",
                                   f"{type(exc).__name__}: {exc}", exc)
+        # ---- Stage-E log-guard checkpoint (M6.1.8 S1, H-1 attribution) -----
+        # `_safe_log` records a guard rejection into `_log_errors` rather
+        # than raising, so a rejected line is only ever noticed at the next
+        # checkpoint. `_record_artifacts` is the one place Stage E logs
+        # anything derived from its inputs, and before this milestone the
+        # next checkpoint after it was Stage F (`verify_chain` -> log_guard),
+        # which reported an E-produced log line as an F failure.
+        #
+        # ATTRIBUTION ONLY, stated plainly so the packet and the source
+        # agree: this is NOT the fix for H-1. The fix is the opaque ordinal
+        # in `_record_artifacts`. BOTH this checkpoint and the Stage-F one
+        # sit AFTER the exposure boundary, so moving the check changes only
+        # WHERE a log failure is reported (E_REPORT, gate 'log_guard',
+        # with E_REPORT absent from stages_completed because the stage did
+        # not close) — never WHETHER the trial id burns. It was already
+        # burnt at RUN_STARTED.
+        #
+        # The one Stage-E line emitted after this point
+        # (`stage=E_REPORT status=end`) is a fixed literal with no variable
+        # payload — pinned at source level by the completeness test in
+        # tests/test_s0_runner.py — and stays covered by the Stage-F check.
+        if self._log_errors:
+            return self._fail_run(RunStage.E_REPORT, rdir, "log_guard",
+                                  self._log_guard_breach(), LogLeakError())
         self._stages_done.append(RunStage.E_REPORT.value)
         self._safe_log(f"stage={RunStage.E_REPORT.value} status=end")
 

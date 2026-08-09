@@ -85,6 +85,21 @@ PACKET_DRAFTED → PACKET_APPROVED → RUNNER_IMPLEMENTED
   | `git diff --check` | 净（exit 0） |
   | `ops/TRIAL_REGISTRY.md` sha256 | `de63b3d690c5c4be…b440`（＝基线，未修改；解析出 **13** 条事件） |
   | `EXPOSURE_LEDGER.md` sha256 | `394813431d879555…bc9e6`（＝基线，未修改） |
+
+  **【HEAD／commit 距离／工作树事实 —— M6.1.8 更正，2026-08-09，`FABLE_MEASURED`】**
+  上表写于 M6.1.7 尚未入库时。**M6.1.7 其后已落为候选 commit**，故上表
+  「当前 HEAD＝`185e47f7`」与「M6.1.7 无任何 commit」两项**均已过期**。
+  原表保留不删，在此重测更新：
+
+  | 事实 | 现值（M6.1.8 实测） |
+  |---|---|
+  | 上一候选 commit（本轮的父） | **`bdc060cefa0eac4351c9c7bc82784e2527391943`**（M6.1.7 入库） |
+  | 分支 | `master` |
+  | `git rev-list --count 6cb7eb71..HEAD` | **9**（M6.1.7 期间为 8，M6.1.6 期间为 7） |
+  | 其中带码候选里程碑 | **7**（M6 / M6.1 / M6.1.1 / M6.1.2 / M6.1.3 / M6.1.6 / **M6.1.7**） |
+  | 工作树（M6.1.8 起点） | **clean**（`git status --porcelain` 空）。本轮开工后会重新变脏——**该计数同样把本文件算在内**，是带时刻限定的观测值，不是稳定事实；本轮候选的最终字节须对候选 commit 重算 |
+  | `ops/TRIAL_REGISTRY.md` / `EXPOSURE_LEDGER.md` | 仍为基线 `de63b3d6…b440` / `394813431d8…bc9e6`，**M6.1.7 未改动一个字节**，M6.1.8 亦不改动 |
+  | `runs/` | 仍不存在 |
   | `runs/` | 不存在；S0-T001 未消耗 |
 
   **不变的结论**：**当前 HEAD 仍无对应 READY**（行 11 绑定
@@ -240,6 +255,21 @@ PACKET_DRAFTED → PACKET_APPROVED → RUNNER_IMPLEMENTED
   与 **L-5**（`runs/` 位于同步中的 OneDrive 树内，任一未声明条目即
   `disk_extra_file` → 烧掉 trial）。**两者都必须在第一次真实 S0 之前
   由 Aaron／Codex 处置**，且都不在本车道的修改权限内。
+
+  > **【M6.1.8 状态更新，2026-08-09，`FABLE_MEASURED`】上段两项现已分道：**
+  >
+  > - **H-1 已修复**（M6.1.8）。日志行改用不透明序号
+  >   `file=artifact_NNNN sha256=…`，**未**放宽 `_FORBIDDEN_VOCAB`、
+  >   **未**白名单 `e1`／`e2`、**未**改任何工件名；manifest 的真名／摘要／
+  >   顺序经**逐字节**证明未变。**它不再是运行前阻塞项。**
+  > - **L-5 维持开放**，本轮**未实施任何缓解**：
+  >   `L5_STATUS=OPERATIONS_REQUIRED_BEFORE_REAL_S0`、
+  >   `BLOCKS_STRATEGY_COUNCIL=NO`、**`BLOCKS_REAL_RUN=YES`**。
+  >   建议 `DEDICATED_LOCAL_NON_SYNCED_RUN_ROOT`，
+  >   但**输出根变更须经 Aaron 明确批准后另轮实施**。
+  >
+  > 故本段「两者都必须……处置」应读作：**现只剩 L-5 一项**。
+  > 详见 `CODEX_REVIEW_PACKET_M6_1_8.md` §1 与 §2。
 
 ## 1. 运行代码版本
 
