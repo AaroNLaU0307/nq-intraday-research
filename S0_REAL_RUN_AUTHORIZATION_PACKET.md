@@ -1,11 +1,35 @@
 # S0_REAL_RUN_AUTHORIZATION_PACKET
 
 ```
-status: PENDING_AARON_APPROVAL
-real_s0: REAL_S0_NOT_AUTHORIZED
+packet_approval_status:   PACKET_APPROVED          # registry 事件 3（Aaron, 2026-07-31）
+draft_status_historical:  PENDING_AARON_APPROVAL   # 起草时标记，仅作历史记录
+real_s0_authorization:    REAL_S0_NOT_AUTHORIZED   # 与上两行完全独立
 drafted_at_utc: 2026-07-31
 drafted_by: main agent (solo; no subagent, no workflow, no real data read)
 ```
+
+**（M6.1.6 / S3，2026-08-09）词汇对齐**：第三行的值改用 **registry 的原文
+词汇** `REAL_S0_NOT_AUTHORIZED`（`ops/TRIAL_REGISTRY.md:19`，事件 3 记
+`real_s0 = REAL_S0_NOT_AUTHORIZED`）。**语义不变**，仅消除本包与 registry
+之间的词汇分歧（原写 `NOT_AUTHORIZED`）。**registry 字节未改动。**
+
+**三个状态字段的关系（2026-08-09 澄清，无行为改变）**：
+
+- **本文件不是冻结件，可编辑。** `guards.FROZEN_HASHES` 仅 **7** 项
+  （`PROJECT_CHARTER.md`、`STUDY_0_PREREGISTRATION.md`、`purchase_plan.yaml`、
+  `MC_METHOD_SPEC.md`、`gate1/platform_params.yaml`、
+  `gate1/evidence_registry.yaml`、`gate1/snapshots/2026-07-28/
+  snapshot_manifest_v5.json`），**均不含本文件**；`FREEZE_LOG.md` 亦无本文件
+  条目（只读代理 S3 于 2026-08-09 逐项复算确认）。append-only 约束属于
+  `ops/TRIAL_REGISTRY.md`，**不属于本包**——故先前"保留旧头部是 append-only
+  精神的延伸"这一理由不成立，已撤销，头部改为三个互相独立的具名字段。
+- **`packet_approval_status: PACKET_APPROVED`**——以 registry 字节为准：
+  治理框架已获 Aaron 批准（事件 3，"Approved for runner implementation only"）。
+- **`draft_status_historical`**——纯历史标记，**不**表示治理框架仍待批准。
+- **`real_s0_authorization: REAL_S0_NOT_AUTHORIZED`**——不受上述任何一项影响：
+  `PACKET_APPROVED` 与 `RUN_AUTHORIZED` 是不同状态（见 §0）。当前 HEAD 无
+  对应 READY；生产解析器 `resolve_authorizations` 对当前 registry 字节返回
+  **0 条存活授权**、链无 problem（S3 实测）。
 
 本包只授权**首次真实 S0**。批准本包 ≠ 运行授权；运行只能由 §10 的精确
 授权语句触发。
@@ -18,32 +42,76 @@ PACKET_DRAFTED → PACKET_APPROVED → RUNNER_IMPLEMENTED
 → COMPLETED / FAILED
 ```
 
-- 当前位置：**PACKET_APPROVED ＋ Codex HOLD/NOT READY（M6/M6.1）**
-  （registry 事件 3；治理框架已获 Aaron 批准。M6 起完整生产链进入
-  代码库但 **fail-closed**：`ResolvedS0Methods` **七个结构化方法字段**（DR-M6-A..G，含 M6.1.1
-  新增 stability_population）任一未裁 → StudyConfig 无法派生 →
-  Stage B 拒绝。DECISION_REQUIRED_M6_1 全部裁决落地并经审计前，
-  不追加 READY、不受理授权；真实运行仍需 §10 语句）。
+- 当前位置（**2026-08-09 现值**；状态机词汇对当前 HEAD 无单一命名态，
+  如实分述）：registry 最新 READY = **行 11 @ `6cb7eb7…`（历史
+  commit）**，其对当前 HEAD 的失效/挂起语义**待 Aaron 裁决**（Option
+  A/B/C，见 DECISION_REQUIRED_READY_SUPERSESSION.md）；当前 HEAD 无
+  对应 READY；现势 = **Codex HOLD（M6.1.3 裁定，未撤销）＋ Fable 自判
+  `M6_1_4_R2_STATUS=HOLD`（未经 Codex 复审；F-1／F-2 均写未闭合）**
+  **【时态更正 —— M6.1.6 / S3，2026-08-09】** 此处原写「两名独立复核员
+  尚未开跑」，已过时并予更正：
+  **(i) M6.1.4-R2 的两名复核员已开跑并交出判定——`R1_VERDICT=PASS`
+  （附三条其后被证伪的声明）／`R2_VERDICT=FAIL`**（见
+  `CODEX_REVIEW_PACKET_M6_1_4.md` §10）；
+  **(ii) M6.1.6 的独立复核员亦已开跑并交出 `M6_1_6_REVIEW=PASS`**
+  （四轴、6 Low、0 High/0 Medium、轴 4 research boundary 零发现；
+  见 `CODEX_REVIEW_PACKET_M6_1_6.md` §3——**其中在唯一允许的修复轮内
+  落地的两条 Low 未经独立复核员重新复核**）。
+  **结论不变**：F-1 整体与 F-2 整体仍为 `PARTIAL`；
+  **`real_s0` 仍为 `REAL_S0_NOT_AUTHORIZED`。**
+  （治理框架获批于 registry 事件 3。M6 起完整生产链进入
+  代码库但 **fail-closed**：`ResolvedS0Methods` **八个结构化方法字段**（DR-M6-A..H，含 M6.1.1
+  新增 stability_population 与 M6.1.3 新增 worst_day_estimator）任一
+  未裁 → StudyConfig 无法派生 → Stage B 拒绝。Codex 对 M6.1.3 候选
+  `1e188b5…` 判 `M6_1_3_VERDICT=HOLD / REAL_RUN_READY=NO`（RC-1/RC-2
+  列 ENGINEERING_REQUIRED，M6.1.4 工程修复进行中）；registry 最新
+  READY（行 11）属历史 commit `6cb7eb7…`，当前 HEAD 无对应 READY——
+  旧 READY 的 append-only 失效/挂起语义待 Aaron 裁决（见
+  DECISION_REQUIRED_READY_SUPERSESSION.md）。DECISION_REQUIRED_M6_1
+  全部裁决落地并经审计前，不追加 READY、不受理授权；真实运行仍需
+  §10 语句）。
 - `PACKET_APPROVED` 与 `RUN_AUTHORIZED` 是**不同状态**，前者绝不自动
   推进为后者；每次状态变化以事件追加进 ops/TRIAL_REGISTRY.md
   （UTC 时间＋commit＋actor＋原因），既有记录永不修改。
-- **最终环境锁（M5-T5 重渲染，2026-08-02 实值；SA-11 修复落地后
-  entrypoint/runner 两行已再渲染；authorized_commit 除外
-  ——见 §1 防自引用定案）**：
+- **环境锁（M5-T5 首渲染；M6.1.4 起对部分行陆续重渲染——**逐行时效见下表**；
+  authorized_commit 除外，见 §1 防自引用定案）**：
+
+  **时效标注（S3 于 2026-08-09 对当前工作树字节逐行复算）**：
+
+  **本表已按 M6.1.6 工作树重算（S3，2026-08-09）。M6.1.6 又改动了
+  `scripts/s0_real_run.py` 与 `src/itsf/s0/runner.py`，并新增了一个
+  生产源文件；下表的 `runner.py` 行与 `s0_real_run.py` 的现值随之更新。**
+
+  | 行 | 状态 |
+  |---|---|
+  | `scripts/s0_real_run.py` | **`STALE_SNAPSHOT_NOT_VALID_FOR_CURRENT_WORKTREE`**（现值 `937c96bf6b15d26b…`；**M6.1.6 更新**，此前记为 `5ea7b7f11e84577c…`） |
+  | `src/itsf/s0/runner.py` | **`STALE_SNAPSHOT_NOT_VALID_FOR_CURRENT_WORKTREE`（M6.1.6 新增失效行）**——锁内 `772790cd9572446a…`，现值 `0c1e5cbb9861f8da…`（M6.1.6 prepare 接缝）。**此行此前列在"其余 10 行一致"内，该归类现已为假** |
+  | `src/itsf/contracts.py` | **`STALE_SNAPSHOT_NOT_VALID_FOR_CURRENT_WORKTREE`**（现值 `d72a9b05dbf481a4…`，M6.1.6 未再改动） |
+  | `src/itsf/s0/evidence.py` | **`STALE_SNAPSHOT_NOT_VALID_FOR_CURRENT_WORKTREE`**（现值 `676fbcd1ae0ac2a9…`，M6.1.6 未再改动） |
+  | 其余 **9** 行（runinfra / context / dataset / labels / features / report / stability / handoff / guards） | 与当前工作树字节**逐项一致**（S3 复算） |
+  | `requirements_lock` | 与当前字节**一致**（`f87799f6d24d3788…`） |
+  | **`src/itsf/s0/output_proof.py`** | **不在本环境锁内 —— 覆盖缺口。** M6.1.6 新增的**生产源**（治理输出证明，`scripts/s0_real_run.py:1091` 与 `:2328` 导入），现值 `1f045ed5fb75480a…`。本轮**不修改本锁的字段集**（属重渲染范围），仅在此如实登记 |
+
+  **上述失效行仅在形成候选 commit 时重渲染**；HOLD 期间不重渲染，以免声称一个
+  不存在的候选。**不得**对本块整体加"全部陈旧"的笼统标注——那对其余 9 行
+  ＋ `requirements_lock` 为假。
+
   ```
   runner_entrypoint: scripts/s0_real_run.py  (zero CLI args; env-clean gate)
   runner_source_sha256:
-    scripts/s0_real_run.py:  16f75aa43dd6908b...
-    src/itsf/s0/runner.py:   772790cd9572446a...
+    scripts/s0_real_run.py:  937c96bf6b15d26b...   # M6.1.6 候选重渲染
+    src/itsf/s0/runner.py:   0c1e5cbb9861f8da...   # M6.1.6 候选重渲染
     src/itsf/s0/runinfra.py: b6cd12d3158ba2a7...
     src/itsf/s0/context.py:  e022cd1a012a0dd8...
     src/itsf/s0/dataset.py:  8e12d35043c0110d...
     src/itsf/s0/labels.py:   964af7725061ad5d...
     src/itsf/s0/features.py: a5e222f679731640...
-    src/itsf/contracts.py:   ddc2123beb6f5f6a...
-    src/itsf/s0/report.py:   13d89a7311e6ad69...
+    src/itsf/contracts.py:   d72a9b05dbf481a4...   # M6.1.6 候选重渲染
+    src/itsf/s0/report.py:   52d050bb6f1095e9...
     src/itsf/s0/stability.py: 7eebd7e057412cc7...
-    src/itsf/s0/handoff.py:  b1ea761c442c3fdc...
+    src/itsf/s0/handoff.py:  a1f2c0a1ac77f96d...
+    src/itsf/s0/evidence.py: 676fbcd1ae0ac2a9...   # M6.1.6 候选重渲染
+    src/itsf/s0/output_proof.py: 1f045ed5fb75480a...   # M6.1.6 新增生产源
     src/itsf/guards.py:      6ec6345734e97f2f...
   requirements_lock: ops/requirements.lock.txt
     sha256 f87799f6d24d3788b8b7b41b7f81d3b01cb2da8070294eba56bada69bbcc16a0
@@ -58,6 +126,15 @@ PACKET_DRAFTED → PACKET_APPROVED → RUNNER_IMPLEMENTED
     frozen_constants_in_process; hermetic child env; no CLI args
     (pinned by tests/test_s0_runner.py)
   ```
+
+  **【M6.1.6 候选重渲染，2026-08-09】** 上表标为
+  `STALE_SNAPSHOT_NOT_VALID_FOR_CURRENT_WORKTREE` 的四行已按本候选字节
+  重渲染，故上表的 STALE 标注对本候选**已不再适用**（保留为沿革）。
+  **另一处变更须显式声明**：`src/itsf/s0/output_proof.py` 是 M6.1.6 新增的
+  **生产源**（被 `scripts/s0_real_run.py` 导入），此前**不在**本锁内——
+  本次**向锁内新增该行**，即改变了本锁的字段集。理由：本锁的用途是钉住
+  "将要运行的源字节"，遗漏一个生产源会使锁**静默不完整**。此为工程性
+  补全，不涉任何研究定义。
   重渲染后的状态上限为 `READY_FOR_RUN_AUTHORIZATION`（须 final-readiness
   审计全 CLOSED），仍须 Aaron 发 §10 精确语句才进入 `RUN_AUTHORIZED`。
 
@@ -163,6 +240,27 @@ trial 开始后不得重置、删除或重新编号；失败运行同样入册�
   128/134/83/2528/9；其余 Preflight 结构计数。runner 必须按冻结原始规则
   独立计算后与这些观测值**比对**（不符即 STOP）；禁止把这些数字用作
   样本选择、事件归类或特征取值的输入常数。
+
+  > **【M6.1.6 / S3 补，2026-08-09】治理链与一处文档层冲突（如实并列，不自行裁决）**
+  >
+  > **治理链存在**：把 preflight 的结构性计数用作 expected 断言，是获授权的——
+  > IR-22（`IMPLEMENTATION_RESOLUTIONS.md:70`，已批准）明令 `context.py` 与
+  > `scripts/s0_input_preflight.py` **同步修复同测试**；IR-26（同上 :123-，
+  > 已批准，Aaron E5）收口于 66 断言 all_pass；`ops/TRIAL_REGISTRY.md:33`
+  > （行 11）记录「Stage B 5/5 全过（含 `preflight_assertions_match` 66/66）」。
+  >
+  > **DOCUMENTATION-LAYER CONFLICT**：工件自带的
+  > `S0_INPUT_PREFLIGHT.json` `"approval"` 字段仍为 `"AWAITING_AARON_APPROVAL"`
+  > （`S0_INPUT_PREFLIGHT_REPORT.md:5` 同），而 `src/itsf/s0/dataset.py:667-668`
+  > 与 `src/itsf/s0/context.py:73` 两处 docstring 称其 "approved"／"APPROVED"。
+  >
+  > **ENGINEERING CONFORMANCE RISK**：expected 与 actual 由**两份形态不同的
+  > 实现**产生（谓词级差异见 `CODEX_REVIEW_PACKET_M6_1_6.md` §6.3），其一致性
+  > 今日**只有经验证据**（A1 数据上 66/66 的一次观测），**不是结构等价证明**。
+  > 一次真实 STOP 的先例已在 registry 内：2026-08-01 的 `INC-fa9234e0e541`。
+  > IR-22 的「同步修复同测试」命令必须持续遵守。
+  >
+  > 本条**不是**新裁决请求，**不改动 registry、不改动源码**。
 - seeds（DR-02 重渲染，Codex baseline audit 批复 Option A）：
   **研究路径随机源唯一 = 冻结 seeds {7, 13, 31}**（S0 §9 Primary
   bootstrap＋附录 A 网格分层抽样＋MC 三 seed 收敛；contracts.

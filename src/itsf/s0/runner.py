@@ -29,6 +29,22 @@ SA-6 hardening (2026-08-01), by finding id:
         PRE_RUN_ATTEMPT_FAILURE path instead of escaping as tracebacks;
   F-27  the reported exception_type comes from isinstance, never from
         parsing the error text.
+
+M6.1.6 S1 — PRE-EXPOSURE PREPARE SEAM. The lifecycle gained one step
+between Stage B and the atomic run-start:
+
+    Stage B checks all pass
+      -> prepare_compute()                    (NEW; still pre-exposure)
+      -> final pre-exposure registry recheck  (inside _atomic_run_start)
+      -> _atomic_run_start / RUN_STARTED      (exposure consumed here)
+      -> compute(prepared)                    (Stage C)
+
+Whatever a Stage-C computation needs in order to be CONSTRUCTIBLE at all
+is now built while the attempt is still cheap. A refusal raised during
+prepare is a PRE_RUN_ATTEMPT_FAILURE (nothing burned); the SAME refusal
+raised inside `compute` would be a RUN_FAILURE that permanently consumes
+the trial id. The runner learns nothing about what the prepared object
+holds — it only forwards it to Stage C.
 """
 from __future__ import annotations
 
@@ -98,7 +114,10 @@ class RunnerDeps:
     trial_state: TrialState                          # from the registry chain
     gates: Sequence[GateCheck]                       # packet §9, in order
     structural_checks: Sequence[GateCheck]           # Stage B (pre-exposure)
-    compute: Callable[[], object]                    # Stage C -> dataset obj
+    compute: Callable[[object], object]              # Stage C(prepared) -> obj
+    """M6.1.6 S1: Stage C receives the run-scoped object that
+    `prepare_compute` returned, explicitly, as its single argument. The
+    runner neither inspects nor stores it beyond the forwarding call."""
     integrity_checks: Sequence[Callable[[object], tuple[bool, str]]]
     render_report: Callable[[object], Mapping[str, str]]  # name -> content
     append_registry_event: Callable[[str, str], None]     # (event, note)
@@ -120,6 +139,13 @@ class RunnerDeps:
     #     the freshly-created runs directory.
     pre_exposure_recheck: Callable[[], tuple[bool, str]] | None = None
     post_run_started_hook: Callable[[Path], None] | None = None
+    # M6.1.6 S1 §prepare seam. Called once, after every Stage-B check has
+    # passed and strictly BEFORE the atomic run-start transition; returns
+    # the run-scoped prepared object that Stage C is then handed. Declared
+    # Optional so the dataclass stays constructible, but an UNWIRED seam is
+    # FAIL-CLOSED at run time — see the refusal in `run()`, which mirrors
+    # the `pre_exposure_recheck is None` precedent in `_atomic_run_start`.
+    prepare_compute: Callable[[], object] | None = None
 
 
 @dataclass
@@ -423,6 +449,49 @@ class S0Runner:
         self._stages_done.append(RunStage.B_LOAD_VALIDATE.value)
         self._safe_log(f"stage={RunStage.B_LOAD_VALIDATE.value} status=end")
 
+        # ---- pre-exposure PREPARE seam (M6.1.6 S1) -------------------------
+        # Last cheap step before the exposure boundary: build the run-scoped
+        # object Stage C will need. Anything that can REFUSE — an unresolved
+        # configuration, an unconstructible input — must refuse HERE, where
+        # the failure is a PRE_RUN_ATTEMPT_FAILURE, instead of inside
+        # `compute`, where the identical refusal would route to `_fail_run`
+        # and permanently burn the trial id.
+        #
+        # Two invariants the ordering below encodes: prepare runs BEFORE the
+        # final registry recheck (which lives inside `_atomic_run_start`, so
+        # the recheck stays the LAST thing that happens before the
+        # transition), and the prepared object is a plain local — never a
+        # module-level or class-level cache — so two runner instances can
+        # never share one.
+        #
+        # FAIL-CLOSED WHEN UNWIRED. This mirrors the pre-exposure
+        # registry-recheck precedent in `_atomic_run_start` (the
+        # `pre_exposure_recheck is None` branch, Aaron §三.5 / SA-11 N-E): a
+        # deps object with no prepare seam refuses pre-exposure rather than
+        # silently skipping ahead to compute. A prepare that returns nothing
+        # is treated the same way — Stage C must be handed a real object.
+        if d.prepare_compute is None:
+            return self._fail_pre_run(
+                RunStage.B_LOAD_VALIDATE, "prepare_compute",
+                "no pre-exposure prepare seam wired — fail closed (mirrors "
+                "the pre-exposure registry recheck at _atomic_run_start)",
+                RunGateError())
+        try:
+            prepared = d.prepare_compute()
+        except Exception as exc:                     # noqa: BLE001
+            return self._fail_pre_run(
+                RunStage.B_LOAD_VALIDATE, "prepare_compute",
+                f"prepare raised {type(exc).__name__}: {exc}", exc)
+        # M6.1.6 review A1-1: any FALSY return is a refusal, not just None.
+        # `is None` alone would forward 0 / "" / () to Stage C, which is the
+        # opposite of fail-closed for a seam whose whole purpose is that
+        # Stage C receives a real prepared object.
+        if not prepared:
+            return self._fail_pre_run(
+                RunStage.B_LOAD_VALIDATE, "prepare_compute",
+                "prepare returned no prepared object — fail closed",
+                RunGateError())
+
         # ---- atomic transition into Stage C (exposure boundary) ------------
         try:
             rdir = self._atomic_run_start()
@@ -448,8 +517,10 @@ class S0Runner:
         self._safe_log(f"stage={RunStage.C_COMPUTE.value} status=start")
 
         # ---- Stage C: compute (zero information release) -------------------
+        # The prepared object built pre-exposure is handed over explicitly;
+        # Stage C never calls back into the prepare seam.
         try:
-            result = d.compute()
+            result = d.compute(prepared)
         except Exception as exc:                     # noqa: BLE001
             return self._fail_run(RunStage.C_COMPUTE, rdir, "compute",
                                   f"{type(exc).__name__}: {exc}", exc)

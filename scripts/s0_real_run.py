@@ -44,7 +44,7 @@ ATTEMPTS_ROOT = REPO / "attempts"
 # Baseline collected-test count at the SA-6 audit commit. The pytest gate
 # requires the suite to still COLLECT at least this many tests, so a muted
 # or filtered run cannot satisfy the gate with a handful of tests (F-09).
-MIN_COLLECTED_TESTS = 1141                  # M6.1.3 fix-round-2: floor=suite
+MIN_COLLECTED_TESTS = 2146                  # M6.1.6: floor = current suite
 
 # External read-only tooling (packet §9 gate 4). Invoked as a subprocess;
 # the tool itself only reads repository files.
@@ -872,6 +872,12 @@ def _partition_admission(candidates, all_probs):
     enforced here, so a colliding name can never misattribute another
     artifact's refusal reasons into the sealed admission record. Any
     problem string attributable to no candidate fails the render closed."""
+    # auditor-2 LOW-4: names must be STRINGS before any substring test —
+    # a non-str name is its own refusal, never a TypeError out of the gate.
+    nonstr = sorted(repr(n) for n in candidates if not isinstance(n, str))
+    if nonstr:
+        raise ValueError("candidate artifact names must be strings: "
+                         + ", ".join(nonstr))
     bad = sorted(n for n in candidates if ": " in n)
     if bad:
         raise ValueError("candidate artifact names must not contain the "
@@ -889,7 +895,8 @@ def _partition_admission(candidates, all_probs):
     return admitted, withheld
 
 
-def render_s0_report(result, *, expected_governance=None) -> dict[str, str]:
+def render_s0_report(result, *, expected_governance=None,
+                     governance_context=None) -> dict[str, str]:
     """Stage-E sealed release: the FORMAL S0 report, whole-document only
     (packet §7 — nothing here reaches a log line).
 
@@ -905,6 +912,57 @@ def render_s0_report(result, *, expected_governance=None) -> dict[str, str]:
         if expected_governance is None:
             expected_governance = _expected_governance()
         internal, formal = rep.split_envelope(result)
+        # M6.1.4 (main-2): the renderer REFUSES to seal without captured
+        # canonical evidence, and the formal payload's evidence-covered
+        # sections are BUILT from the evidence via pure reducers — the
+        # compute tree's pre-aggregated copies are no longer authoritative
+        # for them (reconcile_with_internal below still cross-checks the
+        # producer aggregates against the result, so a reducer-vs-producer
+        # divergence is a hard failure, not a silent override).
+        from itsf.s0 import evidence as ev
+        evd = result.get("evidence")
+        if evd is None:
+            raise ValueError("canonical evidence missing from the compute "
+                             "result — refusing to seal (the formal payload "
+                             "must be rebuilt from captured atoms)")
+        formal = {k: (dict(v) if isinstance(v, dict) else v)
+                  for k, v in formal.items()}
+
+        def _differs(a, b):
+            try:
+                return a != b
+            except Exception:
+                return True     # unequal-on-exception: fail closed
+
+        # The evidence-built value REPLACES the producer copy in the sealed
+        # payload — but a DIVERGENCE between them is a hard refusal, never a
+        # silent repair: it means the producer aggregate and the captured
+        # atoms disagree (a bug or a tamper), and sealing over either
+        # version would hide that.
+        diverged: list[str] = []
+        for red_key, reducer in ev.reducers.items():
+            built = ev.to_plain(reducer(evd))
+            if red_key == "oracle_daily.day_universe":
+                for tk, du in built.items():
+                    cell = dict(formal["oracle_daily"][tk])
+                    if _differs(du, cell.get("day_universe")):
+                        diverged.append(f"{red_key}:{tk}")
+                    cell["day_universe"] = du
+                    formal["oracle_daily"] = {**formal["oracle_daily"],
+                                              tk: cell}
+            elif "." in red_key:
+                sect, sub = red_key.split(".", 1)
+                if _differs(built, formal[sect].get(sub)):
+                    diverged.append(red_key)
+                formal[sect] = {**formal[sect], sub: built}
+            else:
+                if _differs(built, formal.get(red_key)):
+                    diverged.append(red_key)
+                formal[red_key] = built
+        if diverged:
+            raise ValueError(
+                "evidence-reducer divergence from producer output — "
+                "refusing to seal: " + "; ".join(sorted(diverged)))
         problems = rep.validate_formal_payload(
             formal, expected_governance=expected_governance)
         if problems:
@@ -948,10 +1006,26 @@ def render_s0_report(result, *, expected_governance=None) -> dict[str, str]:
             candidates, ho.formal_seal_admission(candidates))
         for fname, artifact in admitted.items():
             files[fname] = ho.dumps_canonical(artifact)
+        # M6.1.4 (main-2): EVIDENCE RECONCILIATION over the ACTUAL bytes
+        # about to be sealed — the JSONL records are parsed back and the
+        # formal payload is reconciled against the captured atoms. HARD
+        # problems refuse the seal; PARTIAL markers are DISCLOSED in the
+        # sealed admission record (honest coverage, never a silent claim).
+        ev_hard, ev_partial = ev.split_problems(
+            ev.reconcile_with_evidence(evd, formal, files))
+        if ev_hard:
+            raise ValueError("evidence reconciliation failed: "
+                             + "; ".join(ev_hard))
         files["HANDOFF_ADMISSION.json"] = ho.dumps_canonical({
             "schema_version": ho.SCHEMA_VERSION,
             "admitted": sorted(admitted),
             "withheld": dict(sorted(withheld.items())),
+            "evidence_reconciliation": {
+                # computed from the actual reconcile result — reaching this
+                # line proves it was empty (a non-empty list raised above),
+                # but the sealed claim is never a hardcoded literal.
+                "hard_problems": list(ev_hard),
+                "partial_coverage": list(ev_partial)},
             "note": ("artifacts whose formal_sealable flag is not True are "
                      "WITHHELD from the sealed set pending the DR-M6 "
                      "rulings; DAY_STRATA / GRID_SAMPLES are not built by "
@@ -991,15 +1065,35 @@ def render_s0_report(result, *, expected_governance=None) -> dict[str, str]:
                              + "; ".join(problems2))
         files["S0_REPORT.json"] = rep.to_formal_json(formal)
         # E2: the manifest is generated AFTER file serialization and then
-        # re-verified against the actual bytes before sealing.
-        univ = {d for t in formal["oracle_daily"].values()
-                for d in (*t["day_universe"]["tp_days"],
-                          *t["day_universe"]["fp_days"])}
-        post = rep.validate_sealed_files(files, formal,
-                                         trade_date_universe=univ)
+        # re-verified against the actual bytes before sealing. M6.1.4
+        # (B0 CR-7): the renderer no longer passes its own universe — the
+        # validator's INDEPENDENT derivation from the payload is the live
+        # path, not dead code shadowed by a caller override.
+        post = rep.validate_sealed_files(files, formal)
         if post:
             raise ValueError("sealed-file verification failed: "
                              + "; ".join(post))
+        # M6.1.6 (S2 slice) — INDEPENDENT governance proof, run LAST, on the
+        # FINAL S0_REPORT.json bytes. Placement is the whole point: the
+        # M6.1.4 evidence pass ran before three of the eleven sealed files
+        # existed, so its target could not have been the sealed set. This
+        # runs after every file is in `files`.
+        #
+        # The expected side is built from a PRE-RUN context supplied by the
+        # caller — never from `result`, `formal`, or the evidence mirror. A
+        # renderer that is not given a context cannot manufacture one from
+        # the thing it is verifying, so the proof is SKIPPED rather than
+        # faked; production wires it (see `main()`), and that wiring is
+        # pinned by test. Scope: this proves the five contract keys of
+        # `governance.*` against independent sources — it does NOT byte-bind
+        # the report to the registry (see the proof's own PARTIAL list).
+        if governance_context is not None:
+            from itsf.s0 import output_proof as _op
+            proof = _op.prove_governance(governance_context,
+                                         sealed_artifacts=files)
+            if not proof.ok:
+                raise ValueError("governance proof failed: "
+                                 + "; ".join(proof.problems))
         return files
     raise ValueError(
         "render_s0_report: refusing non-study payload — the legacy "
@@ -1018,7 +1112,16 @@ PENDING_METHOD_DECISIONS: tuple[str, ...] = _resolved_methods().pending_fields()
 
 
 from itsf.contracts import (StudyConfig,          # noqa: E402
-                            ResolvedS0Methods as _RSM)
+                            is_canonical_spread_scalars as _is_canon_scalars,
+                            is_canonical_ticks as _is_canon_ticks,
+                            ResolvedS0Methods as _RSM,
+                            SpreadCostMethod as _SCM,
+                            VolatilityRegimeMethod as _VRM,
+                            FpAllocationMethod as _FAM,
+                            BootstrapMethod as _BM,
+                            GridRepeatPolicy as _GRP)
+import math as _math                                     # noqa: E402
+from types import MappingProxyType as _MProxy            # noqa: E402
 
 
 _CONFIG_CACHE: dict = {}
@@ -1034,84 +1137,810 @@ def _approved_injectables():
     return None
 
 
-def _validated_config(cfg, why: str):
-    """M6.1.2: the production path may only ever hand out a config that
-    passes REVALIDATION at the point of use — a config that became
-    test_only, structurally invalid or partially-resolved by any route
-    (cache injection, frozen-dataclass bypass, ...) is refused here, so an
-    illegal config can never make ready() true."""
-    if cfg is None:
-        return (None, why)
-    if not isinstance(cfg, StudyConfig):
-        return (None, "config is not a StudyConfig instance")
-    # M6.1.3 fix-round (blind-audit E6; ordering per N3): TYPE PIN before
-    # ANY read of cfg.methods — `!=` dispatches to the left operand and
-    # even an attribute read can execute a foreign property, so no
-    # attacker code may run inside this gate.
-    if type(cfg.methods) is not _RSM:
-        return (None, "config.methods is not a ResolvedS0Methods — "
-                      "equality is never delegated to a foreign methods "
-                      "type")
-    if getattr(cfg.methods, "test_only", False):
-        return (None, "test_only config refused on the production path")
-    # M6.1.3 (main-1): the cache is NEVER a method source — a cached config
-    # is honoured only while it remains IDENTICAL to a fresh read of the
-    # approved method source. With all rulings pending, no resolved config
-    # can match, so a cache injection is refused here regardless of its own
-    # internal consistency.
-    if cfg.methods != _resolved_methods():
-        return (None, "config does not match the fresh approved method "
-                      "source — cache is not a method source")
-    # M6.1.3 fix-round (blind-audit F3): the fresh-source binding covers
-    # the DERIVED injectables too, not only `methods` — a cached config
-    # whose methods match cannot smuggle its own spread_scalars / regime /
-    # vol mappings past the gate. No approved injectable source exists
-    # while DR-1/DR-2 pend, so this fails closed today by construction.
-    inj = _approved_injectables()
-    if inj is None:
-        return (None, "no approved injectable source (spread_scalars / "
-                      "regime_of / vol_axis_of) exists yet — a cached "
-                      "config cannot be its own injectable source")
-    # M6.1.3 fix-round-2 (blind-audit N4c): a malformed injectable source
-    # must fail CLOSED with a reason, never fail open by exception.
-    if not isinstance(inj, dict):
-        return (None, "approved injectable source malformed — fail closed")
-    from itsf.contracts import derive_study_config as _derive
-    if cfg != _derive(_resolved_methods(), **inj):
-        return (None, "config does not match a fresh derivation from the "
-                      "approved sources — cache is not a config source")
-    pend = cfg.methods.pending_fields()
+# =========================================================================
+# THE CONFIGURATION GATEWAY (M6.1.4-ARCH, finding F-1)
+# =========================================================================
+# ONE deterministic path resolves the study configuration, and BOTH
+# RealChain.ready() and RealChain.compute() consume it through the single
+# entry `resolved_study_config()`.
+#
+# WHY A GATEWAY AND NOT MORE GUARDS. F-1 was raised, patched at the three
+# sites it named, and RECURRED. An independent read-only reproduction on
+# this worktree found FOUR live escapes through the public `ready()`
+# contract, not the two the report named: the cache 2-tuple unpack, the
+# `cfg.methods !=` comparison, AND BOTH HALVES of the `cfg != fresh_cfg`
+# comparison a few lines below it (a hostile `__eq__` on a callable field,
+# and a numpy `spread_scalars` whose truth value is ambiguous). Enumerating
+# sites is precisely what failed. The defence is therefore STRUCTURAL:
+#
+#   1. no evaluation point executes foreign code in the first place --
+#      types are pinned with `type(x) is C` BEFORE any attribute read,
+#      equivalence is decided on NON-EXECUTING fingerprints built only from
+#      strictly-normalized atoms (str/int/float/bool/None and tuples
+#      thereof), and the two config callables are compared by in-process
+#      object IDENTITY, never by `==`/`!=`;
+#   2. a SINGLE trust boundary (`_run_guarded`) converts anything that
+#      still escapes into a deterministic, stage-attributed refusal.
+#
+# (2) is the backstop, never the primary defence. Every refusal happens
+# before the compute builder, before any real data load, before runs/
+# creation and before exposure -- Stage B holds the whole thing.
+
+
+#: Gateway stages in EXECUTION order. The G-numbers follow the M6.1.4-ARCH
+#: enumeration of evaluation points (see `_EVALUATION_POINTS`); the tuple
+#: order is the pipeline order, which differs -- G7 runs before G6/G10
+#: because the FRESH approved source is the authority: if the authority is
+#: not ready, nothing about a cached object matters.
+_GATE_STAGES: tuple[str, ...] = (
+    "G1_cache_read",
+    "G2_cache_envelope",
+    "G3_config_type",
+    "G4_methods_type",
+    "G4b_test_only",
+    "G5_method_source",
+    "G5b_source_test_only",
+    "G7_pending",
+    "G7b_structural",
+    "G10_methods_fingerprint",
+    "G10_methods_canonical_form",
+    "G10_methods_equivalence",
+    "G6_injectable_source",
+    "G8_injectable_schema",
+    "G9_derivation",
+    "G11_config_fingerprint",
+    "G11_config_canonical_form",
+    "G11_callable_identity",
+    "G11_config_equivalence",
+    "G12_cache_write",
+    "G13_point_of_use",
+)
+
+#: Mandated evaluation point -> the stage(s) that cover it. NO GATE-COUNT
+#: THEATRE: eleven of the thirteen are real stages with their own refusal,
+#: but (12) is ATTRIBUTION-ONLY -- an in-process cache write has no
+#: legitimate failure mode unless `_CONFIG_CACHE` has itself been replaced
+#: -- and (13) is not a stage at all but the SINGLE-PATH INVARIANT: the
+#: gateway has exactly one code path, so G3..G11 execute on EVERY call,
+#: whether the config came from the cache or was derived this call.
+_EVALUATION_POINTS: dict[int, tuple[str, ...]] = {
+    1: ("G1_cache_read",),
+    2: ("G2_cache_envelope",),
+    3: ("G3_config_type",),
+    4: ("G4_methods_type", "G4b_test_only"),
+    5: ("G5_method_source", "G5b_source_test_only"),
+    6: ("G6_injectable_source",),
+    7: ("G7_pending", "G7b_structural"),
+    8: ("G8_injectable_schema",),
+    9: ("G9_derivation",),
+    # M6.1.4-R2: points (10) and (11) each carry TWO SEPARATE OBLIGATIONS --
+    # value EQUIVALENCE against a fresh derivation (binary), and
+    # REPRESENTATION IDENTITY of the object itself (unary). They are distinct
+    # STAGES with distinct refusals rather than new evaluation points: the
+    # thirteen points are the M6.1.4-ARCH enumeration and are not rewritten
+    # here. Representation is checked BEFORE equivalence on each side, so a
+    # non-canonical cache refuses AS non-canonical.
+    10: ("G10_methods_fingerprint", "G10_methods_canonical_form",
+         "G10_methods_equivalence"),
+    11: ("G11_config_fingerprint", "G11_config_canonical_form",
+         "G11_callable_identity", "G11_config_equivalence"),
+    12: ("G12_cache_write",),
+    13: ("G13_point_of_use",),
+}
+
+_MISSING = object()                      # "no cache entry", never a value
+_SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9_.]")
+
+
+class _ConfigCacheEntry:
+    """The ONLY admissible value of ``_CONFIG_CACHE['cfg']``.
+
+    An EXACT internal envelope, never an arbitrary 2-iterable. It is
+    identified by ``type(x) is _ConfigCacheEntry`` and is NEVER unpacked,
+    iterated, measured or compared -- so a plain object, a 1/2/3-tuple, a
+    dict, or an iterator that detonates on read all refuse identically at
+    G2 WITHOUT a single attribute being touched. That retires the whole
+    ``too many values to unpack`` class, not the three shapes F-1 named.
+
+    A ``__slots__`` immutable class rather than a frozen dataclass, for
+    two reasons. (a) `scripts/s0_real_run.py` is loaded by its tests via
+    `spec_from_file_location` WITHOUT being registered in `sys.modules`,
+    and `@dataclass` cannot resolve a string annotation under that import
+    style. (b) It is strictly MORE INERT: no generated ``__eq__`` (which
+    would be a comparison surface we never want), no generated ``__repr__``
+    (which would stringify an attacker-influenced config into a diagnostic).
+
+    REFUSALS ARE NOT CACHED (`config` is never None). The cache exists for
+    exactly one purpose: giving ready() and compute() the SAME validated
+    INSTANCE. A refusal has no instance to share, and caching one would
+    make a transient source failure sticky for the process lifetime and
+    make the reported reason depend on call order.
+    """
+
+    __slots__ = ("config", "reason")
+
+    def __init__(self, config, reason: str) -> None:
+        object.__setattr__(self, "config", config)
+        object.__setattr__(self, "reason", reason)
+
+    def __setattr__(self, name, value):
+        raise AttributeError("_ConfigCacheEntry is immutable")
+
+    def __delattr__(self, name):
+        raise AttributeError("_ConfigCacheEntry is immutable")
+
+
+class _Refusal(Exception):
+    """An ENUMERATED, deliberate refusal raised inside a guarded body."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+class _StageCursor:
+    """Names the evaluation point currently executing, for attribution."""
+
+    __slots__ = ("domain", "name")
+
+    def __init__(self, domain: str, first: str) -> None:
+        self.domain = domain
+        self.name = first
+
+    def at(self, name: str) -> None:
+        self.name = name
+
+    def token(self) -> str:
+        return f"{self.domain}:{self.name}"
+
+
+def _safe_type_name(exc) -> str:
+    """Sanitized ``type(exc).__name__`` -- ``[A-Za-z0-9_.]``, <= 40 chars.
+
+    The exception TYPE is diagnosable and belongs in the reason string, but
+    it is ALSO attacker-controlled: a hostile ``__eq__``/``__iter__`` may
+    raise an instance of a class whose ``__name__`` is a multi-kilobyte
+    string containing newlines, and that string would travel into
+    attempts/PRE_RUN_ATTEMPT_FAILURE.md and past
+    runinfra.validate_log_event. So the type name is a payload too, and is
+    sanitized rather than trusted.
+    """
+    try:
+        raw = type(exc).__name__
+    except BaseException:                            # noqa: BLE001
+        return "UNPRINTABLE"
+    if type(raw) is not str:
+        return "UNPRINTABLE"
+    return _SAFE_NAME_RE.sub("?", raw)[:40] or "UNPRINTABLE"
+
+
+def _code_heads(codes) -> str:
+    """Deterministic, PAYLOAD-FREE summary of a problem-code list.
+
+    `contracts.validate_injectables` emits ``extra_key:<repr(key)>`` and
+    `ResolvedS0Methods.structural_problems` emits
+    ``...adverse_slippage_ticks_value_invalid:<key>`` -- both embed
+    attacker-controlled text. Only the code HEAD (a closed vocabulary) is
+    reported; the variable tail is dropped.
+    """
+    heads = set()
+    for code in codes:
+        if type(code) is not str:
+            heads.add("UNPRINTABLE")
+            continue
+        heads.add(_SAFE_NAME_RE.sub("?", code.split(":", 1)[0])[:80])
+    return ", ".join(sorted(heads)) or "none"
+
+
+def _refuse(cursor: _StageCursor, stage: str, clause: str):
+    """Advance the cursor and raise the enumerated refusal for `stage`."""
+    cursor.at(stage)
+    raise _Refusal(f"{cursor.domain}:{stage}: {clause}")
+
+
+def _run_guarded(body, cursor: _StageCursor, failure):
+    """THE SINGLE TRUST BOUNDARY of the configuration path (finding F-1).
+
+    `body(cursor)` is a straight-line pipeline that contains NO try/except
+    of its own: it raises `_Refusal` for every ENUMERATED refusal, and it
+    advances `cursor` before every evaluation point, so that an
+    UNENUMERATED explosion -- including one raised by foreign code we never
+    intended to run -- is attributed to the exact stage that was executing.
+
+    Coverage here is STRUCTURAL, not per-site: any evaluation point added
+    to `body` in future is already guarded and already attributed, without
+    anyone remembering to wrap it. The previous round of this defect
+    recurred precisely because it patched named line numbers instead of
+    installing a boundary.
+
+    COST OF `BaseException`: a KeyboardInterrupt or SystemExit raised
+    inside `body` is converted into a refusal rather than propagating.
+    That is deliberate and it is not free. It is the right trade here
+    because the guarded bodies are short, deterministic and entirely
+    PRE-EXPOSURE (no data load, no runs/ creation, no atomic run-start),
+    so refusing is the safe direction -- and because a hostile
+    ``__eq__``/``__iter__`` may raise a non-`Exception` class, which a bare
+    ``except Exception`` would let escape the public (bool, str) contract.
+    """
+    try:
+        return body(cursor)
+    except _Refusal as ref:
+        return failure(ref.reason)
+    except BaseException as exc:                     # noqa: BLE001
+        return failure(f"{cursor.token()}: unexpected "
+                       f"{_safe_type_name(exc)} inside the guarded body "
+                       f"— fail closed")
+
+
+# --- non-executing normalization atoms ------------------------------------
+# Every atom pins the EXACT type before it does anything else, and a value
+# that cannot be normalized without executing foreign code is ITSELF A
+# REFUSAL (the `_NotNormalizable` sentinel), never a silent skip.
+
+class _NotNormalizable:
+    """Sentinel: this value cannot be normalized without executing foreign
+    code. Deliberately inert -- no ``__eq__``, no ``__getattr__``, no
+    ``__iter__``; it is recognised by ``type(x) is _NotNormalizable``."""
+
+    __slots__ = ("rule",)
+
+    def __init__(self, rule: str) -> None:
+        self.rule = rule
+
+
+def _atom_str(value):
+    # `type(...) is str`, not isinstance: a str SUBCLASS can override
+    # __eq__, and the fingerprint tuples are compared with `==`.
+    return value if type(value) is str else _NotNormalizable("expected_str")
+
+
+def _atom_int(value):
+    # `type(...) is int` deliberately EXCLUDES bool (a subclass of int), so
+    # True can never occupy an int slot and compare equal to 1.
+    return value if type(value) is int else _NotNormalizable("expected_int")
+
+
+def _atom_bool(value):
+    return (value if type(value) is bool
+            else _NotNormalizable("expected_bool"))
+
+
+def _atom_number(value):
+    """Exact int/float -> canonical finite non-negative plain float.
+
+    numpy scalars, Decimal and custom ``numbers.Real`` registrations are
+    REFUSED: admitting them would put ``__float__``/``__index__`` dispatch
+    inside the gate. This costs nothing, because both sides of every
+    fingerprint comparison are StudyConfig instances whose __post_init__
+    has already rewritten spread_scalars to plain floats via
+    contracts.canonical_spread_scalars.
+    """
+    if type(value) is int:
+        if value < 0 or value >= 9007199254740993:   # 2**53 + 1
+            return _NotNormalizable("int_out_of_exact_float_range")
+        value = float(value)
+    elif type(value) is not float:
+        return _NotNormalizable("expected_int_or_float")
+    if not _math.isfinite(value):
+        return _NotNormalizable("expected_finite_number")
+    if value < 0.0:
+        return _NotNormalizable("expected_non_negative_number")
+    return 0.0 if value == 0.0 else value            # collapses -0.0
+
+
+def _atom_ticks(value):
+    """Adverse-slippage mapping -> sorted tuple of (str, float) atoms.
+
+    BOUNDARY-GUARDED, NOT NON-EXECUTING -- the one documented residual of
+    this design. `contracts._canonical_ticks` rewrites a Mapping to
+    ``MappingProxyType(dict(...))`` but returns a caller-supplied
+    MappingProxyType UNCHANGED, and a mappingproxy delegates
+    ``__iter__``/``items()`` to its underlying mapping, which may be a dict
+    SUBCLASS with an overridden ``__iter__``. CPython exposes no API to
+    reach the underlying object, and refusing MappingProxyType outright
+    would refuse every legitimately-constructed SpreadCostMethod. So this
+    single read may run foreign code; it cannot ESCAPE (the boundary in
+    `_run_guarded` turns it into a deterministic, stage-attributed
+    refusal), and no COMPARISON is involved. Sorting is safe because both
+    members of every pair are already pinned to exact builtins.
+    """
+    if type(value) is not dict and type(value) is not _MProxy:
+        return _NotNormalizable("expected_dict_or_mappingproxy")
+    pairs = []
+    for key, val in value.items():
+        k = _atom_str(key)
+        if type(k) is _NotNormalizable:
+            return _NotNormalizable("ticks_key." + k.rule)
+        v = _atom_number(val)
+        if type(v) is _NotNormalizable:
+            return _NotNormalizable("ticks_value." + v.rule)
+        pairs.append((k, v))
+    return tuple(sorted(pairs))
+
+
+#: EXPLICIT per-field rules for the structured method sub-items. Never
+#: reflection: tests/test_m6_chain.py pins that each table's key set equals
+#: the dataclass's field set, so a NEW field turns the suite RED instead of
+#: being silently dropped from the fingerprint.
+_METHOD_SUB_RULES: dict = {
+    "SpreadCostMethod": (_SCM, (
+        ("scalar_rule", _atom_str),
+        ("adverse_slippage_ticks", _atom_ticks),
+        ("adverse_semantics", _atom_str))),
+    "VolatilityRegimeMethod": (_VRM, (
+        ("close_source", _atom_str),
+        ("return_basis", _atom_str),
+        ("ddof", _atom_int),
+        ("roll_crossing_rule", _atom_str),
+        ("tercile_reference", _atom_str),
+        ("na_rule", _atom_str))),
+    "FpAllocationMethod": (_FAM, (
+        ("basis", _atom_str),
+        ("weight_source", _atom_str),
+        ("shortfall_rule", _atom_str))),
+    "BootstrapMethod": (_BM, (
+        ("population", _atom_str),
+        ("na_day_rule", _atom_str),
+        ("statistic", _atom_str),
+        ("n_boot_per_seed", _atom_bool),
+        ("quoted_seed_rule", _atom_str),
+        ("percentile_interpolation", _atom_str),
+        ("crn_scope", _atom_str))),
+    "GridRepeatPolicy": (_GRP, (
+        ("k_per_seed", _atom_int),
+        ("k_start_index", _atom_int),
+        ("stream_includes_theta", _atom_bool),
+        ("convergence_rule", _atom_str),
+        ("max_doublings", _atom_int))),
+}
+
+
+def _norm_sub(kind: str, value):
+    """Normalize one structured method sub-item, or return the sentinel."""
+    cls, rules = _METHOD_SUB_RULES[kind]
+    # EXACT type pin BEFORE any attribute read -- stricter than
+    # structural_problems()'s isinstance, and that is the point: a subclass
+    # with an overriding property must refuse, not run.
+    if type(value) is not cls:
+        return _NotNormalizable("expected_exact_" + kind)
+    out = [kind]
+    for name, atom in rules:
+        got = atom(getattr(value, name))
+        if type(got) is _NotNormalizable:
+            return _NotNormalizable(f"{kind}.{name}.{got.rule}")
+        out.append(got)
+    return tuple(out)
+
+
+def _sub_rule(kind: str):
+    def _rule(value):
+        return None if value is None else _norm_sub(kind, value)
+    return _rule
+
+
+def _opt_str(value):
+    return None if value is None else _atom_str(value)
+
+
+#: EXPLICIT per-field rules for ResolvedS0Methods (see _METHOD_SUB_RULES).
+_METHODS_FIELD_RULES: tuple = (
+    ("spread_cost", _sub_rule("SpreadCostMethod")),
+    ("volatility_regime", _sub_rule("VolatilityRegimeMethod")),
+    ("fp_allocation", _sub_rule("FpAllocationMethod")),
+    ("bootstrap_method", _sub_rule("BootstrapMethod")),
+    ("grid_policy", _sub_rule("GridRepeatPolicy")),
+    ("event_na_mapping", _opt_str),
+    ("stability_population", _opt_str),
+    ("worst_day_estimator", _opt_str),
+    ("test_only", _atom_bool),
+)
+
+#: EXPLICIT rules for the derived injectables. The two callables are NOT
+#: fingerprinted -- see G11_callable_identity.
+_INJECTABLE_FIELD_RULES: dict = {
+    "spread_scalars": "canonical_float_triple_median_le_p90_le_p95",
+    "regime_of": "object_identity_only",
+    "vol_axis_of": "object_identity_only",
+}
+
+
+#: --- CANONICAL-REPRESENTATION OBLIGATIONS (M6.1.4-R2, F-1 reopened) -------
+#: ONE ROW PER FIELD `contracts` REWRITES in a `__post_init__`, and nothing
+#: else. F-1 recurred because equivalence was mistaken for interchangeability:
+#: the fingerprints above are a NORMALIZING map, and normalization is exactly
+#: what erases representation (`_atom_number` widens int->float and collapses
+#: -0.0; `_atom_ticks` maps a mutable dict and the canonical read-only
+#: mappingproxy to the SAME sorted tuple). So a cached object can be
+#: fingerprint-EQUAL to a fresh derivation and still not be the canonical
+#: object contracts promises -- and it is the cached INSTANCE that gets
+#: handed out.
+#:
+#: THE CLAIM THESE TABLES MAKE, exactly, and never widened: CANONICAL
+#: WHEREVER CONTRACTS SPECIFIES CANONICAL, exact-type-pinned everywhere else.
+#: Every predicate below IS the contracts function (by object identity, pinned
+#: in tests), so contracts stays the single source and this file defines no
+#: second canonicalization rule.
+#:
+#: EXPLICIT, never reflection: tests/test_m6_chain.py scans contracts for its
+#: `object.__setattr__` rewrites and turns RED if a new one appears without a
+#: row here -- which is also what automatically extends the ACCEPT-SIDE
+#: assertions (see `canonical_form_obligations`).
+_METHODS_CANONICAL_RULES: tuple = (
+    ("spread_cost", _SCM, "adverse_slippage_ticks", _is_canon_ticks),
+)
+
+_CONFIG_CANONICAL_RULES: tuple = (
+    ("spread_scalars", _is_canon_scalars),
+)
+
+
+def _methods_canonical_defect(methods) -> str:
+    """`""` if every methods-side representation obligation holds, else a
+    CLOSED-VOCABULARY description of the first violated one.
+
+    The caller MUST have pinned `type(methods) is _RSM` first. Each row then
+    re-pins its own sub-item's EXACT type before reading the canonicalized
+    field, so this never relies on a previous stage's side effect. Nothing
+    here executes a user object's `__eq__`/`__repr__` or coerces a number:
+    the contracts predicates are type pins plus their own producers.
+    """
+    for name, cls, sub, is_canonical in _METHODS_CANONICAL_RULES:
+        value = getattr(methods, name)
+        if type(value) is not cls:
+            return f"methods.{name} is not exactly a {cls.__name__}"
+        if not is_canonical(getattr(value, sub)):
+            return (f"methods.{name}.{sub} is not the canonical form "
+                    f"contracts specifies")
+    return ""
+
+
+def _config_canonical_defect(cfg) -> str:
+    """As `_methods_canonical_defect`, for the config's own fields. The
+    caller MUST have pinned `type(cfg) is StudyConfig` first.
+
+    THE TWO CALLABLES ARE DELIBERATELY ABSENT and no canonical form is
+    invented for them: they are settled at G11_callable_identity by in-process
+    object identity. That is an ENGINEERING CACHE-COHERENCE RULE -- it answers
+    "is this the very object the approved injectable source hands out in this
+    process?" and NOTHING about what regime_of / vol_axis_of compute. It does
+    not define, approve, rank or narrow their research output; DR-1 and DR-2
+    stay open.
+    """
+    for name, is_canonical in _CONFIG_CANONICAL_RULES:
+        if not is_canonical(getattr(cfg, name)):
+            return (f"config.{name} is not the canonical form contracts "
+                    f"specifies")
+    return ""
+
+
+def canonical_form_obligations(cfg):
+    """`(label, holds)` for EVERY canonical-representation obligation,
+    evaluated on a config the gateway has ACCEPTED.
+
+    THE ACCEPT-SIDE EXTENSION POINT, and the answer to the root cause of this
+    round. The in-repo F-1 regression set (`_F1_CASES` in
+    tests/test_m6_chain.py) was TWELVE named hostile shapes and every single
+    one asserted a REFUSAL; not one asserted anything about a config the
+    gateway ACCEPTS. Two defects that produce an ACCEPT of a non-canonical
+    instance therefore sailed straight through it. Tests consume this to
+    assert the accepted instance is canonical ON THE WAY OUT, and because it
+    is derived from the same tables the gateway stages use, a future
+    canonicalized field joins those assertions by adding one table row --
+    never by someone remembering to write a new test.
+
+    Read-only and total: it reports, it never refuses. The gateway's own
+    refusals live in the two `_..._canonical_defect` helpers.
+    """
+    out = []
+    methods = cfg.methods
+    for name, cls, sub, is_canonical in _METHODS_CANONICAL_RULES:
+        value = getattr(methods, name)
+        out.append((f"methods.{name}.{sub}",
+                    type(value) is cls
+                    and bool(is_canonical(getattr(value, sub)))))
+    for name, is_canonical in _CONFIG_CANONICAL_RULES:
+        out.append((f"config.{name}", bool(is_canonical(getattr(cfg, name)))))
+    return tuple(out)
+
+
+def _methods_fingerprint(methods):
+    """NON-EXECUTING fingerprint of an EXACT ResolvedS0Methods.
+
+    The caller MUST have pinned ``type(methods) is _RSM`` first; every
+    attribute read below is then a plain frozen-dataclass slot on a class
+    we own, and every leaf is an exact builtin atom.
+    """
+    out = ["ResolvedS0Methods"]
+    for name, rule in _METHODS_FIELD_RULES:
+        got = rule(getattr(methods, name))
+        if type(got) is _NotNormalizable:
+            return _NotNormalizable(f"{name}.{got.rule}")
+        out.append(got)
+    return tuple(out)
+
+
+def _config_fingerprint(cfg, methods_fp):
+    """NON-EXECUTING fingerprint of an EXACT StudyConfig.
+
+    CALLABLES ARE DELIBERATELY EXCLUDED: `regime_of` / `vol_axis_of` are
+    settled at G11_callable_identity by object identity (see there).
+    """
+    scal = cfg.spread_scalars
+    if type(scal) is not tuple:
+        return _NotNormalizable("spread_scalars.expected_tuple")
+    if len(scal) != 3:
+        return _NotNormalizable("spread_scalars.expected_length_3")
+    vals = []
+    for i, v in enumerate(scal):
+        got = _atom_number(v)
+        if type(got) is _NotNormalizable:
+            return _NotNormalizable(f"spread_scalars[{i}].{got.rule}")
+        vals.append(got)
+    m, p90, p95 = vals
+    if not (0.0 <= m <= p90 <= p95):
+        return _NotNormalizable("spread_scalars.expected_ordered")
+    return ("StudyConfig", methods_fp, (m, p90, p95))
+
+
+def _gateway_body(cursor: _StageCursor):
+    """The ONE configuration resolution path. CONTAINS NO try/except.
+
+    Every enumerated refusal raises `_Refusal`; anything unenumerated is
+    caught and attributed by the single boundary in `_run_guarded`.
+    """
+    # ---- (1) cache read --------------------------------------------------
+    cursor.at("G1_cache_read")
+    entry = _CONFIG_CACHE.get("cfg", _MISSING)
+
+    # ---- (2) EXACT envelope: no unpack, no len, no iteration -------------
+    cursor.at("G2_cache_envelope")
+    have_cache = entry is not _MISSING
+    cached_cfg = None
+    cached_reason = ""
+    if have_cache:
+        if type(entry) is not _ConfigCacheEntry:
+            _refuse(cursor, "G2_cache_envelope",
+                    "cached entry is not the internal _ConfigCacheEntry "
+                    "envelope — fail closed")
+        cached_cfg = entry.config
+        cached_reason = entry.reason
+        if type(cached_reason) is not str:
+            _refuse(cursor, "G2_cache_envelope",
+                    "cached envelope reason is not a str — fail closed")
+
+    cached_methods = None
+    if have_cache:
+        # ---- (3) EXACT config type BEFORE any attribute read -------------
+        cursor.at("G3_config_type")
+        if type(cached_cfg) is not StudyConfig:
+            _refuse(cursor, "G3_config_type",
+                    "cached object is not exactly a StudyConfig — a "
+                    "subclass could override attribute reads; fail closed")
+        # ---- (4) EXACT methods type BEFORE any read of a methods field --
+        cursor.at("G4_methods_type")
+        cached_methods = cached_cfg.methods
+        if type(cached_methods) is not _RSM:
+            _refuse(cursor, "G4_methods_type",
+                    "config.methods is not exactly a ResolvedS0Methods — "
+                    "equality is never delegated to a foreign methods "
+                    "type")
+        cursor.at("G4b_test_only")
+        flag = cached_methods.test_only
+        if type(flag) is not bool:
+            _refuse(cursor, "G4b_test_only",
+                    "methods.test_only is not a bool — fail closed")
+        if flag:
+            _refuse(cursor, "G4b_test_only",
+                    "test_only config refused on the production path")
+
+    # ---- (5) approved METHOD source (the AUTHORITY) ----------------------
+    cursor.at("G5_method_source")
+    fresh_methods = _resolved_methods()
+    if type(fresh_methods) is not _RSM:
+        _refuse(cursor, "G5_method_source",
+                "approved method source did not return exactly a "
+                "ResolvedS0Methods — fail closed")
+    cursor.at("G5b_source_test_only")
+    fresh_flag = fresh_methods.test_only
+    if type(fresh_flag) is not bool:
+        _refuse(cursor, "G5b_source_test_only",
+                "approved method source test_only is not a bool — fail "
+                "closed")
+    if fresh_flag:
+        _refuse(cursor, "G5b_source_test_only",
+                "approved method source is marked test_only — refused on "
+                "the production path")
+
+    # ---- (7) pending + structural validation, on the FRESH instance ------
+    # Deliberately NOT on the cached one: structural_problems() calls
+    # isinstance/float() and iterates the ticks mapping, which for a cached
+    # config are attacker-influenced values. The cached config's structural
+    # legality is instead established DERIVATIVELY at G10 -- its fingerprint
+    # must equal that of this instance, which has just been validated.
+    cursor.at("G7_pending")
+    pend = fresh_methods.pending_fields()
     if pend:
-        return (None, "pending method rulings: " + ", ".join(pend))
-    bad = cfg.methods.structural_problems()
+        _refuse(cursor, "G7_pending",
+                "pending method rulings: " + ", ".join(pend))
+    cursor.at("G7b_structural")
+    bad = fresh_methods.structural_problems()
     if bad:
-        return (None, "structurally invalid methods: " + ", ".join(bad))
-    if not callable(cfg.regime_of) or not callable(cfg.vol_axis_of):
-        return (None, "config callables invalid")
-    return (cfg, why)
+        _refuse(cursor, "G7b_structural",
+                "structurally invalid methods: " + _code_heads(bad))
+
+    # ---- (10) methods EQUIVALENCE by non-executing fingerprint -----------
+    cursor.at("G10_methods_fingerprint")
+    fresh_m_fp = _methods_fingerprint(fresh_methods)
+    if type(fresh_m_fp) is _NotNormalizable:
+        _refuse(cursor, "G10_methods_fingerprint",
+                "fresh methods field " + fresh_m_fp.rule + " cannot be "
+                "normalized without executing foreign code — fail closed")
+    # ---- (10) REPRESENTATION IDENTITY -- a SEPARATE obligation -----------
+    # The fingerprint just above decides EQUIVALENCE and is deliberately
+    # LOSSY (contracts widens int->float so (0,1,1) and (0.0,1.0,1.0) compare
+    # EQUAL, and a mappingproxy compares equal to the dict it wraps). This
+    # stage asks the other question -- is THIS object in the exact canonical
+    # form contracts specifies? -- and it is asked of the object ITSELF, not
+    # of a comparison. Fixing this inside the fingerprint instead would also
+    # refuse value-equal pairs contracts declares EQUAL.
+    cursor.at("G10_methods_canonical_form")
+    m_defect = _methods_canonical_defect(fresh_methods)
+    if m_defect:
+        _refuse(cursor, "G10_methods_canonical_form",
+                "fresh " + m_defect + " — fail closed")
+    cached_m_fp = None
+    if have_cache:
+        cursor.at("G10_methods_fingerprint")
+        cached_m_fp = _methods_fingerprint(cached_methods)
+        if type(cached_m_fp) is _NotNormalizable:
+            _refuse(cursor, "G10_methods_fingerprint",
+                    "cached methods field " + cached_m_fp.rule + " cannot "
+                    "be normalized without executing foreign code — fail "
+                    "closed")
+        cursor.at("G10_methods_canonical_form")
+        m_defect = _methods_canonical_defect(cached_methods)
+        if m_defect:
+            _refuse(cursor, "G10_methods_canonical_form",
+                    "cached " + m_defect + " — value equivalence is not "
+                    "representation identity; fail closed")
+        cursor.at("G10_methods_equivalence")
+        # Both operands are tuples of exact builtin atoms, so `!=` cannot
+        # dispatch to foreign code. This REPLACES the old
+        # `cfg.methods != fresh_methods`, which did.
+        if cached_m_fp != fresh_m_fp:
+            _refuse(cursor, "G10_methods_equivalence",
+                    "config does not match the fresh approved method "
+                    "source — cache is not a method source")
+
+    # ---- (6) approved INJECTABLE source ----------------------------------
+    cursor.at("G6_injectable_source")
+    injectables = _approved_injectables()
+    if injectables is None:
+        _refuse(cursor, "G6_injectable_source",
+                "no approved injectable source (spread_scalars / "
+                "regime_of / vol_axis_of) exists yet — a cached config "
+                "cannot be its own injectable source; fail closed")
+
+    # ---- (8) injectable SCHEMA (validate_injectables never raises) -------
+    cursor.at("G8_injectable_schema")
+    from itsf.contracts import validate_injectables as _vinj
+    inj_problems = _vinj(injectables)
+    if inj_problems:
+        _refuse(cursor, "G8_injectable_schema",
+                "approved injectable source malformed — fail closed: "
+                + _code_heads(inj_problems))
+
+    # ---- (9) config DERIVATION from the approved sources -----------------
+    cursor.at("G9_derivation")
+    from itsf.contracts import derive_study_config as _derive
+    fresh_cfg = _derive(fresh_methods, **injectables)
+    if type(fresh_cfg) is not StudyConfig:
+        _refuse(cursor, "G9_derivation",
+                "fresh derivation did not return exactly a StudyConfig — "
+                "fail closed")
+
+    # ---- (11) config EQUIVALENCE: fingerprint + callable identity --------
+    cursor.at("G11_config_fingerprint")
+    fresh_c_fp = _config_fingerprint(fresh_cfg, fresh_m_fp)
+    if type(fresh_c_fp) is _NotNormalizable:
+        _refuse(cursor, "G11_config_fingerprint",
+                "fresh config field " + fresh_c_fp.rule + " cannot be "
+                "normalized without executing foreign code — fail closed")
+    cursor.at("G11_config_canonical_form")
+    c_defect = _config_canonical_defect(fresh_cfg)
+    if c_defect:
+        _refuse(cursor, "G11_config_canonical_form",
+                "fresh " + c_defect + " — fail closed")
+    cursor.at("G11_callable_identity")
+    for _name in ("regime_of", "vol_axis_of"):
+        if not callable(getattr(fresh_cfg, _name)):
+            _refuse(cursor, "G11_callable_identity",
+                    "fresh config." + _name + " is not callable — fail "
+                    "closed")
+
+    out_cfg = fresh_cfg
+    out_reason = ("derived from the approved method source and the "
+                  "approved injectable source")
+    if have_cache:
+        cursor.at("G11_config_fingerprint")
+        cached_c_fp = _config_fingerprint(cached_cfg, cached_m_fp)
+        if type(cached_c_fp) is _NotNormalizable:
+            _refuse(cursor, "G11_config_fingerprint",
+                    "cached config field " + cached_c_fp.rule + " cannot "
+                    "be normalized without executing foreign code — fail "
+                    "closed")
+        # REFUSE, NEVER REPAIR. Handing back `contracts.canonical_config(
+        # cached_cfg)` would mint a NEW object on every call -- destroying the
+        # identity guarantee ready() and compute() depend on -- while
+        # silently accepting a tampered cache. It would also re-run
+        # __post_init__, whose structural_problems() calls float() on
+        # attacker-influenced values: a numeric coercion inside the gate.
+        cursor.at("G11_config_canonical_form")
+        c_defect = _config_canonical_defect(cached_cfg)
+        if c_defect:
+            _refuse(cursor, "G11_config_canonical_form",
+                    "cached " + c_defect + " — value equivalence is not "
+                    "representation identity; fail closed")
+        cursor.at("G11_callable_identity")
+        # ENGINEERING IDENTITY RULE -- NOT A RESEARCH STATEMENT.
+        # `is` is used here solely for CACHE COHERENCE: it answers "is this
+        # the very object the approved injectable source hands out in this
+        # process?", and nothing else. It does NOT define, approve, rank or
+        # narrow what regime_of / vol_axis_of compute; DR-1 and DR-2 stay
+        # open. Two callables that agree on every input are DIFFERENT here
+        # by design -- weakening this to semantic comparison would reopen
+        # blind-audit F3 (a cached config supplying its own mappings).
+        # Consequence the future _approved_injectables() must honour: it
+        # must return STABLE callable objects, not fresh lambdas per call.
+        # A hostile __eq__ on a callable is therefore never invoked.
+        for _name in ("regime_of", "vol_axis_of"):
+            got = getattr(cached_cfg, _name)
+            if not callable(got):
+                _refuse(cursor, "G11_callable_identity",
+                        "config." + _name + " is not callable — fail "
+                        "closed")
+            if got is not getattr(fresh_cfg, _name):
+                _refuse(cursor, "G11_callable_identity",
+                        "config." + _name + " is not the same object the "
+                        "approved injectable source hands out — a fresh "
+                        "derivation is not interchangeable with an "
+                        "equivalent-looking callable; fail closed")
+        cursor.at("G11_config_equivalence")
+        # Again atoms only. This REPLACES the old `cfg != fresh_cfg`, which
+        # dispatched to whatever __eq__ the config's fields carried.
+        if cached_c_fp != fresh_c_fp:
+            _refuse(cursor, "G11_config_equivalence",
+                    "config does not match a fresh derivation from the "
+                    "approved sources — cache is not a config source")
+        out_cfg = cached_cfg               # the SAME INSTANCE, by identity
+        out_reason = cached_reason
+    else:
+        # ---- (12) cache write: the ONLY construction site ----------------
+        cursor.at("G12_cache_write")
+        _CONFIG_CACHE["cfg"] = _ConfigCacheEntry(config=fresh_cfg,
+                                                 reason=out_reason)
+
+    # ---- (13) point-of-use revalidation ----------------------------------
+    # Not a gate but the SINGLE-PATH INVARIANT: everything above ran on
+    # THIS call, cache hit or miss, so the config handed out has just been
+    # revalidated against a fresh read of the approved sources.
+    cursor.at("G13_point_of_use")
+    if type(out_cfg) is not StudyConfig:
+        _refuse(cursor, "G13_point_of_use",
+                "gateway post-condition violated — fail closed")
+    return (out_cfg, out_reason)
 
 
 def resolved_study_config() -> tuple[StudyConfig | None, str]:
-    """Shared readiness/compute predicate (E1/M6.1.1). ready() and
-    compute() consume the SAME cached immutable instance — ready=False and
-    compute-raises can never diverge. A test_only config is refused here
-    (production path) even if one were cached."""
-    if "cfg" in _CONFIG_CACHE:
-        cfg, why = _CONFIG_CACHE["cfg"]
-        return _validated_config(cfg, why)
-    pend = _resolved_methods().pending_fields()
-    if pend:
-        out = (None, "pending method rulings: " + ", ".join(pend))
-    else:
-        # Reached only after ALL rulings land. Deriving the concrete
-        # injectables (spread scalars per the ruled reduction rule, the
-        # ruled regime/vol mappings) is the main-agent wiring step that
-        # accompanies the rulings; until it exists this fails CLOSED and
-        # Stage B blocks pre-exposure.
-        out = (None, "rulings landed but config derivation not implemented "
-                     "(M6.1 wiring step) — fail closed pre-exposure")
-    _CONFIG_CACHE["cfg"] = out
-    return out
+    """Shared readiness/compute predicate -- THE single gateway entry.
+
+    ready() and compute() both call this and therefore consume the SAME
+    validated instance (identity, not equality), so ready=False and
+    compute-raises can never diverge. Returns (None, reason) for every
+    failure; NO exception ever crosses this boundary.
+    """
+    cursor = _StageCursor("config_gate", _GATE_STAGES[0])
+    return _run_guarded(_gateway_body, cursor, lambda why: (None, why))
 
 FROZEN_N_BOOT = 10_000                 # frozen: S0 §9 — 10,000 resamples
 FROZEN_BLOCKS = (5, 21)                # frozen: S0 §9 — Primary 5 / Sens 21
@@ -1195,7 +2024,8 @@ def _strkeys(obj):
 
 
 def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
-                            governance_meta, n_boot=FROZEN_N_BOOT):
+                            governance_meta, n_boot=FROZEN_N_BOOT,
+                            universe=None, frozen_hash_observations=None):
     """Assemble the FULL S0 payload per S0_REPORT_CONTENT_CONTRACT §A.
 
     spread_scalars (DR-M6-A) and regime_of (DR-M6-B) are INJECTED so the
@@ -1258,7 +2088,7 @@ def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
     day_meta = {r.trade_date: {"year": r.year, "era": r.era,
                                "d_open": int(r.labels.d_open or 0)}
                 for r in ds.records}
-    return {
+    out = {
         # ---- internal envelope (split_envelope; never sealed) -----------
         "dataset": structural["dataset"],
         "na_reason_counts": structural["na_reason_counts"],
@@ -1337,6 +2167,17 @@ def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
             }},
         "governance": dict(governance_meta),
     }
+    # M6.1.4 (main-1): CANONICAL EVIDENCE is captured at compute time, in
+    # the one scope where the atoms (ds, bars, records, config) are all
+    # live — a SECOND derivation path, not a copy of study.py aggregates.
+    # split_envelope drops the key from both halves, so it can never leak
+    # into the sealed payload; the renderer REQUIRES it and reconciles the
+    # formal payload + actual sealed bytes against it before sealing.
+    from itsf.s0 import evidence as _ev
+    out["evidence"] = _ev.capture_evidence(
+        ds, bars_by_date, out, config, universe=universe,
+        frozen_hash_observations=frozen_hash_observations, n_boot=n_boot)
+    return out
 
 
 def _expected_governance() -> dict:
@@ -1366,6 +2207,49 @@ def validate_report_contract(payload, *, expected_governance=None
         payload, expected_governance=expected_governance)
 
 
+class _PreparedExecutionInput:
+    """M6.1.6 — the object the pre-exposure prepare seam hands to Stage C.
+    Exact-type-pinned by `RealChain.compute`, so Stage C cannot be fed a
+    look-alike and cannot fall back to re-resolving configuration.
+
+    "RUN-SCOPED" IS WRAPPER-SCOPED, AND THE DIFFERENCE MATTERS (M6.1.6
+    review A2-1/A2-2). Each run gets its own wrapper, and two `RealChain`
+    instances never share one. But `.config` is the process-global instance
+    the gateway caches (`out_cfg = cached_cfg`), so the wrapper is scoped
+    per run while the config it carries is not. And the pin is a TYPE pin,
+    not a PROVENANCE pin: a hand-built instance, or an
+    `object.__setattr__` swap of `.config` after prepare, would not be
+    detected. Neither is reachable through `S0Runner.run()` — the window
+    between prepare and compute contains only runner-owned code — but the
+    guarantee is "Stage C cannot re-resolve", not "Stage C's config is
+    unforgeable".
+
+    __slots__, no generated __eq__/__repr__: it is identified by
+    `type(x) is _PreparedExecutionInput` and consumed by attribute read, and
+    is never compared, unpacked or serialized.
+
+    HONEST SCOPE — what this object does and does NOT freeze. `config` is a
+    `StudyConfig`, whose `spread_scalars` are already an immutable tuple of
+    plain floats and whose `methods` are frozen dataclasses. It is NOT the
+    fully materialised execution plan: `config.regime_of` / `.vol_axis_of`
+    remain CALLABLES (behaviour is not snapshot-able — `__closure__` cells,
+    `__code__` and `__globals__` are all rebindable), and
+    `methods.spread_cost.adverse_slippage_ticks` remains a MappingProxyType,
+    i.e. a live view over a backing dict its author may still hold.
+    Materialising the callables needs DR-2's ruled vocabulary (the `vol_na`
+    fourth-stratum case is unruled) and freezing tick VALUES needs a ruling
+    this milestone must not make. Both stay open; F-1 remains PARTIAL."""
+
+    __slots__ = ("config", "reason")
+
+    def __init__(self, *, config, reason):
+        object.__setattr__(self, "config", config)
+        object.__setattr__(self, "reason", reason)
+
+    def __setattr__(self, name, value):          # no post-prepare mutation
+        raise AttributeError("_PreparedExecutionInput is immutable")
+
+
 class RealChain:
     """Cached real-data chain. Universe/dataset are built at most once per
     process; Stage B reads only structural counts from them, Stage C returns
@@ -1377,17 +2261,33 @@ class RealChain:
         self._bars = None
 
     def ready(self) -> tuple[bool, str]:
+        """Public readiness probe — ALWAYS returns (bool, str).
+
+        M6.1.4-ARCH (F-1): the (bool, str) contract is now TOTAL, and it is
+        made total by the SAME single mechanism the config gateway uses
+        (`_run_guarded`), not by a second set of guards. The artifact
+        probes below are inside it too: `Path.exists()` can raise OSError
+        on a pathological path, and that must be a refusal, not an escape.
+        """
+        cursor = _StageCursor("ready_gate", "R1_artifact_paths")
+        return _run_guarded(self._ready_body, cursor,
+                            lambda why: (False, why))
+
+    def _ready_body(self, cursor):
+        """Straight-line readiness pipeline. CONTAINS NO try/except."""
+        cursor.at("R1_artifact_paths")
         missing = [str(p) for p in (F10_CSV, SYMBOLOGY_CSV,
                                     A1_JOB_DIR / "condition.json",
                                     A1_JOB_DIR / "manifest.json")
                    if not p.exists()]
         if missing:
-            return (False, f"stage-C artifacts missing: {missing}")
+            raise _Refusal(f"stage-C artifacts missing: {missing}")
         # M6.1 E1: readiness and compute share resolved_study_config —
         # ready() can never say True while compute() would refuse.
+        cursor.at("R2_config_gateway")
         cfg, why = resolved_study_config()
         if cfg is None:
-            return (False, f"stage-C fail-closed pre-exposure: {why}")
+            raise _Refusal(f"stage-C fail-closed pre-exposure: {why}")
         return (True, "stage C wiring ready (full study chain)")
 
     def _ensure(self):
@@ -1414,6 +2314,27 @@ class RealChain:
     def structural_actuals(self) -> dict:
         ds, uni = self._ensure()
         return structural_actuals_from(ds, uni)
+
+    def render_report_with_governance_proof(self, result):
+        """M6.1.6 — production render entry point. Builds the INDEPENDENT
+        governance context here (pre-run authorization snapshot, frozen-hash
+        authority, fresh disk re-hash) and hands it to the renderer, so the
+        proof's expected side never originates in the payload it verifies.
+
+        The re-hash is taken here, at seal time, from disk — the same
+        derivation `compute()` used, computed again independently rather
+        than carried through the result."""
+        from itsf import guards as _g
+        from itsf.s0 import output_proof as _op
+        ctx = _op.SourceContext(
+            authorization_snapshot=self.authorization_snapshot(),
+            frozen_hash_authority=dict(_g.FROZEN_HASHES),
+            frozen_hash_observations={
+                p: hashlib.sha256((REPO / p).read_bytes()).hexdigest()
+                for p in sorted(_g.FROZEN_HASHES)},
+            engineering_seed=ENGINEERING_SEED,
+            engineering_seed_provenance="DR-02 / packet §5")
+        return render_s0_report(result, governance_context=ctx)
 
     def authorization_snapshot(self) -> dict:
         """Aaron 2026-08-02 §三: structured snapshot of the authorization
@@ -1460,13 +2381,44 @@ class RealChain:
         return (False, f"IR-24 F8 divergence set NON-EMPTY (count={n}) — "
                        "STOP; requires an Aaron ruling before any run")
 
-    def compute(self):
-        # M6.1 E1: SAME predicate as ready() — refusal here is unreachable
-        # when Stage B passed, and precedes any data load either way.
+    def prepare(self):
+        """M6.1.6 (S1 seam) — the PRE-EXPOSURE preparation step.
+
+        This is the ONLY place the production config sources are read for a
+        run. It runs after every Stage-B check has passed and BEFORE
+        `_atomic_run_start`, so a refusal here is pre-exposure by
+        construction: no RUN_STARTED, no runs directory, exposure not
+        consumed (`runner.py` prepare seam, mirroring the pre-exposure
+        registry recheck precedent).
+
+        SCOPE, STATED HONESTLY. This closes the LIFECYCLE hole only — the
+        one where `ready()` resolved a config, discarded it, and `compute()`
+        re-resolved AFTER exposure had been consumed, so that a config
+        refusal burned the trial. It does NOT deliver the fully materialised
+        execution plan the F-1 architecture calls for: `regime_of` and
+        `vol_axis_of` are still carried as CALLABLES, because materialising
+        them over a date domain requires DR-2's ruled vocabulary (the
+        `vol_na` fourth-stratum question is explicitly unruled). F-1 as a
+        whole therefore remains PARTIAL; see the review packet.
+
+        With `_approved_injectables()` returning None, this fails closed on
+        every production path today — which is the intended posture."""
         cfg, why = resolved_study_config()
         if cfg is None:
             raise RuntimeError(f"stage-C config unavailable: {why}")
-        ds, _uni = self._ensure()
+        return _PreparedExecutionInput(config=cfg, reason=why)
+
+    def compute(self, prepared):
+        # M6.1.6: Stage C consumes the PREPARED object and MUST NOT reach
+        # for a config source again. `resolved_study_config()`,
+        # `_resolved_methods()` and `_approved_injectables()` are not called
+        # anywhere below this line — pinned by an AST test.
+        if type(prepared) is not _PreparedExecutionInput:
+            raise RuntimeError("stage-C requires the prepared execution "
+                               "input produced by the pre-exposure prepare "
+                               "seam; refusing to re-resolve configuration")
+        cfg = prepared.config
+        ds, uni = self._ensure()
         from itsf import guards as _g
         text = REGISTRY.read_text(encoding="utf-8")
         _row, commit, _reason = find_authorization_event(text)
@@ -1477,8 +2429,15 @@ class RealChain:
             "frozen_hashes": dict(_g.FROZEN_HASHES),
             "registry_sequence_snapshot": len(parse_registry_events(text)),
         }
+        # M6.1.4 (B0 EV-13 / L127): a FRESH byte-level re-hash of the frozen
+        # files, taken at compute time — the sealed governance block is then
+        # reconciled against observed digests, not against the same module
+        # constant read twice (the M6.1.3 tautology).
+        fh_obs = {p: hashlib.sha256((REPO / p).read_bytes()).hexdigest()
+                  for p in sorted(_g.FROZEN_HASHES)}
         return build_full_study_result(ds, self._bars, config=cfg,
-                                       governance_meta=gov)
+                                       governance_meta=gov, universe=uni,
+                                       frozen_hash_observations=fh_obs)
 
 
 # =========================================================================
@@ -1595,9 +2554,14 @@ def main() -> int:
             wiring_status=chain.ready),
             GateCheck("ir24_f8_divergence_empty",
                       chain.ir24_divergence_guard)),   # SA-10 N6, blocking
+        prepare_compute=chain.prepare,                 # M6.1.6 pre-exposure
         compute=chain.compute,
         integrity_checks=build_integrity_checks(),
-        render_report=render_s0_report,
+        # M6.1.6: the sealed report is rendered WITH an independent
+        # governance context, built from the pre-run authorization snapshot
+        # + the frozen-hash authority + a fresh disk re-hash. None of these
+        # is read from the payload being verified.
+        render_report=chain.render_report_with_governance_proof,
         append_registry_event=registry_append,
         clock_utc=clock,
         log=guarded_log,

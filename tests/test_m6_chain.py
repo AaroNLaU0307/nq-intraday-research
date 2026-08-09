@@ -100,6 +100,18 @@ _GOV = {"trial_id": "S0-T001", "authorized_commit": "a" * 40,
 _CACHE: dict = {}
 
 
+def _cache_entry(mod, cfg, why="injected"):
+    """Build the EXACT internal cache envelope (M6.1.4-ARCH F-1).
+
+    `_CONFIG_CACHE['cfg']` is no longer an arbitrary 2-iterable: the only
+    admissible value is `_ConfigCacheEntry`, identified by an exact
+    `type(x) is` test that never touches the object. Tests that used to
+    inject a `(cfg, why)` tuple go through here; tests that deliberately
+    inject a NON-envelope keep doing so and must be refused at G2.
+    """
+    return mod._ConfigCacheEntry(cfg, why)
+
+
 def _payload(n_boot=10_000):
     mod = real_run_module()
     if "m" not in _CACHE:
@@ -144,7 +156,8 @@ def test_payload_pending_disclosure_is_derived_and_empty():
 
 def test_production_path_refuses_test_only_config(monkeypatch):
     mod = real_run_module()
-    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (_test_config(), "ok"))
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg",
+                        _cache_entry(mod, _test_config(), "ok"))
     cfg, why = mod.resolved_study_config()
     assert cfg is None and "test_only" in why
 
@@ -166,7 +179,7 @@ def test_real_compute_fails_closed_without_loading_data():
     mod._CONFIG_CACHE.clear()
     chain = mod.RealChain()
     with pytest.raises(RuntimeError, match="pending method rulings"):
-        chain.compute()
+        chain.compute(chain.prepare())
     assert chain._ds is None
 
 
@@ -250,51 +263,118 @@ def test_e7_unresolved_config_refused_in_stage_b_zero_exposure(tmp_path):
     assert not Path(deps.config.runs_dir).exists()
 
 
-def test_ready_true_implies_compute_has_no_wiring_error(monkeypatch):
-    """M6.1.3 E7: monkeypatch ONLY the method SOURCE (never the resolver) —
-    the real resolver, cache and point-of-use validation all run. Synthetic
-    resolved methods must carry test_only=False to pass the production
-    seam; the config still never touches real data (ensure is synthetic).
-    """
+def _hermetic_stage_c_paths(mod, monkeypatch, tmp_path):
+    """auditor-2 LOW-5: ready()'s artifact-existence gate must not couple
+    the E7 tests to this machine's data layout — synthetic stand-ins
+    satisfy the existence check without touching any real path."""
+    art = tmp_path / "a1job"
+    art.mkdir()
+    for name in ("condition.json", "manifest.json"):
+        (art / name).write_text("{}", encoding="utf-8")
+    f10 = tmp_path / "f10.csv"
+    f10.write_text("synthetic", encoding="utf-8")
+    sym = tmp_path / "sym.csv"
+    sym.write_text("synthetic", encoding="utf-8")
+    monkeypatch.setattr(mod, "F10_CSV", f10)
+    monkeypatch.setattr(mod, "SYMBOLOGY_CSV", sym)
+    monkeypatch.setattr(mod, "A1_JOB_DIR", art)
+
+
+def test_ready_true_implies_compute_has_no_wiring_error(monkeypatch,
+                                                        tmp_path):
+    """M6.1.4 E7 negative: with the method source resolved but NO approved
+    injectable source, the resolver fails closed at the injectable gate —
+    ready() and compute() must AGREE via the same seam, and the production
+    builder is never invoked (compute calls == 0)."""
     import dataclasses as _dc
     mod = real_run_module()
-    if "m" not in _CACHE:
-        _CACHE["m"] = _market()
-    bars, ds = _CACHE["m"]
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
     synthetic = _dc.replace(_test_methods(), test_only=False)
     monkeypatch.setattr(mod, "_resolved_methods", lambda: synthetic)
+    calls: list = []
+    real_build = mod.build_full_study_result
+    monkeypatch.setattr(
+        mod, "build_full_study_result",
+        lambda *a, **k: calls.append(1) or real_build(*a, **k))
     mod._CONFIG_CACHE.clear()
     try:
-        # derivation is unimplemented even when resolved -> resolver reports
-        # fail-closed; ready() and compute() must AGREE via the same seam.
         cfg, why = mod.resolved_study_config()
-        assert cfg is None and "not implemented" in why
+        assert cfg is None and "no approved injectable source" in why
         chain = mod.RealChain()
         ok, why2 = chain.ready()
-        assert ok is False and "not implemented" in why2
+        assert ok is False and "no approved injectable source" in why2
         import pytest as _pt
-        with _pt.raises(RuntimeError, match="not implemented"):
-            chain.compute()
+        with _pt.raises(RuntimeError, match="injectable"):
+            chain.compute(chain.prepare())
         assert chain._ds is None
+        assert calls == []                      # builder never reached
     finally:
         mod._CONFIG_CACHE.clear()
+
+
+def test_malformed_injectables_keep_ready_false_and_zero_compute(monkeypatch,
+                                                                 tmp_path):
+    """M6.1.4 E7 negative: an approved method source + a MALFORMED
+    injectable source (missing keys / extra keys / wrong types) must yield
+    ready=False with a reasoned refusal, zero production-builder calls and
+    an untouched chain — through the REAL resolver, never a patched one."""
+    import dataclasses as _dc
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    synthetic = _dc.replace(_test_methods(), test_only=False)
+    monkeypatch.setattr(mod, "_resolved_methods", lambda: synthetic)
+    calls: list = []
+    real_build = mod.build_full_study_result
+    monkeypatch.setattr(
+        mod, "build_full_study_result",
+        lambda *a, **k: calls.append(1) or real_build(*a, **k))
+    bad_sources = [
+        {"spread_scalars": (0.5, 0.75, 0.75)},              # missing keys
+        {"spread_scalars": (0.5, 0.75, 0.75),
+         "regime_of": lambda d: "R", "vol_axis_of": _test_vol_axis,
+         "extra": 1},                                       # extra key
+        {"spread_scalars": "not-a-tuple",
+         "regime_of": lambda d: "R", "vol_axis_of": _test_vol_axis},
+        {},                                                 # empty
+    ]
+    for bad in bad_sources:
+        monkeypatch.setattr(mod, "_approved_injectables", lambda b=bad: b)
+        mod._CONFIG_CACHE.clear()
+        try:
+            cfg, why = mod.resolved_study_config()
+            assert cfg is None and "malformed" in why, (bad, why)
+            chain = mod.RealChain()
+            ok, why2 = chain.ready()
+            assert ok is False and "malformed" in why2
+            assert chain._ds is None
+            assert calls == []
+        finally:
+            mod._CONFIG_CACHE.clear()
 
 
 def test_cache_injection_of_resolved_config_is_refused_vs_fresh_source(
         monkeypatch):
     """M6.1.3 main-1/2: the cache is not a method source — a non-test_only
-    'fully resolved' config injected into the cache mismatches the fresh
-    all-pending method source and is refused at the point of use."""
+    'fully resolved' config injected into the cache cannot survive against
+    the fresh all-pending method source, and is refused at the point of use.
+
+    M6.1.4-ARCH: the single gateway resolves stages in ONE order, and the
+    FRESH source is the authority — so with every ruling still pending the
+    refusal is now reported at G7_pending (which is strictly upstream of,
+    and stronger than, the methods-mismatch it used to report). The
+    G10 'cache is not a method source' claim keeps its own live proof in
+    test_f1_methods_mismatch_refusal_under_a_resolved_source, which
+    supplies a RESOLVED fresh source so the pending gate cannot short it."""
     import dataclasses as _dc
     mod = real_run_module()
     cfg = C.derive_study_config(
         _dc.replace(_test_methods(), test_only=False),
         spread_scalars=(0.5, 0.75, 0.75),
         regime_of=lambda d: "R", vol_axis_of=_test_vol_axis)
-    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (cfg, "injected"))
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", _cache_entry(mod, cfg))
     got, why = mod.resolved_study_config()
     assert got is None
-    assert "fresh approved method source" in why
+    assert "pending method rulings" in why
     assert mod.RealChain().ready()[0] is False
 
 
@@ -491,7 +571,7 @@ def test_duck_typed_methods_object_cannot_reach_ready(monkeypatch):
     object.__setattr__(cfg, "spread_scalars", (0.5, 0.75, 0.75))
     object.__setattr__(cfg, "regime_of", lambda d: "R")
     object.__setattr__(cfg, "vol_axis_of", lambda d: "T")
-    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (cfg, "injected"))
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", _cache_entry(mod, cfg))
     got, why = mod.resolved_study_config()
     assert got is None
     assert "ResolvedS0Methods" in why
@@ -510,7 +590,7 @@ def test_matching_methods_cannot_smuggle_foreign_injectables(monkeypatch):
     cfg = C.derive_study_config(approved, spread_scalars=(0.0, 0.0, 0.0),
                                 regime_of=lambda d: "R",
                                 vol_axis_of=lambda d: "T")
-    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (cfg, "injected"))
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", _cache_entry(mod, cfg))
     got, why = mod.resolved_study_config()
     assert got is None
     assert "injectable" in why
@@ -534,7 +614,7 @@ def test_methods_with_raising_test_only_property_cannot_break_the_gate(
     object.__setattr__(cfg, "spread_scalars", (0.5, 0.75, 0.75))
     object.__setattr__(cfg, "regime_of", lambda d: "R")
     object.__setattr__(cfg, "vol_axis_of", lambda d: "T")
-    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (cfg, "injected"))
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", _cache_entry(mod, cfg))
     got, why = mod.resolved_study_config()      # must NOT raise
     assert got is None
     assert "ResolvedS0Methods" in why
@@ -552,7 +632,7 @@ def test_malformed_injectable_source_fails_closed(monkeypatch):
     cfg = C.derive_study_config(approved, spread_scalars=(0.5, 0.75, 0.75),
                                 regime_of=lambda d: "R",
                                 vol_axis_of=lambda d: "T")
-    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (cfg, "injected"))
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", _cache_entry(mod, cfg))
     got, why = mod.resolved_study_config()      # must NOT raise
     assert got is None
     assert "malformed" in why
@@ -576,14 +656,143 @@ def test_injectable_binding_compares_callables_by_identity(monkeypatch):
     lookalike = C.derive_study_config(
         approved, spread_scalars=(0.5, 0.75, 0.75),
         regime_of=lambda d: "R", vol_axis_of=lambda d: "T")
-    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (lookalike, "injected"))
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg",
+                        _cache_entry(mod, lookalike))
     got, why = mod.resolved_study_config()
     assert got is None
     assert "fresh derivation" in why
     genuine = C.derive_study_config(approved, **inj)
-    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (genuine, "derived"))
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg",
+                        _cache_entry(mod, genuine, "derived"))
     got2, _ = mod.resolved_study_config()
     assert got2 is genuine                      # gate is not dead code
+
+
+def _boom_factory(msg):
+    def _boom():
+        raise RuntimeError(msg)
+    return _boom
+
+
+def _b1_builder_spy(mod, monkeypatch):
+    calls: list = []
+    real_build = mod.build_full_study_result
+    monkeypatch.setattr(
+        mod, "build_full_study_result",
+        lambda *a, **k: calls.append(1) or real_build(*a, **k))
+    return calls
+
+
+def test_b1_raising_method_source_yields_reasoned_refusal(monkeypatch,
+                                                          tmp_path):
+    """CLOSEOUT B1: empty cache + a METHOD SOURCE that raises — ready()
+    must return (False, diagnosable reason), never raise; the production
+    builder is never invoked."""
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    calls = _b1_builder_spy(mod, monkeypatch)
+    monkeypatch.setattr(mod, "_resolved_methods",
+                        _boom_factory("method source down"))
+    mod._CONFIG_CACHE.clear()
+    try:
+        cfg, why = mod.resolved_study_config()   # must NOT raise
+        assert cfg is None and "RuntimeError" in why
+        ok, why2 = mod.RealChain().ready()
+        assert ok is False and "RuntimeeError" not in why2  # sane string
+        assert "RuntimeError" in why2
+        assert calls == []
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+def test_b1_raising_injectable_source_yields_reasoned_refusal(monkeypatch,
+                                                              tmp_path):
+    """CLOSEOUT B1: empty cache + resolved methods + an INJECTABLE SOURCE
+    that raises — reasoned refusal, zero builder calls."""
+    import dataclasses as _dc
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    calls = _b1_builder_spy(mod, monkeypatch)
+    approved = _dc.replace(_test_methods(), test_only=False)
+    monkeypatch.setattr(mod, "_resolved_methods", lambda: approved)
+    monkeypatch.setattr(mod, "_approved_injectables",
+                        _boom_factory("injectable source down"))
+    mod._CONFIG_CACHE.clear()
+    try:
+        cfg, why = mod.resolved_study_config()   # must NOT raise
+        assert cfg is None and "RuntimeError" in why
+        ok, why2 = mod.RealChain().ready()
+        assert ok is False and "RuntimeError" in why2
+        assert calls == []
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+def test_b1_raising_derivation_yields_reasoned_refusal(monkeypatch,
+                                                       tmp_path):
+    """CLOSEOUT B1: empty cache + resolved methods + legal-schema
+    injectables whose values make derive_study_config raise (ordering
+    violation surfaces inside the constructor) — reasoned refusal, zero
+    builder calls."""
+    import dataclasses as _dc
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    calls = _b1_builder_spy(mod, monkeypatch)
+    approved = _dc.replace(_test_methods(), test_only=False)
+    monkeypatch.setattr(mod, "_resolved_methods", lambda: approved)
+
+    class _LyingTuple(tuple):
+        # passes validate_injectables' shape test, then derive's
+        # canonicalization sees the same values — force the raise via a
+        # tuple whose iteration misbehaves on the SECOND pass
+        _reads = 0
+
+        def __iter__(self):
+            type(self)._reads += 1
+            if type(self)._reads > 1:
+                raise RuntimeError("derivation-time read")
+            return super().__iter__()
+
+    inj = {"spread_scalars": _LyingTuple((0.5, 0.75, 0.75)),
+           "regime_of": lambda d: "R", "vol_axis_of": _test_vol_axis}
+    monkeypatch.setattr(mod, "_approved_injectables", lambda: dict(inj))
+    mod._CONFIG_CACHE.clear()
+    try:
+        cfg, why = mod.resolved_study_config()   # must NOT raise
+        assert cfg is None
+        ok, why2 = mod.RealChain().ready()
+        assert ok is False
+        assert calls == []
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+def test_b1_subclass_config_with_raising_property_cannot_break_the_gate(
+        monkeypatch, tmp_path):
+    """CLOSEOUT B1: the cache path must prove the object is EXACTLY a
+    StudyConfig BEFORE reading any attribute — isinstance admits a
+    subclass whose `methods` property runs foreign code inside the gate.
+    ready() must return (False, reason), never raise."""
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    calls = _b1_builder_spy(mod, monkeypatch)
+
+    class _EvilConfig(C.StudyConfig):
+        @property
+        def methods(self):
+            raise RuntimeError("foreign property ran inside the gate")
+
+    evil = object.__new__(_EvilConfig)
+    object.__setattr__(evil, "spread_scalars", (0.5, 0.75, 0.75))
+    object.__setattr__(evil, "regime_of", lambda d: "R")
+    object.__setattr__(evil, "vol_axis_of", lambda d: "T")
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", _cache_entry(mod, evil))
+    got, why = mod.resolved_study_config()       # must NOT raise
+    assert got is None
+    assert "StudyConfig" in why
+    ok, _why2 = mod.RealChain().ready()
+    assert ok is False
+    assert calls == []
 
 
 def test_admission_attribution_delimiter_names_are_refused():
@@ -637,14 +846,15 @@ def test_injected_illegal_config_cannot_make_ready_true(monkeypatch):
     object.__setattr__(cfg.methods, "grid_policy", C.GridRepeatPolicy(
         k_per_seed=-5, k_start_index=0, stream_includes_theta=False,
         convergence_rule="X", max_doublings=0))
-    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (cfg, "injected"))
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", _cache_entry(mod, cfg))
     got, why = mod.resolved_study_config()
-    # M6.1.3: the fresh-source identity check fires FIRST (a corrupted
-    # injected config can never match the live method source) — strictly
-    # stronger than reaching the structural branch. The structural branch
-    # itself is pinned by test_structurally_invalid_methods_are_refused_
-    # everywhere via derive_study_config.
-    assert got is None and "fresh approved method source" in why
+    # M6.1.3: a fresh-source check fires FIRST (a corrupted injected config
+    # can never match the live method source) — strictly stronger than
+    # reaching the structural branch. M6.1.4-ARCH: under the single gateway
+    # that first check is G7_pending on the FRESH authority. The structural
+    # branch itself is pinned by test_structurally_invalid_methods_are_
+    # refused_everywhere via derive_study_config.
+    assert got is None and "pending method rulings" in why
     ok, why2 = mod.RealChain().ready()
     assert ok is False
 
@@ -653,7 +863,7 @@ def test_injected_partial_config_cannot_make_ready_true(monkeypatch):
     mod = real_run_module()
     cfg = _non_test_only_config()
     object.__setattr__(cfg.methods, "bootstrap_method", None)
-    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", (cfg, "injected"))
+    monkeypatch.setitem(mod._CONFIG_CACHE, "cfg", _cache_entry(mod, cfg))
     got, why = mod.resolved_study_config()
     assert got is None and ("fresh approved method source" in why
                             or "pending method rulings" in why)
@@ -687,31 +897,55 @@ def test_empty_day_strata_is_not_sealable():
     assert out["formal_sealable"] is False
 
 
-def test_e7_ready_then_compute_share_the_same_validated_config(monkeypatch):
-    """M6.1.2 E7: call ready() FIRST, then compute(), and prove both read
-    the SAME validated config instance (identity, not equality)."""
+def test_e7_ready_then_compute_share_the_same_validated_config(monkeypatch,
+                                                               tmp_path):
+    """M6.1.4 E7 POSITIVE — THE one honest positive path.
+
+    SCOPE, STATED PLAINLY: this is a SYNTHETIC CONFIG-TO-COMPUTE
+    INTEGRATION over a synthetic universe, with the method source, the
+    injectable source and data I/O replaced by synthetic stand-ins. It is
+    NOT a real data chain, NOT a full A->F run, and NOT a real S0. It
+    proves the configuration gateway's positive branch and the identity
+    guarantee, nothing about research output.
+
+    From an EMPTY cache, with ONLY those three seams replaced (never
+    resolved_study_config / _gateway_body / ready / compute), the chain
+    walks: fresh methods -> pending+structural on the fresh authority ->
+    exact injectables -> derive_study_config -> EXACT cache envelope ->
+    point-of-use revalidation -> ready=True -> compute(); ready() and
+    compute() consume the SAME cached validated config INSTANCE."""
+    import dataclasses as _dc
     mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
     if "m" not in _CACHE:
         _CACHE["m"] = _market()
     bars, ds = _CACHE["m"]
-    cfg = _test_config()
-    seen: list = []
+    approved = _dc.replace(_test_methods(), test_only=False)
+    inj = {"spread_scalars": (0.5, 0.75, 0.75),
+           "regime_of": lambda d: "R", "vol_axis_of": _test_vol_axis}
+    monkeypatch.setattr(mod, "_resolved_methods", lambda: approved)
+    monkeypatch.setattr(mod, "_approved_injectables", lambda: dict(inj))
+    mod._CONFIG_CACHE.clear()
+    try:
+        chain = mod.RealChain()
+        monkeypatch.setattr(chain, "_ensure", lambda: (ds, None))
+        chain._bars = bars
 
-    def fake_resolved():
-        seen.append(cfg)
-        return (cfg, "TEST_ONLY injected")
-
-    monkeypatch.setattr(mod, "resolved_study_config", fake_resolved)
-    chain = mod.RealChain()
-    monkeypatch.setattr(chain, "_ensure", lambda: (ds, None))
-    chain._bars = bars
-
-    ok, why = chain.ready()                      # explicit ready() first
-    assert ok is True, why
-    payload = chain.compute()                    # then compute()
-    assert len(seen) >= 2                        # both consulted the source
-    assert all(c is cfg for c in seen)           # identity, one instance
-    assert payload["disclosures"]["methods_test_only"] is True
+        ok, why = chain.ready()                  # explicit ready() first
+        assert ok is True, why
+        cfg1, _ = mod.resolved_study_config()    # cache hit, revalidated
+        assert cfg1 is not None
+        entry = mod._CONFIG_CACHE["cfg"]
+        assert type(entry) is mod._ConfigCacheEntry
+        assert cfg1 is entry.config
+        payload = chain.compute(chain.prepare())  # then compute()
+        cfg2, _ = mod.resolved_study_config()
+        assert cfg2 is cfg1                      # identity, one instance
+        assert payload["disclosures"]["methods_test_only"] is False
+        assert payload["disclosures"]["pending_method_decisions"] == []
+        assert "evidence" in payload             # capture ran at compute
+    finally:
+        mod._CONFIG_CACHE.clear()
 
 
 def test_a11_na_conservation_restatement_is_present_and_arithmetic():
@@ -753,6 +987,15 @@ def test_formal_seal_admission_is_on_the_wire(monkeypatch):
     _REAL_MANIFEST = ho.build_seed_manifest()
     monkeypatch.setattr(ho, "build_seed_manifest",
                         _test_only_sealable_manifest)
+    # M6.1.4 (S2 bundle-atomic admission): the manifest's k_policy/crn_scope
+    # are UNRULED axes — admission refuses ANY concrete string unless the
+    # SourceContext carries a ruled vocabulary. Declaring the TEST_ONLY
+    # ruling on the context (the production no-source seam) is what makes
+    # this fixture admissible — proving the gate is decided by admission
+    # against its sources, not by a hardcoded exclusion.
+    monkeypatch.setattr(ho, "DEFAULT_SOURCE_CONTEXT",
+                        ho.SourceContext(k_policy="TEST_ONLY",
+                                         crn_scope="TEST_ONLY"))
     # M6.1.3 fix-round (blind-audit D44/F9): admission must be ONE call
     # over the WHOLE candidate set — per-file calls make the cross-artifact
     # checks (grid seeds vs seed manifest) unreachable in production.
@@ -770,3 +1013,1261 @@ def test_formal_seal_admission_is_on_the_wire(monkeypatch):
     assert adm["admitted"] == ["SEED_MANIFEST.json"]
     assert adm["withheld"] == {}
     assert calls == [["SEED_MANIFEST.json"]]
+
+
+# =========================================================================
+# M6.1.4-ARCH — finding F-1: THE single configuration gateway
+# =========================================================================
+# F-1 was raised, patched at the three sites it named, and RECURRED. An
+# independent read-only reproduction on this worktree found FOUR live
+# escapes through the public `RealChain.ready()` (bool, str) contract, not
+# the two the report named — both halves of the `cfg != fresh_cfg`
+# comparison escaped too. These tests are BEHAVIOURAL and go through the
+# public boundary; they pin the gateway's total coverage, not any one site.
+
+_F1_MARKER = "PAYLOAD_MARKER_c0ffee"        # must never reach a reason string
+
+
+class _F1PlainObject:
+    """A cache value that is not an envelope and not even iterable."""
+
+
+class _F1IterBomb:
+    """A cache value whose iteration detonates (the old unpack path)."""
+
+    def __iter__(self):
+        raise RuntimeError(_F1_MARKER)
+
+
+class _F1LenBomb:
+    def __len__(self):
+        raise RuntimeError(_F1_MARKER)
+
+
+class _F1BoolBomb:
+    def __bool__(self):
+        raise RuntimeError(_F1_MARKER)
+
+
+class _F1GetattrBomb:
+    def __getattr__(self, name):
+        raise RuntimeError(_F1_MARKER)
+
+
+class _F1EqBomb:
+    """A METHODS-FIELD value whose `__eq__` detonates, and counts calls."""
+
+    calls = 0
+
+    def __eq__(self, other):
+        type(self).calls += 1
+        raise RuntimeError(_F1_MARKER)
+
+    def __hash__(self):
+        return 0
+
+
+class _F1CallableEqBomb:
+    """A CALLABLE whose `__eq__` detonates — the point-(11) escape."""
+
+    calls = 0
+
+    def __call__(self, day):
+        return "R"
+
+    def __eq__(self, other):
+        type(self).calls += 1
+        raise RuntimeError(_F1_MARKER)
+
+    def __hash__(self):
+        return 0
+
+
+class _F1DuckMethods:
+    """Not a ResolvedS0Methods; lies on every probe it is asked."""
+
+    test_only = False
+
+    def __eq__(self, other):
+        return True
+
+    def __ne__(self, other):
+        return False
+
+    def __hash__(self):
+        return 0
+
+    def pending_fields(self):
+        return ()
+
+    def structural_problems(self):
+        return []
+
+
+def _f1_approved_methods():
+    """A FULLY-RESOLVED, structurally valid, non-test_only method source.
+
+    Synthetic TEST_ONLY *values* with the test_only flag cleared, used ONLY
+    to reach the gateway stages that sit behind the pending gate. Every
+    test using it asserts a REFUSAL or the synthetic positive path; it
+    never reaches a real computation and adopts no ruling."""
+    import dataclasses as _dc
+    return _dc.replace(_test_methods(), test_only=False)
+
+
+_F1_REGIME = lambda d: "R"                                      # noqa: E731
+
+
+def _f1_injectables():
+    """A valid injectable source returning STABLE callable objects — the
+    property `_approved_injectables()` must honour for cache coherence
+    (see the G11_callable_identity rule)."""
+    return {"spread_scalars": (0.5, 0.75, 0.75),
+            "regime_of": _F1_REGIME, "vol_axis_of": _test_vol_axis}
+
+
+def _f1_resolved_sources(mod, monkeypatch):
+    monkeypatch.setattr(mod, "_resolved_methods", _f1_approved_methods)
+    monkeypatch.setattr(mod, "_approved_injectables", _f1_injectables)
+
+
+def _f1_bypass_config(methods=None, spread_scalars=(0.5, 0.75, 0.75),
+                      regime_of=None, vol_axis_of=None):
+    """A StudyConfig assembled by BYPASS (object.__new__ + __setattr__) so
+    that structurally impossible field values can be presented to the
+    gateway. Every such config must be REFUSED."""
+    cfg = object.__new__(C.StudyConfig)
+    object.__setattr__(cfg, "methods",
+                       _f1_approved_methods() if methods is None else methods)
+    object.__setattr__(cfg, "spread_scalars", spread_scalars)
+    object.__setattr__(cfg, "regime_of",
+                       _F1_REGIME if regime_of is None else regime_of)
+    object.__setattr__(cfg, "vol_axis_of",
+                       _test_vol_axis if vol_axis_of is None else vol_axis_of)
+    return cfg
+
+
+# --- the 12 hostile cases (id -> (setup, expected stage)) -------------------
+
+def _f1_c_plain_object(mod, monkeypatch):
+    mod._CONFIG_CACHE["cfg"] = _F1PlainObject()
+
+
+def _f1_c_1_tuple(mod, monkeypatch):
+    mod._CONFIG_CACHE["cfg"] = (None,)
+
+
+def _f1_c_2_tuple_legacy(mod, monkeypatch):
+    """The shape the cache used to hold. It is refused now: the envelope is
+    EXACT, so there is no 2-iterable fallback left to attack."""
+    _f1_resolved_sources(mod, monkeypatch)
+    mod._CONFIG_CACHE["cfg"] = (
+        C.derive_study_config(_f1_approved_methods(), **_f1_injectables()),
+        "legacy")
+
+
+def _f1_c_3_tuple(mod, monkeypatch):
+    mod._CONFIG_CACHE["cfg"] = (None, "a", "b")
+
+
+def _f1_c_dict(mod, monkeypatch):
+    """REGRESSION PIN, NOT A REPRODUCTION. A 2-key dict did NOT escape the
+    old code (it unpacked to its two string keys and was caught by the
+    StudyConfig type pin); a 3-key one did. Pinned here so neither shape
+    can ever become an escape again."""
+    mod._CONFIG_CACHE["cfg"] = {"cfg": None, "why": "x", "extra": 1}
+
+
+def _f1_c_raising_iter(mod, monkeypatch):
+    mod._CONFIG_CACHE["cfg"] = _F1IterBomb()
+
+
+def _f1_c_methods_eq_raises(mod, monkeypatch):
+    import dataclasses as _dc
+    _f1_resolved_sources(mod, monkeypatch)
+    methods = _dc.replace(_f1_approved_methods(),
+                          event_na_mapping=_F1EqBomb())
+    mod._CONFIG_CACHE["cfg"] = _cache_entry(
+        mod, _f1_bypass_config(methods=methods))
+
+
+def _f1_c_methods_eq_numpy(mod, monkeypatch):
+    import dataclasses as _dc
+    import numpy as np
+    _f1_resolved_sources(mod, monkeypatch)
+    methods = _dc.replace(_f1_approved_methods(),
+                          event_na_mapping=np.array([1, 2, 3]))
+    mod._CONFIG_CACHE["cfg"] = _cache_entry(
+        mod, _f1_bypass_config(methods=methods))
+
+
+def _f1_c_config_callable_eq_raises(mod, monkeypatch):
+    _f1_resolved_sources(mod, monkeypatch)
+    mod._CONFIG_CACHE["cfg"] = _cache_entry(
+        mod, _f1_bypass_config(regime_of=_F1CallableEqBomb()))
+
+
+def _f1_c_config_scalars_numpy(mod, monkeypatch):
+    import numpy as np
+    _f1_resolved_sources(mod, monkeypatch)
+    mod._CONFIG_CACHE["cfg"] = _cache_entry(
+        mod, _f1_bypass_config(spread_scalars=np.array([0.5, 0.75, 0.75])))
+
+
+def _f1_c_fresh_methods_wrong_type(mod, monkeypatch):
+    monkeypatch.setattr(mod, "_resolved_methods", _F1DuckMethods)
+    monkeypatch.setattr(mod, "_approved_injectables", _f1_injectables)
+
+
+def _f1_c_fresh_methods_structurally_invalid(mod, monkeypatch):
+    import dataclasses as _dc
+    bad = _dc.replace(_f1_approved_methods(), grid_policy=C.GridRepeatPolicy(
+        k_per_seed=-5, k_start_index=0, stream_includes_theta=False,
+        convergence_rule="X", max_doublings=0))
+    monkeypatch.setattr(mod, "_resolved_methods", lambda: bad)
+    monkeypatch.setattr(mod, "_approved_injectables", _f1_injectables)
+
+
+# --- M6.1.4-R2: NON-CANONICAL REPRESENTATIONS (F-1 REOPENED) ---------------
+# Every case below is FINGERPRINT-EQUAL to a fresh derivation. The value
+# EQUIVALENCE obligation is satisfied; the REPRESENTATION IDENTITY obligation
+# is not. Before this round each of them was ACCEPTED and the non-canonical
+# INSTANCE was handed out.
+
+def _f1_inj_with(scalars):
+    """A valid injectable source at `scalars`, with the SAME callable objects
+    (so G11_callable_identity passes and the refusal can only come from the
+    representation stage)."""
+    def _source():
+        return {"spread_scalars": scalars,
+                "regime_of": _F1_REGIME, "vol_axis_of": _test_vol_axis}
+    return _source
+
+
+def _f1_bypass_spread_cost(ticks):
+    """A SpreadCostMethod assembled by BYPASS so `__post_init__` — and with
+    it `contracts._canonical_ticks` — never runs. This is the ONLY route to a
+    non-canonical ticks container: `dataclasses.replace` re-canonicalizes."""
+    sc = object.__new__(C.SpreadCostMethod)
+    object.__setattr__(sc, "scalar_rule", "TEST_ONLY")
+    object.__setattr__(sc, "adverse_slippage_ticks", ticks)
+    object.__setattr__(sc, "adverse_semantics", "replaces_per_side")
+    return sc
+
+
+def _f1_c_config_scalars_int_not_float(mod, monkeypatch):
+    """`(0, 1, 1)` vs canonical `(0.0, 1.0, 1.0)`: `_atom_number` widens int
+    to float, so the fingerprints are IDENTICAL. The sealed disclosure
+    `spread_scalars_used` then serializes `[0, 1, 1]`."""
+    monkeypatch.setattr(mod, "_resolved_methods", _f1_approved_methods)
+    monkeypatch.setattr(mod, "_approved_injectables",
+                        _f1_inj_with((0.0, 1.0, 1.0)))
+    mod._CONFIG_CACHE["cfg"] = _cache_entry(
+        mod, _f1_bypass_config(spread_scalars=(0, 1, 1)))
+
+
+def _f1_c_config_scalars_negative_zero(mod, monkeypatch):
+    """`-0.0` is collapsed by `_atom_number` exactly as `_canonical_scalar`
+    collapses it, so the fingerprints match while the JSON tokens differ."""
+    monkeypatch.setattr(mod, "_resolved_methods", _f1_approved_methods)
+    monkeypatch.setattr(mod, "_approved_injectables",
+                        _f1_inj_with((0.0, 1.0, 1.0)))
+    mod._CONFIG_CACHE["cfg"] = _cache_entry(
+        mod, _f1_bypass_config(spread_scalars=(-0.0, 1.0, 1.0)))
+
+
+def _f1_c_config_scalars_tuple_subclass(mod, monkeypatch):
+    """REGRESSION PIN (already refused): the CONTAINER is pinned exactly."""
+    class _Triple(tuple):
+        pass
+    monkeypatch.setattr(mod, "_resolved_methods", _f1_approved_methods)
+    monkeypatch.setattr(mod, "_approved_injectables",
+                        _f1_inj_with((0.0, 1.0, 1.0)))
+    mod._CONFIG_CACHE["cfg"] = _cache_entry(
+        mod, _f1_bypass_config(spread_scalars=_Triple((0.0, 1.0, 1.0))))
+
+
+def _f1_c_methods_ticks_plain_dict(mod, monkeypatch):
+    """A MUTABLE plain dict where contracts promises a read-only mapping.
+    `_atom_ticks` normalizes both to the same sorted tuple."""
+    import dataclasses as _dc
+    _f1_resolved_sources(mod, monkeypatch)
+    methods = _dc.replace(_f1_approved_methods(),
+                          spread_cost=_f1_bypass_spread_cost({"Base": 1.0}))
+    mod._CONFIG_CACHE["cfg"] = _cache_entry(
+        mod, _f1_bypass_config(methods=methods))
+
+
+def _f1_c_methods_ticks_dict_subclass(mod, monkeypatch):
+    """REGRESSION PIN (already refused at the fingerprint): `_atom_ticks`
+    pins `type(v) is dict`, so a subclass never gets to run its `__iter__`."""
+    import dataclasses as _dc
+
+    class _Ticks(dict):
+        pass
+    _f1_resolved_sources(mod, monkeypatch)
+    methods = _dc.replace(
+        _f1_approved_methods(),
+        spread_cost=_f1_bypass_spread_cost(_Ticks({"Base": 1.0})))
+    mod._CONFIG_CACHE["cfg"] = _cache_entry(
+        mod, _f1_bypass_config(methods=methods))
+
+
+def _f1_c_methods_ticks_proxy_over_hostile_subclass(mod, monkeypatch):
+    """THE DOCUMENTED RESIDUAL, pinned as BOUNDED. The container is a genuine
+    read-only mappingproxy, so the representation check passes; the wrapped
+    object is a dict subclass whose `__iter__` detonates, and CPython exposes
+    no API to see through the proxy. The single boundary converts it into a
+    stage-attributed refusal — it cannot escape, and it is not silently
+    accepted either."""
+    import dataclasses as _dc
+    from types import MappingProxyType as _MP
+
+    class _HostileTicks(dict):
+        def __iter__(self):
+            raise RuntimeError(_F1_MARKER)
+
+        def items(self):
+            raise RuntimeError(_F1_MARKER)
+    _f1_resolved_sources(mod, monkeypatch)
+    methods = _dc.replace(
+        _f1_approved_methods(),
+        spread_cost=_f1_bypass_spread_cost(_MP(_HostileTicks({"Base": 1.0}))))
+    mod._CONFIG_CACHE["cfg"] = _cache_entry(
+        mod, _f1_bypass_config(methods=methods))
+
+
+def _f1_c_cache_entry_subclass(mod, monkeypatch):
+    """REGRESSION PIN: the cache envelope itself is an EXACT type."""
+    class _Sneaky(mod._ConfigCacheEntry):
+        __slots__ = ()
+    _f1_resolved_sources(mod, monkeypatch)
+    mod._CONFIG_CACHE["cfg"] = _Sneaky(
+        C.derive_study_config(_f1_approved_methods(), **_f1_injectables()),
+        "subclassed")
+
+
+_F1_CASES = {
+    "cache_plain_object": (_f1_c_plain_object, "G2_cache_envelope"),
+    "cache_1_tuple": (_f1_c_1_tuple, "G2_cache_envelope"),
+    "cache_2_tuple_legacy": (_f1_c_2_tuple_legacy, "G2_cache_envelope"),
+    "cache_3_tuple": (_f1_c_3_tuple, "G2_cache_envelope"),
+    "cache_dict": (_f1_c_dict, "G2_cache_envelope"),
+    "cache_raising_iter": (_f1_c_raising_iter, "G2_cache_envelope"),
+    "methods_eq_raises": (_f1_c_methods_eq_raises,
+                          "G10_methods_fingerprint"),
+    "methods_eq_numpy_non_scalar": (_f1_c_methods_eq_numpy,
+                                    "G10_methods_fingerprint"),
+    "config_callable_eq_raises": (_f1_c_config_callable_eq_raises,
+                                  "G11_callable_identity"),
+    "config_scalars_numpy_non_scalar": (_f1_c_config_scalars_numpy,
+                                        "G11_config_fingerprint"),
+    "fresh_methods_wrong_type": (_f1_c_fresh_methods_wrong_type,
+                                 "G5_method_source"),
+    "fresh_methods_structurally_invalid": (
+        _f1_c_fresh_methods_structurally_invalid, "G7b_structural"),
+    # --- M6.1.4-R2: representation identity (the reopened half of F-1) -----
+    "config_scalars_int_not_float": (_f1_c_config_scalars_int_not_float,
+                                     "G11_config_canonical_form"),
+    "config_scalars_negative_zero": (_f1_c_config_scalars_negative_zero,
+                                     "G11_config_canonical_form"),
+    "methods_ticks_plain_dict": (_f1_c_methods_ticks_plain_dict,
+                                 "G10_methods_canonical_form"),
+    # --- regression pins: already refused, must never become an escape ----
+    "config_scalars_tuple_subclass": (_f1_c_config_scalars_tuple_subclass,
+                                      "G11_config_fingerprint"),
+    "methods_ticks_dict_subclass": (_f1_c_methods_ticks_dict_subclass,
+                                    "G10_methods_fingerprint"),
+    "methods_ticks_proxy_over_hostile_subclass": (
+        _f1_c_methods_ticks_proxy_over_hostile_subclass,
+        "G10_methods_fingerprint"),
+    "cache_entry_subclass": (_f1_c_cache_entry_subclass, "G2_cache_envelope"),
+}
+
+#: The cases whose defect is REPRESENTATION, not value equivalence: each is
+#: fingerprint-equal to a fresh derivation and was ACCEPTED before M6.1.4-R2.
+_F1_NON_CANONICAL_IDS = ("config_scalars_int_not_float",
+                         "config_scalars_negative_zero",
+                         "methods_ticks_plain_dict")
+
+_F1_IDS = sorted(_F1_CASES)
+
+
+def _f1_arm(mod, monkeypatch, tmp_path, case_id):
+    """Install hermetic Stage-C paths, a builder spy and the case's world."""
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    calls = _b1_builder_spy(mod, monkeypatch)
+    mod._CONFIG_CACHE.clear()
+    _F1_CASES[case_id][0](mod, monkeypatch)
+    return calls
+
+
+@pytest.mark.parametrize("case_id", _F1_IDS)
+def test_f1_gateway_refuses_every_hostile_cache_and_source(
+        case_id, monkeypatch, tmp_path):
+    """Every hostile cache shape / source defect yields (False, reason)
+    through the PUBLIC boundary — never an exception, never ready=True, and
+    never a production-builder call."""
+    mod = real_run_module()
+    try:
+        calls = _f1_arm(mod, monkeypatch, tmp_path, case_id)
+        chain = mod.RealChain()
+        out = chain.ready()                       # must NOT raise
+        assert isinstance(out, tuple) and len(out) == 2
+        ok, why = out
+        assert ok is False
+        assert isinstance(why, str) and why.strip()
+        assert _F1_CASES[case_id][1] in why, why
+        assert calls == []                        # builder never reached
+        assert chain._ds is None                  # no data ever loaded
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+@pytest.mark.parametrize("case_id", _F1_IDS)
+def test_f1_gateway_refusals_are_pre_exposure_through_the_real_runner(
+        case_id, monkeypatch, tmp_path):
+    """Each refusal stops the REAL S0Runner in Stage B: no exposure, no
+    RUN_STARTED, no runs/ directory (neither the tmp one the harness
+    proposes nor the repository's), zero production-builder calls."""
+    mod = real_run_module()
+    try:
+        calls = _f1_arm(mod, monkeypatch, tmp_path, case_id)
+        chain = mod.RealChain()
+        deps, events, _ = make_deps(
+            tmp_path, gates=[ok_gate()],
+            b_checks=[GateCheck("stage_c_wiring_activated", chain.ready)],
+            compute=lambda: (_ for _ in ()).throw(
+                AssertionError("compute must be unreachable")),
+            renderer=mod.render_s0_report,
+            runs_dir=tmp_path / "runs" / "S0-T001")
+        out = S0Runner(deps).run()
+        assert out.ok is False
+        assert out.failure_kind == "pre_run_attempt"
+        assert out.exposure_consumed is False
+        assert "RUN_STARTED" not in [e for e, _ in events]
+        assert not Path(deps.config.runs_dir).exists()
+        assert not (REPO / "runs").exists()       # repo runs/ never created
+        assert calls == []
+        assert chain._ds is None
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+# Built by FACTORY, never instantiated in the parametrize list: pytest
+# inspects parameter objects to build test ids, and a __getattr__ bomb
+# detonates during COLLECTION if handed a live instance.
+_F1_ANY_VALUE_FACTORIES = {
+    "plain_object": _F1PlainObject,
+    "iter_bomb": _F1IterBomb,
+    "len_bomb": _F1LenBomb,
+    "bool_bomb": _F1BoolBomb,
+    "getattr_bomb": _F1GetattrBomb,
+    "none": lambda: None,
+    "true": lambda: True,
+    "zero": lambda: 0,
+    "empty_str": lambda: "",
+    "empty_bytes": lambda: b"",
+    "empty_tuple": tuple,
+    "one_tuple": lambda: (None,),
+    "three_tuple": lambda: (None, "a", "b"),
+    "list": list,
+    "empty_dict": dict,
+    "one_key_dict": lambda: {"cfg": None},
+    "set": set,
+    "iterator": lambda: iter([1, 2]),
+    "type_object": lambda: object,
+    "eq_bomb": _F1EqBomb,
+    "callable_eq_bomb": _F1CallableEqBomb,
+}
+
+
+@pytest.mark.parametrize("value_id", sorted(_F1_ANY_VALUE_FACTORIES))
+def test_f1_ready_returns_a_bool_str_pair_for_any_cache_value(
+        value_id, monkeypatch, tmp_path):
+    """The (bool, str) contract is TOTAL over the cache slot: no value of
+    any shape can make ready() raise or return a malformed pair."""
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    mod._CONFIG_CACHE.clear()
+    try:
+        mod._CONFIG_CACHE["cfg"] = _F1_ANY_VALUE_FACTORIES[value_id]()
+        out = mod.RealChain().ready()             # must NOT raise
+        assert isinstance(out, tuple) and len(out) == 2
+        assert out[0] is False
+        assert isinstance(out[1], str) and out[1].strip()
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+@pytest.mark.parametrize("case_id", _F1_IDS)
+def test_f1_refusal_reasons_are_stable_and_payload_free(
+        case_id, monkeypatch, tmp_path):
+    """Reasons are deterministic (identical across calls), carry a stable
+    machine-readable stage token, and never leak an attacker-controlled
+    payload."""
+    mod = real_run_module()
+    try:
+        _f1_arm(mod, monkeypatch, tmp_path, case_id)
+        first = mod.RealChain().ready()[1]
+        second = mod.RealChain().ready()[1]
+        assert first == second                    # deterministic
+        assert _F1_MARKER not in first            # no payload dump
+        body = first.split("stage-C fail-closed pre-exposure: ", 1)[-1]
+        assert re.match(r"^config_gate:G\d+[a-z]?_[a-z_0-9]+: \S", body), body
+        assert "\n" not in first and "\r" not in first
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+def test_f1_cache_holds_exactly_one_internal_envelope(monkeypatch, tmp_path):
+    """The cache is an EXACT internal envelope, and REFUSALS ARE NEVER
+    CACHED — the cache exists only to hand ready() and compute() the same
+    validated INSTANCE, and a refusal has no instance to share."""
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    entry_cls = mod._ConfigCacheEntry
+    assert entry_cls.__slots__ == ("config", "reason")
+    assert entry_cls.__eq__ is object.__eq__      # no comparison surface
+    probe = entry_cls(None, "x")
+    with pytest.raises(AttributeError):
+        probe.config = 1                          # immutable
+    mod._CONFIG_CACHE.clear()
+    try:
+        # (a) every refusal leaves the cache untouched
+        for case_id in _F1_IDS:
+            mod._CONFIG_CACHE.clear()
+            _F1_CASES[case_id][0](mod, monkeypatch)
+            before = dict(mod._CONFIG_CACHE)
+            ok, _ = mod.RealChain().ready()
+            assert ok is False
+            assert dict(mod._CONFIG_CACHE) == before, case_id
+        # (b) the positive path writes exactly one envelope
+        mod._CONFIG_CACHE.clear()
+        _f1_resolved_sources(mod, monkeypatch)
+        ok, why = mod.RealChain().ready()
+        assert ok is True, why
+        assert list(mod._CONFIG_CACHE) == ["cfg"]
+        assert type(mod._CONFIG_CACHE["cfg"]) is entry_cls
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+_F1_BAD_FIELD_VALUES = {
+    "spread_cost": ("not-a-dataclass", "G10_methods_fingerprint"),
+    "volatility_regime": (42, "G10_methods_fingerprint"),
+    "fp_allocation": (object(), "G10_methods_fingerprint"),
+    "bootstrap_method": ([], "G10_methods_fingerprint"),
+    "grid_policy": ("x", "G10_methods_fingerprint"),
+    "event_na_mapping": (_F1EqBomb(), "G10_methods_fingerprint"),
+    "stability_population": (42, "G10_methods_fingerprint"),
+    "worst_day_estimator": ({}, "G10_methods_fingerprint"),
+    # test_only is refused EARLIER, at its own dedicated stage — a stronger
+    # gate than the fingerprint, so the fingerprint never sees it.
+    "test_only": (1, "G4b_test_only"),
+}
+
+
+@pytest.mark.parametrize("field", sorted(_F1_BAD_FIELD_VALUES))
+def test_f1_methods_fingerprint_refuses_a_non_normalizable_field(
+        field, monkeypatch, tmp_path):
+    """A value that cannot be normalized without executing foreign code is
+    ITSELF A REFUSAL, never a silent skip — for EVERY ResolvedS0Methods
+    field, and the reason names the field."""
+    import dataclasses as _dc
+    mod = real_run_module()
+    bad_value, expected_stage = _F1_BAD_FIELD_VALUES[field]
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    _f1_resolved_sources(mod, monkeypatch)
+    calls = _b1_builder_spy(mod, monkeypatch)
+    mod._CONFIG_CACHE.clear()
+    try:
+        methods = _dc.replace(_f1_approved_methods(), **{field: bad_value})
+        mod._CONFIG_CACHE["cfg"] = _cache_entry(
+            mod, _f1_bypass_config(methods=methods))
+        ok, why = mod.RealChain().ready()         # must NOT raise
+        assert ok is False
+        assert expected_stage in why, why
+        if expected_stage == "G10_methods_fingerprint":
+            assert field in why, why
+        assert calls == []
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+@pytest.mark.parametrize("kind", ("SpreadCostMethod", "VolatilityRegimeMethod",
+                                  "FpAllocationMethod", "BootstrapMethod",
+                                  "GridRepeatPolicy"))
+def test_f1_sub_rule_tables_cover_every_field(kind):
+    """The normalization tables are EXPLICIT, never reflection — so a new
+    field on a contracts dataclass must turn this RED rather than be
+    silently dropped from the fingerprint."""
+    import dataclasses as _dc
+    mod = real_run_module()
+    cls, rules = mod._METHOD_SUB_RULES[kind]
+    assert cls.__name__ == kind
+    assert {name for name, _ in rules} == {f.name for f in _dc.fields(cls)}
+
+
+def test_f1_methods_rule_table_covers_every_field():
+    import dataclasses as _dc
+    mod = real_run_module()
+    assert ({name for name, _ in mod._METHODS_FIELD_RULES}
+            == {f.name for f in _dc.fields(C.ResolvedS0Methods)})
+
+
+def test_f1_injectable_rule_table_is_exact():
+    """Every injectable has an explicit rule, and the two callables are
+    declared identity-only rather than fingerprinted."""
+    mod = real_run_module()
+    assert set(mod._INJECTABLE_FIELD_RULES) == set(C.INJECTABLE_KEYS)
+    assert (mod._INJECTABLE_FIELD_RULES["regime_of"]
+            == mod._INJECTABLE_FIELD_RULES["vol_axis_of"]
+            == "object_identity_only")
+
+
+def test_f1_hostile_dunder_eq_is_never_invoked_by_the_gateway(
+        monkeypatch, tmp_path):
+    """The gateway does not merely SURVIVE a hostile `__eq__` — it never
+    runs one. Equivalence is decided on non-executing fingerprints and, for
+    the callables, on object identity."""
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)   # once per tmp_path
+    calls = _b1_builder_spy(mod, monkeypatch)
+    _F1EqBomb.calls = 0
+    _F1CallableEqBomb.calls = 0
+    try:
+        for case_id in ("methods_eq_raises", "config_callable_eq_raises"):
+            mod._CONFIG_CACHE.clear()
+            _F1_CASES[case_id][0](mod, monkeypatch)
+            ok, _ = mod.RealChain().ready()
+            assert ok is False
+            assert calls == []
+        assert _F1EqBomb.calls == 0
+        assert _F1CallableEqBomb.calls == 0
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+def test_f1_callables_are_compared_by_object_identity_only(monkeypatch,
+                                                           tmp_path):
+    """ENGINEERING IDENTITY RULE — cache coherence only. `is` answers "is
+    this the very object the approved source hands out in this process?"
+    and NOTHING about what regime_of / vol_axis_of compute; DR-1 and DR-2
+    stay open. An equivalent-looking callable is therefore refused, and a
+    callable whose `__eq__` would detonate passes when it IS the same
+    object — proving the comparison is `is`, not `==`."""
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    _F1CallableEqBomb.calls = 0
+    hostile = _F1CallableEqBomb()
+    inj = {"spread_scalars": (0.5, 0.75, 0.75),
+           "regime_of": hostile, "vol_axis_of": _test_vol_axis}
+    monkeypatch.setattr(mod, "_resolved_methods", _f1_approved_methods)
+    monkeypatch.setattr(mod, "_approved_injectables", lambda: dict(inj))
+    mod._CONFIG_CACHE.clear()
+    try:
+        # (a) equivalent-but-distinct callable -> refused
+        lookalike = C.derive_study_config(
+            _f1_approved_methods(), spread_scalars=(0.5, 0.75, 0.75),
+            regime_of=_F1CallableEqBomb(), vol_axis_of=_test_vol_axis)
+        mod._CONFIG_CACHE["cfg"] = _cache_entry(mod, lookalike)
+        got, why = mod.resolved_study_config()
+        assert got is None
+        assert "G11_callable_identity" in why and "fresh derivation" in why
+        # (b) the SAME object -> accepted, and __eq__ still never ran
+        mod._CONFIG_CACHE.clear()
+        genuine = C.derive_study_config(_f1_approved_methods(), **inj)
+        mod._CONFIG_CACHE["cfg"] = _cache_entry(mod, genuine, "derived")
+        got2, _ = mod.resolved_study_config()
+        assert got2 is genuine                    # gate is not dead code
+        assert _F1CallableEqBomb.calls == 0
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+def test_f1_methods_mismatch_refusal_under_a_resolved_source(monkeypatch,
+                                                             tmp_path):
+    """G10 keeps a LIVE proof of the 'cache is not a method source' claim.
+
+    The fresh source is RESOLVED here, so the pending gate cannot short the
+    pipeline: the refusal genuinely comes from the methods-equivalence
+    comparison of two fingerprints that differ."""
+    import dataclasses as _dc
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    _f1_resolved_sources(mod, monkeypatch)
+    calls = _b1_builder_spy(mod, monkeypatch)
+    mod._CONFIG_CACHE.clear()
+    try:
+        divergent = _dc.replace(_f1_approved_methods(),
+                                stability_population="A_DIFFERENT_VALUE")
+        mod._CONFIG_CACHE["cfg"] = _cache_entry(
+            mod, _f1_bypass_config(methods=divergent))
+        got, why = mod.resolved_study_config()
+        assert got is None
+        assert "G10_methods_equivalence" in why
+        assert "cache is not a method source" in why
+        assert mod.RealChain().ready()[0] is False
+        assert calls == []
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+def test_f1_boundary_reports_a_sanitized_exception_type(monkeypatch,
+                                                        tmp_path):
+    """An UNENUMERATED explosion is attributed to the stage that was
+    running and carries the exception TYPE — SANITIZED, because the type
+    name is itself attacker-controlled.
+
+    HONEST LIMIT, stated rather than implied: including the type at all
+    means a short attacker-chosen type name CAN appear in the reason. That
+    is the bounded price of diagnosability. What is guaranteed is that the
+    token is <= 40 characters, restricted to [A-Za-z0-9_.] with everything
+    else replaced by '?', and therefore cannot inject newlines or markdown
+    into attempts/PRE_RUN_ATTEMPT_FAILURE.md or trip
+    runinfra.validate_log_event. The twelve ENUMERATED refusals leak
+    nothing at all — they refuse before any foreign code runs (see
+    test_f1_refusal_reasons_are_stable_and_payload_free)."""
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    calls = _b1_builder_spy(mod, monkeypatch)
+
+    class _Nasty(Exception):
+        pass
+
+    _Nasty.__name__ = "Evil\nName: " + _F1_MARKER + "x" * 300
+
+    def _boom():
+        raise _Nasty("detail " + _F1_MARKER)
+
+    monkeypatch.setattr(mod, "_resolved_methods", _boom)
+    mod._CONFIG_CACHE.clear()
+    try:
+        ok, why = mod.RealChain().ready()         # must NOT raise
+        assert ok is False
+        assert "G5_method_source" in why          # stage attribution
+        assert "\n" not in why and "\r" not in why      # no injection
+        assert "x" * 50 not in why                # truncated, not dumped
+        assert len(why) < 300                     # bounded
+        assert "detail " + _F1_MARKER not in why  # the MESSAGE never leaks
+        assert calls == []
+        # a normal exception type still reads cleanly
+        monkeypatch.setattr(mod, "_resolved_methods",
+                            _boom_factory("method source down"))
+        ok2, why2 = mod.RealChain().ready()
+        assert ok2 is False and "RuntimeError" in why2
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+def test_f1_gateway_has_a_single_trust_boundary():
+    """THE anti-scatter pin. Total coverage comes from ONE boundary at the
+    gateway's edge plus a stage cursor — not from try/except at named
+    sites, which is exactly what let F-1 recur. The only other guarded
+    region in the whole config path is `_safe_type_name`, which is
+    load-bearing because it executes INSIDE the boundary's own handler,
+    where a raise would escape the public contract."""
+    import inspect
+    mod = real_run_module()
+
+    def _stmts(fn):
+        """Statement-level tokens only — a substring scan would match
+        'try:' inside '_ConfigCacheEntry:'."""
+        return [ln.split("#", 1)[0].strip()
+                for ln in inspect.getsource(fn).splitlines()]
+
+    boundary = _stmts(mod._run_guarded)
+    assert boundary.count("try:") == 1
+    assert sum(1 for s in boundary if s.startswith("except ")) == 2
+    assert sum(1 for s in boundary
+               if s.startswith("except _Refusal")) == 1
+    assert sum(1 for s in boundary
+               if s.startswith("except BaseException")) == 1
+
+    assert _stmts(mod._safe_type_name).count("try:") == 1
+
+    for fn in (mod._gateway_body, mod.resolved_study_config,
+               mod._methods_fingerprint, mod._config_fingerprint,
+               mod._norm_sub, mod._atom_ticks, mod._atom_number,
+               mod._atom_str, mod._atom_int, mod._atom_bool,
+               mod._code_heads, mod._refuse, mod.RealChain._ready_body,
+               mod.RealChain.ready,
+               # M6.1.4-R2: the representation stages join the SAME single
+               # boundary — they add no try/except of their own.
+               mod._methods_canonical_defect, mod._config_canonical_defect,
+               mod.canonical_form_obligations,
+               C.is_canonical_spread_scalars, C.is_canonical_ticks):
+        stmts = _stmts(fn)
+        assert "try:" not in stmts, fn
+        assert not any(s.startswith("except") for s in stmts), fn
+
+    # No equality against a config / methods OBJECT survives anywhere in
+    # the pipeline: the only comparisons are between fingerprint tuples of
+    # exact builtin atoms (every such line names a `_fp` operand).
+    for line in inspect.getsource(mod._gateway_body).splitlines():
+        code = line.split("#", 1)[0]
+        if "==" in code or "!=" in code:
+            assert "_fp" in code, line
+
+
+def test_f1_every_mandated_evaluation_point_maps_to_a_named_stage():
+    """All 13 mandated evaluation points map onto named gateway stages.
+
+    NO GATE-COUNT THEATRE. Eleven are real stages with their own refusal
+    string. Point (12) cache-write is ATTRIBUTION-ONLY — an in-process
+    write has no legitimate failure mode unless `_CONFIG_CACHE` has itself
+    been replaced. Point (13) is not a stage at all but the SINGLE-PATH
+    INVARIANT: the gateway has exactly one code path, so G3..G11 execute on
+    every call, cache hit or miss — which is what makes point-of-use
+    revalidation automatic rather than a step someone must remember."""
+    import inspect
+    mod = real_run_module()
+    assert sorted(mod._EVALUATION_POINTS) == list(range(1, 14))
+    mapped = [s for stages in mod._EVALUATION_POINTS.values() for s in stages]
+    assert len(set(mapped)) == len(mapped)        # no stage double-counted
+    assert sorted(mapped) == sorted(mod._GATE_STAGES)
+    src = inspect.getsource(mod._gateway_body)
+    for stage in mod._GATE_STAGES:
+        assert f'"{stage}"' in src, stage
+
+
+# =========================================================================
+# M6.1.4-R2 — finding F-1 REOPENED: REPRESENTATION IDENTITY
+# =========================================================================
+# THE NAMED ROOT CAUSE. Before this round the in-repo F-1 regression set was
+# 12 named hostile shapes (`_F1_CASES`) and EVERY ONE OF THEM ASSERTED A
+# REFUSAL. Not one test asserted anything about a config the gateway
+# ACCEPTS. That asymmetry — assert-on-refuse only, never assert-on-accept —
+# is why two mechanisms that produce an ACCEPT of a non-canonical instance
+# passed the whole set. The fix is not two more refusal cases; it is the
+# permanent ACCEPT-SIDE class below: whatever the gateway hands out is
+# asserted canonical on the way out, over a table that a future canonicalized
+# field must join (see test_f1_canonical_form_tables_cover_every_
+# contracts_canonicalization, which turns RED until it does).
+#
+# The claim, stated exactly and never widened: CANONICAL WHEREVER CONTRACTS
+# SPECIFIES CANONICAL, exact-type-pinned everywhere else.
+
+
+class _F1NonBoolEq:
+    """`__eq__` returns a non-plain-bool truthy object and counts calls. It
+    must never be EXECUTED by any stage — not the fingerprints, not the
+    representation stages."""
+
+    calls = 0
+
+    def __eq__(self, other):
+        type(self).calls += 1
+        return ["not-a-bool"]
+
+    def __hash__(self):
+        return 0
+
+
+def _f1_accept(mod, monkeypatch, tmp_path):
+    """Arm the POSITIVE path and return the accepted config instance."""
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    _f1_resolved_sources(mod, monkeypatch)
+    mod._CONFIG_CACHE.clear()
+    cfg, why = mod.resolved_study_config()
+    assert cfg is not None, why
+    return cfg
+
+
+def test_f1_accept_side_obligations_cover_every_canonical_form_rule():
+    """NON-VACUITY of the accept-side class: the obligation list is derived
+    from the SAME tables the gateway's representation stages consume, so it
+    cannot silently shrink to zero and make the accept-side assertions
+    trivially true."""
+    mod = real_run_module()
+    cfg = C.derive_study_config(_f1_approved_methods(), **_f1_injectables())
+    labels = [label for label, _ in mod.canonical_form_obligations(cfg)]
+    assert labels                                  # never vacuous
+    assert len(set(labels)) == len(labels)
+    expected = ([f"methods.{f}.{sub}"
+                 for f, _cls, sub, _p in mod._METHODS_CANONICAL_RULES]
+                + [f"config.{f}" for f, _p in mod._CONFIG_CANONICAL_RULES])
+    assert labels == expected
+
+
+def test_f1_canonical_form_tables_cover_every_contracts_canonicalization():
+    """ANTI-DRIFT PIN, and the extension point for the accept-side class.
+
+    `contracts` creates a canonical-representation obligation exactly where a
+    `__post_init__` REWRITES a field with `object.__setattr__`. Every such
+    field must have a row in a gateway canonical-form table; a new one turns
+    this RED, and adding the row automatically extends both the gateway
+    stages and every accept-side assertion below."""
+    import inspect as _i
+    mod = real_run_module()
+    rewritten = set(re.findall(r'object\.__setattr__\(\s*self,\s*"(\w+)"',
+                               _i.getsource(C)))
+    covered = ({sub for _f, _cls, sub, _p in mod._METHODS_CANONICAL_RULES}
+               | {f for f, _p in mod._CONFIG_CANONICAL_RULES})
+    assert rewritten == covered == {"spread_scalars", "adverse_slippage_ticks"}
+
+
+def test_f1_canonical_form_binds_to_contracts_and_defines_no_second_rule():
+    """The gateway must not carry its own idea of 'canonical'. Every
+    predicate in every table IS the contracts function, by object identity —
+    so contracts stays the single source and the two cannot drift."""
+    mod = real_run_module()
+    predicates = ({p for _f, _cls, _sub, p in mod._METHODS_CANONICAL_RULES}
+                  | {p for _f, p in mod._CONFIG_CANONICAL_RULES})
+    assert predicates <= {C.is_canonical_spread_scalars, C.is_canonical_ticks}
+    assert mod._is_canon_scalars is C.is_canonical_spread_scalars
+    assert mod._is_canon_ticks is C.is_canonical_ticks
+
+
+@pytest.mark.parametrize("case_id", _F1_NON_CANONICAL_IDS)
+def test_f1_representation_and_equivalence_are_separate_obligations(
+        case_id, monkeypatch, tmp_path):
+    """THE DECISIVE TEST. Each of these caches is FINGERPRINT-EQUAL to a
+    fresh derivation — the EQUIVALENCE obligation is satisfied — and must
+    still refuse, at the REPRESENTATION stage, never at an equivalence one.
+
+    A refusal tagged `_equivalence` here would mean the fix was smuggled into
+    the fingerprint, which would also refuse value-equal pairs contracts
+    declares EQUAL (`_canonical_scalar` widens int to float on purpose)."""
+    mod = real_run_module()
+    try:
+        calls = _f1_arm(mod, monkeypatch, tmp_path, case_id)
+        cfg, why = mod.resolved_study_config()
+        assert cfg is None
+        assert "_canonical_form" in why, why
+        assert "_equivalence" not in why, why
+        assert "representation" in why, why
+        assert calls == []
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+@pytest.mark.parametrize("case_id", _F1_NON_CANONICAL_IDS)
+def test_f1_gateway_never_hands_out_a_non_canonical_instance(
+        case_id, monkeypatch, tmp_path):
+    """ACCEPT-SIDE, negative half: a non-canonical cache yields NO instance
+    at all. Refuse, never repair — returning `canonical_config(cached)` would
+    mint a new object per call and destroy the ready()/compute() identity
+    guarantee while silently accepting a tampered cache."""
+    mod = real_run_module()
+    try:
+        _f1_arm(mod, monkeypatch, tmp_path, case_id)
+        before = mod._CONFIG_CACHE.get("cfg")
+        cfg, why = mod.resolved_study_config()
+        assert cfg is None and isinstance(why, str) and why.strip()
+        assert mod.RealChain().ready()[0] is False
+        # the hostile entry is left EXACTLY as injected: no refusal cached,
+        # and — the point — no repaired replacement written back either.
+        assert mod._CONFIG_CACHE.get("cfg") is before
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+def test_f1_accepted_config_is_canonical_on_every_obligation(monkeypatch,
+                                                             tmp_path):
+    """ACCEPT-SIDE, positive half — THE permanent class the 12-case refusal
+    set lacked. Whatever the gateway ACCEPTS is asserted canonical on the way
+    out, obligation by obligation, over the table above."""
+    mod = real_run_module()
+    try:
+        cfg = _f1_accept(mod, monkeypatch, tmp_path)
+        obligations = mod.canonical_form_obligations(cfg)
+        assert obligations
+        for label, holds in obligations:
+            assert holds is True, label
+        # ... and spelled out once, so a table bug cannot make it vacuous:
+        assert C.is_canonical_spread_scalars(cfg.spread_scalars) is True
+        assert all(type(v) is float for v in cfg.spread_scalars)
+        assert C.is_canonical_ticks(
+            cfg.methods.spread_cost.adverse_slippage_ticks) is True
+        assert "-0.0" not in json.dumps(list(cfg.spread_scalars))
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+def test_f1_positive_path_shares_one_canonical_instance(monkeypatch,
+                                                        tmp_path):
+    """ready() -> ready() -> synthetic compute() still share ONE instance BY
+    IDENTITY, and that one instance is canonical.
+
+    SCOPE: synthetic config-to-compute integration with the method source,
+    the injectable source and data I/O replaced by stand-ins — not a real
+    data chain, not a real S0, nothing about research output."""
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    if "m" not in _CACHE:
+        _CACHE["m"] = _market()
+    bars, ds = _CACHE["m"]
+    _f1_resolved_sources(mod, monkeypatch)
+    mod._CONFIG_CACHE.clear()
+    try:
+        chain = mod.RealChain()
+        monkeypatch.setattr(chain, "_ensure", lambda: (ds, None))
+        chain._bars = bars
+        ok, why = chain.ready()
+        assert ok is True, why
+        cfg1, _ = mod.resolved_study_config()
+        ok2, why2 = chain.ready()
+        assert ok2 is True, why2
+        payload = chain.compute(chain.prepare())
+        cfg2, _ = mod.resolved_study_config()
+        assert cfg2 is cfg1                        # ONE instance, identity
+        assert cfg1 is mod._CONFIG_CACHE["cfg"].config
+        for label, holds in mod.canonical_form_obligations(cfg2):
+            assert holds is True, label
+        # the representation obligation is exactly what keeps the SEALED
+        # bytes stable: this is the value that travels into the disclosure.
+        conv = payload["disclosures"]["method_conventions"]
+        used = conv["spread_scalars_used"]
+        assert all(type(v) is float for v in used)
+        assert json.dumps(used) == json.dumps([0.5, 0.75, 0.75])
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+def test_f1_non_bool_equality_is_never_executed_by_any_stage(monkeypatch,
+                                                             tmp_path):
+    """An object whose `__eq__` returns a NON-PLAIN-BOOL must never be
+    executed — in any slot, at any stage. Type is pinned before every read,
+    so the refusal comes from normalization, not from a comparison."""
+    import dataclasses as _dc
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    _f1_resolved_sources(mod, monkeypatch)
+    calls = _b1_builder_spy(mod, monkeypatch)
+    _F1NonBoolEq.calls = 0
+    try:
+        plants = {
+            "methods_field": lambda: _f1_bypass_config(
+                methods=_dc.replace(_f1_approved_methods(),
+                                    stability_population=_F1NonBoolEq())),
+            "spread_scalars_member": lambda: _f1_bypass_config(
+                spread_scalars=(_F1NonBoolEq(), 1.0, 1.0)),
+            "ticks_value": lambda: _f1_bypass_config(
+                methods=_dc.replace(
+                    _f1_approved_methods(),
+                    spread_cost=_f1_bypass_spread_cost(
+                        {"Base": _F1NonBoolEq()}))),
+            "ticks_key": lambda: _f1_bypass_config(
+                methods=_dc.replace(
+                    _f1_approved_methods(),
+                    spread_cost=_f1_bypass_spread_cost(
+                        {_F1NonBoolEq(): 1.0}))),
+        }
+        for slot, make in plants.items():
+            mod._CONFIG_CACHE.clear()
+            mod._CONFIG_CACHE["cfg"] = _cache_entry(mod, make())
+            ok, why = mod.RealChain().ready()       # must NOT raise
+            assert ok is False, slot
+            assert isinstance(why, str) and why.strip()
+            assert calls == [], slot
+        assert _F1NonBoolEq.calls == 0
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+# ===========================================================================
+# M6.1.6 — the PRE-EXPOSURE PREPARE SEAM (lifecycle slice only).
+#
+# Scope discipline: these tests prove the LIFECYCLE property (config is
+# resolved once, pre-exposure, and Stage C consumes that object) and nothing
+# more. They do NOT claim F-1 closed: the prepared object still carries
+# callables and a MappingProxyType, both of which need rulings this
+# milestone must not make.
+# ===========================================================================
+
+def test_m616_stage_c_never_reaches_a_config_source():
+    """AST pin: `RealChain.compute` and everything it calls in-module must
+    not reference any global config-resolution entry point. This is the
+    mechanical form of 'reading STOPS at prepare'."""
+    import ast
+    import inspect
+    mod = real_run_module()
+    src = inspect.getsource(mod.RealChain.compute)
+    tree = ast.parse("if 1:\n" + src)
+    banned = {"resolved_study_config", "_resolved_methods",
+              "_approved_injectables", "_config_gateway"}
+    seen = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+    seen |= {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
+    assert not (seen & banned), sorted(seen & banned)
+
+
+def test_m616_prepare_returns_an_exact_typed_immutable_object(monkeypatch,
+                                                              tmp_path):
+    import dataclasses as _dc
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    approved = _dc.replace(_test_methods(), test_only=False)
+    inj = {"spread_scalars": (0.5, 0.75, 0.75),
+           "regime_of": lambda d: "R", "vol_axis_of": _test_vol_axis}
+    monkeypatch.setattr(mod, "_resolved_methods", lambda: approved)
+    monkeypatch.setattr(mod, "_approved_injectables", lambda: dict(inj))
+    mod._CONFIG_CACHE.clear()
+    try:
+        prepared = mod.RealChain().prepare()
+        assert type(prepared) is mod._PreparedExecutionInput
+        with pytest.raises(AttributeError):
+            prepared.config = None
+        assert not hasattr(prepared, "__dict__")     # __slots__
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+def test_m616_compute_refuses_a_look_alike_prepared_object(monkeypatch,
+                                                           tmp_path):
+    """Stage C is exact-type-pinned: a duck-typed stand-in carrying a legal
+    config must NOT be accepted, because accepting it would reopen the
+    'compute re-resolves' path through a different door."""
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+
+    class _LookAlike:
+        config = _test_config()
+        reason = "look-alike"
+
+    chain = mod.RealChain()
+    with pytest.raises(RuntimeError, match="prepared execution input"):
+        chain.compute(_LookAlike())
+    assert chain._ds is None
+
+
+def test_m616_prepare_fails_closed_on_the_real_production_source(monkeypatch,
+                                                                 tmp_path):
+    """The production posture today: `_approved_injectables()` is None, so
+    prepare refuses BEFORE exposure and Stage C is never reached."""
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    mod._CONFIG_CACHE.clear()
+    try:
+        chain = mod.RealChain()
+        with pytest.raises(RuntimeError, match="stage-C config unavailable"):
+            chain.prepare()
+        assert chain._ds is None
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+def test_m616_deps_wire_prepare_and_one_arg_compute():
+    """The production deps object must carry the seam; a missing seam is
+    fail-closed in the runner, so an unwired production path would refuse
+    pre-exposure rather than reach compute."""
+    import inspect
+    mod = real_run_module()
+    src = inspect.getsource(mod)
+    assert "prepare_compute=chain.prepare" in src
+    assert len(inspect.signature(mod.RealChain.compute).parameters) == 2
+
+
+def test_m616_governance_proof_is_wired_on_the_production_render_path():
+    """The proof must be enforced where it matters: the production deps
+    object renders through the entry point that builds an INDEPENDENT
+    context. A synthetic render that supplies no context does not run the
+    proof — that is disclosed here rather than claimed as coverage."""
+    import inspect
+    mod = real_run_module()
+    src = inspect.getsource(mod)
+    assert "render_report=chain.render_report_with_governance_proof" in src
+    sig = inspect.signature(mod.render_s0_report).parameters
+    assert "governance_context" in sig and sig["governance_context"].default is None
+
+
+def test_m616_governance_context_never_reads_the_payload_it_verifies():
+    """AST pin on the production context builder: it may reach guards, the
+    repo tree and the pre-run snapshot — it must NOT touch `result`,
+    `formal`, or the evidence mirror."""
+    import ast
+    import inspect
+    mod = real_run_module()
+    fn = mod.RealChain.render_report_with_governance_proof
+    tree = ast.parse("if 1:\n" + inspect.getsource(fn))
+    ctx_call = [n for n in ast.walk(tree)
+                if isinstance(n, ast.Call)
+                and getattr(getattr(n, "func", None), "attr", "")
+                == "SourceContext"]
+    assert len(ctx_call) == 1
+    names = {n.id for n in ast.walk(ctx_call[0]) if isinstance(n, ast.Name)}
+    attrs = {n.attr for n in ast.walk(ctx_call[0])
+             if isinstance(n, ast.Attribute)}
+    assert "result" not in names
+    assert not ({"evidence", "formal"} & (names | attrs))
+
+
+def test_m616_governance_proof_refuses_a_tampered_final_report(monkeypatch,
+                                                               tmp_path):
+    """End-to-end through the REAL renderer: tamper `governance.trial_id`
+    in the payload and the proof must refuse the seal, even though every
+    pre-existing gate passes."""
+    from itsf import guards as _g
+    from itsf.s0 import output_proof as _op
+    mod = real_run_module()
+    ctx = _op.SourceContext(
+        authorization_snapshot={"trial_id": _GOV["trial_id"],
+                                "authorized_commit": _GOV["authorized_commit"],
+                                "event_sequence":
+                                    _GOV["registry_sequence_snapshot"]},
+        frozen_hash_authority=dict(_GOV["frozen_hashes"]),
+        frozen_hash_observations=dict(_GOV["frozen_hashes"]),
+        engineering_seed=_GOV["engineering_seed"],
+        engineering_seed_provenance="TEST_ONLY provenance")
+    honest = mod.render_s0_report(_payload(), expected_governance=dict(_GOV),
+                                  governance_context=ctx)
+    assert "S0_REPORT.json" in honest          # honest render still seals
+
+    # NEVER mutate the shared cached payload: _payload() returns the same
+    # object to every test, so an in-place rebind here would poison the
+    # whole suite (observed once, fixed here).
+    src = _payload()
+    bad = {k: v for k, v in src.items()}
+    bad["governance"] = {**src["governance"], "trial_id": "S0-T999"}
+    with pytest.raises(ValueError, match="governance proof failed"):
+        mod.render_s0_report(bad,
+                             expected_governance=dict(bad["governance"]),
+                             governance_context=ctx)
+
+
+def test_m616_review_a3_1_hostile_mapping_context_cannot_set_the_expectation():
+    """M6.1.6 review A3-1: a Mapping whose `.get()` and `__getitem__`
+    disagree must not pass SourceContext validation and then supply
+    DIFFERENT values as the frozen expectation ('validate X, use Y')."""
+    from itsf.s0 import output_proof as _op
+
+    class _TwoFaced(dict):
+        def get(self, key, default=None):        # honest face
+            return {"trial_id": _GOV["trial_id"],
+                    "authorized_commit": _GOV["authorized_commit"],
+                    "event_sequence":
+                        _GOV["registry_sequence_snapshot"]}.get(key, default)
+
+    two_faced = _TwoFaced({"trial_id": "S0-ATTACKER",
+                           "authorized_commit": "f" * 40,
+                           "event_sequence": 777})
+    ctx = _op.SourceContext(
+        authorization_snapshot=two_faced,
+        frozen_hash_authority=dict(_GOV["frozen_hashes"]),
+        frozen_hash_observations=dict(_GOV["frozen_hashes"]),
+        engineering_seed=_GOV["engineering_seed"],
+        engineering_seed_provenance="TEST_ONLY provenance")
+    files = mod_render_honest_report()
+    proof = _op.prove_governance(ctx, sealed_artifacts=files)
+    # The materialised (attacker) values are what became the expectation,
+    # so the honest report must now FAIL — the two faces can no longer
+    # diverge silently.
+    assert proof.ok is False
+    assert any("trial_id" in p for p in proof.problems), proof.problems
+
+
+def mod_render_honest_report():
+    from itsf.s0 import output_proof as _op
+    mod = real_run_module()
+    ctx = _op.SourceContext(
+        authorization_snapshot={"trial_id": _GOV["trial_id"],
+                                "authorized_commit": _GOV["authorized_commit"],
+                                "event_sequence":
+                                    _GOV["registry_sequence_snapshot"]},
+        frozen_hash_authority=dict(_GOV["frozen_hashes"]),
+        frozen_hash_observations=dict(_GOV["frozen_hashes"]),
+        engineering_seed=_GOV["engineering_seed"],
+        engineering_seed_provenance="TEST_ONLY provenance")
+    return mod.render_s0_report(_payload(), expected_governance=dict(_GOV),
+                                governance_context=ctx)

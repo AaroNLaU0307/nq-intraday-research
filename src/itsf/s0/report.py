@@ -248,6 +248,175 @@ _STABILITY_AXIS_BOOKKEEPING_KEYS: frozenset[str] = frozenset({"conservation_ok"}
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
+# ---------------------------------------------------------------------------
+# 1b-0. M6.1.4-S1 NEVER-CRASH PRIMITIVES (Codex RC-1 fix round).
+#
+# Every public entry point in this module is a FAIL-CLOSED GATE: it must
+# return a problem LIST for ARBITRARY JSON-like input and must never raise,
+# because an exception escaping a gate is not a refusal — it is an
+# unhandled crash that the caller may catch, log and route around. The
+# concrete crash classes Codex enumerated, all reproduced as tests before
+# being fixed here:
+#   (a) `sorted(set(d) - set(allowed))` on a dict carrying BOTH str and int
+#       keys -> TypeError ("'<' not supported between instances of 'int'
+#       and 'str'") inside the unknown-key reporter;
+#   (b) `name.partition("|")` on a NON-STRING manifest key -> AttributeError
+#       inside validate_sealed_files;
+#   (c) bool/int/tuple dict keys, deeply aberrant mappings and outright
+#       MALICIOUS objects (a key whose `__hash__`/`__eq__` raises, a value
+#       whose property access raises) anywhere in the tree.
+#
+# `_safe_sorted` gives every heterogeneous key set a TOTAL order without
+# ever comparing across types; `_safe_key_set`/`_safe_keys` survive a
+# raising `__hash__`; `_safe_repr` survives a raising `__repr__`; and
+# `_guarded` is the last-resort net that converts any residual exception
+# into one more problem string (fail-closed: a non-empty list refuses the
+# seal) instead of letting it escape.
+# ---------------------------------------------------------------------------
+def _safe_repr(value) -> str:
+    """`repr(value)` that can never raise (a malicious __repr__ is itself a
+    tampering vector, so it degrades to a type name, never to a crash)."""
+    try:
+        return repr(value)
+    except Exception:                                    # noqa: BLE001
+        try:
+            return f"<unreprable {type(value).__name__}>"
+        except Exception:                                # noqa: BLE001
+            return "<unreprable>"
+
+
+def _sort_key(value):
+    """A TOTAL order over arbitrary JSON-like keys: sort by type name first,
+    then by the value itself when it is a plain str/int/float, else by its
+    safe repr. Never compares an int against a str, so a mixed-type key set
+    can no longer explode the `sorted()` calls this module makes."""
+    tname = type(value).__name__
+    if isinstance(value, str):
+        return (tname, value, "")
+    if isinstance(value, bool):
+        return (tname, "", str(int(value)))
+    if isinstance(value, (int, float)):
+        try:
+            return (tname, "", f"{float(value):+032.6f}")
+        except Exception:                                # noqa: BLE001
+            return (tname, "", _safe_repr(value))
+    return (tname, "", _safe_repr(value))
+
+
+def _safe_sorted(values) -> list:
+    """`sorted(values)` that never raises on a heterogeneous / hostile set."""
+    try:
+        items = list(values)
+    except Exception:                                    # noqa: BLE001
+        return []
+    try:
+        return sorted(items, key=_sort_key)
+    except Exception:                                    # noqa: BLE001
+        return items
+
+
+def _safe_list_text(values) -> str:
+    """`str(list_of_keys)` for a problem message, hostile-repr-proof, and
+    BYTE-IDENTICAL to the old `f"...:{sorted(extra)}"` rendering for the
+    ordinary all-plain-key case (so no existing problem-code assertion in
+    tests/test_s0_report.py changes shape)."""
+    display = [v if isinstance(v, (str, int, float, type(None))) else
+               _safe_repr(v) for v in values]
+    try:
+        return str(display)
+    except Exception:                                    # noqa: BLE001
+        return "[<unreprable>]"
+
+
+def _safe_keys(d) -> list:
+    """`list(d)` for a mapping whose keys may raise on iteration."""
+    if not isinstance(d, Mapping):
+        return []
+    try:
+        return list(d)
+    except Exception:                                    # noqa: BLE001
+        return []
+
+
+def _safe_key_set(d) -> set:
+    """`set(d)` that tolerates a key whose `__hash__` raises: unhashable /
+    hostile keys are reported as their safe repr rather than crashing the
+    caller (they are ALWAYS a defect — `_walk_r8` reports them separately —
+    so degrading their identity here loses no signal)."""
+    out: set = set()
+    for key in _safe_keys(d):
+        try:
+            out.add(key)
+        except Exception:                                # noqa: BLE001
+            out.add(f"<unhashable:{type(key).__name__}>")
+    return out
+
+
+def _safe_in(container, key) -> bool:
+    """`key in container` that never raises (a hostile key's `__eq__` fires
+    on any hash-bucket collision, so even a plain `"x" in d` membership test
+    is reachable by an attacker-supplied mapping)."""
+    try:
+        return key in container
+    except Exception:                                    # noqa: BLE001
+        return False
+
+
+def _safe_not_in(container, key) -> bool:
+    """`key not in container`, FAIL-CLOSED: a membership test that RAISES
+    (a hostile `__eq__` firing on a hash-bucket collision) is treated as
+    "not present", i.e. as an unknown/extra key. Answering "present" there
+    would let an attacker hide a smuggled key behind a raising comparison."""
+    try:
+        return key not in container
+    except Exception:                                    # noqa: BLE001
+        return True
+
+
+def _safe_set_diff(left, right) -> list:
+    """Elements of `left` not in `right`, tolerating hostile members on
+    either side (a bare `set - set` invokes `__eq__` on collision)."""
+    try:
+        items = list(left)
+    except Exception:                                    # noqa: BLE001
+        return []
+    return [k for k in items if _safe_not_in(right, k)]
+
+
+def _safe_get(d, key, default=None):
+    """`d.get(key, default)` that never raises. Same rationale as
+    `_safe_in`; also survives a Mapping subclass with a hostile
+    `__getitem__`."""
+    if not isinstance(d, Mapping):
+        return default
+    try:
+        return d.get(key, default)
+    except Exception:                                    # noqa: BLE001
+        return default
+
+
+def _guarded(name: str, fn, problems: list[str]) -> list[str]:
+    """Run `fn(problems)` and convert ANY escaping exception into a final
+    `validator_internal_error:<entry point>:<ExcType>` problem.
+
+    This is a NET, not a substitute for the structural fixes above: the
+    specific crash classes Codex listed are each fixed at their source so
+    hostile input still yields a PRECISE problem code. What this guarantees
+    on top is the absolute property the mandate requires — the function
+    RETURNS a problem list for arbitrary input, always, and every problem
+    accumulated before the failure is still reported (fail-closed: a
+    non-empty list means Stage E refuses to seal)."""
+    try:
+        fn(problems)
+    except Exception as exc:                             # noqa: BLE001
+        try:
+            etype = type(exc).__name__
+        except Exception:                                # noqa: BLE001
+            etype = "Exception"
+        problems.append(f"validator_internal_error:{name}:{etype}")
+    return problems
+
+
 def _is_number(v) -> bool:
     """int/float, never bool, and FINITE."""
     return (isinstance(v, (int, float)) and not isinstance(v, bool)
@@ -504,12 +673,17 @@ def _check_no_unknown_keys(d, allowed, path: str, problems: list[str], *,
     """`d`'s key set must be a SUBSET of `allowed`. No-ops on a non-dict `d`
     — the caller's own type/presence check already reports that defect;
     this only ever adds an unknown-key problem on a dict whose key set
-    exceeds the documented allowance."""
+    exceeds the documented allowance.
+
+    M6.1.4-S1 (Codex crash class (a)): the key set is diffed and ordered
+    through `_safe_key_set`/`_safe_sorted`, so a section carrying BOTH str
+    and int keys (e.g. `{"pooled": ..., 7: ...}`) now REPORTS
+    `<code>:<path>:[7]` instead of raising TypeError out of `sorted()`."""
     if not isinstance(d, dict):
         return
-    extra = sorted(set(d) - set(allowed))
+    extra = _safe_sorted(_safe_set_diff(_safe_keys(d), set(allowed)))
     if extra:
-        problems.append(f"{code}:{path}:{extra}")
+        problems.append(f"{code}:{path}:{_safe_list_text(extra)}")
 
 
 # A1 structural — s0_real_run.py build_full_study_result's own
@@ -807,13 +981,24 @@ def _walk_r8(obj, path: str, problems: list[str]) -> None:
     key, a stringified-object leak ("...object at 0x..."), or a literal
     "dataset" key anywhere in the tree (not just at the top level)."""
     if isinstance(obj, dict):
-        for key, value in obj.items():
+        try:
+            items = list(obj.items())
+        except Exception:                                # noqa: BLE001
+            problems.append(f"mapping_unwalkable:{path}")
+            return
+        for key, value in items:
+            # M6.1.4-S1 (Codex crash class (c)): the str type-check comes
+            # FIRST. `key == "dataset"` on a hostile key runs
+            # `str.__eq__(key)` -> NotImplemented -> the REFLECTED
+            # `key.__eq__("dataset")`, i.e. attacker code, inside the
+            # validator. Comparing only after `isinstance(key, str)` makes
+            # that unreachable.
+            if not isinstance(key, str):
+                problems.append(f"non_str_key:{path}:{_safe_repr(key)}")
+                _walk_r8(value, f"{path}.<{_safe_repr(key)}>", problems)
+                continue
             if key == "dataset":
                 problems.append(f"dataset_key_present:{path}.{key}")
-            if not isinstance(key, str):
-                problems.append(f"non_str_key:{path}:{key!r}")
-                _walk_r8(value, f"{path}.<{key!r}>", problems)
-                continue
             _walk_r8(value, f"{path}.{key}", problems)
         return
     if isinstance(obj, (list, tuple)):
@@ -1244,11 +1429,30 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
     `test_post_injection_corruption_caught_by_second_validate_call` in
     tests/test_s0_report.py for a worked example of why both calls plus
     `validate_sealed_files` are required together.
-    """
-    if not isinstance(payload, dict):
-        return ["payload_not_dict"]
 
-    problems: list[str] = []
+    M6.1.4-S1: the whole rule body runs under `_guarded`, so the
+    "never raises" promise above is now STRUCTURAL rather than a
+    per-rule discipline claim — arbitrary JSON-like input (mixed-type dict
+    keys, hostile `__hash__`/`__eq__`/property objects, deeply aberrant
+    mappings) yields a problem list, always. Every problem accumulated
+    before an internal failure is still returned, plus a final
+    `validator_internal_error:validate_formal_payload:<ExcType>`.
+    """
+    return _guarded(
+        "validate_formal_payload",
+        lambda acc: _validate_formal_payload_inner(
+            payload, expected_governance, acc),
+        [])
+
+
+def _validate_formal_payload_inner(payload, expected_governance,
+                                   problems: list[str]) -> list[str]:
+    """`validate_formal_payload`'s rule body. Appends to (and returns) the
+    caller's accumulator so a crash mid-way still surfaces every problem
+    found up to that point."""
+    if not isinstance(payload, dict):
+        problems.append("payload_not_dict")
+        return problems
 
     # R1 — every section present, non-empty, and a dict.
     for key in FORMAL_SECTIONS:
@@ -1271,8 +1475,9 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
 
     # frozen: S0 §7 L133 — the theta axis is EXACTLY {0.5, 0.3}, never a
     # subset (a single-theta payload), a superset, or a renamed key.
-    tkeys = sorted(payload["oracle_daily"])
-    if set(tkeys) != _EXPECTED_THETA_KEYS:
+    tkeys = _safe_sorted(_safe_keys(payload["oracle_daily"]))
+    if (_safe_set_diff(tkeys, _EXPECTED_THETA_KEYS)
+            or _safe_set_diff(_EXPECTED_THETA_KEYS, tkeys)):
         problems.append(
             f"theta_axis_mismatch:got={tkeys}:"
             f"expected={sorted(_EXPECTED_THETA_KEYS)}")
@@ -1284,8 +1489,9 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
     theta_unions: dict[str, frozenset] = {}
     theta_tp_days: dict[str, frozenset] = {}
     for tkey in tkeys:
-        tcell = payload["oracle_daily"].get(tkey)
-        du = tcell.get("day_universe") if isinstance(tcell, dict) else None
+        tcell = _safe_get(payload["oracle_daily"], tkey)
+        du = _safe_get(tcell, "day_universe") if isinstance(tcell, dict) \
+            else None
         if not isinstance(du, dict):
             problems.append(f"day_universe_missing:{tkey}")
             continue
@@ -1530,14 +1736,16 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
     expected_ci = {f"{t}|{e}|{s}|block{b}"
                    for t in tkeys for e in ENGINES for s in _SCENARIOS
                    for b in _BLOCKS}
-    actual_ci = set(payload["bootstrap_ci"])
-    for k in sorted(expected_ci - actual_ci):
+    actual_ci = _safe_keys(payload["bootstrap_ci"])
+    for k in _safe_sorted(_safe_set_diff(expected_ci, actual_ci)):
         problems.append(f"bootstrap_ci_missing:{k}")
-    for k in sorted(actual_ci - expected_ci):
-        problems.append(f"bootstrap_ci_extra:{k}")
-    for key in sorted(expected_ci & actual_ci):
+    for k in _safe_sorted(_safe_set_diff(actual_ci, expected_ci)):
+        problems.append(f"bootstrap_ci_extra:{_safe_repr(k)}"
+                        if not isinstance(k, str) else f"bootstrap_ci_extra:{k}")
+    present = [k for k in expected_ci if not _safe_not_in(actual_ci, k)]
+    for key in _safe_sorted(present):
         blk = int(key.rsplit("block", 1)[1])
-        cell = payload["bootstrap_ci"][key]
+        cell = _safe_get(payload["bootstrap_ci"], key)
         if not isinstance(cell, dict):
             problems.append(f"bootstrap_ci_cell_type:{key}")
             continue
@@ -1640,7 +1848,7 @@ def validate_formal_payload(payload, *, expected_governance=None) -> list[str]:
     # theoretical_oracle.
     for section in ("oracle_daily", "e2_worst_days", "sizing_outputs",
                     "frequency", "theoretical_oracle"):
-        if sorted(payload[section]) != tkeys:
+        if _safe_sorted(_safe_keys(payload[section])) != tkeys:
             problems.append(f"theta_keys_mismatch:{section}")
 
     # frozen: S0 §7 — theoretical_oracle per-theta shape (A3): Base scenario
@@ -2368,6 +2576,42 @@ _FROZEN_LINE_FIELDS: tuple[str, ...] = ("entry_timestamp",
 _INTERNAL_NAME_LEAK: tuple[str, ...] = ("entry_ts", "exit_ts")
 
 
+def _derive_trade_date_universe(payload):
+    """The sealed trade-date universe DERIVED from the payload's own
+    `oracle_daily[<theta>].day_universe.tp_days/fp_days` — matrix CR-7's
+    reducer (b). Returns None (never an empty set) when the payload cannot
+    support that derivation at all (no `oracle_daily`, or not one theta
+    cell carrying a usable day_universe), so a caller-supplied override for
+    a deliberately narrow payload stays legal while an override against a
+    FULL payload is cross-checked. Never raises."""
+    if not isinstance(payload, dict):
+        return None
+    od = _safe_get(payload, "oracle_daily")
+    if not isinstance(od, dict) or not od:
+        return None
+    derivable = False
+    universe: set = set()
+    for tcell in list(od.values()):
+        if not isinstance(tcell, dict):
+            continue
+        du = _safe_get(tcell, "day_universe")
+        if not isinstance(du, dict):
+            continue
+        for grp in ("tp_days", "fp_days"):
+            days = _safe_get(du, grp)
+            if isinstance(days, (list, tuple)):
+                derivable = True
+                for d in days:
+                    # a NON-str date is kept (as its safe repr) rather than
+                    # dropped: dropping it would SHRINK the universe a
+                    # sealed file is compared against, i.e. weaken the gate.
+                    try:
+                        universe.add(d if isinstance(d, str) else _safe_repr(d))
+                    except Exception:                    # noqa: BLE001
+                        universe.add("<unhashable_trade_date>")
+    return universe if derivable else None
+
+
 def validate_sealed_files(files: Mapping[str, str], payload, *,
                           trade_date_universe=None) -> list[str]:
     """Verify the sealed JSONL bodies against `payload["mc_handoff_manifest"]
@@ -2417,37 +2661,83 @@ def validate_sealed_files(files: Mapping[str, str], payload, *,
     removed). An explicit iterable of "YYYY-MM-DD" strings OVERRIDES that
     derivation, for a caller validating a narrower payload that carries no
     `oracle_daily` section at all.
+
+    M6.1.4-S1 (matrix CR-7 — "the sealed trade-date universe"): an
+    explicitly supplied `trade_date_universe` that DISAGREES with this
+    function's own derivation from a payload that DOES carry a usable
+    `oracle_daily` is now itself a hard problem
+    (`sealed_file_universe_override_mismatch:...`). The production renderer
+    passes `trade_date_universe=univ` computed from
+    `formal["oracle_daily"][t]["day_universe"]`, which USED to make the
+    validator's independent derivation dead code in production — two
+    "independent" derivations that were structurally one. The override is
+    still honoured (the documented narrow-payload use, where `oracle_daily`
+    is absent/unusable, is untouched and raises no problem), but it can no
+    longer MASK the independent derivation.
+
+    M6.1.4-S1 also puts the whole body under `_guarded` and makes every key
+    handling site type-safe: a NON-STRING manifest key
+    (`{7: {...}}`) previously crashed `name.partition("|")` with an
+    AttributeError instead of returning a problem.
     """
-    problems: list[str] = []
-    manifest = (payload.get("mc_handoff_manifest", {})
+    return _guarded(
+        "validate_sealed_files",
+        lambda acc: _validate_sealed_files_inner(
+            files, payload, trade_date_universe, acc),
+        [])
+
+
+def _validate_sealed_files_inner(files, payload, trade_date_universe,
+                                 problems: list[str]) -> list[str]:
+    """`validate_sealed_files`' body (see that function's docstring)."""
+    manifest = (_safe_get(payload, "mc_handoff_manifest", {})
                if isinstance(payload, dict) else {})
-    file_specs = manifest.get("files") if isinstance(manifest, dict) else None
+    file_specs = _safe_get(manifest, "files") if isinstance(manifest, dict) \
+        else None
     if not isinstance(file_specs, dict) or not file_specs:
-        return ["mc_handoff_manifest_files_missing"]
+        problems.append("mc_handoff_manifest_files_missing")
+        return problems
+    if not isinstance(files, Mapping):
+        problems.append("sealed_files_argument_not_a_mapping")
+        files = {}
 
     expected_keys = {f"{e}|{s}" for e in ENGINES for s in _SCENARIOS}
-    got_keys = set(file_specs)
-    if got_keys != expected_keys:
+    got_keys = _safe_keys(file_specs)
+    missing_keys = _safe_sorted(_safe_set_diff(expected_keys, got_keys))
+    extra_keys = _safe_sorted(_safe_set_diff(got_keys, expected_keys))
+    if missing_keys or extra_keys:
         problems.append(
             "mc_handoff_manifest_files_key_set_mismatch:"
-            f"missing={sorted(expected_keys - got_keys)}:"
-            f"extra={sorted(got_keys - expected_keys)}")
+            f"missing={_safe_list_text(missing_keys)}:"
+            f"extra={_safe_list_text(extra_keys)}")
 
-    if trade_date_universe is not None:
-        universe = set(trade_date_universe)
+    derived_universe = _derive_trade_date_universe(payload)
+    if trade_date_universe is None:
+        universe = derived_universe if derived_universe is not None else set()
     else:
-        od = payload.get("oracle_daily", {}) if isinstance(payload, dict) \
-            else {}
-        universe = {
-            d for tcell in (od.values() if isinstance(od, dict) else ())
-            if isinstance(tcell, dict)
-            for grp in ("tp_days", "fp_days")
-            for d in ((tcell.get("day_universe") or {}).get(grp) or ())
-        }
+        try:
+            universe = set(trade_date_universe)
+        except Exception:                                # noqa: BLE001
+            problems.append("sealed_file_universe_override_type")
+            universe = derived_universe if derived_universe is not None else set()
+        else:
+            # CR-7: the caller's explicit set may never silently REPLACE the
+            # payload-derived one when the payload can supply it.
+            if derived_universe is not None and universe != derived_universe:
+                problems.append(
+                    "sealed_file_universe_override_mismatch:"
+                    f"only_in_override={_safe_list_text(_safe_sorted(universe - derived_universe))}:"
+                    f"only_in_payload={_safe_list_text(_safe_sorted(derived_universe - universe))}")
 
-    counts = manifest.get("counts", {}) if isinstance(manifest, dict) else {}
+    counts = _safe_get(manifest, "counts", {}) if isinstance(manifest, dict) \
+        else {}
 
-    for name, spec in file_specs.items():
+    for name, spec in list(file_specs.items()):
+        # M6.1.4-S1 (Codex crash class (b)): a NON-STRING manifest key
+        # crashed `.partition` before it could ever be reported.
+        if not isinstance(name, str):
+            problems.append(f"sealed_file_spec_key_type:{_safe_repr(name)}")
+            continue
         eng, sep, scn = name.partition("|")
         if not sep:
             problems.append(f"sealed_file_spec_key_format:{name}")
@@ -2455,13 +2745,22 @@ def validate_sealed_files(files: Mapping[str, str], payload, *,
         if not isinstance(spec, dict):
             problems.append(f"sealed_file_spec_type:{name}")
             continue
-        fname = spec.get("file")
-        want_sha = spec.get("sha256")
-        want_n = spec.get("n_records")
-        if fname not in files:
-            problems.append(f"sealed_file_missing:{name}:{fname}")
+        fname = _safe_get(spec, "file")
+        want_sha = _safe_get(spec, "sha256")
+        want_n = _safe_get(spec, "n_records")
+        if not _safe_in(files, fname):
+            problems.append(
+                f"sealed_file_missing:{name}:"
+                f"{fname if isinstance(fname, str) else _safe_repr(fname)}")
             continue
-        body = files[fname]
+        try:
+            body = files[fname]
+        except Exception:                                # noqa: BLE001
+            problems.append(f"sealed_file_body_unreadable:{name}")
+            continue
+        if not isinstance(body, str):
+            problems.append(f"sealed_file_body_type:{name}")
+            continue
         got_sha = hashlib.sha256(body.encode("utf-8")).hexdigest()
         if got_sha != want_sha:
             problems.append(f"sealed_file_sha256_mismatch:{name}")
@@ -2495,12 +2794,13 @@ def validate_sealed_files(files: Mapping[str, str], payload, *,
                 if field not in rec:
                     problems.append(
                         f"sealed_file_line_missing_field:{name}:{i}:{field}")
-            got_fields, want_fields = set(rec), set(FORMAL_RECORD_FIELDS)
+            got_fields, want_fields = _safe_key_set(rec), set(
+                FORMAL_RECORD_FIELDS)
             if got_fields != want_fields:
                 problems.append(
                     f"sealed_file_line_field_set_mismatch:{name}:{i}:"
-                    f"missing={sorted(want_fields - got_fields)}:"
-                    f"extra={sorted(got_fields - want_fields)}")
+                    f"missing={_safe_list_text(_safe_sorted(want_fields - got_fields))}:"
+                    f"extra={_safe_list_text(_safe_sorted(got_fields - want_fields))}")
             leaked = [f for f in _INTERNAL_NAME_LEAK if f in rec]
             if leaked:
                 problems.append(
@@ -2541,14 +2841,16 @@ def validate_sealed_files(files: Mapping[str, str], payload, *,
         # universe:` guard here would give a non-empty file a free pass
         # whenever the universe happened to be empty.
         file_dates = set(per_file_dates)
-        missing = sorted(universe - file_dates)
-        extra = sorted(file_dates - universe)
+        missing = _safe_sorted(universe - file_dates)
+        extra = _safe_sorted(file_dates - universe)
         if missing:
             problems.append(
-                f"sealed_file_missing_trade_dates:{name}:{missing}")
+                f"sealed_file_missing_trade_dates:{name}:"
+                f"{_safe_list_text(missing)}")
         if extra:
             problems.append(
-                f"sealed_file_extra_trade_dates:{name}:{extra}")
+                f"sealed_file_extra_trade_dates:{name}:"
+                f"{_safe_list_text(extra)}")
 
     # mission M6.1.2-S3 item 8 — SEALED-FILE COMPLETENESS: the renderer
     # (scripts/s0_real_run.py::render_s0_report) now stamps
@@ -2587,33 +2889,50 @@ def validate_sealed_files(files: Mapping[str, str], payload, *,
             self_excluded: set[str] = set()
         else:
             self_excluded = set(self_excluded_raw)
-            disallowed = sorted(self_excluded - _ALLOWED_SELF_EXCLUDED)
+            disallowed = _safe_sorted(self_excluded - _ALLOWED_SELF_EXCLUDED)
             if disallowed:
                 problems.append(
-                    f"sealed_files_self_excluded_not_allowed:{disallowed}")
+                    "sealed_files_self_excluded_not_allowed:"
+                    f"{_safe_list_text(disallowed)}")
                 # fail closed: an illegally-named exclusion buys NO bypass
                 # of the completeness reconciliation below.
                 self_excluded = self_excluded & _ALLOWED_SELF_EXCLUDED
-        for fname, spec in sealed_files.items():
-            if fname not in files:
+        for fname, spec in list(sealed_files.items()):
+            if not _safe_in(files, fname):
                 problems.append(
-                    f"sealed_files_manifest_entry_missing_file:{fname}")
+                    "sealed_files_manifest_entry_missing_file:"
+                    f"{fname if isinstance(fname, str) else _safe_repr(fname)}")
                 continue
             if not isinstance(spec, dict):
-                problems.append(f"sealed_files_manifest_entry_type:{fname}")
+                problems.append(
+                    "sealed_files_manifest_entry_type:"
+                    f"{fname if isinstance(fname, str) else _safe_repr(fname)}")
                 continue
-            body_bytes = files[fname].encode("utf-8")
+            try:
+                raw_body = files[fname]
+            except Exception:                            # noqa: BLE001
+                raw_body = None
+            if not isinstance(raw_body, str):
+                problems.append(f"sealed_files_manifest_entry_body_type:"
+                                f"{fname if isinstance(fname, str) else _safe_repr(fname)}")
+                continue
+            body_bytes = raw_body.encode("utf-8")
             got_sha = hashlib.sha256(body_bytes).hexdigest()
-            if spec.get("sha256") != got_sha:
+            if _safe_get(spec, "sha256") != got_sha:
                 problems.append(
                     f"sealed_files_manifest_sha256_mismatch:{fname}")
-            if spec.get("bytes") != len(body_bytes):
+            if _safe_get(spec, "bytes") != len(body_bytes):
                 problems.append(
                     f"sealed_files_manifest_bytes_mismatch:{fname}")
-        uncovered = sorted(set(files) - set(sealed_files) - self_excluded)
+        uncovered = _safe_sorted(
+            _safe_set_diff(_safe_set_diff(_safe_keys(files),
+                                          _safe_keys(sealed_files)),
+                           self_excluded))
         if uncovered:
             problems.append(
-                "sealed_files_manifest_incomplete:" + ",".join(uncovered))
+                "sealed_files_manifest_incomplete:"
+                + ",".join(u if isinstance(u, str) else _safe_repr(u)
+                           for u in uncovered))
 
     return problems
 
@@ -2890,12 +3209,26 @@ def reconcile_with_internal(internal, formal) -> list[str]:
     malformed/missing shape at any nesting level — the same fail-closed
     discipline as `validate_formal_payload`/`validate_sealed_files`. NOT
     wired into any sealing gate by this module (main-agent renderer work).
+
+    M6.1.4-S1: the body now runs under `_guarded` too, so "never raises"
+    holds for ARBITRARY input (hostile keys/objects included), not only
+    for the malformed shapes this function's own branches anticipate.
     """
-    problems: list[str] = []
+    return _guarded(
+        "reconcile_with_internal",
+        lambda acc: _reconcile_with_internal_inner(internal, formal, acc),
+        [])
+
+
+def _reconcile_with_internal_inner(internal, formal,
+                                   problems: list[str]) -> list[str]:
+    """`reconcile_with_internal`'s body (see that function's docstring)."""
     if not isinstance(internal, dict):
-        return ["internal_not_dict"]
+        problems.append("internal_not_dict")
+        return problems
     if not isinstance(formal, dict):
-        return ["formal_not_dict"]
+        problems.append("formal_not_dict")
+        return problems
 
     study = internal.get("study")
     if not isinstance(study, dict):

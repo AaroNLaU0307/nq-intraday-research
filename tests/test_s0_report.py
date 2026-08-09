@@ -31,6 +31,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+import random
 import types
 from collections.abc import Mapping
 from pathlib import Path
@@ -2586,3 +2587,321 @@ def test_reconcile_catches_cross_field_synchronized_value_tampering():
     assert any(p.startswith(
         f"reconcile_oracle_series_value_mismatch:oracle_daily|{T0}|")
         for p in problems)
+
+
+# ---------------------------------------------------------------------------
+# M6.1.4-S1 — NEVER-CRASH HARDENING (Codex RC-1 fix round).
+#
+# Every public entry point of this module is a FAIL-CLOSED GATE, so an
+# exception escaping one is not a refusal — it is a crash the caller may
+# catch, log and route around. Each test below reproduces one of the
+# concrete crash classes Codex enumerated (each raised TypeError /
+# AttributeError / RuntimeError out of the gate before the fix) and then
+# asserts the fixed behaviour: a problem LIST, never a raise.
+#
+#   (a) `sorted(set(d) - set(allowed))` on a section carrying BOTH str and
+#       int keys -> TypeError inside the unknown-key reporter;
+#   (b) `name.partition("|")` on a NON-STRING manifest key ->
+#       AttributeError inside validate_sealed_files;
+#   (c) bool / int / tuple dict keys, deeply aberrant mappings, and
+#       MALICIOUS objects (a key whose `__eq__` fires on a hash-bucket
+#       collision, a value whose every attribute access raises, a hostile
+#       `__repr__`) anywhere in a JSON-like tree.
+# ---------------------------------------------------------------------------
+class _EqBomb:
+    """A dict KEY engineered to collide with a name in the ALLOWED set of
+    the container it is planted in, so any membership test the validator
+    makes (`key in allowed`, `set(d) - allowed`) reaches its raising
+    `__eq__` through the reflected-comparison path.
+
+    The collision target must NOT already be a key of the same dict —
+    CPython compares on insertion too, so planting a bomb next to its own
+    collision partner raises in the TEST rather than in the validator."""
+
+    def __init__(self, collides_with: str):
+        self._target = collides_with
+
+    def __hash__(self):
+        return hash(self._target)
+
+    def __eq__(self, other):
+        raise RuntimeError("hostile __eq__ reached the validator")
+
+
+class _HashBomb:
+    def __hash__(self):
+        raise RuntimeError("hostile __hash__ reached the validator")
+
+
+class _PropertyBomb:
+    """A VALUE whose every attribute access — and whose repr — raises."""
+
+    def __getattr__(self, name):
+        raise RuntimeError(f"hostile attribute {name}")
+
+    def __repr__(self):
+        raise RuntimeError("hostile __repr__ reached the validator")
+
+
+def _returns_problem_list(out) -> bool:
+    return isinstance(out, list) and all(isinstance(p, str) for p in out)
+
+
+def test_crash_a_mixed_str_int_unknown_keys_return_problems_not_a_crash():
+    """Codex crash (a): a section whose UNKNOWN-key set holds BOTH a str
+    and an int used to explode `sorted()` inside `_check_no_unknown_keys`
+    ("'<' not supported between instances of 'int' and 'str'"). Two extras
+    of MIXED type in the SAME dict are what it takes — one extra alone
+    sorts fine, which is why this defect survived until now."""
+    with pytest.raises(TypeError):
+        sorted({7, "smuggled"})              # the pre-fix expression
+    payload = _valid_payload()
+    payload["structural"][7] = {"smuggled": True}
+    payload["structural"]["smuggled"] = True
+    payload["oracle_daily"][T0]["day_universe"][3] = "x"
+    payload["oracle_daily"][T0]["day_universe"]["ghost"] = "x"
+    problems = _validate(payload)
+    assert _returns_problem_list(problems)
+    assert any(p.startswith("structural_unknown_key:") for p in problems)
+    assert any(p.startswith("day_universe_unknown_key:") for p in problems)
+    # the R8 walk still reports the non-str key on its own terms
+    assert any(p.startswith("non_str_key:") for p in problems)
+
+
+def test_crash_a_direct_helper_reproduction_is_total_ordered():
+    """The helper itself: a heterogeneous key set now sorts through a TOTAL
+    order (type name first) instead of comparing int against str."""
+    hostile = {"a": 1, 7: 2, True: 3, (1, 2): 4, "z": 5, 3.5: 6}
+    with pytest.raises(TypeError):
+        sorted(set(hostile) - {"a"})        # the pre-fix expression
+    problems: list[str] = []
+    report._check_no_unknown_keys(hostile, ("a",), "$", problems,
+                                  code="unknown")
+    assert len(problems) == 1 and problems[0].startswith("unknown:$:")
+    # a TOTAL order: every extra is reported, none is silently dropped
+    for token in ("7", "'z'", "(1, 2)", "3.5"):
+        assert token in problems[0], (token, problems[0])
+
+
+def test_crash_b_non_string_manifest_key_returns_a_problem_not_a_crash():
+    """Codex crash (b): `name.partition("|")` on a non-str manifest key."""
+    files, payload = _sealed_fixture()
+    payload["mc_handoff_manifest"]["files"][7] = {
+        "file": "x", "n_records": 0, "sha256": "0" * 64}
+    problems = report.validate_sealed_files(files, payload)
+    assert _returns_problem_list(problems)
+    assert any(p.startswith("sealed_file_spec_key_type:") for p in problems)
+    assert any(p.startswith("mc_handoff_manifest_files_key_set_mismatch")
+               for p in problems)
+
+
+def test_crash_b_non_string_sealed_files_key_returns_a_problem():
+    files, payload = _sealed_fixture()
+    payload["mc_handoff_manifest"]["sealed_files"][42] = {
+        "sha256": "0" * 64, "bytes": 1}
+    problems = report.validate_sealed_files(files, payload)
+    assert _returns_problem_list(problems)
+    assert any(p.startswith("sealed_files_manifest_entry_missing_file:")
+               for p in problems)
+
+
+def test_crash_b_non_string_file_body_returns_a_problem():
+    files, payload = _sealed_fixture()
+    files["MC_HANDOFF_E1_Base.jsonl"] = 12345          # not a str
+    problems = report.validate_sealed_files(files, payload)
+    assert _returns_problem_list(problems)
+    assert any(p.startswith("sealed_file_body_type:") for p in problems)
+
+
+@pytest.mark.parametrize("key", [True, 7, (1, 2), 3.5, None])
+def test_crash_c_aberrant_dict_keys_anywhere_return_problems(key):
+    payload = _valid_payload()
+    payload["disclosures"]["method_conventions"][key] = "smuggled"
+    problems = _validate(payload)
+    assert _returns_problem_list(problems)
+    assert problems, "an aberrant key must never seal silently"
+
+
+def test_crash_c_hostile_eq_key_never_escapes_validate_formal_payload():
+    """`mc_handoff_manifest` carries only {"counts"} pre-injection, so a key
+    colliding with the ALLOWED name "sealed_files" plants cleanly and then
+    fires inside `_check_no_unknown_keys`' membership test."""
+    payload = _valid_payload()
+    payload["mc_handoff_manifest"][_EqBomb("sealed_files")] = {"x": 1}
+    problems = report.validate_formal_payload(
+        payload, expected_governance=payload["governance"])
+    assert _returns_problem_list(problems)
+    assert problems, "an unverifiable key must fail CLOSED, never seal"
+
+
+def test_crash_c_hostile_eq_key_never_escapes_validate_sealed_files():
+    files, payload = _sealed_fixture()
+    specs = payload["mc_handoff_manifest"]["files"]
+    del specs["E2|Severe"]                     # free the collision slot
+    specs[_EqBomb("E2|Severe")] = {"file": "x"}
+    problems = report.validate_sealed_files(files, payload)
+    assert _returns_problem_list(problems)
+    assert problems
+
+
+def test_crash_c_hostile_hash_key_cannot_even_be_planted_and_still_never_crashes():
+    """A key whose `__hash__` raises cannot enter a dict at all (CPython
+    hashes on insertion), so this class is unreachable THROUGH a mapping —
+    documented here rather than assumed. The validator must still survive
+    the object appearing as a VALUE."""
+    with pytest.raises(RuntimeError):
+        {}[_HashBomb()] = 1
+    payload = _valid_payload()
+    payload["disclosures"]["hostile"] = _HashBomb()
+    assert _returns_problem_list(_validate(payload))
+
+
+def test_crash_c_property_bomb_value_never_escapes_any_gate():
+    payload = _valid_payload()
+    payload["disclosures"]["na_conservation"] = _PropertyBomb()
+    problems = report.validate_formal_payload(
+        payload, expected_governance=payload["governance"])
+    assert _returns_problem_list(problems) and problems
+
+
+def test_crash_c_property_bomb_value_never_escapes_reconcile_with_internal():
+    internal = _internal_envelope()
+    formal = _valid_payload()
+    formal["oracle_daily"] = _PropertyBomb()
+    assert _returns_problem_list(
+        report.reconcile_with_internal(internal, formal))
+
+
+def test_crash_c_deeply_aberrant_mapping_never_crashes():
+    """A tree that is a mapping all the way down, with a self-reference and
+    a mixed-type key set at every level."""
+    deep = {"structural": {}}
+    node = deep["structural"]
+    for i in range(30):
+        child = {i: {}, str(i): {}, True: {}}
+        node["next"] = child
+        node = child
+    deep["self"] = deep                       # cycle
+    assert _returns_problem_list(report.validate_formal_payload(deep))
+    assert _returns_problem_list(report.validate_sealed_files({}, deep))
+    assert _returns_problem_list(report.reconcile_with_internal(deep, deep))
+
+
+def _random_json_like(rng, depth=0):
+    """A JSON-LIKE tree that deliberately includes what a real JSON tree
+    cannot: non-str keys, non-finite floats, object-repr strings."""
+    kinds = ["int", "float", "str", "bool", "none", "list", "dict"]
+    if depth >= 3:
+        kinds = kinds[:5]
+    kind = rng.choice(kinds)
+    if kind == "int":
+        return rng.randint(-9, 9)
+    if kind == "float":
+        return rng.choice([1.5, -0.25, float("nan"), float("inf")])
+    if kind == "str":
+        return rng.choice(["", "x", "2020-01-02", "<obj object at 0x7f00>"])
+    if kind == "bool":
+        return rng.choice([True, False])
+    if kind == "none":
+        return None
+    if kind == "list":
+        return [_random_json_like(rng, depth + 1)
+                for _ in range(rng.randint(0, 3))]
+    keys = ["structural", "oracle_daily", "mc_handoff_manifest", "files",
+            "pooled", "n_tp", "day_universe", 7, True, (1, 2), 3.5, None]
+    return {rng.choice(keys): _random_json_like(rng, depth + 1)
+            for _ in range(rng.randint(0, 5))}
+
+
+@pytest.mark.parametrize("seed", range(40))
+def test_fuzz_every_gate_returns_a_problem_list_and_never_raises(seed):
+    rng = random.Random(seed)
+    payload = _random_json_like(rng)
+    files = _random_json_like(rng)
+    gov = _random_json_like(rng)
+    assert _returns_problem_list(
+        report.validate_formal_payload(payload, expected_governance=gov))
+    assert _returns_problem_list(report.validate_sealed_files(files, payload))
+    assert _returns_problem_list(
+        report.reconcile_with_internal(payload, files))
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_fuzz_gates_never_seal_a_random_tree(seed):
+    """Fail-CLOSED, not merely crash-free: a random tree must never come
+    back with an EMPTY problem list."""
+    rng = random.Random(1000 + seed)
+    assert report.validate_formal_payload(_random_json_like(rng)) != []
+
+
+# ---------------------------------------------------------------------------
+# M6.1.4-S1 — CR-7: the sealed trade-date universe had TWO derivations that
+# were structurally ONE. The production renderer always passes
+# `trade_date_universe=univ`, and that override silently REPLACED the
+# validator's own derivation from `payload["oracle_daily"]`, so the
+# independent path was dead code in production. The override is still
+# honoured (a deliberately narrow payload has no oracle_daily to derive
+# from), but it can no longer MASK the independent derivation.
+# ---------------------------------------------------------------------------
+def _payload_universe(payload) -> set:
+    return {d for t in payload["oracle_daily"].values()
+            for d in (*t["day_universe"]["tp_days"],
+                      *t["day_universe"]["fp_days"])}
+
+
+def test_cr7_universe_override_disagreeing_with_the_payload_is_flagged():
+    files, payload = _sealed_fixture()
+    shrunk = set(sorted(_payload_universe(payload))[1:])
+    problems = report.validate_sealed_files(files, payload,
+                                            trade_date_universe=shrunk)
+    assert any(p.startswith("sealed_file_universe_override_mismatch:")
+               for p in problems)
+
+
+def test_cr7_universe_override_matching_the_payload_stays_silent():
+    """The PRODUCTION renderer path: `render_s0_report` computes `univ` from
+    the payload's own day_universe, so it agrees by construction and the new
+    cross-check adds no problem — omitting it is now equivalent, which is
+    the whole point of the fix."""
+    files, payload = _sealed_fixture()
+    univ = _payload_universe(payload)
+    assert report.validate_sealed_files(files, payload,
+                                        trade_date_universe=univ) == []
+    assert report.validate_sealed_files(files, payload) == []
+
+
+def test_cr7_override_on_a_narrow_payload_without_oracle_daily_is_allowed():
+    files, payload = _sealed_fixture()
+    universe = _payload_universe(payload)
+    narrow = {"mc_handoff_manifest": payload["mc_handoff_manifest"]}
+    problems = report.validate_sealed_files(files, narrow,
+                                            trade_date_universe=universe)
+    assert not any(p.startswith("sealed_file_universe_override_mismatch")
+                   for p in problems)
+
+
+def test_cr7_extra_day_in_the_override_is_flagged():
+    files, payload = _sealed_fixture()
+    problems = report.validate_sealed_files(
+        files, payload,
+        trade_date_universe=_payload_universe(payload) | {"2099-01-01"})
+    flagged = [p for p in problems
+               if p.startswith("sealed_file_universe_override_mismatch:")]
+    assert flagged and "2099-01-01" in flagged[0]
+
+
+def test_cr7_non_iterable_override_degrades_to_a_problem():
+    files, payload = _sealed_fixture()
+    problems = report.validate_sealed_files(files, payload,
+                                            trade_date_universe=object())
+    assert "sealed_file_universe_override_type" in problems
+
+
+def test_cr7_derivation_helper_returns_none_only_when_underivable():
+    _files, payload = _sealed_fixture()
+    assert report._derive_trade_date_universe(payload) is not None
+    assert report._derive_trade_date_universe({}) is None
+    assert report._derive_trade_date_universe({"oracle_daily": {}}) is None
+    assert report._derive_trade_date_universe(
+        {"oracle_daily": {"theta_0.5": {"day_universe": {}}}}) is None
+    assert report._derive_trade_date_universe(None) is None

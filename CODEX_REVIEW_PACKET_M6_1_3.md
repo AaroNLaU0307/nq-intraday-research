@@ -105,3 +105,80 @@
 3. 复核 RC-1/RC-2 的「按令不补丁」处理是否符合 M6.1.3 任务书
    （同类复现两次 → 停止局部修补 → 架构级根因 → 升级裁决）。
 4. 若接受：D-2/D-3 请给架构方案立场（M6.1.4 范围裁定权在 Aaron）。
+
+---
+
+## ERRATUM（2026-08-08，按 Codex M6.1.3 HOLD 裁定修正；上文原样保留）
+
+1. **C-5 应为 PARTIAL，非 CLOSED**：生产渲染器的 admission candidates
+   仅含 SEED_MANIFEST，grid↔manifest 跨工件检查在生产**不可达**——
+   D44d 的"可达"证据来自合成同 call 集，不构成生产接线证明。真实
+   production consumer 接线后方可 CLOSED。
+2. **C-1 范围限定**：仅为 **formal-only 防篡改**（对账锚在 producer
+   聚合 `study[...]` 上），不构成端到端数值真实性主张——该主张即
+   RC-1，Codex 已列 ENGINEERING_REQUIRED，由 M6.1.4 处理。
+3. **D-4 计数勘误**："DR-1..DR-7 八项方法裁决包其余各项"应为
+   "**DR 家族共 8 个（DR-1..DR-8，DR-8=DR-M6-H）**，除 D-1 已单列外
+   其余各项"。
+4. **P-3 精确化**：**7 个**结构化字段无 computational consumer；
+   `worst_day_estimator` 仅有 governance-status consumer（翻转
+   `estimator_status` 状态串），**没有** estimator-selection consumer。
+5. **D-2/D-3 归类更新**：Codex 已将 RC-1/RC-2 由 DECISION_REQUIRED
+   改列 **ENGINEERING_REQUIRED**（不涉方法选择，Fable 权限内执行）；
+   本 packet 写作时的归类反映当时状态，现以 Codex 裁定为准。
+
+## ERRATUM 续（2026-08-09，M6.1.4-R2 只读事实核查；上文仍原样保留）
+
+6. **电池数字的证据级别**：头部 `1141 passed / 0 failed / 0 skipped`
+   标 `FABLE/OPUS_REPORTED`。与后续里程碑那些"工作树已消失、不可复算"
+   的数字不同，**该值绑定已提交的 commit `1e188b5`**，原则上可由
+   `git archive` 快照独立复算；**S3 本轮未复算**，故不标
+   `S3_INDEPENDENTLY_RERUN`。当前工作树的对应值为 **2093**
+   （S3 实测，见 M6.1.4 packet §0）。
+7. **"0 skipped" 的性质**：与后继 packet 同——那是**本环境某次运行的
+   观测值**，不是结构保证。代码事实是 `tests/test_preflight.py` 含
+   **10** 处条件性 `pytest.skip`（全库唯一含 `pytest.skip` 的文件，
+   S3 全库计数核实），preflight 工件缺失时会触发。
+8. **§2 "CLOSED（三证齐全：生产接线＋独立重算＋反例证据）"表头的效力
+   仅限本 packet**：本 packet 的 CLOSED 表确为**四列**、逐行填三腿，
+   表头因此有支撑。**后继 M6.1.4 packet 把表体收缩为两列却沿用了同一
+   表头**，那里的"三证齐全"缺乏支撑，已在该 packet 内撤销并改为逐行
+   申报证据类型。此处记录以免读者把两处表头当作同一标准。
+9. **RC-1/RC-2 的后继状态（前向指针）**：本 packet 升级出的 RC-1／RC-2
+   在 M6.1.4 中演化为 **F-1（配置网关）／F-2（证据消费完备性）**。
+   截至 2026-08-09，**两者均未闭合**，同列
+   `PARTIAL + ENGINEERING_REQUIRED`：F-1 已**两度**在宣告闭合后复发
+   （M6.1.4 packet §9.1），F-2 的叶粒度缺口经叶谱系矩阵补强后仍留
+   "121 行中 10 行无独立权威"的自陈残余。本 packet §3 的"已知残洞总账"
+   **不**因后续里程碑而自动缩小。
+
+## ERRATUM 续二（2026-08-09，M6.1.6 / S3 治理更正轮；上文仍原样保留）
+
+10. **第 6 条的"当前工作树对应值 **2093**"已被 M6.1.6 追过**：当前工作树
+    值为 **2146**（`MIN_COLLECTED_TESTS` 同步为 2146，双钉于
+    `scripts/s0_real_run.py:47` 与 `tests/test_s0_runner.py:867`；
+    S3 于 2026-08-09 复跑实测 **2146 passed / 0 failed / 0 skipped**，
+    400.21s，exit 0）。本 packet 头部的 **1141** 仍绑定已提交的 commit
+    `1e188b5`，标注不变（`FABLE/OPUS_REPORTED`，原则上可由 `git archive`
+    快照独立复算，**S3 仍未复算**）。
+11. **第 9 条的复核时态更正**：其"截至 2026-08-09"的判断成立，但理由须
+    更新——M6.1.4-R2 的**两名独立复核员已开跑**（`R1_VERDICT=PASS`
+    附三条其后被证伪的声明／`R2_VERDICT=FAIL`，见 M6.1.4 packet §10），
+    **M6.1.6 的独立复核员亦已开跑并判 `M6_1_6_REVIEW=PASS`**
+    （四轴、6 Low、0 High/0 Medium、**轴 4 research boundary 零发现**）。
+    **结论不变**：F-1 整体与 F-2 整体仍为 `PARTIAL`。任何
+    "复核员尚未开跑"的措辞在本仓库内均已过时，不得再写。
+12. **第 9 条引用的"121 行中 10 行无独立权威"须加限定**：该措辞本身已被
+    M6.1.4-R2 的复核员 R2 实测证伪（它蕴含"其余 111 行在每个粒度上都有
+    权威"，而 `EV-9.level_dates` 的元素、`EV-1.y_cont` 的值、
+    `TOP.record_fields` 的子键都没有）。其载体
+    `M6_1_4_LEAF_LINEAGE_MATRIX.md` 现已标为
+    **`PROVISIONAL / REJECTED AS TRUTH SOURCE`**。引用时请改引
+    M6.1.4 packet §10.4，**不要**再引该矩阵的 §1／§4 散文或 `authority` 列。
+13. **M6.1.6 轮闭合了两个具名接缝，均**不**是 RC-1／RC-2 的整体闭合**：
+    prepared **LIFECYCLE 接缝**（CLOSED）与治理 **OUTPUT-PROOF 切片**
+    （`governance.*` 五键，CLOSED）。同轮登记了一条**已核实、未修**的
+    高严重度项：runner 以 `Path.write_text(..., encoding="utf-8")` 且
+    **无** `newline=""` 落盘，Windows 上 CRLF 转译，导致同一封存输出内
+    对同一工件存在**两个摘要**（磁盘 vs 内存），10 个 `sealed_files` 中
+    **9 个**不匹配。详见 `CODEX_REVIEW_PACKET_M6_1_6.md` §1／§4。

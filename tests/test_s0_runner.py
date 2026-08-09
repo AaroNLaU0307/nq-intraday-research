@@ -14,6 +14,7 @@ against synthetic fixtures — never against the real archive (F-01/03/07/
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import json
 import subprocess
 import sys
@@ -49,10 +50,33 @@ def real_run_module():
     return _SCRIPT_CACHE["mod"]
 
 
+def _as_stage_c_compute(fn):
+    """M6.1.6 S1 arity shim.
+
+    `RunnerDeps.compute` now takes the run-scoped object returned by the
+    pre-exposure prepare seam. Callers of this factory (including
+    tests/test_m6_chain.py, which imports it) still hand in ZERO-ARG
+    computes; adapt those here so the lifecycle change stays confined to
+    the runner plus this one factory. A compute that already declares a
+    positional parameter is passed through UNCHANGED — which is what the
+    identity assertions below depend on."""
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):                  # builtins / C callables
+        params = {}
+    takes_positional = any(
+        p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD,
+                   p.VAR_POSITIONAL)
+        for p in params.values())
+    if takes_positional:
+        return fn
+    return lambda prepared: fn()
+
+
 def make_deps(tmp_path: Path, *, gates=(), b_checks=(),
               compute=None, integrity=(), renderer=None,
               registry_events=None, log=None, append_event=None,
-              runs_dir=None):
+              runs_dir=None, prepare=None):
     cfg = RunConfig(trial_id="S0-T001",
                     authorized_commit="a" * 40,
                     engineering_seed=20260731,
@@ -64,13 +88,19 @@ def make_deps(tmp_path: Path, *, gates=(), b_checks=(),
     def default_append(ev, note):
         events.append((ev, note))
 
+    def default_prepare():
+        """A FRESH prepared object per call — never a module-level cache, so
+        two S0Runner instances can never end up sharing one."""
+        return {"prepared": True}
+
     logs: list[str] = []
     deps = RunnerDeps(
         config=cfg,
         trial_state=TrialState.RUN_AUTHORIZED,
         gates=tuple(gates),
         structural_checks=tuple(b_checks),
-        compute=compute or (lambda: {"sentinel": True}),
+        compute=_as_stage_c_compute(compute or (lambda prepared:
+                                                {"sentinel": True})),
         integrity_checks=tuple(integrity),
         render_report=renderer or (lambda r: {"S0_REPORT.md": "sealed"}),
         append_registry_event=append_event or default_append,
@@ -79,7 +109,10 @@ def make_deps(tmp_path: Path, *, gates=(), b_checks=(),
         # SA-11 N-E: an unwired recheck is now FAIL-CLOSED in the runner, so
         # the synthetic harness injects an explicit passing recheck.
         pre_exposure_recheck=lambda: (True, "synthetic recheck"),
-        post_run_started_hook=None)
+        post_run_started_hook=None,
+        # M6.1.6 S1: an unwired prepare seam is FAIL-CLOSED in the runner
+        # (same rule as the recheck above), so the harness injects one.
+        prepare_compute=prepare or default_prepare)
     return deps, events, logs
 
 
@@ -831,7 +864,7 @@ def test_pytest_gate_floor_is_the_audit_baseline():
     """SA-10 N3: the floor tracks the CURRENT suite, closing the
     silent-collection-drop headroom."""
     mod = real_run_module()
-    assert mod.MIN_COLLECTED_TESTS == 1141
+    assert mod.MIN_COLLECTED_TESTS == 2146
 
 
 # ===========================================================================
@@ -1112,8 +1145,15 @@ def test_entrypoint_compute_is_the_real_chain():
     assert "compute_unreachable" not in source
     assert "RealChain" in source
     assert "chain.compute" in source
-    assert "render_s0_report" in source
     assert "build_structural_checks" in source
+    # M6.1.6: the render is wired through the chain's governance-proof
+    # entry point, which builds an INDEPENDENT context and then delegates
+    # to render_s0_report. Both halves are pinned so neither can be
+    # quietly dropped.
+    assert "chain.render_report_with_governance_proof" in source
+    assert "render_s0_report(" in inspect.getsource(
+        mod.RealChain.render_report_with_governance_proof)
+    assert "prepare_compute=chain.prepare" in source
 
 
 # =========================================================================
@@ -1433,3 +1473,255 @@ def test_actuals_prev_close_missing_counted_by_value_none():
     assert out["anchor.prev_rth_close.available"] == 1
     assert out["na_reason.anchor.prev_rth_close."
                "prev_rth_close_anchor_missing"] == 1
+
+
+# =========================================================================
+# M6.1.6 S1 — the PRE-EXPOSURE PREPARE SEAM
+#
+# Lifecycle under test:
+#     Stage B all pass -> prepare_compute() -> final registry recheck
+#     -> _atomic_run_start / RUN_STARTED (exposure) -> compute(prepared)
+#
+# The point of the seam: a refusal that happens during prepare is a
+# PRE_RUN_ATTEMPT_FAILURE and costs nothing, whereas the identical refusal
+# raised inside `compute` routes to _fail_run and permanently burns the
+# trial id. Every test here is synthetic and goes through the real runner.
+# =========================================================================
+
+
+def _counting_compute(counter: dict):
+    def compute(prepared):
+        counter["compute"] = counter.get("compute", 0) + 1
+        counter["seen"] = prepared
+        return {"sentinel": True}
+    return compute
+
+
+def test_prepare_failure_is_pre_exposure_and_compute_never_runs(tmp_path):
+    """Requirement 5: prepare refuses -> PRE-run failure. No RUN_STARTED,
+    no runs directory, exposure intact, Stage C never entered."""
+    counter: dict = {}
+
+    def refusing_prepare():
+        raise RunGateError("synthetic prepare refusal (unresolved config)")
+
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()],
+                                prepare=refusing_prepare,
+                                compute=_counting_compute(counter))
+    out = S0Runner(deps).run()
+
+    assert out.failure_kind == "pre_run_attempt"
+    assert out.exposure_consumed is False
+    assert "RUN_STARTED" not in [e for e, _ in events]
+    assert [e for e, _ in events] == ["PRE_RUN_ATTEMPT_FAILURE"]
+    assert not Path(deps.config.runs_dir).exists()
+    assert counter.get("compute", 0) == 0
+    assert out.failed_gate == "prepare_compute"
+    assert out.terminal_stage == RunStage.B_LOAD_VALIDATE
+    # the same refusal INSIDE compute would have burned the trial:
+    assert (out.attempts_dir / "PRE_RUN_ATTEMPT_FAILURE.md").exists()
+
+
+def test_prepare_returning_nothing_is_also_a_pre_exposure_refusal(tmp_path):
+    """A prepare that yields no object is fail-closed, not a silent pass:
+    Stage C must be handed a real prepared object or not run at all."""
+    counter: dict = {}
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()],
+                                prepare=lambda: None,
+                                compute=_counting_compute(counter))
+    out = S0Runner(deps).run()
+    assert out.failure_kind == "pre_run_attempt"
+    assert out.exposure_consumed is False
+    assert "RUN_STARTED" not in [e for e, _ in events]
+    assert not Path(deps.config.runs_dir).exists()
+    assert counter.get("compute", 0) == 0
+
+
+def test_compute_receives_the_identical_object_prepare_returned(tmp_path):
+    """Requirement 2/4: identity, not equality — Stage C gets THE object."""
+    token = {"prepared": ["run", "scoped"]}
+    counter: dict = {}
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()],
+                           prepare=lambda: token,
+                           compute=_counting_compute(counter))
+    out = S0Runner(deps).run()
+    assert out.ok is True
+    assert counter["seen"] is token
+
+
+def test_two_runner_instances_do_not_share_a_prepared_object(tmp_path):
+    """Requirement 7: the prepared object is run-scoped. No cross-run
+    global, no class attribute, no module cache."""
+    made: list[object] = []
+
+    def prepare():
+        obj = {"prepared": len(made)}      # a FRESH object every call
+        made.append(obj)
+        return obj
+
+    seen: list[object] = []
+
+    def compute(prepared):
+        seen.append(prepared)
+        return {"sentinel": True}
+
+    deps_a, _, _ = make_deps(tmp_path / "a", gates=[ok_gate()],
+                             prepare=prepare, compute=compute)
+    deps_b, _, _ = make_deps(tmp_path / "b", gates=[ok_gate()],
+                             prepare=prepare, compute=compute)
+    assert S0Runner(deps_a).run().ok is True
+    assert S0Runner(deps_b).run().ok is True
+
+    assert len(made) == 2 and len(seen) == 2
+    assert seen[0] is made[0] and seen[1] is made[1]
+    assert seen[0] is not seen[1]
+
+
+def test_mutating_the_source_after_prepare_does_not_change_the_prepared(
+        tmp_path):
+    """The prepared object is a run-scoped SNAPSHOT: mutating the original
+    mutable input after prepare has returned must not reach Stage C."""
+    import copy
+    source = {"rows": [1, 2, 3]}
+
+    def prepare():
+        return copy.deepcopy(source)
+
+    counter: dict = {}
+
+    def recheck_that_mutates_the_source():
+        # runs strictly AFTER prepare and strictly BEFORE the transition
+        source["rows"].append(999)
+        return True, "source mutated after prepare"
+
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()], prepare=prepare,
+                           compute=_counting_compute(counter))
+    deps = _dc_replace(deps,
+                       pre_exposure_recheck=recheck_that_mutates_the_source)
+    out = S0Runner(deps).run()
+
+    assert out.ok is True
+    assert source["rows"] == [1, 2, 3, 999]          # the mutation happened
+    assert counter["seen"] == {"rows": [1, 2, 3]}    # ... and did not land
+
+
+def test_stage_c_never_calls_back_into_prepare(tmp_path):
+    """Requirement 1/4: prepare is called exactly once per run, from the
+    pre-exposure seam only — Stage C consumes, it does not re-prepare."""
+    counter = {"prepare": 0}
+
+    def prepare():
+        counter["prepare"] += 1
+        return {"prepared": counter["prepare"]}
+
+    def compute(prepared):
+        counter["compute"] = counter.get("compute", 0) + 1
+        return {"sentinel": True}
+
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()],
+                           b_checks=[GateCheck("b1", lambda: (True, "ok"))],
+                           integrity=[lambda r: (True, "ok")],
+                           prepare=prepare, compute=compute)
+    out = S0Runner(deps).run()
+    assert out.ok is True
+    assert counter["prepare"] == 1
+    assert counter["compute"] == 1
+
+
+def test_unwired_prepare_seam_is_fail_closed(tmp_path):
+    """Requirement 6: no prepare seam wired -> pre-exposure refusal, exactly
+    like the unwired pre_exposure_recheck rule it is modelled on. The source
+    must also SAY that it mirrors that precedent."""
+    counter: dict = {}
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()],
+                                compute=_counting_compute(counter))
+    deps = _dc_replace(deps, prepare_compute=None)
+    out = S0Runner(deps).run()
+
+    assert out.failure_kind == "pre_run_attempt"
+    assert out.exposure_consumed is False
+    assert "RUN_STARTED" not in [e for e, _ in events]
+    assert not Path(deps.config.runs_dir).exists()
+    assert counter.get("compute", 0) == 0
+    assert out.failed_gate == "prepare_compute"
+    # the precedent is stated in the runner source, not only here
+    source = inspect.getsource(S0Runner.run)
+    assert "fail closed" in source
+    assert "pre-exposure registry recheck" in source
+
+
+def test_prepare_runs_after_stage_b_before_recheck_and_before_exposure(
+        tmp_path):
+    """Requirement 1/3 — the whole point of the milestone, pinned as one
+    observed sequence through the real runner."""
+    order: list[str] = []
+
+    def gate_a():
+        order.append("stage_a")
+        return True, "ok"
+
+    def check_b():
+        order.append("stage_b")
+        return True, "ok"
+
+    def prepare():
+        order.append("prepare")
+        return {"prepared": True}
+
+    def recheck():
+        order.append("pre_exposure_recheck")
+        return True, "synthetic recheck"
+
+    def compute(prepared):
+        order.append("compute")
+        return {"sentinel": True}
+
+    def append_event(event, note):
+        order.append(f"event:{event}")
+
+    deps, _, _ = make_deps(tmp_path, gates=[GateCheck("g1", gate_a)],
+                           b_checks=[GateCheck("b1", check_b)],
+                           prepare=prepare, compute=compute,
+                           append_event=append_event)
+    deps = _dc_replace(deps, pre_exposure_recheck=recheck)
+    out = S0Runner(deps).run()
+
+    assert out.ok is True
+    assert order == ["stage_a", "stage_b", "prepare", "pre_exposure_recheck",
+                     "event:RUN_STARTED", "compute", "event:COMPLETED"]
+
+
+def test_prepare_failure_never_reaches_the_registry_recheck(tmp_path):
+    """Ordering, negatively: a refusing prepare must stop the lifecycle
+    before the final registry recheck ever runs."""
+    seen: list[str] = []
+
+    def recheck():
+        seen.append("recheck")
+        return True, "synthetic recheck"
+
+    def refusing_prepare():
+        raise RunGateError("synthetic prepare refusal")
+
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()],
+                           prepare=refusing_prepare)
+    deps = _dc_replace(deps, pre_exposure_recheck=recheck)
+    out = S0Runner(deps).run()
+    assert out.failure_kind == "pre_run_attempt"
+    assert seen == []
+
+
+def test_m616_review_a1_1_falsy_prepared_object_is_also_fail_closed(tmp_path):
+    """M6.1.6 review A1-1: `is None` alone would forward a falsy non-None
+    return (0, "", ()) to Stage C. Any falsy prepare result is a refusal."""
+    for falsy in (0, "", (), {}):
+        calls: list = []
+        deps, _events, _logs = make_deps(
+            tmp_path / f"r{id(falsy)}",
+            compute=lambda prepared: calls.append(1),
+            prepare=lambda f=falsy: f)
+        out = S0Runner(deps).run()
+        assert out.ok is False, falsy
+        assert out.failure_kind == "pre_run_attempt", falsy
+        assert out.exposure_consumed is False
+        assert calls == []

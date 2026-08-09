@@ -6,8 +6,11 @@ Field semantics mirror frozen S0 §10.1 / MC spec — do not reinterpret.
 """
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from numbers import Real as _Real
+from types import MappingProxyType
 
 # --- MNQ instrument constants (CME) ----------------------------------------
 MNQ_POINT_VALUE_USD = 2.0      # $2 per index point
@@ -25,15 +28,196 @@ S0_PLATFORM_FEE_RT_USD = 1.74
 RESEARCH_BOOTSTRAP_SEEDS: tuple[int, int, int] = (7, 13, 31)
 
 
+# --- M6.1.4 (S3): CANONICAL FORM helpers -----------------------------------
+# Config equality is the load-bearing gate on the production path
+# (`s0_real_run`'s config gateway compares a cached config against a FRESH
+# derivation). Equality is only meaningful if both sides are in one canonical
+# form, so every numeric injectable is reduced to a plain Python float at
+# construction. None of this adopts, ranks or narrows any unruled research
+# choice (DR-1 / DR-M6-A-v2 stays open): it is representation only.
+
+#: The EXACT key set a `_approved_injectables()` source must return. Exact,
+#: not minimal: an extra key is a defect, not a harmless addition, because
+#: `derive_study_config(**inj)` would either explode or silently ignore it.
+INJECTABLE_KEYS: frozenset[str] = frozenset(
+    {"spread_scalars", "regime_of", "vol_axis_of"})
+
+
+def _canonical_scalar(value):
+    """`float(value)` for a finite, non-negative REAL number; else ``None``.
+
+    Canonicalization decisions (documented, not ruled):
+      * ``bool`` is REFUSED — ``True`` is an ``int`` in Python and would
+        silently canonicalize to ``1.0``, turning a flag into a price.
+      * numpy scalars (``np.float32``/``np.float64``/``np.int64``/...) are
+        ACCEPTED and canonicalized to plain floats: they register as
+        ``numbers.Real``. ``np.bool_`` does NOT register as ``numbers.Real``
+        and is therefore refused exactly like ``bool``.
+      * ``int`` is accepted and widened to ``float`` so that ``(0, 1, 1)``
+        and ``(0.0, 1.0, 1.0)`` compare EQUAL after canonicalization.
+      * ``str``/``Decimal``/``None``/objects are refused (not ``Real``).
+      * NEGATIVE ZERO IS COLLAPSED TO ``+0.0`` (M6.1.4 Phase-E LOW-2).
+        ``-0.0`` passes the non-negative test (``-0.0 >= 0.0`` is ``True``)
+        and ``-0.0 == 0.0`` is ``True``, so two configs carrying different
+        zero signs are canonical-EQUAL while their SEALED BYTES differ:
+        ``disclosures.method_conventions.spread_scalars_used`` serializes
+        ``-0.0`` and ``0.0`` as different JSON tokens. Equality-based gates
+        would pass a pair the seal digest separates. Collapsing the sign bit
+        here makes canonical equality and byte identity agree.
+    Never raises for any input.
+    """
+    try:
+        if isinstance(value, bool) or not isinstance(value, _Real):
+            return None
+        out = float(value)
+    except Exception:
+        return None
+    if not math.isfinite(out) or out < 0.0:
+        return None
+    if out == 0.0:                 # collapses -0.0 (and +0.0) to +0.0
+        out = 0.0
+    return out
+
+
+def canonical_spread_scalars(scalars):
+    """Canonical ``(median, P90, P95)`` triple of plain floats, or ``None``.
+
+    ``None`` means "not a legal triple" — wrong container, wrong length, a
+    non-canonicalizable element, or an out-of-order triple. The ordering
+    invariant ``0 <= median <= P90 <= P95`` is a TYPE-level invariant (see
+    the proof chain in `StudyConfig.__post_init__`), not an approval of any
+    DR-1 reduction rule. Never raises for any input.
+    """
+    if not isinstance(scalars, tuple):
+        return None
+    try:
+        if len(scalars) != 3:
+            return None
+        out = []
+        for v in scalars:
+            f = _canonical_scalar(v)
+            if f is None:
+                return None
+            out.append(f)
+    except Exception:
+        return None
+    m, p90, p95 = out
+    if not (0.0 <= m <= p90 <= p95):
+        return None
+    return (m, p90, p95)
+
+
+def is_canonical_spread_scalars(scalars) -> bool:
+    """True iff `scalars` IS ALREADY EXACTLY what `canonical_spread_scalars`
+    would produce for it — REPRESENTATION, not value (M6.1.4-R2, F-1).
+
+    TWO SEPARATE OBLIGATIONS, and the reason this predicate exists.
+    `canonical_spread_scalars` answers EQUIVALENCE ("do these carry the same
+    values?"); it deliberately CANNOT answer REPRESENTATION ("is this object
+    itself in canonical form?"), because `_canonical_scalar` widens ``int``
+    to ``float`` precisely so ``(0, 1, 1)`` and ``(0.0, 1.0, 1.0)`` compare
+    EQUAL, and collapses ``-0.0`` to ``+0.0``. Both erasures are correct for
+    equivalence and fatal for anything that decides INTERCHANGEABILITY on
+    values alone: `disclosures.method_conventions.spread_scalars_used`
+    serializes the triple verbatim, so ``[0, 1, 1]`` and ``[-0.0, ...]``
+    reach the SEALED BYTES while comparing equal to the canonical form.
+
+    ONE RULE, NOT TWO. Only the two properties ``==`` provably cannot see
+    are stated here — the exact element TYPE and the ZERO SIGN BIT. Container
+    shape, finiteness, non-negativity and the ordering invariant are
+    DELEGATED to `canonical_spread_scalars`, so this predicate can never
+    drift into a second, differently-worded canonical form.
+
+    NEVER RAISES, and never executes foreign code. Ordering is load-bearing:
+    every element is pinned to EXACTLY ``float`` BEFORE the delegated call,
+    so no user ``__float__`` / ``__index__`` / ``__eq__`` can run (a ``float``
+    SUBCLASS may override ``__eq__``, hence `type(v) is float`, not
+    isinstance). Returns a plain ``bool``.
+    """
+    if type(scalars) is not tuple or len(scalars) != 3:
+        return False
+    for v in scalars:
+        if type(v) is not float:
+            return False
+        if math.copysign(1.0, v) < 0.0:      # -0.0 (and any negative) refused
+            return False
+    return canonical_spread_scalars(scalars) == scalars
+
+
+def _canonical_ticks(ticks):
+    """Immutable canonical form of a per-scenario adverse-slippage mapping.
+
+    A `Mapping` becomes a `MappingProxyType` over a shallow copy, so a
+    validated config's method values cannot be mutated in place afterwards
+    (mutate-after-validate would otherwise only be caught by the NEXT
+    revalidation). Anything that is not a Mapping — or a Mapping whose
+    iteration raises — is returned UNCHANGED so that
+    `ResolvedS0Methods.structural_problems()` can report it as a problem
+    rather than this helper raising inside a constructor. Never raises.
+    """
+    if isinstance(ticks, MappingProxyType):
+        return ticks
+    if isinstance(ticks, Mapping):
+        try:
+            return MappingProxyType(dict(ticks))
+        except Exception:
+            return ticks
+    return ticks
+
+
+def is_canonical_ticks(ticks) -> bool:
+    """True iff `ticks` IS the read-only container `_canonical_ticks`
+    produces — REPRESENTATION, not value (M6.1.4-R2, F-1).
+
+    WHY VALUE EQUIVALENCE CANNOT ANSWER THIS. A `MappingProxyType` compares
+    EQUAL to the plain dict it wraps (that equality is relied on elsewhere,
+    see `SpreadCostMethod`), and any normalization to a sorted key/value
+    sequence maps both to the same thing. So a MUTABLE mapping and the
+    canonical read-only one are indistinguishable by value, while only one of
+    them keeps the promise `SpreadCostMethod` makes in its docstring.
+
+    SCOPE OF THE GUARANTEE, stated exactly and not to be widened. True means
+    the object exposes NO MUTATION SURFACE OF ITS OWN — ``ticks["Base"] = 9``
+    raises ``TypeError``. It does NOT mean the mapping is immutable: a
+    mappingproxy is a LIVE VIEW, and whoever holds the wrapped object can
+    still mutate it. For a legitimately constructed `SpreadCostMethod` that
+    holder cannot exist (`_canonical_ticks` wraps a SHALLOW COPY the caller
+    never sees), but for a config assembled by BYPASS the wrapper's author
+    keeps the reference. Mutation through such a reference is caught only by
+    the config gateway's revalidate-on-every-call invariant — ACROSS calls,
+    never within one. It also cannot say what type the wrapped mapping is:
+    CPython exposes no API to reach the object behind a mappingproxy.
+
+    Never raises, never iterates, never calls ``keys()``/``items()``: a type
+    pin plus the producer's own idempotence. That second conjunct is the
+    BINDING — it turns false if `_canonical_ticks` ever stops returning a
+    mappingproxy unchanged, so the two cannot drift apart.
+    """
+    return type(ticks) is MappingProxyType and _canonical_ticks(ticks) is ticks
+
+
 # --- M6.1.1: structured method sub-items (one dataclass per DR family; no
 #     coarse strings hiding several sub-decisions). Every field is set ONLY
 #     when Aaron's ruling lands with its IR reference. ----------------------
 
 @dataclass(frozen=True)
 class SpreadCostMethod:                    # DR-M6-A-v2 + IR-7
+    """M6.1.4 (S3): `adverse_slippage_ticks` is CANONICALIZED at construction
+    to a `MappingProxyType` over a shallow copy, so the mapping a validated
+    config carries is READ-ONLY (`cfg.methods.spread_cost
+    .adverse_slippage_ticks["Base"] = 9` raises `TypeError`). The read access
+    pattern is unchanged — `MappingProxyType` is a `collections.abc.Mapping`
+    and compares equal to the plain dict it wraps, so equality-based gates and
+    `dataclasses.replace()` are unaffected. A NON-Mapping value is left
+    untouched so `structural_problems()` still reports it."""
     scalar_rule: str                       # e.g. "B-i" once ruled
     adverse_slippage_ticks: object         # Mapping[str, float] per scenario
     adverse_semantics: str                 # "replaces_per_side" (documented)
+
+    def __post_init__(self):
+        canon = _canonical_ticks(self.adverse_slippage_ticks)
+        if canon is not self.adverse_slippage_ticks:
+            object.__setattr__(self, "adverse_slippage_ticks", canon)
 
 
 @dataclass(frozen=True)
@@ -55,13 +239,48 @@ class FpAllocationMethod:                  # DR-M6-C
 
 @dataclass(frozen=True)
 class BootstrapMethod:                     # DR-M6-D
+    """DR-M6-D sub-decisions, one structured field each.
+
+    `n_boot_per_seed` IS A FLAG, NEVER A RESAMPLE COUNT (M6.1.4 S3 naming
+    audit). It carries DR-4.4 — the *attribution* of the frozen S0 §9
+    budget of 10,000 stationary-bootstrap resamples:
+
+        True  -> the 10,000 resamples are drawn PER SEED
+                 (3 seeds x 10,000 = 30,000 draws in total)
+        False -> the 10,000 are the TOTAL across the three seeds
+
+    The count itself is frozen elsewhere and is NOT this field's business:
+    it lives in `s0_real_run.FROZEN_N_BOOT = 10_000` (frozen S0 §9) and is
+    pinned by the formal validator as `bootstrap_ci.<cell>.per_seed.<seed>
+    .n_boot == 10000` (B0 matrix L083). Setting this field to `10000` is the
+    misread this docstring exists to prevent; `structural_problems()`
+    refuses any non-`bool` value AND emits a dedicated
+    `n_boot_per_seed_is_a_flag_not_a_resample_count` problem for a numeric
+    one, so such a value can never reach a `StudyConfig`.
+
+    This field does NOT rule DR-4.4 — it only carries Aaron's ruling once it
+    lands. `n_boot_applies_per_seed` is the unambiguous read alias; the field
+    name is retained so existing construction sites keep working.
+    """
     population: str
     na_day_rule: str
     statistic: str
-    n_boot_per_seed: bool
+    n_boot_per_seed: bool                  # DR-4.4 FLAG — not a count
     quoted_seed_rule: str
     percentile_interpolation: str
     crn_scope: str
+
+    @property
+    def n_boot_applies_per_seed(self) -> bool:
+        """Unambiguous read alias for `n_boot_per_seed` (see class docstring).
+
+        Prefer this name at every consumer site: it cannot be misread as a
+        resample count. The underlying field name is kept as the canonical
+        CONSTRUCTION key so no existing caller breaks; a full rename is a
+        main-agent step (the identifier appears in main-agent-owned test
+        files) and must keep this alias until those sites migrate.
+        """
+        return self.n_boot_per_seed
 
 
 @dataclass(frozen=True)
@@ -183,6 +402,14 @@ class ResolvedS0Methods:
                          "crn_scope"):
                 _str("bootstrap_method", name, getattr(b, name))
             _bool("bootstrap_method", "n_boot_per_seed", b.n_boot_per_seed)
+            # M6.1.4 (S3) naming audit: the ONE misread this field invites is
+            # "number of resamples per seed". A numeric value therefore gets
+            # its own decisive problem code on top of the generic bool check,
+            # so `n_boot_per_seed=10_000` can never reach a StudyConfig.
+            if (not isinstance(b.n_boot_per_seed, bool)
+                    and isinstance(b.n_boot_per_seed, _Real)):
+                problems.append("bootstrap_method.n_boot_per_seed_is_a_flag_"
+                                "not_a_resample_count")
 
         if isinstance(self.grid_policy, GridRepeatPolicy):
             g = self.grid_policy
@@ -240,11 +467,8 @@ class StudyConfig:
             if not callable(getattr(self, name)):
                 raise ValueError(f"StudyConfig: {name} must be callable")
         scal = self.spread_scalars
-        import math as _math
         if (not isinstance(scal, tuple) or len(scal) != 3
-                or any(isinstance(v, bool) or not isinstance(v, (int, float))
-                       or not _math.isfinite(float(v)) or float(v) < 0.0
-                       for v in scal)):
+                or any(_canonical_scalar(v) is None for v in scal)):
             raise ValueError("StudyConfig: spread_scalars must be 3 finite "
                              "non-negative numbers")
         # M6.1.3 M-2 ordering constraint — PROOF CHAIN (this is a TYPE-level
@@ -259,11 +483,17 @@ class StudyConfig:
         #   -> quantiles of one population are monotone: Q50 <= Q90 <= Q95
         #   -> every candidate reduction under DR-1 (A-i/A-ii/B-i/B-ii/C)
         #      preserves that pointwise order.
-        m, p90, p95 = (float(v) for v in scal)
-        if not (0.0 <= m <= p90 <= p95):
+        canon = canonical_spread_scalars(scal)
+        if canon is None:
             raise ValueError("StudyConfig: spread_scalars must satisfy "
                              "0 <= median <= P90 <= P95 (frozen §6 quantile "
                              "semantics; see proof chain in source)")
+        # M6.1.4 (S3) CANONICAL FORM: store plain floats, never numpy scalars
+        # and never a mixed int/float triple, so that two configs derived
+        # from EQUAL inputs compare EQUAL — the property the production
+        # cache gate (the config gateway) depends on. Representation only:
+        # no DR-1 reduction rule is adopted, ranked or narrowed here.
+        object.__setattr__(self, "spread_scalars", canon)
 
 
 def derive_study_config(methods: ResolvedS0Methods, *,
@@ -288,6 +518,160 @@ def derive_study_config(methods: ResolvedS0Methods, *,
                          "methods: " + ", ".join(bad))
     return StudyConfig(methods=methods, spread_scalars=tuple(spread_scalars),
                        regime_of=regime_of, vol_axis_of=vol_axis_of)
+
+
+class _Unreadable:
+    """Sentinel: a key whose value could not be read (see
+    `validate_injectables`). Deliberately inert — no `__eq__`, no
+    `__getattr__`."""
+
+    __slots__ = ()
+
+
+_UNREADABLE = _Unreadable()
+
+
+def validate_injectables(inj) -> list[str]:
+    """M6.1.4 (S3) — EXACT-KEY schema gate for an `_approved_injectables()`
+    payload. Returns a deterministic (sorted, de-duplicated) list of problem
+    codes; an EMPTY list means the mapping is structurally admissible as
+    ``derive_study_config(methods, **inj)`` keyword arguments.
+
+    THIS FUNCTION NEVER RAISES, for any input whatsoever — that is its whole
+    point. It sits in front of the production config gate, where a
+    `TypeError` escaping the check would be a fail-OPEN by exception
+    (blind-audit N4c class). Bools, strings, lists, ``None``, objects with a
+    raising ``__getattr__``/``__eq__``/``keys()``, and Mappings whose
+    ``__getitem__`` detonates all come back as problem codes.
+
+    BOUNDARY — the callables are checked with `callable()` and are NEVER
+    CALLED here. Invoking attacker-supplied code inside a validation gate is
+    the N3 defect class this codebase already fixed once (see
+    the config gateway's type-pin-before-any-read ordering in s0_real_run).
+    Whether `regime_of("2020-01-02")` actually returns a legal regime label
+    is a CALL-TIME concern and belongs to the compute path's own
+    ``try/except`` — never to this gate.
+
+    This function validates STRUCTURE only. It never adopts, ranks or
+    narrows any unruled research choice: DR-1 (the spread reduction rule
+    that produces the triple) and DR-2 (the volatility/regime mappings) stay
+    open, and a structurally admissible payload is not an approved one.
+
+    Problem codes (all prefixed ``injectables.``):
+      ``not_a_mapping`` · ``empty`` · ``keys_unreadable`` ·
+      ``missing_key:<name>`` · ``extra_key:<name>`` · ``unreadable:<name>`` ·
+      ``spread_scalars_not_a_tuple`` · ``spread_scalars_wrong_length:<n>`` ·
+      ``spread_scalars_value_invalid:<index>`` ·
+      ``spread_scalars_not_ordered_median_le_p90_le_p95`` ·
+      ``regime_of_not_callable`` · ``vol_axis_of_not_callable`` ·
+      ``validation_raised``
+    """
+    problems: list[str] = []
+
+    def _emit(code: str) -> None:
+        problems.append("injectables." + code)
+
+    def _name(key) -> str:
+        try:
+            return key if isinstance(key, str) else repr(key)
+        except BaseException:
+            return "<unreprable_key>"
+
+    try:
+        # A Mapping is required. `bool`/`str`/`list`/`tuple`/`None`/arbitrary
+        # objects are refused WITHOUT touching a single attribute on them.
+        if not isinstance(inj, Mapping):
+            _emit("not_a_mapping")
+            return sorted(set(problems))
+
+        try:
+            keys = list(inj.keys())
+        except BaseException:
+            _emit("keys_unreadable")
+            return sorted(set(problems))
+
+        if not keys:
+            _emit("empty")
+
+        seen: set[str] = set()
+        for key in keys:
+            if isinstance(key, str) and key in INJECTABLE_KEYS:
+                seen.add(key)
+            else:
+                _emit("extra_key:" + _name(key))
+        for want in sorted(INJECTABLE_KEYS):
+            if want not in seen:
+                _emit("missing_key:" + want)
+
+        def _read(key):
+            """Value at `key`, or the `_UNREADABLE` sentinel."""
+            try:
+                return inj[key]
+            except BaseException:
+                _emit("unreadable:" + key)
+                return _UNREADABLE
+
+        if "spread_scalars" in seen:
+            scal = _read("spread_scalars")
+            if scal is not _UNREADABLE:
+                if not isinstance(scal, tuple):
+                    _emit("spread_scalars_not_a_tuple")
+                else:
+                    try:
+                        length = len(scal)
+                    except BaseException:
+                        length = -1
+                    if length != 3:
+                        _emit(f"spread_scalars_wrong_length:{length}")
+                    else:
+                        vals = []
+                        for i, v in enumerate(scal):
+                            f = _canonical_scalar(v)
+                            if f is None:
+                                _emit(f"spread_scalars_value_invalid:{i}")
+                            vals.append(f)
+                        if all(v is not None for v in vals):
+                            m, p90, p95 = vals
+                            if not (0.0 <= m <= p90 <= p95):
+                                _emit("spread_scalars_not_ordered_median_le_"
+                                      "p90_le_p95")
+
+        for name in ("regime_of", "vol_axis_of"):
+            if name in seen:
+                fn = _read(name)
+                if fn is not _UNREADABLE and not callable(fn):
+                    _emit(name + "_not_callable")
+    except BaseException:
+        # Last line of defence. A gate that raises is a gate that fails open;
+        # BaseException is deliberate (a hostile __getattr__ may raise
+        # anything at all, including a non-Exception).
+        _emit("validation_raised")
+    return sorted(set(problems))
+
+
+def canonical_config(cfg: StudyConfig) -> StudyConfig:
+    """M6.1.4 (S3) — return `cfg` in canonical form (idempotent).
+
+    Every `StudyConfig` built through `__init__`/`derive_study_config` is
+    ALREADY canonical: `__post_init__` rewrites `spread_scalars` to a tuple
+    of plain floats and `SpreadCostMethod.__post_init__` freezes the adverse
+    -slippage mapping. This helper exists for configs assembled by BYPASS
+    (`object.__new__` + `object.__setattr__`, the route the M6.1.2/M6.1.3
+    defence-in-depth tests exercise) and for callers that want the guarantee
+    explicitly. It re-runs the full `__post_init__` validation, so an
+    invalid config raises `ValueError` here rather than propagating.
+
+    NOT A SECURITY GATE. It reads `cfg.methods` and therefore must run
+    AFTER the caller's type pin (`type(cfg.methods) is ResolvedS0Methods`),
+    never before it — reading attributes off an unpinned object can execute
+    foreign code (blind-audit N3).
+    """
+    if not isinstance(cfg, StudyConfig):
+        raise TypeError("canonical_config: not a StudyConfig instance")
+    return StudyConfig(methods=cfg.methods,
+                       spread_scalars=cfg.spread_scalars,
+                       regime_of=cfg.regime_of,
+                       vol_axis_of=cfg.vol_axis_of)
 
 
 @dataclass
