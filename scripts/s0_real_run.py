@@ -44,7 +44,7 @@ ATTEMPTS_ROOT = REPO / "attempts"
 # Baseline collected-test count at the SA-6 audit commit. The pytest gate
 # requires the suite to still COLLECT at least this many tests, so a muted
 # or filtered run cannot satisfy the gate with a handful of tests (F-09).
-MIN_COLLECTED_TESTS = 2146                  # M6.1.6: floor = current suite
+MIN_COLLECTED_TESTS = 2205                  # M6.1.7: floor = current suite
 
 # External read-only tooling (packet §9 gate 4). Invoked as a subprocess;
 # the tool itself only reads repository files.
@@ -1087,13 +1087,23 @@ def render_s0_report(result, *, expected_governance=None,
         # pinned by test. Scope: this proves the five contract keys of
         # `governance.*` against independent sources — it does NOT byte-bind
         # the report to the registry (see the proof's own PARTIAL list).
+        # M6.1.7: what runs HERE is only a PRE-WRITE SCREEN. The renderer
+        # holds strings, not files, so a verdict taken here can only say
+        # "what I am about to write is correct" — which is what M6.1.6's
+        # CLOSED actually meant, and precisely why it missed that 9 of 10
+        # artifacts landed on disk with different bytes than the manifest
+        # declared. The screen's job is to stop a wrong governance block
+        # from ever becoming a file; the RELEASE verdict is taken after the
+        # bytes exist, by `RealChain.post_write_verify`. The screen returns
+        # a `DraftScreen`, which has no `ok` field and raises on `bool()`,
+        # so this cannot be mistaken for the release gate.
         if governance_context is not None:
             from itsf.s0 import output_proof as _op
-            proof = _op.prove_governance(governance_context,
-                                         sealed_artifacts=files)
-            if not proof.ok:
-                raise ValueError("governance proof failed: "
-                                 + "; ".join(proof.problems))
+            screen = _op.screen_governance_draft(governance_context,
+                                                 draft_artifacts=files)
+            if screen.blocking_problems:
+                raise ValueError("governance draft screen failed: "
+                                 + "; ".join(screen.blocking_problems))
         return files
     raise ValueError(
         "render_s0_report: refusing non-study payload — the legacy "
@@ -1122,6 +1132,7 @@ from itsf.contracts import (StudyConfig,          # noqa: E402
                             GridRepeatPolicy as _GRP)
 import math as _math                                     # noqa: E402
 from types import MappingProxyType as _MProxy            # noqa: E402
+from collections.abc import Mapping as _Mapping          # noqa: E402
 
 
 _CONFIG_CACHE: dict = {}
@@ -2180,20 +2191,66 @@ def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
     return out
 
 
-def _expected_governance() -> dict:
+def _expected_governance(snapshot=None) -> dict:
     """Independently RE-derive the governance context from primary sources
     (registry bytes + guards constants) — never from the payload's own
     governance block, so the cross-check catches drift/tampering between
-    compute and seal (M6.1.1 S1 wiring)."""
+    compute and seal (M6.1.1 S1 wiring).
+
+    M6.1.7 — `snapshot` is the PRE-EXPOSURE authorization snapshot carried
+    by the prepared execution input. Production ALWAYS passes it (pinned by
+    test); the `None` path is for non-run callers (direct renderer tests),
+    which have no run and therefore no RUN_STARTED row skewing the count.
+
+    WHY THE COUNT MUST COME FROM THE SNAPSHOT AND THE COMMIT MUST NOT.
+    `registry_sequence_snapshot` means "the registry as of authorization".
+    Re-deriving it at seal time returns the pre-exposure count PLUS this
+    run's own RUN_STARTED row, so it is taken from the snapshot. The
+    AUTHORIZED COMMIT is different in kind: it is the run's authorization
+    identity and must be STABLE, so it is still re-read from live registry
+    bytes and required to agree with the snapshot.
+
+    WHAT THAT RE-READ IS AND IS NOT WORTH (M6.1.7 review L-6, correcting the
+    reason first recorded here). It does NOT rescue this comparison from
+    vacuity: measured, FOUR of the five keys are already the same in-process
+    expression on both sides — `trial_id` (`TRIAL_ID`), `engineering_seed`
+    (`ENGINEERING_SEED`), `frozen_hashes` (`dict(guards.FROZEN_HASHES)`) and,
+    since M6.1.7, `registry_sequence_snapshot` (the snapshot on both sides).
+    The re-read keeps exactly ONE key non-vacuous, not two.
+
+    Its real value is the `raise` below: it is a MID-RUN RE-AUTHORIZATION
+    DETECTOR, and it is the only one there is. `pre_exposure_recheck`
+    structurally cannot cover this — it runs BEFORE `RUN_STARTED`, so a
+    registry re-authorized after the exposure boundary is invisible to it.
+    Moving the check there would strictly lose detection. Note also that
+    `RUN_STARTED` is not a `RUN_AUTHORIZED` row, so this run's own append
+    cannot trip it: the count moves, the commit does not.
+
+    The non-vacuous governance comparison lives elsewhere and is unaffected
+    by any of this — `output_proof.prove_governance` builds its expected
+    side from the snapshot plus the frozen-hash authority cross-checked
+    against a live disk re-hash, and reads its actual side off the sealed
+    bytes on disk.
+    """
     from itsf import guards as _g
     text = REGISTRY.read_text(encoding="utf-8")
     _row, commit, _reason = find_authorization_event(text)
+    if snapshot is None:
+        sequence = len(parse_registry_events(text))
+    else:
+        snap_commit = snapshot.get("authorized_commit")
+        if snap_commit != commit:
+            raise ValueError(
+                "authorized commit changed between the pre-exposure "
+                "authorization snapshot and seal time — refusing to seal "
+                "(snapshot vs live registry disagree)")
+        sequence = snapshot["event_sequence"]
     return {
         "trial_id": TRIAL_ID,
         "authorized_commit": commit,
         "engineering_seed": ENGINEERING_SEED,
         "frozen_hashes": dict(_g.FROZEN_HASHES),
-        "registry_sequence_snapshot": len(parse_registry_events(text)),
+        "registry_sequence_snapshot": sequence,
     }
 
 
@@ -2238,13 +2295,32 @@ class _PreparedExecutionInput:
     i.e. a live view over a backing dict its author may still hold.
     Materialising the callables needs DR-2's ruled vocabulary (the `vol_na`
     fourth-stratum case is unruled) and freezing tick VALUES needs a ruling
-    this milestone must not make. Both stay open; F-1 remains PARTIAL."""
+    this milestone must not make. Both stay open; F-1 remains PARTIAL.
 
-    __slots__ = ("config", "reason")
+    M6.1.7 — it also carries the PRE-EXPOSURE AUTHORIZATION SNAPSHOT.
 
-    def __init__(self, *, config, reason):
+    `snapshot` is a MappingProxyType over a PRIVATE dict copy taken at
+    prepare time. Nobody else holds a reference to the backing dict, so
+    unlike `.config`'s live method table this one is genuinely materialised
+    — it is not the `MappingProxyType` PARTIAL noted above.
+
+    WHY IT IS HERE AT ALL. `compute()` used to re-read `ops/TRIAL_REGISTRY.md`
+    to build `governance`, and that read happens AFTER `_atomic_run_start`
+    has appended this run's own `RUN_STARTED` row. `parse_registry_events`
+    counts that row, so the sealed `registry_sequence_snapshot` was the
+    pre-exposure count PLUS ONE. It went unnoticed because
+    `_expected_governance()` re-read the registry at seal time too: both
+    sides of the contract check drifted together and agreed at N+1. Same
+    shape as the CRLF defect — a check and its expectation drawn from one
+    moving source cannot see that source move.
+    """
+
+    __slots__ = ("config", "reason", "snapshot")
+
+    def __init__(self, *, config, reason, snapshot):
         object.__setattr__(self, "config", config)
         object.__setattr__(self, "reason", reason)
+        object.__setattr__(self, "snapshot", snapshot)
 
     def __setattr__(self, name, value):          # no post-prepare mutation
         raise AttributeError("_PreparedExecutionInput is immutable")
@@ -2315,26 +2391,83 @@ class RealChain:
         ds, uni = self._ensure()
         return structural_actuals_from(ds, uni)
 
-    def render_report_with_governance_proof(self, result):
-        """M6.1.6 — production render entry point. Builds the INDEPENDENT
-        governance context here (pre-run authorization snapshot, frozen-hash
-        authority, fresh disk re-hash) and hands it to the renderer, so the
-        proof's expected side never originates in the payload it verifies.
+    def _governance_context(self, prepared):
+        """Build the INDEPENDENT expected-side context for the governance
+        checks. Its authorization facts come from the PRE-EXPOSURE snapshot
+        the prepared object carries — never from `self.authorization_snapshot()`
+        called again here, which after RUN_STARTED would observe a registry
+        one event longer than the one the run was authorized against.
 
-        The re-hash is taken here, at seal time, from disk — the same
-        derivation `compute()` used, computed again independently rather
-        than carried through the result."""
+        The frozen-hash re-hash IS taken live from disk at call time: that
+        fact has an independent authority (`guards.FROZEN_HASHES`) to be
+        compared against, so observing it late is a feature, not drift."""
         from itsf import guards as _g
         from itsf.s0 import output_proof as _op
-        ctx = _op.SourceContext(
-            authorization_snapshot=self.authorization_snapshot(),
+        return _op.SourceContext(
+            authorization_snapshot=dict(prepared.snapshot),
             frozen_hash_authority=dict(_g.FROZEN_HASHES),
             frozen_hash_observations={
                 p: hashlib.sha256((REPO / p).read_bytes()).hexdigest()
                 for p in sorted(_g.FROZEN_HASHES)},
             engineering_seed=ENGINEERING_SEED,
             engineering_seed_provenance="DR-02 / packet §5")
-        return render_s0_report(result, governance_context=ctx)
+
+    def render_report_with_governance_proof(self, result, prepared):
+        """M6.1.6/M6.1.7 — production render entry point.
+
+        Takes the prepared object EXPLICITLY (Stage E is post-exposure, and
+        the run's pre-exposure authority must be handed to it rather than
+        fished out of a module global or an instance attribute — stashing it
+        was how the defect this milestone closes got in).
+
+        What happens here is the pre-write screen only. The release verdict
+        is `post_write_verify`, below, which reads the bytes off disk."""
+        if type(prepared) is not _PreparedExecutionInput:
+            raise RuntimeError("stage-E requires the prepared execution "
+                               "input produced by the pre-exposure prepare "
+                               "seam")
+        return render_s0_report(
+            result,
+            expected_governance=_expected_governance(prepared.snapshot),
+            governance_context=self._governance_context(prepared))
+
+    def post_write_verify(self, rdir, written, prepared):
+        """M6.1.7 — THE RELEASE VERDICT, taken from the bytes on disk.
+
+        Runs after every renderer artifact has been written and before
+        Stage E completes. `written` is the runner's (name, bytes) record;
+        it is deliberately NOT used as the source of truth here — this
+        checker re-reads the files, because a verdict computed from the
+        same in-memory values the writer used is the exact mistake M6.1.6
+        made. `written` is accepted so the seam's contract is uniform and
+        so a future check can compare the two independently.
+
+        THE ASYMMETRY (see runner.py): the WIRING of this seam is proven
+        pre-exposure, but the CHECK itself can only run once the bytes
+        exist, i.e. after the exposure boundary. A refusal here is a
+        Stage-E RUN failure with the trial already burned. That is
+        unavoidable — disk bytes cannot be verified before they are disk
+        bytes — and it is why nothing on the refusal path deletes anything.
+        """
+        from itsf.s0 import output_proof as _op
+        if type(prepared) is not _PreparedExecutionInput:
+            return (False, "post-write verify: not the prepared execution "
+                           "input from the pre-exposure seam")
+        try:
+            proof = _op.prove_governance(
+                self._governance_context(prepared),
+                report_path=Path(rdir) / "S0_REPORT.json",
+                infrastructure_files=("manifest.jsonl",
+                                      "REGISTRY_AFTER_RUN_STARTED.json"))
+        except _op.ProofRefused as exc:
+            return (False, f"post-write governance proof refused: {exc}")
+        if not proof.ok:
+            return (False, "post-write governance proof failed: "
+                    + "; ".join(proof.problems))
+        return (True, "disk governance + sealed-set proof passed "
+                f"({proof.comparisons_performed} governance, "
+                f"{proof.disk_checks_performed} disk checks, "
+                f"report {proof.report_sha256[:16]})")
 
     def authorization_snapshot(self) -> dict:
         """Aaron 2026-08-02 §三: structured snapshot of the authorization
@@ -2381,7 +2514,7 @@ class RealChain:
         return (False, f"IR-24 F8 divergence set NON-EMPTY (count={n}) — "
                        "STOP; requires an Aaron ruling before any run")
 
-    def prepare(self):
+    def prepare(self, snapshot):
         """M6.1.6 (S1 seam) — the PRE-EXPOSURE preparation step.
 
         This is the ONLY place the production config sources are read for a
@@ -2402,11 +2535,42 @@ class RealChain:
         whole therefore remains PARTIAL; see the review packet.
 
         With `_approved_injectables()` returning None, this fails closed on
-        every production path today — which is the intended posture."""
+        every production path today — which is the intended posture.
+
+        M6.1.7 — `snapshot` is the Stage-A authorization snapshot held by
+        `make_snapshot_control`'s closure. It is passed IN rather than
+        re-derived here on purpose: a second `authorization_snapshot()` call
+        would be a second source of truth for the same fact, and this
+        milestone exists because two sources of truth for one fact is how
+        both the CRLF defect and the sequence-count defect got in. Because
+        the value comes from that closure, `pre_exposure_recheck` — which
+        runs later, inside `_atomic_run_start` — proves the registry is
+        still byte-identical to THE VERY SNAPSHOT this object carries.
+        """
+        # Snapshot first: it is the cheap, purely structural half, so a
+        # malformed snapshot is attributable as such instead of being
+        # masked by whatever the config resolver happens to say today.
+        if not isinstance(snapshot, _Mapping):
+            raise RuntimeError("prepare requires the Stage-A authorization "
+                               "snapshot mapping")
+        snap = dict(snapshot)                     # private copy; see below
+        missing = sorted({"trial_id", "authorized_commit", "event_sequence",
+                          "registry_sha256"} - set(snap))
+        if missing:
+            raise RuntimeError("authorization snapshot is missing required "
+                               "fields: " + ", ".join(missing))
+        if not snap["authorized_commit"]:
+            raise RuntimeError("authorization snapshot carries no authorized "
+                               "commit — refusing to prepare a run")
+        if not isinstance(snap["event_sequence"], int):
+            raise RuntimeError("authorization snapshot event_sequence is not "
+                               "an int")
         cfg, why = resolved_study_config()
         if cfg is None:
             raise RuntimeError(f"stage-C config unavailable: {why}")
-        return _PreparedExecutionInput(config=cfg, reason=why)
+        return _PreparedExecutionInput(
+            config=cfg, reason=why,
+            snapshot=_MProxy(snap))
 
     def compute(self, prepared):
         # M6.1.6: Stage C consumes the PREPARED object and MUST NOT reach
@@ -2420,14 +2584,20 @@ class RealChain:
         cfg = prepared.config
         ds, uni = self._ensure()
         from itsf import guards as _g
-        text = REGISTRY.read_text(encoding="utf-8")
-        _row, commit, _reason = find_authorization_event(text)
+        # M6.1.7: governance comes ONLY from the pre-exposure snapshot the
+        # prepared object carries. Stage C runs AFTER `_atomic_run_start`
+        # appended this run's own RUN_STARTED row, so the registry re-read
+        # that used to stand here reported the pre-exposure event count
+        # PLUS ONE. `REGISTRY` is not read anywhere below this line — the
+        # frozen-hash re-hash beneath is a different fact with a different
+        # source, and is deliberately kept live.
+        snap = prepared.snapshot
         gov = {
             "trial_id": TRIAL_ID,
-            "authorized_commit": commit,
+            "authorized_commit": snap["authorized_commit"],
             "engineering_seed": ENGINEERING_SEED,
             "frozen_hashes": dict(_g.FROZEN_HASHES),
-            "registry_sequence_snapshot": len(parse_registry_events(text)),
+            "registry_sequence_snapshot": snap["event_sequence"],
         }
         # M6.1.4 (B0 EV-13 / L127): a FRESH byte-level re-hash of the frozen
         # files, taken at compute time — the sealed governance block is then
@@ -2461,8 +2631,14 @@ def make_snapshot_control(chain: "RealChain", attempts_dir: Path):
         if not snap["authorized_commit"]:
             return (False, "no RUN_AUTHORIZED event to snapshot")
         attempts_dir.mkdir(parents=True, exist_ok=True)
+        # M6.1.7 review L-2: `indent=1` embeds newlines, so a text-mode
+        # write makes these bytes platform-dependent. This lands in the
+        # ATTEMPT directory, never the run directory, so it is outside the
+        # sealed set and never had the two-digest defect — same rule, same
+        # reason, no exception worth remembering.
         (attempts_dir / "AUTHORIZATION_SNAPSHOT.json").write_text(
-            json.dumps(snap, indent=1, sort_keys=True), encoding="utf-8")
+            json.dumps(snap, indent=1, sort_keys=True),
+            encoding="utf-8", newline="\n")
         state["snapshot"] = snap
         return (True, "authorization snapshot recorded")
 
@@ -2480,13 +2656,35 @@ def make_snapshot_control(chain: "RealChain", attempts_dir: Path):
 
     def post_run_started_hook(rdir: Path) -> None:
         after = hashlib.sha256(REGISTRY.read_bytes()).hexdigest()
+        # M6.1.7: `indent=1` puts real newlines in this document, so a
+        # text-mode write would make its bytes platform-dependent inside the
+        # run directory. It never enters `sealed_files`, so it never had the
+        # two-digest defect — but "the run directory is byte-determined" is
+        # the claim this milestone makes, and an exception to it should not
+        # have to be remembered.
         (rdir / "REGISTRY_AFTER_RUN_STARTED.json").write_text(
             json.dumps({"registry_sha256_after_run_started": after,
                         "snapshot_before": state.get("snapshot", {})},
-                       indent=1, sort_keys=True), encoding="utf-8")
+                       indent=1, sort_keys=True),
+            encoding="utf-8", newline="\n")
+
+    def prepare_for_run():
+        """M6.1.7 — the pre-exposure prepare seam, bound to THIS closure's
+        Stage-A snapshot.
+
+        `chain.prepare` deliberately does not read the registry itself: the
+        snapshot it embeds must be the same object `pre_exposure_recheck`
+        compares against, so that the recheck's "registry unchanged since
+        authorization" proof applies to the value the run actually seals.
+        Two independent reads of one fact is what produced the defect."""
+        snap = state.get("snapshot")
+        if snap is None:
+            raise RuntimeError("no Stage-A authorization snapshot in memory "
+                               "— refusing to prepare a run")
+        return chain.prepare(snap)
 
     return (g_authorization_snapshot, pre_exposure_recheck,
-            post_run_started_hook)
+            post_run_started_hook, prepare_for_run)
 
 
 # =========================================================================
@@ -2539,7 +2737,7 @@ def main() -> int:
     # Aaron 2026-08-02 §三 — built by the module-level factory so the
     # EXACT production closures are what tests execute (SA-12 N-B).
     (g_authorization_snapshot, pre_exposure_recheck,
-     post_run_started_hook) = make_snapshot_control(
+     post_run_started_hook, prepare_for_run) = make_snapshot_control(
         chain, Path(cfg.attempts_dir))
 
     deps = RunnerDeps(
@@ -2554,14 +2752,18 @@ def main() -> int:
             wiring_status=chain.ready),
             GateCheck("ir24_f8_divergence_empty",
                       chain.ir24_divergence_guard)),   # SA-10 N6, blocking
-        prepare_compute=chain.prepare,                 # M6.1.6 pre-exposure
+        # M6.1.7: the prepare seam is bound to the snapshot-control closure,
+        # so the prepared object embeds THE SAME Stage-A snapshot that
+        # `pre_exposure_recheck` proves the registry still matches.
+        prepare_compute=prepare_for_run,               # M6.1.6/7 pre-exposure
         compute=chain.compute,
         integrity_checks=build_integrity_checks(),
-        # M6.1.6: the sealed report is rendered WITH an independent
-        # governance context, built from the pre-run authorization snapshot
-        # + the frozen-hash authority + a fresh disk re-hash. None of these
-        # is read from the payload being verified.
+        # M6.1.6/7: the renderer takes (result, prepared) and runs only the
+        # PRE-WRITE screen. The release verdict is `post_write_verify`,
+        # which re-reads the artifacts off disk — the renderer's strings
+        # cannot answer whether the bytes that landed are the right bytes.
         render_report=chain.render_report_with_governance_proof,
+        post_write_verify=chain.post_write_verify,     # M6.1.7 disk seal
         append_registry_event=registry_append,
         clock_utc=clock,
         log=guarded_log,

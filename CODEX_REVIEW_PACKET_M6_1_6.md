@@ -12,6 +12,26 @@
 
 ---
 
+> ## ⚠ 事后批注（M6.1.7 / S3，2026-08-09）——**本文件宣布的两条 CLOSED 均已被重新打开**
+>
+> **本批注不删除、不改写本文件的任何原始主张。** 原文逐字保留，供沿革比对。
+> 加批注的唯一目的是：**读者不得带着一个错误的「CLOSED 是什么意思」离开本文件。**
+>
+> | 本文件的 CLOSED | M6.1.7 判定 | 理由（一句话） |
+> |---|---|---|
+> | **§1.2 治理 OUTPUT-PROOF 切片** | **HISTORICALLY PROVISIONAL → REOPENED**，由 M6.1.7 §1.2 以**磁盘**形态重新闭合 | 其判定对象是**内存 `dict`**；在它说「通过」的同一时刻，磁盘上 10 个封存工件里 **9 个**的 `sha256` **与 `bytes`** 皆与自陈不符 |
+> | **§1.1 prepared LIFECYCLE 接缝** | **HISTORICALLY PROVISIONAL → PARTIALLY REOPENED**（config 生命周期部分成立；措辞与覆盖面已更正） | (a) 其 `if not prepared` 一条**被判为错误并撤销**；(b) 该接缝**未**把曝光前 registry 快照纳入 prepared 对象，故 `compute` 仍在 `RUN_STARTED` **之后**重读 registry，`registry_sequence_snapshot` 仍会封存 **N＋1** |
+>
+> **两条 CLOSED 都不是假陈述**——它们是**比读者会以为的弱得多的陈述**。
+> 这一定性由 M6.1.7 明确不予升格；若 Codex 认为应记为「误报的 CLOSED」，
+> 请在复审中明说。
+>
+> 逐节批注见 §1.1、§1.2、§2 表、§3、§4、§5.2、§7 各处的
+> **【M6.1.7 批注】** 段。完整论证与全部复算数字见
+> `CODEX_REVIEW_PACKET_M6_1_7.md`（§1、§3）。
+
+---
+
 ## 0. 验收门实测
 
 **证据级别声明（逐行标注，不设跨行统一标准）**：
@@ -55,7 +75,27 @@ src/itsf/s0/evidence.py   676fbcd1ae0ac2a9
 
 ## 1. 本轮闭合的两个接缝（**只此两条**）
 
-### 1.1 prepared **LIFECYCLE 接缝** —— CLOSED
+### 1.1 prepared **LIFECYCLE 接缝** —— CLOSED　【**M6.1.7 已将本条重新打开（部分）**】
+
+> **【M6.1.7 批注】本节标题的 CLOSED 是 HISTORICALLY PROVISIONAL。**
+> 以下原文保留不改；两处必须与原文同时读：
+>
+> 1. **下文「prepare 返回任何 falsy 值（`if not prepared`）→ 同样失败」一条，
+>    已被 M6.1.7 判为错误并撤销**，回退为 `if prepared is None`。理由：
+>    `not prepared` 会在 runner 的门内执行**应用方控制**的 `__bool__`／`__len__`
+>    （门内跑外来代码），并且破坏了该通用生命周期组件的通用性——
+>    falsy 的 prepared 对象是合法的，应原样转交 `compute`。
+>    见 `CODEX_REVIEW_PACKET_M6_1_7.md` §1.4。
+> 2. **更实质的一条：本接缝的覆盖面比「LIFECYCLE 接缝已闭合」这句话所暗示的窄。**
+>    prepared 对象**没有**携带曝光前的 registry 授权快照，故 `compute()` 仍在
+>    `_atomic_run_start` 追加本次运行自己的 `RUN_STARTED` 行**之后**重读
+>    `ops/TRIAL_REGISTRY.md`，封存的 `registry_sequence_snapshot` 因而是
+>    **曝光前计数 ＋ 1**。它当时未被发现，是因为 `_expected_governance()`
+>    在封存时**也**重读 registry：契约检查的两侧一起漂移，在 N＋1 上一致同意。
+>    M6.1.7 §1.3 闭合此项。
+>
+> 「Stage C 只消费被交付的 prepared 对象、config 解析前移到 exposure 之前」
+> 这一部分**仍然成立**，未被推翻。
 
 生命周期新序（`src/itsf/s0/runner.py:37-40`，实施在 `:434-523`）：
 
@@ -83,7 +123,29 @@ config 拒绝会**烧掉 trial**（exposure 已消耗）。新序把解析前移
 Stage C 只消费被交付的 prepared 对象（`s0_real_run.py:2411-2415` 另有 AST 测试
 钉住「Stage C 以下不得再触碰任何 config 源」）。
 
-### 1.2 治理 **OUTPUT-PROOF 切片**（`governance.*` **仅此五键**）—— CLOSED
+### 1.2 治理 **OUTPUT-PROOF 切片**（`governance.*` **仅此五键**）—— CLOSED　【**M6.1.7 已将本条重新打开**】
+
+> **【M6.1.7 批注】本节标题的 CLOSED 是 HISTORICALLY PROVISIONAL，已被 REOPENED
+> 并由 M6.1.7 §1.2 以更强形态（磁盘判定）重新闭合。**
+>
+> 本节下文自己已经写明了要害：生产走的是 `sealed_artifacts=files`，
+> 读的是**内存字符串**，「因此本切片证明的是『渲染器打算封存的内容』，
+> 而不是『磁盘上最终躺着的字节』」。**M6.1.7 度量了那句限定的代价**：
+> 在这条 CLOSED 说「通过」的同一时刻，磁盘上 10 个 `sealed_files` 工件里
+> **9 个**的 `sha256` **与 `bytes` 两个字段都**与其自陈不符（§4 只记了摘要，
+> 字节数同样为假，偏移量恰为该工件的 LF 计数）。
+>
+> M6.1.7 的处置：`sealed_artifacts=` **改为永远抛 `ProofRefused` 的毒丸**；
+> 生产改传 `report_path=<run_dir>/S0_REPORT.json`；
+> `GovernanceProof.__post_init__` 拒绝任何 `actual_source != "file"`，
+> 故**一个 `GovernanceProof` 只可能为读自磁盘的字节而存在**；
+> 内存检查降级为 `screen_governance_draft`，返回的 `DraftScreen`
+> **无 `ok` 字段**、`ok` 属性抛异常、`bool()` 抛异常，无法被误当作发布门。
+> 另新增第二条轴：每条 `sealed_files` 声明对 `Path.read_bytes()` 逐条比对，
+> 且声明集合须**恰好等于**运行目录实际内容。
+>
+> **本节其余各条（跑在最后、expected 侧独立、比较次数派生、期望键域不由被守护
+> 对象定尺寸）在 M6.1.7 中均予保留并继续成立**——被推翻的只是**取证对象**。
 
 `src/itsf/s0/output_proof.py`，单一公开可调用 `prove_governance`。
 
@@ -117,12 +179,12 @@ Stage C 只消费被交付的 prepared 对象（`s0_real_run.py:2411-2415` 另�
 > 下列四条是**四个不同的对象**。把其中任意两条写成同一件事，就是本项目
 > 已两度付出代价的那类过度声明。
 
-| 对象 | 本轮状态 | 依据 |
-|---|---|---|
-| prepared **LIFECYCLE 接缝** | **CLOSED** | §1.1 |
-| 治理 **OUTPUT-PROOF 切片**（`governance.*` 仅） | **CLOSED** | §1.2 |
-| **F-1 整体** | **PARTIAL** | 见下 |
-| **F-2 整体** | **PARTIAL**，本轮**无变化** | 见下 |
+| 对象 | 本轮状态 | 依据 | **M6.1.7 事后状态** |
+|---|---|---|---|
+| prepared **LIFECYCLE 接缝** | **CLOSED** | §1.1 | **PARTIALLY REOPENED**（`if not prepared` 撤销；快照未纳入 prepared）→ M6.1.7 §1.3／§1.4 |
+| 治理 **OUTPUT-PROOF 切片**（`governance.*` 仅） | **CLOSED** | §1.2 | **REOPENED**（判定对象为内存 dict）→ 由 M6.1.7 §1.2 以磁盘形态重新闭合 |
+| **F-1 整体** | **PARTIAL** | 见下 | **仍 PARTIAL**（M6.1.7 §2.1；两条理由字节级不变） |
+| **F-2 整体** | **PARTIAL**，本轮**无变化** | 见下 | **仍 PARTIAL，M6.1.7 亦无变化**（`evidence.py` 哈希逐位不变） |
 
 ### 2.1 F-1 整体 —— PARTIAL（原因具名，源码核实）
 
@@ -193,6 +255,16 @@ D-4 仍挂在既有 DR 伞下，队列长度不变（见 `DECISION_REQUIRED_READ
    **不同**取值作为 expectation」这一「validate X, use Y」类。
 2. falsy prepared 对象 —— `src/itsf/s0/runner.py:485-492`，注释
    `M6.1.6 review A1-1`：**任何** falsy 返回都是拒绝，不只是 `None`。
+   > **【M6.1.7 批注】本条修复已被撤销（REVERTED）。** 回退为
+   > `if prepared is None`（`runner.py:627-646`）。撤销理由是结构性的：
+   > `not prepared` 在 runner 的门内执行应用方控制的 `__bool__`／`__len__`，
+   > 且把「对象有没有意义」这个**应用**问题错放进了**通用**生命周期机。
+   > 钉子：`tests/test_s0_runner.py` 中的 falsy 穿透参数化测试与
+   > `__bool__` 抛异常对象测试，覆盖 compute／渲染器／写后验证三个转交点。
+   > 见 `CODEX_REVIEW_PACKET_M6_1_7.md` §1.4。
+   > **附带说明**：本条正是本文件 §3 末尾那条限定
+   > 「修复轮自判闭合不构成闭合」所预留的风险的一次实际兑现——
+   > 一条未经复核员重新复核的修复，事后被判为错误。
 
 **其余 4 条 Low 记为设计注记，本轮不改。**
 
@@ -204,6 +276,25 @@ D-4 仍挂在既有 DR 伞下，队列长度不变（见 `DECISION_REQUIRED_READ
 ---
 
 ## 4. DEFERRED —— 已核实、**本轮未修**：CRLF 转译造成同一工件两个摘要
+
+> **【M6.1.7 批注】本条已在 M6.1.7 闭合。** 本节的登记**当时是准确的**，
+> 其「必须在任何真实 S0 授权之前处置」的判断**已被兑现**：
+> Stage E 现在把每个工件**编码恰好一次**并以 `write_bytes`（二进制，
+> 无换行转译）落盘，同一个 `bytes` 值入哈希链并交给写后验证接缝，
+> 路径上不再有任何 re-read 取摘要的动作。
+> **两处对本节的精确化（M6.1.7 / S3 实测）**：
+> (i) 错的不止 `sha256`，**`bytes` 字段同样为假**，偏移量恰为该工件的 LF 计数
+> （实测 `S0_REPORT.md`：内存 425 字节 / 磁盘 430 字节）；
+> (ii) 「9/10」在结构上依赖「每份 JSONL 至少 2 条记录」——正文是
+> `"\n".join(...)`，0 或 1 条记录时无裸 LF。真实 S0 下每（engine, scenario）
+> 为逐可构造日的数千条，故该退化情形不可达；`S0_REPORT.md` 一项则无条件成立。
+> 另请注意 M6.1.7 §4.4 登记的**残留（一半已闭，一半具名延期）**：
+> 字节保真只覆盖**渲染器工件**。
+> `REGISTRY_AFTER_RUN_STARTED.json` 其后**已补 `newline="\n"`**（已闭合）；
+> `runinfra.py:1089` 与 `:1090-1093` 的 `RUN_FAILURE_REPORT.{md,json}`
+> **仍为文本模式，且被有意延期**（在 M6.1.7 的每条 lease 之外，
+> 且只在失败路径写出，与成功路径上的磁盘证明时序不相交）。
+> 二者均不进 `sealed_files`，故都不构成「一个工件两个摘要」。
 
 **严重度按原样记录，不软化。**
 
@@ -285,6 +376,22 @@ CLOSED**（生命周期接缝完全在 exposure 之前、与落盘无关；治�
   **但这与本轮另一条接缝的处置相反**：`prepare_compute` 未接线是
   **FAIL**（§1.1）。**同一轮内两条接缝对「未接线」给出相反答案，
   这是本轮唯一不遵循自身先例之处，在此登记，不自行裁决。**
+
+> **【M6.1.7 批注】本节两条的事后状态**：
+>
+> - **第一条（证明结果在封存输出中不留痕）——仍然成立，未闭合。**
+>   M6.1.7 的 `post_write_verify` 只把摘要放进返回的 detail 字符串，
+>   而 detail 只在**失败**路径进入 `RUN_FAILURE_REPORT`；成功运行的封存
+>   字节里仍查不到「本次做过治理证明、且它自陈了若干缺口」。
+>   扩展已冻结的报告 schema 需要一条不得由工程车道作出的裁决，
+>   故 M6.1.7 §4.3 继续以**披露**处置，不静默补齐。
+> - **第二条（未接线是 SKIP 还是 FAIL）——缩小，但未消失。**
+>   `s0_real_run.py:1100` 仍是 `if governance_context is not None:`，
+>   即 **PRE-WRITE 屏**未接线仍是静默跳过。但**发布判定**已改为 fail-closed：
+>   `post_write_verify` 未接线在**曝光前**即拒绝（`runner.py:615-621`），
+>   与 `prepare_compute` / `pre_exposure_recheck` 同例。
+>   **本节登记的那条不一致因此从「两条接缝答案相反」缩小为
+>   「屏 vs 判定的答案不同」，请求 Codex 给立场的诉求仍然有效。**
 
 ---
 
@@ -434,6 +541,16 @@ docstring 自称与 preflight「identical」。按本节，该词在**谓词层�
 
 已在授权包内就地更新该表。**「不得对本块整体加『全部陈旧』笼统标注」这一
 既有约束继续成立**——本轮仍有 9 行为真。
+
+> **【M6.1.7 批注】本节列出的三个现值均已再次移动**（S3 于 2026-08-09 复算）：
+> `scripts/s0_real_run.py` `937c96bf6b15d26b` → `ef03cc3a824054aa`；
+> `src/itsf/s0/runner.py` `0c1e5cbb9861f8da` → `b44306f8f1202e80`；
+> `src/itsf/s0/output_proof.py` `1f045ed5fb75480a` → `b43c05243bd9b886`。
+> 其余 **11** 个生产源 ＋ `requirements_lock` ＋ 两个 preflight 工件哈希
+> **逐位不变**。授权包 §0 环境锁已按 M6.1.7 工作树再次重渲染，
+> 并在其中显式声明了「哪三个字段变了、为什么变」。
+> 本节所指出的「output_proof.py 不在锁内」这一覆盖缺口，
+> **已由 M6.1.6 的重渲染补入锁内**，本轮只更新其取值。
 
 ---
 

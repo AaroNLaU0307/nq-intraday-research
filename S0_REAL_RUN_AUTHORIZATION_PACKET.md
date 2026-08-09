@@ -70,6 +70,34 @@ PACKET_DRAFTED → PACKET_APPROVED → RUNNER_IMPLEMENTED
   DECISION_REQUIRED_READY_SUPERSESSION.md）。DECISION_REQUIRED_M6_1
   全部裁决落地并经审计前，不追加 READY、不受理授权；真实运行仍需
   §10 语句）。
+
+  **【HEAD／commit 距离／工作树事实 —— M6.1.7 / S3，2026-08-09 实测更新】**
+  上文写于 M6.1.6 尚未入库时，其「当前 HEAD」指向 `1e188b5…`；
+  **该指代现已过时**，在此更新（原文保留，不改写）：
+
+  | 事实 | 现值（S3 对仓库实测） |
+  |---|---|
+  | 当前 `git HEAD` | **`185e47f7e95c5d0cca4b44257c5b32c99790ef83`**（M6.1.6 入库） |
+  | 分支 | `master` |
+  | `git rev-list --count 6cb7eb71..HEAD`（自 registry 行 11 READY 起的 commit 距离） | **8**（M6.1.6 期间为 7） |
+  | 其中带码候选里程碑 | **6**（M6 / M6.1 / M6.1.1 / M6.1.2 / M6.1.3 / **M6.1.6**）；另两个为 registry 行 11 追加 commit 与 HANDOFF_TO_CODEX 独立 handoff commit |
+  | 工作树 | **未提交**的 M6.1.7 改动，**M6.1.7 无任何 commit**。`git status --porcelain` **在本次测量时为 10 行 ＝ 9 modified ＋ 1 untracked**：3 个生产源（`scripts/s0_real_run.py`、`src/itsf/s0/runner.py`、`src/itsf/s0/output_proof.py`）＋ 3 份测试（`tests/test_s0_runner.py`、`tests/test_s0_output_proof.py`、`tests/test_m6_chain.py`）＋ 3 份治理文档（本文件、`CODEX_REVIEW_PACKET_M6_1_6.md`、`DECISION_REQUIRED_READY_SUPERSESSION.md`）＋ untracked 的 `CODEX_REVIEW_PACKET_M6_1_7.md`。**⚠ 该计数把本文件自己算在内**——本文件每被编辑一次它就已经是旧值；这是一个**带时刻限定的观测值，不是稳定事实**（复核员 L-8 指出前值 6 为自相矛盾） |
+  | `git diff --check` | 净（exit 0） |
+  | `ops/TRIAL_REGISTRY.md` sha256 | `de63b3d690c5c4be…b440`（＝基线，未修改；解析出 **13** 条事件） |
+  | `EXPOSURE_LEDGER.md` sha256 | `394813431d879555…bc9e6`（＝基线，未修改） |
+  | `runs/` | 不存在；S0-T001 未消耗 |
+
+  **不变的结论**：**当前 HEAD 仍无对应 READY**（行 11 绑定
+  `6cb7eb7…`，其间已前进 8 个 commit）；`resolve_authorizations` 对当前
+  registry 字节仍返回 **0 条存活授权**；
+  **`real_s0_authorization` 保持 `REAL_S0_NOT_AUTHORIZED`。**
+  Codex 对 M6.1.3 的 `HOLD / REAL_RUN_READY=NO` 裁定**未被撤销**。
+  M6.1.6 与 M6.1.7 均**未**追加任何 registry 事件。
+  M6.1.7 闭合的四个对象及其复算数字见 `CODEX_REVIEW_PACKET_M6_1_7.md`；
+  **其中 M6.1.6 宣布的两条 CLOSED 已被 M6.1.7 判为历史性临时并重新打开**
+  （见该 packet §3 与 `CODEX_REVIEW_PACKET_M6_1_6.md` 顶部批注）——
+  故上文 (ii) 所引的 `M6_1_6_REVIEW=PASS` **不得**被读作那两条接缝已终局闭合。
+
 - `PACKET_APPROVED` 与 `RUN_AUTHORIZED` 是**不同状态**，前者绝不自动
   推进为后者；每次状态变化以事件追加进 ops/TRIAL_REGISTRY.md
   （UTC 时间＋commit＋actor＋原因），既有记录永不修改。
@@ -92,6 +120,53 @@ PACKET_DRAFTED → PACKET_APPROVED → RUNNER_IMPLEMENTED
   | `requirements_lock` | 与当前字节**一致**（`f87799f6d24d3788…`） |
   | **`src/itsf/s0/output_proof.py`** | **不在本环境锁内 —— 覆盖缺口。** M6.1.6 新增的**生产源**（治理输出证明，`scripts/s0_real_run.py:1091` 与 `:2328` 导入），现值 `1f045ed5fb75480a…`。本轮**不修改本锁的字段集**（属重渲染范围），仅在此如实登记 |
 
+  ---
+
+  **【M6.1.7 重渲染，S3，2026-08-09】上表整体已被 M6.1.7 工作树追过。**
+  M6.1.6 已作为 commit `185e47f7e95c5d0cca4b44257c5b32c99790ef83` 入库，
+  上表所述「工作树」即该 commit；M6.1.7 在其之上产生了**未提交**的改动。
+  **下表是对当前工作树字节的逐行复算（S3 实测，非转录）**：
+
+  | 行 | 锁内旧值（M6.1.6 重渲染值） | 当前工作树现值 | 状态 |
+  |---|---|---|---|
+  | `scripts/s0_real_run.py` | `937c96bf6b15d26b…` | **`131b0dd11422ca3d…`** | **已更新** |
+  | `src/itsf/s0/runner.py` | `0c1e5cbb9861f8da…` | **`b44306f8f1202e80…`** | **已更新** |
+  | `src/itsf/s0/output_proof.py` | `1f045ed5fb75480a…` | **`b43c05243bd9b886…`** | **已更新** |
+  | 其余 **11** 行（runinfra / context / dataset / labels / features / contracts / report / stability / handoff / evidence / guards） | — | 与锁内值**逐位一致** | 未变 |
+  | `requirements_lock` | `f87799f6d24d3788…` | 一致（全 hash 复算相同） | 未变 |
+  | 两个 preflight 工件 | `9d6dd1c1…` / `ea287f85…` | 一致 | 未变 |
+
+  **变的是哪三个字段、为什么变（逐条给出，不笼统）**：
+
+  1. **`src/itsf/s0/runner.py`** —— Stage E 的写路径由
+     `write_text(content, encoding="utf-8")`（Windows 文本模式，`\n`→`\r\n`）
+     改为「**编码恰好一次**、以 `write_bytes` 原样落盘、同一 `bytes` 值入哈希链」；
+     新增**必需**的写后验证接缝（未接线在曝光前即拒绝）；
+     `if not prepared` 回退为 `if prepared is None`；
+     `render_report` 改为两参 `(result, prepared)`；
+     `INCIDENT_*.md` / `HALF_TRANSITION.md` 两处写入补 `newline="\n"`。
+  2. **`src/itsf/s0/output_proof.py`** —— 发布判定改从**磁盘**取得：
+     `sealed_artifacts=` 变为永远抛 `ProofRefused` 的毒丸，
+     生产改传 `report_path=<run_dir>/S0_REPORT.json`，
+     `GovernanceProof.actual_source` 被强制为 `"file"`；
+     内存检查降级为 `screen_governance_draft`（返回不可当作验收的 `DraftScreen`）；
+     新增封存集轴（逐条 `sha256`／`bytes` 对 `Path.read_bytes()` 比对，
+     并要求声明集合恰等于运行目录实际内容）。
+  3. **`scripts/s0_real_run.py`** —— 治理数据改从**曝光前授权快照**取得
+     （prepared 对象携带该快照；`compute` 不再重读 registry；
+     `_expected_governance(snapshot)` 从快照取 SEQUENCE、仍从实时 registry
+     字节重读 authorized COMMIT 并要求两者一致），
+     以及渲染屏／磁盘判定的接线分离。
+
+  **未变的原因同样具名**：M6.1.7 **未触碰**研究语义面
+  （`dataset.py` / `context.py` / `contracts.py` / `evidence.py` /
+  `report.py` / `handoff.py` 字节逐位不变），故 F-2 与 EV-11 侧的
+  锁值一并不动。
+
+  **本次重渲染不改变本锁的字段集**（M6.1.6 已把 `output_proof.py` 补入锁内），
+  仅更新三个取值。`ops/requirements.lock.txt`、Python／依赖版本行、
+  两个 preflight 工件哈希**均未改动**。
+
   **上述失效行仅在形成候选 commit 时重渲染**；HOLD 期间不重渲染，以免声称一个
   不存在的候选。**不得**对本块整体加"全部陈旧"的笼统标注——那对其余 9 行
   ＋ `requirements_lock` 为假。
@@ -99,19 +174,19 @@ PACKET_DRAFTED → PACKET_APPROVED → RUNNER_IMPLEMENTED
   ```
   runner_entrypoint: scripts/s0_real_run.py  (zero CLI args; env-clean gate)
   runner_source_sha256:
-    scripts/s0_real_run.py:  937c96bf6b15d26b...   # M6.1.6 候选重渲染
-    src/itsf/s0/runner.py:   0c1e5cbb9861f8da...   # M6.1.6 候选重渲染
+    scripts/s0_real_run.py:  131b0dd11422ca3d...   # M6.1.7 重渲染（M6.1.6 值 937c96bf6b15d26b）
+    src/itsf/s0/runner.py:   b44306f8f1202e80...   # M6.1.7 重渲染（M6.1.6 值 0c1e5cbb9861f8da）
     src/itsf/s0/runinfra.py: b6cd12d3158ba2a7...
     src/itsf/s0/context.py:  e022cd1a012a0dd8...
     src/itsf/s0/dataset.py:  8e12d35043c0110d...
     src/itsf/s0/labels.py:   964af7725061ad5d...
     src/itsf/s0/features.py: a5e222f679731640...
-    src/itsf/contracts.py:   d72a9b05dbf481a4...   # M6.1.6 候选重渲染
+    src/itsf/contracts.py:   d72a9b05dbf481a4...   # M6.1.6 候选重渲染；M6.1.7 未再改动
     src/itsf/s0/report.py:   52d050bb6f1095e9...
     src/itsf/s0/stability.py: 7eebd7e057412cc7...
     src/itsf/s0/handoff.py:  a1f2c0a1ac77f96d...
-    src/itsf/s0/evidence.py: 676fbcd1ae0ac2a9...   # M6.1.6 候选重渲染
-    src/itsf/s0/output_proof.py: 1f045ed5fb75480a...   # M6.1.6 新增生产源
+    src/itsf/s0/evidence.py: 676fbcd1ae0ac2a9...   # M6.1.6 候选重渲染；M6.1.7 未再改动
+    src/itsf/s0/output_proof.py: b43c05243bd9b886...   # M6.1.7 重渲染（M6.1.6 值 1f045ed5fb75480a）
     src/itsf/guards.py:      6ec6345734e97f2f...
   requirements_lock: ops/requirements.lock.txt
     sha256 f87799f6d24d3788b8b7b41b7f81d3b01cb2da8070294eba56bada69bbcc16a0
@@ -137,6 +212,34 @@ PACKET_DRAFTED → PACKET_APPROVED → RUNNER_IMPLEMENTED
   补全，不涉任何研究定义。
   重渲染后的状态上限为 `READY_FOR_RUN_AUTHORIZATION`（须 final-readiness
   审计全 CLOSED），仍须 Aaron 发 §10 精确语句才进入 `RUN_AUTHORIZED`。
+
+  **【M6.1.7，S3，2026-08-09 —— 本次重渲染的性质，务必与上段区分】**
+  上段（M6.1.6）是对一个**已形成的候选**的重渲染。
+  **本次不同：M6.1.7 至今没有 commit**，上面三行的现值取自
+  **未提交的工作树字节**。故本次重渲染**不宣称任何候选**，
+  也**不**把状态推进到 `READY_FOR_RUN_AUTHORIZATION`。
+  其唯一用途是：让本锁不要在字节层面静默陈旧。
+  一旦 M6.1.7 形成 commit，这三行须**再次**按该 commit 的字节复算确认。
+  **`real_s0_authorization` 保持 `REAL_S0_NOT_AUTHORIZED`，不变。**
+
+  **新鲜度警告（如实记录，不隐去）**：S3 在同一次会话内实测到
+  `scripts/s0_real_run.py` **四个**取值——`9565c930…` → `a86515c0…` →
+  `ef03cc3a…` → **`131b0dd1…`**（工程车道、主代理、复核修复轮先后编辑）。
+  上表与锁内记的是**修复轮后的最终重读值**，由 S3 在全部编辑完成后亲自复算，
+  **不是转录自任何人交回的清单**——本轮凡他人交回的数值一律重测，
+  该纪律对主代理与独立复核员同样适用。
+  **该重读不构成「此后不再变」的保证**，故在本锁被用于任何 readiness
+  判断之前，**必须**对候选 commit 的字节重新复算。
+  未移动并经 S3 复算确认的：`runner.py` `b44306f8…`、
+  `output_proof.py` `b43c0524…`、`runinfra.py` `b6cd12d3…`（锁内值，逐位相同；
+  最后一项同时是「§4.4 延期项确未被动」的字节证据）。
+
+  **⚠ 本锁的字节一致 ≠ 可以起跑。** 见
+  `CODEX_REVIEW_PACKET_M6_1_7.md` 顶部的 **H-1**（guarded logger 会在
+  Stage F、一次已通过验证的封存之后烧掉 trial；基线即存在，M6.1.7 范围外）
+  与 **L-5**（`runs/` 位于同步中的 OneDrive 树内，任一未声明条目即
+  `disk_extra_file` → 烧掉 trial）。**两者都必须在第一次真实 S0 之前
+  由 Aaron／Codex 处置**，且都不在本车道的修改权限内。
 
 ## 1. 运行代码版本
 

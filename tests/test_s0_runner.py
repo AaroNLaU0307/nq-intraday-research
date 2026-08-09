@@ -73,10 +73,26 @@ def _as_stage_c_compute(fn):
     return lambda prepared: fn()
 
 
+def default_post_write_verify(runs_dir: Path, written, prepared):
+    """M6.1.7 S1 — the synthetic stand-in for the production output-proof
+    verifier the main agent wires into `RunnerDeps.post_write_verify`.
+
+    It does the one thing the seam exists for: prove that each artifact's
+    ON-DISK bytes are exactly the bytes the renderer produced. It is a real
+    verifier, not a rubber stamp — every make_deps-built run in this suite
+    (and in tests/test_m6_chain.py, which imports make_deps) therefore
+    exercises the byte-fidelity invariant end to end."""
+    for name, data in written:
+        on_disk = (runs_dir / name).read_bytes()
+        if on_disk != data:
+            return False, f"on-disk bytes differ from renderer bytes: {name}"
+    return True, f"{len(written)} artifact(s) byte-verified"
+
+
 def make_deps(tmp_path: Path, *, gates=(), b_checks=(),
               compute=None, integrity=(), renderer=None,
               registry_events=None, log=None, append_event=None,
-              runs_dir=None, prepare=None):
+              runs_dir=None, prepare=None, post_write_verify=None):
     cfg = RunConfig(trial_id="S0-T001",
                     authorized_commit="a" * 40,
                     engineering_seed=20260731,
@@ -102,7 +118,13 @@ def make_deps(tmp_path: Path, *, gates=(), b_checks=(),
         compute=_as_stage_c_compute(compute or (lambda prepared:
                                                 {"sentinel": True})),
         integrity_checks=tuple(integrity),
-        render_report=renderer or (lambda r: {"S0_REPORT.md": "sealed"}),
+        # M6.1.7 S1 follow-up: the Stage-E renderer takes TWO arguments,
+        # (result, prepared). NO arity shim is applied here — unlike
+        # `_as_stage_c_compute` above, a one-arg renderer is passed straight
+        # through so the runner rejects it loudly. Adapting it here would
+        # reintroduce exactly the silence the two-arg contract removes.
+        render_report=renderer or (
+            lambda result, prepared: {"S0_REPORT.md": "sealed"}),
         append_registry_event=append_event or default_append,
         clock_utc=lambda: CLOCK,
         log=log if log is not None else logs.append,
@@ -112,7 +134,10 @@ def make_deps(tmp_path: Path, *, gates=(), b_checks=(),
         post_run_started_hook=None,
         # M6.1.6 S1: an unwired prepare seam is FAIL-CLOSED in the runner
         # (same rule as the recheck above), so the harness injects one.
-        prepare_compute=prepare or default_prepare)
+        prepare_compute=prepare or default_prepare,
+        # M6.1.7 S1: an unwired post-write verification seam is likewise
+        # FAIL-CLOSED (pre-exposure), so the harness injects a real one.
+        post_write_verify=post_write_verify or default_post_write_verify)
     return deps, events, logs
 
 
@@ -404,7 +429,8 @@ def test_classify_exception_unit():
 def test_stage_e_writes_hash_chain_and_stage_f_verifies_it(tmp_path):
     deps, _, sink_logs = make_deps(
         tmp_path, gates=[ok_gate()],
-        renderer=lambda r: {"S0_REPORT.md": "sealed", "counts.md": "n=1"})
+        renderer=lambda result, prepared: {"S0_REPORT.md": "sealed",
+                                           "counts.md": "n=1"})
     out = S0Runner(deps).run()
     assert out.ok is True
 
@@ -441,7 +467,8 @@ def test_stage_f_fails_when_a_sealed_artifact_is_altered(tmp_path, monkeypatch):
 
 
 def test_stage_e_requires_at_least_one_artifact(tmp_path):
-    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()], renderer=lambda r: {})
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()],
+                           renderer=lambda result, prepared: {})
     out = S0Runner(deps).run()
     assert out.ok is False
     assert out.terminal_stage == RunStage.E_REPORT
@@ -864,7 +891,7 @@ def test_pytest_gate_floor_is_the_audit_baseline():
     """SA-10 N3: the floor tracks the CURRENT suite, closing the
     silent-collection-drop headroom."""
     mod = real_run_module()
-    assert mod.MIN_COLLECTED_TESTS == 2146
+    assert mod.MIN_COLLECTED_TESTS == 2205
 
 
 # ===========================================================================
@@ -1153,7 +1180,20 @@ def test_entrypoint_compute_is_the_real_chain():
     assert "chain.render_report_with_governance_proof" in source
     assert "render_s0_report(" in inspect.getsource(
         mod.RealChain.render_report_with_governance_proof)
-    assert "prepare_compute=chain.prepare" in source
+    # M6.1.7: the prepare seam is NO LONGER the bare bound method. Stage A's
+    # authorization snapshot lives in make_snapshot_control's closure, and
+    # `chain.prepare` has no way to reach it, so the seam is bound inside
+    # that closure as `prepare_for_run`. Both the new wiring and the ABSENCE
+    # of the old one are pinned: re-wiring `chain.prepare` directly would
+    # force prepare to re-derive the snapshot itself, which is the second
+    # independent read of one fact that this milestone exists to remove.
+    assert "prepare_compute=prepare_for_run" in source
+    assert "prepare_compute=chain.prepare" not in source
+    # M6.1.7: the disk seam is part of the "entrypoint is the real chain"
+    # claim now — the renderer's strings cannot answer whether the bytes
+    # that landed are the right bytes, so the release verdict is taken from
+    # disk by the chain's own post-write verifier.
+    assert "post_write_verify=chain.post_write_verify" in source
 
 
 # =========================================================================
@@ -1372,7 +1412,19 @@ def test_snapshot_control_production_closures(tmp_path, monkeypatch):
     passes on an unchanged registry, and FAILS after an appended event
     (this assertion goes red if the comparison is mutated fail-open);
     (iii) the post hook writes REGISTRY_AFTER_RUN_STARTED.json carrying
-    the post-append registry hash and the Stage-A snapshot."""
+    the post-append registry hash and the Stage-A snapshot.
+
+    M6.1.7 adds a FOURTH production closure to the same factory,
+    `prepare_for_run`, and (iv)/(v) below cover it: it is fail-closed
+    pre-exposure with no Stage-A snapshot, and it hands `chain.prepare`
+    THE SAME snapshot OBJECT the recheck holds as its reference side.
+    That identity is the point — `chain.prepare` deliberately does not
+    call `authorization_snapshot()` itself, because a second independent
+    read of one fact is what produced the defect this milestone closes
+    (Stage C re-read the registry AFTER its own RUN_STARTED row had been
+    appended, so the sealed registry_sequence_snapshot was the
+    pre-exposure count plus one — invisible, because the seal-time
+    expectation re-read the same moved source and drifted with it)."""
     import hashlib as _h
     mod = real_run_module()
     commit = "c" * 40
@@ -1381,19 +1433,73 @@ def test_snapshot_control_production_closures(tmp_path, monkeypatch):
     chain = mod.RealChain()
     assert chain.authorization_snapshot() == chain.authorization_snapshot()
     attempts = tmp_path / "attempts"
-    gate, recheck, hook = mod.make_snapshot_control(chain, attempts)
+    # M6.1.7: FOUR closures — the prepare seam is built here too, because
+    # it is the only way it can reach this closure's Stage-A snapshot.
+    gate, recheck, hook, prepare_for_run = mod.make_snapshot_control(
+        chain, attempts)
 
     ok, why = recheck()                       # before the gate: fail closed
     assert ok is False and "no Stage-A" in why
+
+    # (iv) M6.1.7 — the prepare seam is fail-closed the same way, and this
+    # refusal happens PRE-exposure (the seam runs before _atomic_run_start,
+    # so a RuntimeError here is a PRE_RUN_ATTEMPT_FAILURE that burns
+    # nothing; the runner-level proof of that routing is
+    # test_prepare_failure_is_pre_exposure_and_compute_never_runs).
+    with pytest.raises(RuntimeError,
+                       match="no Stage-A authorization snapshot"):
+        prepare_for_run()
+
+    # ... and a malformed snapshot is attributable AS a snapshot defect:
+    # prepare validates the snapshot structurally BEFORE it resolves any
+    # config, so this never surfaces as "stage-C config unavailable".
+    with pytest.raises(RuntimeError, match="missing required fields"):
+        chain.prepare({"trial_id": "S0-T001"})
+
+    # From here on, record every snapshot the chain produces, so the
+    # identity claims below are about OBJECTS and not about equal values
+    # (every snapshot of an unchanged registry compares equal — identity is
+    # the only thing that distinguishes "the Stage-A object" from "a fresh
+    # re-read that happens to agree").
+    produced: list = []
+    real_snapshot = chain.authorization_snapshot
+
+    def recording_snapshot():
+        snap_obj = real_snapshot()
+        produced.append(snap_obj)
+        return snap_obj
+
+    monkeypatch.setattr(chain, "authorization_snapshot", recording_snapshot)
 
     ok, _ = gate()                            # (i) gate side-effects
     assert ok is True
     snap = json.loads(
         (attempts / "AUTHORIZATION_SNAPSHOT.json").read_text("utf-8"))
     assert snap["authorized_commit"] == commit
+    assert len(produced) == 1                 # the gate took exactly one
+    stage_a_snapshot = produced[0]
 
     ok, _ = recheck()                         # (ii) unchanged -> pass
     assert ok is True
+    # the recheck compares the STORED Stage-A object against a FRESH read:
+    # a second snapshot object now exists, equal but not identical.
+    assert len(produced) == 2
+    assert produced[1] == stage_a_snapshot
+    assert produced[1] is not stage_a_snapshot
+
+    # (v) M6.1.7 — prepare_for_run hands chain.prepare THAT SAME OBJECT,
+    # and takes no snapshot of its own.
+    handed: list = []
+
+    def recording_prepare(snapshot):
+        handed.append(snapshot)
+        return "PREPARED"
+
+    monkeypatch.setattr(chain, "prepare", recording_prepare)
+    assert prepare_for_run() == "PREPARED"
+    assert handed == [stage_a_snapshot]
+    assert handed[0] is stage_a_snapshot      # identity, not equality
+    assert len(produced) == 2                 # prepare re-read NOTHING
 
     rdir = tmp_path / "runs"                  # (iii) hook side-effects
     rdir.mkdir()
@@ -1523,8 +1629,10 @@ def test_prepare_failure_is_pre_exposure_and_compute_never_runs(tmp_path):
 
 
 def test_prepare_returning_nothing_is_also_a_pre_exposure_refusal(tmp_path):
-    """A prepare that yields no object is fail-closed, not a silent pass:
-    Stage C must be handed a real prepared object or not run at all."""
+    """A prepare that returns None yields no object at all, and that is
+    fail-closed, not a silent pass: Stage C must be handed an object or not
+    run. (M6.1.7 S1: `None` specifically — a FALSY object is still an
+    object and is forwarded unchanged; see the falsy pass-through test.)"""
     counter: dict = {}
     deps, events, _ = make_deps(tmp_path, gates=[ok_gate()],
                                 prepare=lambda: None,
@@ -1711,17 +1819,477 @@ def test_prepare_failure_never_reaches_the_registry_recheck(tmp_path):
     assert seen == []
 
 
-def test_m616_review_a1_1_falsy_prepared_object_is_also_fail_closed(tmp_path):
-    """M6.1.6 review A1-1: `is None` alone would forward a falsy non-None
-    return (0, "", ()) to Stage C. Any falsy prepare result is a refusal."""
-    for falsy in (0, "", (), {}):
-        calls: list = []
-        deps, _events, _logs = make_deps(
-            tmp_path / f"r{id(falsy)}",
-            compute=lambda prepared: calls.append(1),
-            prepare=lambda f=falsy: f)
-        out = S0Runner(deps).run()
-        assert out.ok is False, falsy
-        assert out.failure_kind == "pre_run_attempt", falsy
-        assert out.exposure_consumed is False
-        assert calls == []
+# =========================================================================
+# M6.1.7 S1 — (c) the runner never reads the prepared object's TRUTH VALUE
+#
+# The M6.1.6 `if not prepared` gate is reverted to `if prepared is None`.
+# Two things are pinned below: a falsy prepared object reaches Stage C
+# UNCHANGED (the runner is a generic lifecycle component — whether an
+# object is *meaningful* is the application's business), and an object
+# whose __bool__ raises passes through the runner untouched, proving no
+# application-controlled truth-value code runs inside the gate.
+# =========================================================================
+
+
+@pytest.mark.parametrize("falsy", [0, 0.0, "", (), {}, [], frozenset(),
+                                   set()],
+                         ids=["int0", "float0", "emptystr", "emptytuple",
+                              "emptydict", "emptylist", "frozenset",
+                              "set"])
+def test_falsy_prepared_object_passes_through_to_compute_unchanged(tmp_path,
+                                                                   falsy):
+    """M6.1.7 S1 requirement 6: an empty tuple / empty mapping / 0 is a
+    legitimate prepared object. It must reach Stage C — by IDENTITY, not by
+    equality — and the run must seal normally. An application that wants
+    emptiness to be a refusal raises inside its own prepare seam."""
+    seen: list = []
+
+    def compute(prepared):
+        seen.append(prepared)
+        return {"sentinel": True}
+
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()],
+                                prepare=lambda: falsy, compute=compute)
+    out = S0Runner(deps).run()
+
+    assert out.ok is True, (out.failure_kind, out.failed_gate)
+    assert out.exposure_consumed is True
+    assert [e for e, _ in events] == ["RUN_STARTED", "COMPLETED"]
+    assert len(seen) == 1
+    assert seen[0] is falsy                          # identity, unchanged
+
+
+class _TruthValueBomb:
+    """Any attempt to evaluate this object's truth value detonates.
+
+    `not x` consults __bool__ and falls back to __len__, so BOTH are armed.
+    A runner that asks "is the prepared object meaningful?" cannot survive
+    contact with this object; a runner that only asks "is it None?" never
+    notices it is unusual."""
+
+    def __bool__(self) -> bool:
+        raise AssertionError(
+            "the runner evaluated the prepared object's __bool__")
+
+    def __len__(self) -> int:
+        raise AssertionError(
+            "the runner evaluated the prepared object's __len__")
+
+
+def test_prepared_object_truth_value_is_never_read_by_the_runner(tmp_path):
+    """M6.1.7 S1 requirement 7. The failure mode this pins is exact: under
+    `if not prepared`, this object's __bool__ runs INSIDE the runner's
+    pre-exposure gate and the AssertionError escapes `run()` entirely (it is
+    raised outside every try block), so the lifecycle dies with a bare
+    traceback and no governance record at all."""
+    bomb = _TruthValueBomb()
+    seen: dict = {}
+
+    def compute(prepared):
+        seen["compute"] = prepared
+        return {"sentinel": True}
+
+    def renderer(result, prepared):
+        seen["render"] = prepared
+        return {"S0_REPORT.md": MULTILINE_ARTIFACT}
+
+    def verify(rdir, written, prepared):
+        seen["verify"] = prepared
+        return True, "ok"
+
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()],
+                                prepare=lambda: bomb, compute=compute,
+                                renderer=renderer, post_write_verify=verify)
+    out = S0Runner(deps).run()                       # must not raise
+
+    assert out.ok is True, (out.failure_kind, out.failed_gate)
+    assert [e for e, _ in events] == ["RUN_STARTED", "COMPLETED"]
+    # M6.1.7 S1 follow-up: the bomb survives ALL THREE forwarding sites —
+    # Stage C, the Stage-E renderer and the post-write verifier — so no
+    # stage of the lifecycle evaluates the prepared object's truth value.
+    assert set(seen) == {"compute", "render", "verify"}
+    for where, obj in seen.items():
+        assert obj is bomb, where                    # forwarded, unexamined
+    # and the runner's own source no longer contains the truth-value gate
+    source = inspect.getsource(S0Runner.run)
+    assert "if prepared is None:" in source
+    assert "if not prepared:" not in source
+
+
+# =========================================================================
+# M6.1.7 S1 — (a) BYTE FIDELITY: on-disk bytes == renderer bytes == the
+# bytes in the hash chain.
+#
+# Measured defect at HEAD 185e47f7: Stage E wrote artifacts with
+# `write_text(content, encoding="utf-8")`, which on Windows translates
+# '\n' -> '\r\n', so the string the renderer produced and the bytes on
+# disk were different values. The runner hashed the DISK bytes into the
+# manifest while the renderer's own report recorded the IN-MEMORY digest —
+# two digests for one artifact inside one sealed output. Every fixture
+# below therefore contains a MULTI-LINE artifact: a single-line artifact
+# cannot reproduce the defect (it has no '\n' to translate).
+# =========================================================================
+
+
+MULTILINE_ARTIFACT = (
+    "# S0 REPORT\n\nline one\nline two\n\n- bullet\n- bullet\n")
+JSON_ARTIFACT = '{\n  "sealed_files": {\n    "a": 1\n  }\n}\n'
+SINGLE_LINE_ARTIFACT = '{"admitted": []}'
+
+
+def _byte_fixture_renderer(result, prepared):
+    """Three artifacts: two multi-line (the defect's shape) and one
+    single-line (the one artifact that agreed even before the fix).
+
+    Two-arg, per the M6.1.7 S1 follow-up render contract."""
+    return {"S0_REPORT.md": MULTILINE_ARTIFACT,
+            "S0_REPORT.json": JSON_ARTIFACT,
+            "HANDOFF_ADMISSION.json": SINGLE_LINE_ARTIFACT}
+
+
+def _fixture_artifacts():
+    """The fixture's {name: content} map, for assertions."""
+    return _byte_fixture_renderer(None, None)
+
+
+def test_on_disk_bytes_are_exactly_the_bytes_the_renderer_produced(tmp_path):
+    """Byte-for-byte, for EVERY written artifact, including the multi-line
+    ones. This assertion is red at HEAD 185e47f7 on Windows."""
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()],
+                           renderer=_byte_fixture_renderer)
+    out = S0Runner(deps).run()
+    assert out.ok is True, (out.failure_kind, out.failed_gate)
+
+    for name, content in _fixture_artifacts().items():
+        on_disk = (out.runs_dir / name).read_bytes()
+        assert on_disk == content.encode("utf-8"), name
+        assert b"\r\n" not in on_disk, name          # no text-mode translation
+
+    # the multi-line artifact really does carry newlines (guard against a
+    # fixture that would make this test vacuous)
+    assert MULTILINE_ARTIFACT.count("\n") >= 5
+    assert b"\n" in (out.runs_dir / "S0_REPORT.md").read_bytes()
+
+
+def test_hash_chain_records_the_digest_of_those_exact_bytes(tmp_path):
+    """The chain's file_sha256 must equal sha256(renderer bytes) AND
+    sha256(on-disk bytes) — one number, not two."""
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()],
+                           renderer=_byte_fixture_renderer)
+    out = S0Runner(deps).run()
+    assert out.ok is True
+
+    records = [json.loads(ln) for ln in
+               (out.runs_dir / "manifest.jsonl").read_text("utf-8").splitlines()
+               if ln.strip()]
+    recorded = {r["relative_path"]: r["file_sha256"]
+                for r in records if r["record_type"] == "file"}
+    assert set(recorded) == set(_fixture_artifacts())
+
+    for name, content in _fixture_artifacts().items():
+        renderer_digest = runinfra.hashlib.sha256(
+            content.encode("utf-8")).hexdigest()
+        disk_digest = runinfra.hashlib.sha256(
+            (out.runs_dir / name).read_bytes()).hexdigest()
+        assert recorded[name] == renderer_digest, name
+        assert recorded[name] == disk_digest, name
+
+
+def test_stage_e_logs_the_same_digest_it_chained(tmp_path):
+    """The guarded `file=<name> sha256=<64hex>` log line is the third place
+    a digest is published; it must agree with the other two."""
+    sink: list[str] = []
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()],
+                           renderer=lambda result, prepared: {
+                               "S0_REPORT.md": MULTILINE_ARTIFACT},
+                           log=guarded_logger(sink))
+    out = S0Runner(deps).run()
+    assert out.ok is True
+    digest = runinfra.hashlib.sha256(
+        MULTILINE_ARTIFACT.encode("utf-8")).hexdigest()
+    assert f"file=S0_REPORT.md sha256={digest}" in sink
+
+
+# =========================================================================
+# M6.1.7 S1 — (b) the REQUIRED post-write verification seam
+# =========================================================================
+
+
+def test_unwired_post_write_verifier_refuses_before_exposure(tmp_path):
+    """Requirement 4: the WIRING check is pre-exposure, exactly like the
+    `prepare_compute` and `pre_exposure_recheck` precedents — no
+    RUN_STARTED, no runs directory, exposure NOT consumed, Stage C never
+    entered."""
+    counter: dict = {}
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()],
+                                compute=_counting_compute(counter))
+    deps = _dc_replace(deps, post_write_verify=None)
+    out = S0Runner(deps).run()
+
+    assert out.failure_kind == "pre_run_attempt"
+    assert out.exposure_consumed is False
+    assert out.failed_gate == "post_write_verify"
+    assert out.terminal_stage == RunStage.B_LOAD_VALIDATE
+    assert [e for e, _ in events] == ["PRE_RUN_ATTEMPT_FAILURE"]
+    assert "RUN_STARTED" not in [e for e, _ in events]
+    assert not Path(deps.config.runs_dir).exists()
+    assert counter.get("compute", 0) == 0
+    assert (out.attempts_dir / "PRE_RUN_ATTEMPT_FAILURE.md").exists()
+    # the precedent and the asymmetry are stated in the runner source
+    source = inspect.getsource(S0Runner.run)
+    assert "fail closed" in source
+    assert "ASYMMETRY" in source
+
+
+def test_post_write_verifier_refusal_is_a_stage_e_run_failure(tmp_path):
+    """The other half of the asymmetry: the verification itself happens
+    AFTER the bytes exist, i.e. after exposure. A refusal burns the trial
+    and must preserve every diagnostic artifact."""
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()], renderer=_byte_fixture_renderer,
+        post_write_verify=lambda rdir, written, prepared: (
+            False, "digest disagreement in S0_REPORT.md"))
+    out = S0Runner(deps).run()
+
+    assert out.ok is False
+    assert out.failure_kind == "run_failure"
+    assert out.exposure_consumed is True
+    assert out.terminal_stage == RunStage.E_REPORT
+    assert out.failed_gate == "post_write_verify"
+    assert [e for e, _ in events] == ["RUN_STARTED", "FAILED"]
+
+    # ARTIFACTS PRESERVED: nothing written before the refusal is removed,
+    # and the failure evidence is written alongside it.
+    for name, content in _fixture_artifacts().items():
+        assert (out.runs_dir / name).read_bytes() == content.encode("utf-8")
+    assert (out.runs_dir / "RUN_FAILURE_REPORT.md").exists()
+    assert (out.runs_dir / "RUN_FAILURE_REPORT.json").exists()
+    assert (out.runs_dir / f"INCIDENT_{out.incident_id}.md").exists()
+    # F-05 still holds on this path: the raw detail is sealed, not published
+    note = dict(events)["FAILED"]
+    assert "digest disagreement" not in note
+    assert out.incident_id in note
+    assert "digest disagreement" in (
+        out.runs_dir / f"INCIDENT_{out.incident_id}.md").read_text("utf-8")
+
+
+def test_post_write_verifier_that_raises_is_also_a_stage_e_run_failure(
+        tmp_path):
+    def exploding(rdir, written, prepared):
+        raise RunGateError("verifier blew up")
+
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()],
+                                post_write_verify=exploding)
+    out = S0Runner(deps).run()
+    assert out.failure_kind == "run_failure"
+    assert out.terminal_stage == RunStage.E_REPORT
+    assert out.failed_gate == "post_write_verify"
+    payload = json.loads((out.runs_dir / "RUN_FAILURE_REPORT.json")
+                         .read_text("utf-8"))
+    assert payload["exception_type"] == "RunGateError"   # F-27 isinstance
+
+
+def test_post_write_verifier_receives_the_prepared_object(tmp_path):
+    """Requirement 3: the prepared object is handed over EXPLICITLY as a
+    parameter — identity, not equality, and no module-level temporary."""
+    token = {"prepared": ["run", "scoped"]}
+    seen: dict = {}
+
+    def verify(rdir, written, prepared):
+        seen["runs_dir"] = rdir
+        seen["written"] = written
+        seen["prepared"] = prepared
+        return True, "ok"
+
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()],
+                           prepare=lambda: token,
+                           renderer=_byte_fixture_renderer,
+                           post_write_verify=verify)
+    out = S0Runner(deps).run()
+
+    assert out.ok is True
+    assert seen["prepared"] is token
+    assert seen["runs_dir"] == out.runs_dir
+    assert dict(seen["written"]) == {
+        n: c.encode("utf-8") for n, c in _fixture_artifacts().items()}
+
+
+def test_post_write_verifier_receives_a_falsy_prepared_object_too(tmp_path):
+    """The two M6.1.7 halves meet: a falsy prepared object is forwarded to
+    the verifier unchanged, so the verifier must not be handed a
+    'meaningfulness' verdict the runner made on its behalf."""
+    seen: dict = {}
+    empty = ()
+
+    def verify(rdir, written, prepared):
+        seen["prepared"] = prepared
+        return True, "ok"
+
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()], prepare=lambda: empty,
+                           post_write_verify=verify)
+    assert S0Runner(deps).run().ok is True
+    assert seen["prepared"] is empty
+
+
+def test_verifier_runs_after_every_write_and_before_the_chain(tmp_path):
+    """Placement, pinned by observation: when the verifier runs, EVERY
+    renderer artifact is already closed on disk and NOTHING has entered the
+    manifest yet — so the append-only chain can never record a digest for
+    an artifact whose bytes were not first proven. Stage E has not
+    completed either."""
+    observed: dict = {}
+
+    def verify(rdir, written, prepared):
+        observed["names_on_disk"] = sorted(
+            p.name for p in rdir.iterdir() if p.is_file())
+        observed["manifest_exists"] = (rdir / "manifest.jsonl").exists()
+        observed["written_names"] = sorted(n for n, _ in written)
+        return True, "ok"
+
+    deps, _, _ = make_deps(tmp_path, gates=[ok_gate()],
+                           renderer=_byte_fixture_renderer,
+                           post_write_verify=verify)
+    out = S0Runner(deps).run()
+
+    assert out.ok is True
+    expected = sorted(_fixture_artifacts())
+    assert observed["names_on_disk"] == expected     # all files written
+    assert observed["written_names"] == expected     # all handed over
+    assert observed["manifest_exists"] is False      # chain not yet touched
+    # ... and afterwards the chain does exist and Stage E completed
+    assert (out.runs_dir / "manifest.jsonl").exists()
+    assert "E_REPORT" in out.stages_completed
+
+
+def test_a_refusing_verifier_leaves_no_manifest_record_behind(tmp_path):
+    """The consequence of the placement above, stated as a fact about the
+    failed run: unproven bytes never entered the append-only chain."""
+    deps, _, _ = make_deps(
+        tmp_path, gates=[ok_gate()], renderer=_byte_fixture_renderer,
+        post_write_verify=lambda rdir, written, prepared: (False, "nope"))
+    out = S0Runner(deps).run()
+    assert out.ok is False
+    assert not (out.runs_dir / "manifest.jsonl").exists()
+    assert "E_REPORT" not in out.stages_completed
+
+
+def test_default_synthetic_verifier_actually_catches_a_byte_difference(
+        tmp_path):
+    """The harness verifier is not a rubber stamp: hand it a doctored
+    `written` pair and it refuses. Without this, every make_deps-built run
+    in this suite would 'verify' vacuously."""
+    ok, detail = default_post_write_verify(tmp_path, (), None)
+    assert ok is True and "0 artifact" in detail
+
+    (tmp_path / "S0_REPORT.md").write_bytes(
+        MULTILINE_ARTIFACT.encode("utf-8"))
+    ok, detail = default_post_write_verify(
+        tmp_path, (("S0_REPORT.md", MULTILINE_ARTIFACT.encode("utf-8")),),
+        None)
+    assert ok is True
+
+    crlf = MULTILINE_ARTIFACT.replace("\n", "\r\n").encode("utf-8")
+    ok, detail = default_post_write_verify(
+        tmp_path, (("S0_REPORT.md", crlf),), None)
+    assert ok is False
+    assert "S0_REPORT.md" in detail
+
+
+# =========================================================================
+# M6.1.7 S1 follow-up — (b2) the Stage-E RENDERER receives the prepared
+# object, as an explicit second argument.
+#
+# Motivation (main agent, measured): `render_report` is wired into
+# RunnerDeps at CONSTRUCTION time, before prepare_compute() has run, so a
+# one-arg renderer cannot close over the run's pre-exposure authority and
+# has to re-derive it at render time — from a registry the run's own
+# RUN_STARTED append has already advanced by one event. The contract check
+# and its expectation then drift together and agree while being wrong: the
+# same structural blindness as the CRLF/two-digest defect above.
+#
+# The fix is the rule already applied to `compute` and `post_write_verify`:
+# post-exposure stages that need the pre-exposure authority take it as a
+# parameter. Two arguments, no arity shim.
+# =========================================================================
+
+
+def test_render_report_receives_the_identical_prepared_object(tmp_path):
+    """Identity, not equality — the renderer gets THE object `prepare`
+    returned, so it never has to go looking for the run's authority."""
+    token = {"prepared": ["run", "scoped"], "event_sequence": 7}
+    seen: dict = {}
+
+    def renderer(result, prepared):
+        seen["result"] = result
+        seen["prepared"] = prepared
+        return {"S0_REPORT.md": MULTILINE_ARTIFACT}
+
+    sentinel = {"sentinel": True}
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()],
+                                prepare=lambda: token,
+                                compute=lambda prepared: sentinel,
+                                renderer=renderer)
+    out = S0Runner(deps).run()
+
+    assert out.ok is True, (out.failure_kind, out.failed_gate)
+    assert seen["prepared"] is token                 # the pre-exposure object
+    assert seen["result"] is sentinel                # ... and the Stage-C one
+    assert [e for e, _ in events] == ["RUN_STARTED", "COMPLETED"]
+    # the same object reached all three post-exposure stages
+    assert (out.runs_dir / "S0_REPORT.md").read_bytes() == \
+        MULTILINE_ARTIFACT.encode("utf-8")
+
+
+def test_one_argument_render_report_is_rejected_not_tolerated(tmp_path):
+    """No arity shim: a renderer that declares only `(result)` must FAIL,
+    loudly, instead of being quietly accommodated by an optional second
+    argument — an optional parameter would let exactly the defective
+    one-arg renderer keep re-deriving the run's authority in silence.
+
+    The failure is a Stage-E RUN failure (the renderer cannot be called
+    before its inputs exist, so the arity defect is only observable after
+    the exposure boundary): trial burned, artifacts and failure evidence
+    retained. That cost is the point — it is loud."""
+    calls: list = []
+
+    def one_arg_renderer(result):                    # the defective wiring
+        calls.append(result)
+        return {"S0_REPORT.md": MULTILINE_ARTIFACT}
+
+    deps, events, _ = make_deps(tmp_path, gates=[ok_gate()],
+                                renderer=one_arg_renderer)
+    out = S0Runner(deps).run()
+
+    assert out.ok is False
+    assert out.failure_kind == "run_failure"
+    assert out.terminal_stage == RunStage.E_REPORT
+    assert out.failed_gate == "render_report"
+    assert calls == []                               # never even entered
+    assert [e for e, _ in events] == ["RUN_STARTED", "FAILED"]
+    # nothing was written or chained on the strength of a defective renderer
+    assert not (out.runs_dir / "S0_REPORT.md").exists()
+    assert not (out.runs_dir / "manifest.jsonl").exists()
+    assert "E_REPORT" not in out.stages_completed
+    # the failure is DISCLOSED, not swallowed: report + sealed raw detail
+    assert (out.runs_dir / "RUN_FAILURE_REPORT.md").exists()
+    sealed = (out.runs_dir
+              / f"INCIDENT_{out.incident_id}.md").read_text("utf-8")
+    assert "TypeError" in sealed                     # the arity error itself
+    # F-27 still holds: a TypeError is not one of the governance contracts
+    payload = json.loads((out.runs_dir / "RUN_FAILURE_REPORT.json")
+                         .read_text("utf-8"))
+    assert payload["exception_type"] == "Unknown"
+
+
+def test_runner_source_wires_the_two_argument_render_call():
+    """The contract lives in the runner, not only in these fixtures: the
+    call site passes `prepared`, and NO arity-adapting shim exists anywhere
+    in the module (an `inspect.signature`-based adapter is the exact thing
+    that would restore the silence)."""
+    source = inspect.getsource(S0Runner.run)
+    assert "d.render_report(result, prepared)" in source
+    assert "d.render_report(result)" not in source
+    module_source = inspect.getsource(sys.modules[S0Runner.__module__])
+    for shim in ("import inspect", "inspect.signature", "getfullargspec",
+                 "co_argcount", "except TypeError"):
+        assert shim not in module_source, shim

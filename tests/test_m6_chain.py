@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+from types import MappingProxyType as _MPX
 from pathlib import Path
 
 import pytest
@@ -97,6 +98,32 @@ _GOV = {"trial_id": "S0-T001", "authorized_commit": "a" * 40,
         "frozen_hashes": {f"f{i}.md": "0" * 64 for i in range(7)},
         "registry_sequence_snapshot": 13}
 
+
+def _test_snapshot(**over):
+    """M6.1.7: a synthetic Stage-A authorization snapshot.
+
+    `prepare()` takes this rather than reading the registry itself, so the
+    value the run seals is the SAME object `pre_exposure_recheck` proves the
+    registry still matches. Tests must therefore supply one.
+    """
+    snap = {"trial_id": _GOV["trial_id"],
+            "authorized_commit": _GOV["authorized_commit"],
+            "event_sequence": _GOV["registry_sequence_snapshot"],
+            "registry_sha256": "b" * 64,
+            "exact_authorization_text_sha256": "c" * 64}
+    snap.update(over)
+    return snap
+
+
+def _write_run_dir(tmp_path, files, name="rundir"):
+    """Write a rendered artifact map to disk EXACTLY as the runner does:
+    encode once to UTF-8, write bytes, no newline translation."""
+    rdir = tmp_path / name
+    rdir.mkdir(parents=True, exist_ok=True)
+    for fname, content in files.items():
+        (rdir / fname).write_bytes(content.encode("utf-8"))
+    return rdir
+
 _CACHE: dict = {}
 
 
@@ -179,7 +206,7 @@ def test_real_compute_fails_closed_without_loading_data():
     mod._CONFIG_CACHE.clear()
     chain = mod.RealChain()
     with pytest.raises(RuntimeError, match="pending method rulings"):
-        chain.compute(chain.prepare())
+        chain.compute(chain.prepare(_test_snapshot()))
     assert chain._ds is None
 
 
@@ -224,7 +251,7 @@ def test_e7_runner_a_to_f_production_builder_inside_stage_c(tmp_path):
 
     deps, events, _ = make_deps(
         tmp_path, gates=[ok_gate()], compute=compute,
-        renderer=lambda r: mod.render_s0_report(
+        renderer=lambda r, prepared: mod.render_s0_report(
             r, expected_governance=dict(_GOV)),
         integrity=mod.build_integrity_checks())
     assert calls["n"] == 0                # nothing precomputed
@@ -305,7 +332,7 @@ def test_ready_true_implies_compute_has_no_wiring_error(monkeypatch,
         assert ok is False and "no approved injectable source" in why2
         import pytest as _pt
         with _pt.raises(RuntimeError, match="injectable"):
-            chain.compute(chain.prepare())
+            chain.compute(chain.prepare(_test_snapshot()))
         assert chain._ds is None
         assert calls == []                      # builder never reached
     finally:
@@ -887,8 +914,34 @@ def test_expected_governance_rederives_from_primary_sources():
         mod.parse_registry_events(text))
     _row, commit, _ = mod.find_authorization_event(text)
     assert gov["authorized_commit"] == commit
-    # independence: takes NO payload argument
-    assert len(inspect.signature(mod._expected_governance).parameters) == 0
+    # independence: the ONLY parameter is the pre-run snapshot, never the
+    # payload being verified, and it defaults to the legacy re-derivation.
+    params = inspect.signature(mod._expected_governance).parameters
+    assert list(params) == ["snapshot"]
+    assert params["snapshot"].default is None
+
+
+def test_m617_expected_governance_takes_the_sequence_from_the_snapshot():
+    """M6.1.7 — the defect this closes: at seal time the registry already
+    holds this run's own RUN_STARTED row, so re-deriving the event count
+    there returns the PRE-EXPOSURE count plus one. The count must come from
+    the snapshot; the authorized COMMIT must still be re-read live."""
+    mod = real_run_module()
+    text = mod.REGISTRY.read_text(encoding="utf-8")
+    live_count = len(mod.parse_registry_events(text))
+    _row, commit, _ = mod.find_authorization_event(text)
+
+    # a snapshot taken BEFORE this run's RUN_STARTED row existed
+    snap = {"trial_id": mod.TRIAL_ID, "authorized_commit": commit,
+            "event_sequence": live_count - 1, "registry_sha256": "b" * 64}
+    gov = mod._expected_governance(snap)
+    assert gov["registry_sequence_snapshot"] == live_count - 1
+    assert gov["registry_sequence_snapshot"] != live_count      # the +1 bug
+    # the commit is NOT taken from the snapshot: it is re-read from registry
+    # bytes and required to agree, so the check cannot go vacuous.
+    assert gov["authorized_commit"] == commit
+    with pytest.raises(ValueError, match="authorized commit changed"):
+        mod._expected_governance({**snap, "authorized_commit": "9" * 40})
 
 
 def test_empty_day_strata_is_not_sealable():
@@ -938,7 +991,7 @@ def test_e7_ready_then_compute_share_the_same_validated_config(monkeypatch,
         entry = mod._CONFIG_CACHE["cfg"]
         assert type(entry) is mod._ConfigCacheEntry
         assert cfg1 is entry.config
-        payload = chain.compute(chain.prepare())  # then compute()
+        payload = chain.compute(chain.prepare(_test_snapshot()))  # then compute()
         cfg2, _ = mod.resolved_study_config()
         assert cfg2 is cfg1                      # identity, one instance
         assert payload["disclosures"]["methods_test_only"] is False
@@ -2010,7 +2063,7 @@ def test_f1_positive_path_shares_one_canonical_instance(monkeypatch,
         cfg1, _ = mod.resolved_study_config()
         ok2, why2 = chain.ready()
         assert ok2 is True, why2
-        payload = chain.compute(chain.prepare())
+        payload = chain.compute(chain.prepare(_test_snapshot()))
         cfg2, _ = mod.resolved_study_config()
         assert cfg2 is cfg1                        # ONE instance, identity
         assert cfg1 is mod._CONFIG_CACHE["cfg"].config
@@ -2105,7 +2158,7 @@ def test_m616_prepare_returns_an_exact_typed_immutable_object(monkeypatch,
     monkeypatch.setattr(mod, "_approved_injectables", lambda: dict(inj))
     mod._CONFIG_CACHE.clear()
     try:
-        prepared = mod.RealChain().prepare()
+        prepared = mod.RealChain().prepare(_test_snapshot())
         assert type(prepared) is mod._PreparedExecutionInput
         with pytest.raises(AttributeError):
             prepared.config = None
@@ -2142,7 +2195,7 @@ def test_m616_prepare_fails_closed_on_the_real_production_source(monkeypatch,
     try:
         chain = mod.RealChain()
         with pytest.raises(RuntimeError, match="stage-C config unavailable"):
-            chain.prepare()
+            chain.prepare(_test_snapshot())
         assert chain._ds is None
     finally:
         mod._CONFIG_CACHE.clear()
@@ -2155,7 +2208,7 @@ def test_m616_deps_wire_prepare_and_one_arg_compute():
     import inspect
     mod = real_run_module()
     src = inspect.getsource(mod)
-    assert "prepare_compute=chain.prepare" in src
+    assert "prepare_compute=prepare_for_run" in src
     assert len(inspect.signature(mod.RealChain.compute).parameters) == 2
 
 
@@ -2179,7 +2232,11 @@ def test_m616_governance_context_never_reads_the_payload_it_verifies():
     import ast
     import inspect
     mod = real_run_module()
-    fn = mod.RealChain.render_report_with_governance_proof
+    # M6.1.7: the builder moved into its own method, which takes ONLY the
+    # prepared object — `result` is not even in its scope, so the property
+    # is now structural rather than merely observed.
+    fn = mod.RealChain._governance_context
+    assert list(inspect.signature(fn).parameters) == ["self", "prepared"]
     tree = ast.parse("if 1:\n" + inspect.getsource(fn))
     ctx_call = [n for n in ast.walk(tree)
                 if isinstance(n, ast.Call)
@@ -2214,19 +2271,40 @@ def test_m616_governance_proof_refuses_a_tampered_final_report(monkeypatch,
                                   governance_context=ctx)
     assert "S0_REPORT.json" in honest          # honest render still seals
 
+    # (1) PRE-WRITE SCREEN: a wrong governance block never becomes a file.
     # NEVER mutate the shared cached payload: _payload() returns the same
     # object to every test, so an in-place rebind here would poison the
     # whole suite (observed once, fixed here).
     src = _payload()
     bad = {k: v for k, v in src.items()}
     bad["governance"] = {**src["governance"], "trial_id": "S0-T999"}
-    with pytest.raises(ValueError, match="governance proof failed"):
+    with pytest.raises(ValueError, match="governance draft screen failed"):
         mod.render_s0_report(bad,
                              expected_governance=dict(bad["governance"]),
                              governance_context=ctx)
 
+    # (2) THE M6.1.7 PROPERTY: the honest artifacts land on disk, and the
+    # report is tampered with AFTERWARDS. The in-memory route was
+    # structurally blind to this — it had already returned its verdict on a
+    # dict. The disk proof reads the bytes that are actually there.
+    rdir = _write_run_dir(tmp_path, honest)
+    clean = _op.prove_governance(ctx, report_path=rdir / "S0_REPORT.json",
+                                 infrastructure_files=())
+    assert clean.ok is True and clean.actual_source == "file"
 
-def test_m616_review_a3_1_hostile_mapping_context_cannot_set_the_expectation():
+    import json as _json
+    doc = _json.loads((rdir / "S0_REPORT.json").read_text(encoding="utf-8"))
+    doc["governance"]["trial_id"] = "S0-T999"
+    (rdir / "S0_REPORT.json").write_bytes(
+        _json.dumps(doc, indent=1, sort_keys=True).encode("utf-8"))
+    tampered = _op.prove_governance(ctx, report_path=rdir / "S0_REPORT.json",
+                                    infrastructure_files=())
+    assert tampered.ok is False
+    assert any("trial_id" in p for p in tampered.problems), tampered.problems
+
+
+def test_m616_review_a3_1_hostile_mapping_context_cannot_set_the_expectation(
+        tmp_path):
     """M6.1.6 review A3-1: a Mapping whose `.get()` and `__getitem__`
     disagree must not pass SourceContext validation and then supply
     DIFFERENT values as the frozen expectation ('validate X, use Y')."""
@@ -2248,8 +2326,9 @@ def test_m616_review_a3_1_hostile_mapping_context_cannot_set_the_expectation():
         frozen_hash_observations=dict(_GOV["frozen_hashes"]),
         engineering_seed=_GOV["engineering_seed"],
         engineering_seed_provenance="TEST_ONLY provenance")
-    files = mod_render_honest_report()
-    proof = _op.prove_governance(ctx, sealed_artifacts=files)
+    rdir = _write_run_dir(tmp_path, mod_render_honest_report())
+    proof = _op.prove_governance(ctx, report_path=rdir / "S0_REPORT.json",
+                                 infrastructure_files=())
     # The materialised (attacker) values are what became the expectation,
     # so the honest report must now FAIL — the two faces can no longer
     # diverge silently.
@@ -2271,3 +2350,223 @@ def mod_render_honest_report():
         engineering_seed_provenance="TEST_ONLY provenance")
     return mod.render_s0_report(_payload(), expected_governance=dict(_GOV),
                                 governance_context=ctx)
+
+
+# ===========================================================================
+# M6.1.7 — DISK SEAL: the release verdict comes from bytes on disk, and the
+# governance it verifies comes from the PRE-EXPOSURE snapshot.
+# ===========================================================================
+
+def _prepared_with(mod, snapshot=None):
+    """Build the production prepared object directly.
+
+    `prepare()` cannot be used here: it needs an approved config, and the
+    production posture is that `_approved_injectables()` returns None. What
+    is under test is the SNAPSHOT half, so the config slot is a stand-in.
+    """
+    return mod._PreparedExecutionInput(
+        config=_test_config(), reason="TEST_ONLY",
+        snapshot=_MPX(dict(snapshot or _test_snapshot())))
+
+
+def _report_governance_for(mod, snap):
+    """The governance block an honest report MUST declare, derived from the
+    same authorities the production context uses — never from the report."""
+    from itsf import guards as _g
+    return {"trial_id": snap["trial_id"],
+            "authorized_commit": snap["authorized_commit"],
+            "engineering_seed": mod.ENGINEERING_SEED,
+            "frozen_hashes": dict(_g.FROZEN_HASHES),
+            "registry_sequence_snapshot": snap["event_sequence"]}
+
+
+def _honest_run_dir(mod, tmp_path, snap, monkeypatch):
+    """Render an honest report through the REAL renderer and lay it down on
+    disk exactly as the runner does.
+
+    The live registry carries ZERO live authorizations (by design: S0 is not
+    authorized), so `_expected_governance` would refuse the synthetic
+    commit. The authorization lookup is therefore stubbed to state that the
+    registry authorizes THIS run's commit — a declared synthetic boundary,
+    not a weakening: everything downstream of that fact is real code.
+    """
+    monkeypatch.setattr(mod, "find_authorization_event",
+                        lambda text, trial_id=mod.TRIAL_ID: (
+                            1, snap["authorized_commit"], "TEST_ONLY"))
+    gov = _report_governance_for(mod, snap)
+    src = _payload()
+    payload = {k: v for k, v in src.items()}
+    payload["governance"] = gov
+    prepared = _prepared_with(mod, snap)
+    files = mod.RealChain().render_report_with_governance_proof(
+        payload, prepared)
+    return _write_run_dir(tmp_path, files), prepared, files
+
+
+def test_m617_prepared_carries_an_immutable_pre_exposure_snapshot():
+    mod = real_run_module()
+    prepared = _prepared_with(mod)
+    assert prepared.snapshot["event_sequence"] == \
+        _GOV["registry_sequence_snapshot"]
+    with pytest.raises(TypeError):                 # mappingproxy is read-only
+        prepared.snapshot["event_sequence"] = 999
+    with pytest.raises(AttributeError):            # and the slot cannot rebind
+        prepared.snapshot = {}
+    assert not hasattr(prepared, "__dict__")
+
+
+def test_m617_prepare_refuses_a_snapshot_without_an_authorized_commit():
+    mod = real_run_module()
+    chain = mod.RealChain()
+    with pytest.raises(RuntimeError, match="missing required"):
+        chain.prepare({"trial_id": "S0-T001"})     # missing fields
+    with pytest.raises(RuntimeError, match="no authorized commit"):
+        chain.prepare(_test_snapshot(authorized_commit=""))
+    assert chain._ds is None
+
+
+def test_m617_compute_never_reads_the_registry_after_run_started():
+    """AST pin. Stage C runs AFTER `_atomic_run_start` appended this run's
+    own RUN_STARTED row, so ANY registry read here reports the pre-exposure
+    count plus one — the exact defect measured at 185e47f7."""
+    import ast
+    import inspect
+    mod = real_run_module()
+    src = inspect.getsource(mod.RealChain.compute)
+    tree = ast.parse("if 1:\n" + src)
+    names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+    calls = {getattr(getattr(n, "func", None), "id", "")
+             for n in ast.walk(tree) if isinstance(n, ast.Call)}
+    assert "REGISTRY" not in names
+    assert "parse_registry_events" not in calls
+    assert "find_authorization_event" not in calls
+    # and it DOES take them from the prepared snapshot
+    assert "prepared.snapshot" in src
+
+
+def test_m617_production_deps_wire_the_disk_verifier():
+    import inspect
+    mod = real_run_module()
+    src = inspect.getsource(mod)
+    assert "post_write_verify=chain.post_write_verify" in src
+    assert "prepare_compute=prepare_for_run" in src
+    # the renderer takes the prepared object explicitly
+    assert list(inspect.signature(
+        mod.RealChain.render_report_with_governance_proof).parameters) == \
+        ["self", "result", "prepared"]
+
+
+def test_m617_release_verdict_is_taken_from_disk_not_from_memory():
+    """The renderer may only SCREEN; `prove_governance` must not appear on
+    the render path, and the seam that does call it must pass report_path."""
+    import inspect
+    mod = real_run_module()
+    render_src = inspect.getsource(mod.render_s0_report)
+    assert "screen_governance_draft" in render_src
+    assert "prove_governance" not in render_src
+    verify_src = inspect.getsource(mod.RealChain.post_write_verify)
+    assert "report_path=" in verify_src
+    assert "sealed_artifacts" not in verify_src
+
+
+def test_m617_post_write_verify_passes_on_honest_disk_bytes(tmp_path, monkeypatch):
+    mod = real_run_module()
+    snap = _test_snapshot()
+    rdir, prepared, files = _honest_run_dir(mod, tmp_path, snap, monkeypatch)
+    written = tuple((n, c.encode("utf-8")) for n, c in files.items())
+    ok, detail = mod.RealChain().post_write_verify(rdir, written, prepared)
+    assert ok is True, detail
+    assert "disk governance" in detail
+
+
+def test_m617_post_write_verify_catches_a_post_render_tamper(tmp_path, monkeypatch):
+    """The property the in-memory proof was structurally blind to: the
+    renderer finished, its verdict was already taken, and THEN the bytes on
+    disk changed."""
+    import json as _json
+    mod = real_run_module()
+    snap = _test_snapshot()
+    rdir, prepared, files = _honest_run_dir(mod, tmp_path, snap, monkeypatch)
+    written = tuple((n, c.encode("utf-8")) for n, c in files.items())
+
+    doc = _json.loads((rdir / "S0_REPORT.json").read_text(encoding="utf-8"))
+    doc["governance"]["registry_sequence_snapshot"] = 999
+    (rdir / "S0_REPORT.json").write_bytes(
+        _json.dumps(doc, indent=1, sort_keys=True).encode("utf-8"))
+
+    ok, detail = mod.RealChain().post_write_verify(rdir, written, prepared)
+    assert ok is False
+    assert "registry_sequence_snapshot" in detail
+
+
+def test_m617_post_write_verify_catches_a_crlf_translated_artifact(tmp_path, monkeypatch):
+    """The measured 185e47f7 defect, reproduced end-to-end: rewrite one
+    artifact in TEXT mode (what `write_text` did on Windows) and the sealed
+    set must refuse, even though the manifest itself is untouched."""
+    mod = real_run_module()
+    snap = _test_snapshot()
+    rdir, prepared, files = _honest_run_dir(mod, tmp_path, snap, monkeypatch)
+    written = tuple((n, c.encode("utf-8")) for n, c in files.items())
+
+    victim = next(n for n, c in files.items()
+                  if n != "S0_REPORT.json" and "\n" in c)
+    (rdir / victim).write_bytes(files[victim].replace("\n", "\r\n")
+                                .encode("utf-8"))
+    ok, detail = mod.RealChain().post_write_verify(rdir, written, prepared)
+    assert ok is False
+    assert victim in detail
+
+
+def test_m617_post_write_verify_refuses_a_foreign_prepared_object(tmp_path, monkeypatch):
+    mod = real_run_module()
+    snap = _test_snapshot()
+    rdir, _prepared, files = _honest_run_dir(mod, tmp_path, snap, monkeypatch)
+    written = tuple((n, c.encode("utf-8")) for n, c in files.items())
+
+    class _LookAlike:
+        config = None
+        reason = "look-alike"
+        snapshot = _MPX(dict(_test_snapshot()))
+
+    ok, detail = mod.RealChain().post_write_verify(rdir, written,
+                                                   _LookAlike())
+    assert ok is False
+    assert "prepared execution input" in detail
+
+
+def test_m617_compute_stamps_the_snapshot_sequence_not_the_live_registry(
+        monkeypatch, tmp_path):
+    """M6.1.7 review L-4: BEHAVIOURAL evidence for the C3 closure.
+
+    The AST pin next door dies to any refactor that hides the read behind a
+    helper, and nothing else asserted what `compute` actually STAMPS. Here
+    the live registry is made UNREADABLE — so reading it is impossible
+    rather than merely unexpected — and the snapshot carries a sequence
+    that differs from the real one, as this run's own RUN_STARTED row makes
+    it differ.
+    """
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+
+    class _Unreadable(type(mod.REGISTRY)):
+        def read_text(self, *a, **k):
+            raise AssertionError("compute read the registry after RUN_STARTED")
+        read_bytes = read_text
+        open = read_text
+
+    monkeypatch.setattr(mod, "REGISTRY", _Unreadable(mod.REGISTRY))
+    captured = {}
+    monkeypatch.setattr(mod, "build_full_study_result",
+                        lambda *a, **k: captured.update(k) or {"study": 1})
+
+    snap = _test_snapshot(event_sequence=7)
+    prepared = _prepared_with(mod, snap)
+    chain = mod.RealChain()
+    monkeypatch.setattr(chain, "_ensure", lambda: (None, "UNIVERSE"))
+    chain._bars = None
+    chain.compute(prepared)
+
+    gov = captured["governance_meta"]
+    assert gov["registry_sequence_snapshot"] == 7          # pre-exposure value
+    assert gov["authorized_commit"] == snap["authorized_commit"]
+    assert gov["trial_id"] == mod.TRIAL_ID

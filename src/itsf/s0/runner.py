@@ -45,6 +45,69 @@ prepare is a PRE_RUN_ATTEMPT_FAILURE (nothing burned); the SAME refusal
 raised inside `compute` would be a RUN_FAILURE that permanently consumes
 the trial id. The runner learns nothing about what the prepared object
 holds — it only forwards it to Stage C.
+
+M6.1.7 S1 — BYTE FIDELITY AT STAGE E + THE POST-WRITE VERIFICATION SEAM.
+
+  (a) Measured defect closed. Stage E used to write each artifact with
+      `path.write_text(content, encoding="utf-8")`. On Windows that opens
+      the file in TEXT mode, so every `\n` in `content` became `\r\n` on
+      disk: the in-memory string and the on-disk bytes were two different
+      values. The runner then hashed `path.read_bytes()` (the DISK bytes)
+      into the manifest chain while the renderer's own report recorded the
+      IN-MEMORY digest for the same artifact — two digests for one file
+      inside one sealed output. Measured at HEAD 185e47f7: 9 of the 10
+      `mc_handoff_manifest.sealed_files` digests did not match the bytes
+      actually on disk (only the single-line HANDOFF_ADMISSION.json,
+      which contains no newline, agreed). Stage F could not see it because
+      BOTH of its sides were disk-derived.
+
+      The fix is a single source of truth: each artifact's content is
+      encoded to UTF-8 EXACTLY ONCE, and that one `bytes` value is what is
+      written (`write_bytes`, binary mode, no newline translation), what
+      enters the hash chain, and what is handed to the verification seam.
+      Nothing on this path re-reads the file to obtain a digest, so a
+      second digest for one artifact can no longer be constructed.
+
+  (b) REQUIRED post-write verification seam (`RunnerDeps.post_write_verify`)
+      runs after ALL renderer artifacts are written and BEFORE Stage E
+      completes — specifically before the manifest chain records them, so
+      the append-only chain can never carry a digest for an artifact whose
+      bytes were not first proven. It is handed the run directory, the
+      written (name, bytes) pairs and the PREPARED OBJECT explicitly, as
+      parameters; the runner keeps no module-level or instance-level
+      temporary state for it.
+
+      THE ASYMMETRY, stated deliberately: the WIRING of the verifier is
+      checked pre-exposure (an unwired seam refuses before RUN_STARTED,
+      exactly like `prepare_compute` and `pre_exposure_recheck`), but the
+      VERIFICATION ITSELF can only happen after the bytes exist on disk —
+      i.e. after the exposure boundary. A verification REFUSAL is therefore
+      a Stage-E RUN failure: the trial id is already burned and cannot be
+      given back. That is the accepted trade-off, and it is why the refusal
+      path deletes nothing: every artifact, the failure report and the
+      sealed incident detail are all retained for adjudication.
+
+  (b2) `render_report` takes the prepared object too — `(result, prepared)`,
+      TWO arguments, no arity shim. Stage E is post-exposure, and the
+      renderer is wired at deps-construction time (before `prepare_compute`
+      runs), so a one-argument renderer that needs the run's pre-exposure
+      authority has no choice but to re-derive it at render time from a
+      source the run's own RUN_STARTED registry append has already moved.
+      Both sides of the resulting contract check then drift together and
+      agree while being wrong — the same structural blindness as (a). The
+      generalized rule: the prepared object is the run's PRE-EXPOSURE
+      authority, and every post-exposure stage that needs it (`compute`,
+      `render_report`, `post_write_verify`) takes it as an explicit
+      parameter. A one-argument renderer fails loudly (TypeError -> Stage-E
+      run failure) instead of being quietly accommodated.
+
+  (c) `prepared is None` restored (the M6.1.6 `if not prepared` is
+      reverted). Evaluating `not prepared` executes application-controlled
+      `__bool__`/`__len__` code INSIDE the runner's gate — foreign code in
+      the gate — and it also broke the runner's generality: whether a
+      prepared object is *meaningful* is the application's business, not a
+      generic lifecycle component's. A falsy prepared object (empty tuple,
+      empty mapping, 0) is forwarded to `compute` unchanged.
 """
 from __future__ import annotations
 
@@ -119,7 +182,30 @@ class RunnerDeps:
     `prepare_compute` returned, explicitly, as its single argument. The
     runner neither inspects nor stores it beyond the forwarding call."""
     integrity_checks: Sequence[Callable[[object], tuple[bool, str]]]
-    render_report: Callable[[object], Mapping[str, str]]  # name -> content
+    render_report: Callable[[object, object], Mapping[str, str]]
+    """Stage E renderer: (result, prepared) -> {artifact_name: content}.
+
+    M6.1.7 S1 follow-up — TWO arguments, deliberately, and no compatibility
+    shim. `render_report` is wired into this dataclass at CONSTRUCTION time,
+    i.e. before `prepare_compute()` has run, so a renderer cannot close over
+    the run's pre-exposure authority; without a parameter it has to go
+    re-derive that authority itself at render time, from whatever source is
+    reachable — and that source has by then been mutated by the run's own
+    RUN_STARTED registry append. That is a same-source-both-sides defect of
+    exactly the shape as the CRLF/two-digest bug this milestone closed: the
+    check and its expectation drift together, so the error is structurally
+    invisible.
+
+    The rule this encodes is the same one `compute` and `post_write_verify`
+    follow: the prepared object is the run's PRE-EXPOSURE authority, and any
+    post-exposure stage that needs that authority receives it as an explicit
+    parameter rather than fishing for it. A one-argument renderer is a wiring
+    defect and MUST fail loudly (TypeError -> Stage-E run failure), never be
+    silently tolerated by an optional second argument.
+
+    As everywhere else, the runner learns nothing about the object: it
+    forwards it, reads no attribute on it, and never evaluates its truth
+    value."""
     append_registry_event: Callable[[str, str], None]     # (event, note)
     clock_utc: Callable[[], str]                     # injected (no Date.now)
     log: Callable[[str], None]
@@ -146,6 +232,30 @@ class RunnerDeps:
     # FAIL-CLOSED at run time — see the refusal in `run()`, which mirrors
     # the `pre_exposure_recheck is None` precedent in `_atomic_run_start`.
     prepare_compute: Callable[[], object] | None = None
+    # M6.1.7 S1 §post-write verification seam. Called ONCE per run, after
+    # every renderer artifact has been written and strictly BEFORE the
+    # manifest chain records any of them (so an unproven artifact never
+    # enters the append-only chain) and before Stage E completes.
+    #
+    #     post_write_verify(runs_dir, written, prepared) -> (ok, detail)
+    #
+    #   runs_dir : the run directory the artifacts were written into;
+    #   written  : an immutable sequence of (relative_name, bytes) pairs —
+    #              the EXACT byte values that were written to disk and that
+    #              are about to enter the hash chain;
+    #   prepared : the run-scoped object `prepare_compute` returned, passed
+    #              EXPLICITLY as a parameter (never stashed on the runner,
+    #              never a module-level temporary).
+    #
+    # Declared Optional so the dataclass stays constructible, but an
+    # UNWIRED seam is FAIL-CLOSED PRE-EXPOSURE — see the refusal in `run()`,
+    # which mirrors the `prepare_compute is None` / `pre_exposure_recheck is
+    # None` precedents. The wiring check is pre-exposure; the verification
+    # itself is necessarily post-write, hence a Stage-E run failure (see the
+    # module docstring, M6.1.7 (b)).
+    post_write_verify: Callable[
+        [Path, Sequence[tuple[str, bytes]], object],
+        tuple[bool, str]] | None = None
 
 
 @dataclass
@@ -206,8 +316,12 @@ class S0Runner:
                 f"directory and is covered by the directory's retention rule):\n\n"
                 f"{detail}\n")
         try:
+            # M6.1.7 S1: newline="\n" — a governance file's bytes must not
+            # depend on the platform the run happened on (text mode would
+            # emit \r\n on Windows). Same rule as the artifact writes in
+            # Stage E and as append_registry_event_line below.
             (directory / f"INCIDENT_{incident_id}.md").write_text(
-                body, encoding="utf-8")
+                body, encoding="utf-8", newline="\n")
         except OSError:
             return False
         return True
@@ -348,8 +462,8 @@ class S0Runner:
                 "until Aaron adjudicates; see the registry chain.\n"
                 f"registry append error class: {type(exc).__name__}\n")
             try:
-                (rdir / HALF_TRANSITION_NAME).write_text(marker,
-                                                         encoding="utf-8")
+                (rdir / HALF_TRANSITION_NAME).write_text(
+                    marker, encoding="utf-8", newline="\n")   # M6.1.7 S1
             except OSError:
                 pass
             raise RunGateError(
@@ -383,7 +497,16 @@ class S0Runner:
 
     def _record_artifacts(self, runs_dir: Path, stage: RunStage,
                           written: Sequence[tuple[str, bytes]]) -> None:
-        """One `file` record per closed artifact + the stage seal."""
+        """One `file` record per closed artifact + the stage seal.
+
+        M6.1.7 S1: `written` carries the EXACT byte values that were written
+        to disk (see Stage E). The chain hashes those values directly — it
+        never re-reads the files — so the digest in the manifest and the
+        digest of the bytes on disk are the same number by construction,
+        not by coincidence. Stage F then re-derives the same digest from
+        disk, which is a genuine cross-check precisely because the write
+        path performs no translation of any kind.
+        """
         manifest = runs_dir / MANIFEST_NAME
         tail = self._chain_tail(manifest)
         for name, data in written:
@@ -476,20 +599,50 @@ class S0Runner:
                 "no pre-exposure prepare seam wired — fail closed (mirrors "
                 "the pre-exposure registry recheck at _atomic_run_start)",
                 RunGateError())
+        # M6.1.7 S1: the post-write verification seam is REQUIRED, and its
+        # WIRING is checked here — pre-exposure, alongside the two seams it
+        # is modelled on (`prepare_compute` above, `pre_exposure_recheck` in
+        # `_atomic_run_start`). A deps object with no verifier must never
+        # reach RUN_STARTED, because a run that cannot prove its own output
+        # bytes is not worth the trial id it would consume.
+        #
+        # ASYMMETRY, deliberately accepted (module docstring M6.1.7 (b)):
+        # only the WIRING can be checked before exposure. The verification
+        # itself needs bytes on disk, so it necessarily runs post-write —
+        # and a verification REFUSAL is therefore a Stage-E RUN failure with
+        # the trial id already burned, not a free pre-run attempt. That is
+        # why the refusal path retains every artifact.
+        if d.post_write_verify is None:
+            return self._fail_pre_run(
+                RunStage.B_LOAD_VALIDATE, "post_write_verify",
+                "no post-write verification seam wired — fail closed "
+                "(mirrors the pre-exposure prepare seam and registry "
+                "recheck; only the WIRING is checkable pre-exposure)",
+                RunGateError())
         try:
             prepared = d.prepare_compute()
         except Exception as exc:                     # noqa: BLE001
             return self._fail_pre_run(
                 RunStage.B_LOAD_VALIDATE, "prepare_compute",
                 f"prepare raised {type(exc).__name__}: {exc}", exc)
-        # M6.1.6 review A1-1: any FALSY return is a refusal, not just None.
-        # `is None` alone would forward 0 / "" / () to Stage C, which is the
-        # opposite of fail-closed for a seam whose whole purpose is that
-        # Stage C receives a real prepared object.
-        if not prepared:
+        # M6.1.7 S1 — `is None`, NOT `not prepared` (the M6.1.6 A1-1 change
+        # is reverted). Two reasons, both structural:
+        #   1. `not prepared` executes application-controlled __bool__ /
+        #      __len__ code INSIDE the runner's gate. Foreign code in the
+        #      gate is precisely the class of defect this project has been
+        #      burned by before; an object whose __bool__ raises would take
+        #      down the lifecycle from inside a governance check.
+        #   2. It breaks this component's generality. S0Runner is a generic
+        #      lifecycle machine: "was an object produced?" is its question,
+        #      "is that object MEANINGFUL?" is the application's. A falsy
+        #      prepared object — an empty tuple, an empty mapping, 0 — is a
+        #      legitimate prepared object and is forwarded to `compute`
+        #      unchanged. An application that wants emptiness to be a
+        #      refusal raises inside its own `prepare_compute`.
+        if prepared is None:
             return self._fail_pre_run(
                 RunStage.B_LOAD_VALIDATE, "prepare_compute",
-                "prepare returned no prepared object — fail closed",
+                "prepare returned no prepared object (None) — fail closed",
                 RunGateError())
 
         # ---- atomic transition into Stage C (exposure boundary) ------------
@@ -546,19 +699,68 @@ class S0Runner:
 
         # ---- Stage E: sealed report + manifest chain (packet §6) -----------
         self._safe_log(f"stage={RunStage.E_REPORT.value} status=start")
+        written: list[tuple[str, bytes]] = []
         try:
-            artifacts = d.render_report(result)
+            # M6.1.7 S1 follow-up: the renderer receives the run-scoped
+            # prepared object EXPLICITLY, as its second argument — the same
+            # rule as `compute(prepared)` and `post_write_verify(...,
+            # prepared)`. A one-arg renderer raises TypeError here and takes
+            # the Stage-E run-failure path; there is no arity shim, because
+            # an optional second argument would let a one-arg renderer go on
+            # silently re-deriving the run's authority from a source this
+            # run has already mutated.
+            artifacts = d.render_report(result, prepared)
             if not artifacts:
                 raise RunGateError(
                     "render_report produced no artifacts; a sealed S0 report "
                     "is mandatory at Stage E")
-            written: list[tuple[str, bytes]] = []
             for name, content in artifacts.items():
-                path = rdir / name
-                path.write_text(content, encoding="utf-8")
-                written.append((name, path.read_bytes()))
-            # every closed artifact enters the append-only hash chain, then
-            # the stage seal closes E (SA-6 F-06 / packet §6)
+                # M6.1.7 S1 — ONE encode, ONE byte value. `data` is the only
+                # representation of this artifact that exists downstream: it
+                # is written verbatim in BINARY mode (write_bytes performs no
+                # newline translation, so a '\n' stays 0x0A on every
+                # platform), it is what `_record_artifacts` hashes into the
+                # chain, and it is what the verification seam is handed.
+                # Nothing here re-reads the file to obtain a digest, so the
+                # disk bytes and the recorded digest cannot diverge.
+                data = content.encode("utf-8")
+                (rdir / name).write_bytes(data)
+                written.append((name, data))
+        except Exception as exc:                     # noqa: BLE001
+            return self._fail_run(RunStage.E_REPORT, rdir, "render_report",
+                                  f"{type(exc).__name__}: {exc}", exc)
+
+        # ---- REQUIRED post-write verification seam (M6.1.7 S1) -------------
+        # Every renderer artifact is now closed on disk, and NOTHING has
+        # entered the manifest chain yet. The verifier is handed the run
+        # directory, the exact byte values that were written, and the
+        # prepared object — explicitly, as parameters. Running it here (not
+        # after `_record_artifacts`) means the append-only chain can never
+        # carry a digest for an artifact whose bytes were not first proven.
+        #
+        # Exposure is ALREADY consumed at this point (see the asymmetry note
+        # at the pre-exposure wiring check): a refusal is a Stage-E RUN
+        # failure that burns the trial id. Nothing is deleted or rewritten on
+        # that path — the artifacts stay, `_fail_run` seals the raw detail in
+        # INCIDENT_*.md and writes RUN_FAILURE_REPORT.{md,json} into the run
+        # directory, so the discrepancy can be adjudicated from the evidence.
+        try:
+            verified, verify_detail = d.post_write_verify(
+                rdir, tuple(written), prepared)
+        except Exception as exc:                     # noqa: BLE001
+            return self._fail_run(
+                RunStage.E_REPORT, rdir, "post_write_verify",
+                f"post-write verification raised {type(exc).__name__}: {exc}",
+                exc)
+        if not verified:
+            return self._fail_run(
+                RunStage.E_REPORT, rdir, "post_write_verify",
+                f"post-write verification refused: {verify_detail}",
+                RunGateError())
+
+        # every closed, VERIFIED artifact enters the append-only hash chain,
+        # then the stage seal closes E (SA-6 F-06 / packet §6)
+        try:
             self._record_artifacts(rdir, RunStage.E_REPORT, written)
         except Exception as exc:                     # noqa: BLE001
             return self._fail_run(RunStage.E_REPORT, rdir, "render_report",
