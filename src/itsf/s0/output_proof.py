@@ -203,6 +203,12 @@ __all__ = (
     "DraftScreen",
     "prove_governance",
     "screen_governance_draft",
+    # F-2 key-claims release gate (S0 closeout, Aaron ruling 2026-08-10) —
+    # a CHECKER surface like the two above, never a producer.
+    "KEY_CLAIM_IDS",
+    "ResearchClaimsContext",
+    "KeyClaimsReport",
+    "verify_key_claims",
 )
 
 # The ONE artifact whose bytes may be the actual side. Hard-coded on purpose:
@@ -1058,3 +1064,387 @@ def screen_governance_draft(context: "SourceContext", *,
         comparisons_required=_leaf_count(_expected_tree(context)),
         draft_sha256=hashlib.sha256(raw).hexdigest(),
         acceptance=_NOT_AN_ACCEPTANCE)
+
+
+# ===========================================================================
+# F-2 MINIMAL SEAL BOUNDARY — KEY-CLAIMS RELEASE GATE (S0 closeout,
+# Aaron ruling 2026-08-10)
+# ===========================================================================
+# Aaron's mandated boundary, stated verbatim in the closeout master prompt:
+# independent-source reconciliation ONLY for the formally PUBLISHED key
+# claims — (1) the day universe, (2) label/NA counts, (3) Primary/Oracle
+# versus parsed artifact bytes, (4) the cost & engine axes and the sealed
+# artifact name set, (5) bootstrap/seeds/estimator, (6) the formal report
+# versus the disk manifest. Explicitly NOT a general leaf-proof framework:
+# the closed six-claim list below is the whole scope, each claim is its own
+# named function, and adding a claim means editing this closed tuple. The
+# legacy evidence leaf/token system stays what M6.1.8 §5 says it is —
+# a diagnostic, not a release certificate; KC3 CONSUMES its hard verdict
+# rather than rebuilding it.
+#
+# Independence sources (never the payload's own mirror of itself):
+#   KC1/KC2 -> the LOCKED preflight assertions bytes (compare-only file);
+#   KC3     -> evidence.reconcile_with_evidence's flat verdict, whose D_TP /
+#              D_FP / oracle series are REBUILT from parsed MC_HANDOFF bytes;
+#   KC4     -> the frozen engine x scenario matrix constants (study/report),
+#              which finally binds the sealed NAME SET to an authority
+#              OUTSIDE the report (closing _PARTIAL_DECLARATION_UNBOUND for
+#              the name-set axis; byte identity stays Q2's job);
+#   KC5     -> contracts.RESEARCH_BOOTSTRAP_SEEDS / report.FROZEN_N_BOOT /
+#              the Aaron-ruled ResolvedS0Methods instance;
+#   KC6     -> the runner's post-write disk verification seam result.
+
+KEY_CLAIM_IDS: tuple[str, ...] = (
+    "KC1_day_universe",
+    "KC2_label_na_counts",
+    "KC3_primary_oracle_vs_bytes",
+    "KC4_engine_scenario_axis_and_sealed_names",
+    "KC5_bootstrap_seeds_estimator",
+    "KC6_report_vs_disk",
+)
+
+#: The five funnel levels shared by the locked assertions file and the
+#: published `structural.funnel_counts` (same VERBATIM key names; the side
+#: diagnostic is compared only when both sides carry it).
+_KC_FUNNEL_LEVELS: tuple[str, ...] = (
+    "L0_scheduled_trading_days", "L1_observed_rth_days",
+    "L2_regular_full_session_candidates", "L3_structurally_eligible_days",
+    "L4_final_feature_construction_dates")
+_KC_FUNNEL_SIDE = "side_diagnostic_complete_390_bar_rth_days"
+
+#: Sealed names that MAY appear beyond the always-expected set — admitted
+#: only when their admission conditions hold (handoff.formal_sealable);
+#: their presence is validated as membership of this CLOSED set, never as a
+#: free-form allowance.
+_KC_OPTIONAL_SEALED: frozenset = frozenset(
+    {"DAY_STRATA.json", "GRID_SAMPLES.json", "SEED_MANIFEST.json"})
+
+
+@dataclass(frozen=True)
+class ResearchClaimsContext:
+    """Independent inputs for `verify_key_claims`. Built by the ENTRY, never
+    by the renderer, and never from the payload under test.
+
+    assertions_bytes: raw bytes of the locked expected_preflight_assertions
+        JSON (the Stage-B compare-only file).
+    ruled_methods: the Aaron-ruled contracts.ResolvedS0Methods instance.
+    evidence_problems: the flat list returned by
+        evidence.reconcile_with_evidence(...) for THIS payload+files, or
+        None if it was not run (None is an uncovered claim -> FAIL).
+    disk_report: {"ok": bool, "detail": <str>} adapted from the runner's
+        post_write_verify seam result, or None before the bytes exist
+        (pre-write phase only).
+    """
+    assertions_bytes: object
+    ruled_methods: object
+    evidence_problems: object
+    disk_report: object
+
+
+@dataclass(frozen=True)
+class KeyClaimsReport:
+    """Per-claim verdicts. `phase` is 'pre_write' or 'post_write'.
+
+    Like `DraftScreen`, this object refuses `bool()` so it can never be
+    mistaken for a boolean gate; consumers must ask the explicit question
+    (`sealable_pre_write` / `releasable_post_write`).
+    """
+    phase: str
+    verdicts: Mapping                 # claim_id -> PASS | FAIL | PENDING
+    problems: tuple
+
+    def __bool__(self) -> bool:
+        raise TypeError("KeyClaimsReport has no boolean value; use "
+                        ".sealable_pre_write or .releasable_post_write")
+
+    @property
+    def sealable_pre_write(self) -> bool:
+        if self.phase != "pre_write":
+            return False
+        return all(self.verdicts.get(c) == "PASS"
+                   for c in KEY_CLAIM_IDS[:-1]) and (
+                       self.verdicts.get("KC6_report_vs_disk") == "PENDING")
+
+    @property
+    def releasable_post_write(self) -> bool:
+        if self.phase != "post_write":
+            return False
+        return all(self.verdicts.get(c) == "PASS" for c in KEY_CLAIM_IDS)
+
+
+def _kc_int(v) -> bool:
+    return type(v) is int
+
+
+def _kc1_kc2(formal, ctx, problems, verdicts) -> None:
+    """KC1 (funnel vs locked assertions) + KC2 (NA arithmetic bound to the
+    independent L3). One parse, two claims, separate verdicts."""
+    v1 = v2 = "PASS"
+    try:
+        raw = ctx.assertions_bytes
+        if not isinstance(raw, (bytes, bytearray)):
+            raise ValueError("assertions_bytes_not_bytes")
+        locked = json.loads(bytes(raw).decode("utf-8"))
+        funnel = locked["funnel"]
+        if not isinstance(funnel, Mapping):
+            raise ValueError("locked_funnel_not_a_mapping")
+    except Exception as exc:
+        problems.append("key_claims.assertions_unusable:" + type(exc).__name__)
+        verdicts["KC1_day_universe"] = "FAIL"
+        verdicts["KC2_label_na_counts"] = "FAIL"
+        return
+
+    st = formal.get("structural") if isinstance(formal, Mapping) else None
+    fc = st.get("funnel_counts") if isinstance(st, Mapping) else None
+    if not isinstance(fc, Mapping):
+        problems.append("key_claims.KC1.published_funnel_counts_missing")
+        v1 = "FAIL"
+    else:
+        for level in _KC_FUNNEL_LEVELS:
+            got, want = fc.get(level), funnel.get(level)
+            if not _kc_int(got) or not _kc_int(want):
+                problems.append("key_claims.KC1.level_uncovered:" + level)
+                v1 = "FAIL"
+            elif got != want:
+                problems.append("key_claims.KC1.funnel_mismatch:"
+                                + level + ":" + repr(got) + "!=" + repr(want))
+                v1 = "FAIL"
+        got, want = fc.get(_KC_FUNNEL_SIDE), funnel.get(_KC_FUNNEL_SIDE)
+        if _kc_int(got) and _kc_int(want) and got != want:
+            problems.append("key_claims.KC1.funnel_mismatch:"
+                            + _KC_FUNNEL_SIDE + ":" + repr(got)
+                            + "!=" + repr(want))
+            v1 = "FAIL"
+
+    l3 = funnel.get("L3_structurally_eligible_days")
+    if not _kc_int(l3):
+        problems.append("key_claims.KC2.locked_l3_unusable")
+        v2 = "FAIL"
+    else:
+        nat = st.get("na_table") if isinstance(st, Mapping) else None
+        pop = nat.get("population") if isinstance(nat, Mapping) else None
+        if not _kc_int(pop) or pop != l3:
+            problems.append("key_claims.KC2.population_not_bound_to_locked_l3:"
+                            + repr(pop) + "!=" + repr(l3))
+            v2 = "FAIL"
+        per_field = (nat.get("per_field")
+                     if isinstance(nat, Mapping) else None)
+        rows_seen = 0
+        if isinstance(per_field, Mapping):
+            for table in ("features", "labels"):
+                rows = per_field.get(table)
+                if not isinstance(rows, Mapping):
+                    continue
+                for name, row in rows.items():
+                    if not isinstance(row, Mapping):
+                        continue
+                    rows_seen += 1
+                    na, ok = row.get("na"), row.get("not_na")
+                    if not _kc_int(na) or not _kc_int(ok) or na + ok != l3:
+                        problems.append(
+                            "key_claims.KC2.row_not_conserved_vs_locked_l3:"
+                            + table + "." + str(name))
+                        v2 = "FAIL"
+                    reasons = row.get("reasons")
+                    if isinstance(reasons, Mapping) and reasons:
+                        vals = list(reasons.values())
+                        if all(_kc_int(x) for x in vals) and sum(vals) != na:
+                            problems.append(
+                                "key_claims.KC2.reasons_do_not_sum_to_na:"
+                                + table + "." + str(name))
+                            v2 = "FAIL"
+        if rows_seen == 0:
+            problems.append("key_claims.KC2.no_na_rows_covered")
+            v2 = "FAIL"
+        f10 = st.get("f10_counts") if isinstance(st, Mapping) else None
+        if isinstance(f10, Mapping) and f10:
+            vals = list(f10.values())
+            if all(_kc_int(x) for x in vals):
+                if sum(vals) != l3:
+                    problems.append("key_claims.KC2.f10_partition_sum:"
+                                    + repr(sum(vals)) + "!=" + repr(l3))
+                    v2 = "FAIL"
+            else:
+                problems.append("key_claims.KC2.f10_counts_not_ints")
+                v2 = "FAIL"
+        else:
+            problems.append("key_claims.KC2.f10_counts_missing")
+            v2 = "FAIL"
+    verdicts["KC1_day_universe"] = v1
+    verdicts["KC2_label_na_counts"] = v2
+
+
+def _kc3(ctx, problems, verdicts) -> None:
+    ev = ctx.evidence_problems
+    if ev is None:
+        problems.append("key_claims.KC3.evidence_reconciliation_not_run")
+        verdicts["KC3_primary_oracle_vs_bytes"] = "FAIL"
+        return
+    try:
+        entries = [str(x) for x in ev]
+    except Exception:
+        problems.append("key_claims.KC3.evidence_problems_not_iterable")
+        verdicts["KC3_primary_oracle_vs_bytes"] = "FAIL"
+        return
+    hard = [e for e in entries if not e.startswith("PARTIAL:")]
+    if hard:
+        problems.append("key_claims.KC3.evidence_hard_problems:"
+                        + ";".join(hard[:5]))
+        verdicts["KC3_primary_oracle_vs_bytes"] = "FAIL"
+    else:
+        verdicts["KC3_primary_oracle_vs_bytes"] = "PASS"
+
+
+def _kc4(formal, problems, verdicts) -> None:
+    # The AUTHORITY is the frozen engine/scenario constants — imported at
+    # call time so this module can never drift from the single source.
+    from itsf.s0.report import _SCENARIOS as _SCN          # frozen S0 §6
+    from itsf.s0.study import ENGINES as _ENG              # frozen S0 §7
+    expected = set()
+    for e in _ENG:
+        for s in _SCN:
+            expected.add("MC_HANDOFF_" + str(e) + "_" + str(s) + ".jsonl")
+    expected |= {"S0_REPORT.md", "HANDOFF_ADMISSION.json"}
+    man = (formal.get("mc_handoff_manifest")
+           if isinstance(formal, Mapping) else None)
+    sealed = man.get("sealed_files") if isinstance(man, Mapping) else None
+    if not isinstance(sealed, Mapping) or not sealed:
+        problems.append("key_claims.KC4.sealed_files_missing")
+        verdicts["KC4_engine_scenario_axis_and_sealed_names"] = "FAIL"
+        return
+    names = set(sealed)
+    v = "PASS"
+    missing = expected - names
+    if missing:
+        problems.append("key_claims.KC4.expected_sealed_names_missing:"
+                        + ",".join(sorted(missing)))
+        v = "FAIL"
+    extra = names - expected - _KC_OPTIONAL_SEALED
+    if extra:
+        problems.append("key_claims.KC4.sealed_names_outside_frozen_matrix:"
+                        + ",".join(sorted(str(x) for x in extra)))
+        v = "FAIL"
+    if "S0_REPORT.json" in names:
+        problems.append("key_claims.KC4.self_excluded_name_in_sealed_set")
+        v = "FAIL"
+    verdicts["KC4_engine_scenario_axis_and_sealed_names"] = v
+
+
+def _kc5(formal, ctx, problems, verdicts) -> None:
+    from itsf.contracts import RESEARCH_BOOTSTRAP_SEEDS as _SEEDS
+    from itsf.s0.report import FROZEN_N_BOOT as _NBOOT
+    v = "PASS"
+    m = ctx.ruled_methods
+    ruled_est = getattr(m, "worst_day_estimator", None)
+    if not isinstance(ruled_est, str) or not ruled_est:
+        problems.append("key_claims.KC5.ruled_estimator_unusable")
+        verdicts["KC5_bootstrap_seeds_estimator"] = "FAIL"
+        return
+    want_seeds = {str(s) for s in _SEEDS}
+    bci = (formal.get("bootstrap_ci")
+           if isinstance(formal, Mapping) else None)
+    state = {"per_seed_found": 0, "v": v}
+
+    def _walk(node, depth=0):
+        if depth > 6 or not isinstance(node, Mapping):
+            return
+        ps = node.get("per_seed")
+        if isinstance(ps, Mapping):
+            state["per_seed_found"] += 1
+            if set(str(k) for k in ps.keys()) != want_seeds:
+                problems.append(
+                    "key_claims.KC5.per_seed_keys_not_frozen_seed_set")
+                state["v"] = "FAIL"
+            for sk, cell in ps.items():
+                nb = (cell.get("n_boot")
+                      if isinstance(cell, Mapping) else None)
+                if nb != _NBOOT:
+                    problems.append("key_claims.KC5.n_boot_not_frozen:"
+                                    + str(sk) + ":" + repr(nb))
+                    state["v"] = "FAIL"
+            return
+        for child in node.values():
+            _walk(child, depth + 1)
+
+    _walk(bci if isinstance(bci, Mapping) else {})
+    v = state["v"]
+    if state["per_seed_found"] == 0:
+        problems.append("key_claims.KC5.no_per_seed_blocks_covered")
+        v = "FAIL"
+    e2 = (formal.get("e2_worst_days")
+          if isinstance(formal, Mapping) else None)
+    cells = 0
+    if isinstance(e2, Mapping):
+        for tkey, scns in e2.items():
+            if not isinstance(scns, Mapping):
+                continue
+            for scn, cell in scns.items():
+                if not isinstance(cell, Mapping):
+                    continue
+                cells += 1
+                if cell.get("estimator_status") != "resolved":
+                    problems.append(
+                        "key_claims.KC5.estimator_status_not_resolved:"
+                        + str(tkey) + "|" + str(scn))
+                    v = "FAIL"
+                disclosed = cell.get("percentile_estimator")
+                if (not isinstance(disclosed, str)
+                        or ruled_est not in disclosed):
+                    problems.append(
+                        "key_claims.KC5.estimator_disclosure_not_ruled:"
+                        + str(tkey) + "|" + str(scn))
+                    v = "FAIL"
+    if cells == 0:
+        problems.append("key_claims.KC5.no_e2_cells_covered")
+        v = "FAIL"
+    verdicts["KC5_bootstrap_seeds_estimator"] = v
+
+
+def _kc6(ctx, phase, problems, verdicts) -> None:
+    dr = ctx.disk_report
+    if phase == "pre_write":
+        if dr is None:
+            verdicts["KC6_report_vs_disk"] = "PENDING"
+        else:
+            problems.append(
+                "key_claims.KC6.disk_report_supplied_before_write")
+            verdicts["KC6_report_vs_disk"] = "FAIL"
+        return
+    if not isinstance(dr, Mapping) or dr.get("ok") is not True:
+        problems.append("key_claims.KC6.disk_verification_not_ok")
+        verdicts["KC6_report_vs_disk"] = "FAIL"
+    else:
+        verdicts["KC6_report_vs_disk"] = "PASS"
+
+
+def verify_key_claims(formal, ctx, *, phase):
+    """Run the CLOSED six-claim battery. Never raises, for any input.
+
+    phase='pre_write'  -> KC1..KC5 must PASS, KC6 must be PENDING
+                          (`sealable_pre_write`).
+    phase='post_write' -> all six must PASS (`releasable_post_write`).
+    An unusable context or an unreadable payload is a FAIL on the affected
+    claim, never an exception and never a silent PASS.
+    """
+    problems = []
+    verdicts = {}
+    if phase not in ("pre_write", "post_write"):
+        return KeyClaimsReport(
+            phase=str(phase),
+            verdicts=MappingProxyType(
+                dict((c, "FAIL") for c in KEY_CLAIM_IDS)),
+            problems=("key_claims.phase_invalid:" + repr(phase),))
+    for step in (lambda: _kc1_kc2(formal, ctx, problems, verdicts),
+                 lambda: _kc3(ctx, problems, verdicts),
+                 lambda: _kc4(formal, problems, verdicts),
+                 lambda: _kc5(formal, ctx, problems, verdicts),
+                 lambda: _kc6(ctx, phase, problems, verdicts)):
+        try:
+            step()
+        except BaseException as exc:      # defensive: a gate must not raise
+            problems.append("key_claims.step_raised:" + type(exc).__name__)
+    for c in KEY_CLAIM_IDS:
+        verdicts.setdefault(c, "FAIL")
+    return KeyClaimsReport(phase=phase,
+                           verdicts=MappingProxyType(dict(verdicts)),
+                           problems=tuple(problems))

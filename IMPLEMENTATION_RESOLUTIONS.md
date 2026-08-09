@@ -134,7 +134,36 @@ SA-14 另留三条非阻塞观察（>40-hex 截断接受、supersede note 多字
 | 方法语义（八条） | previous session=紧邻上一实际 CME RTH session（独立于漏斗）；vendor-degraded session 不得跳过；regular 取精确 15:59 bar close；scheduled early close 取精确最后排期 RTH bar close；**exact required close 存在且 finite 时，即使带 vendor-degraded 标记也可用**；标记只进 diagnostic 不自动 NA；zero-bar／精确排期收盘缺失／close 非 finite／无前日记 NA；禁 last available/nearest bar/向前跳日/填充/插值 |
 | 实施边界 | **不得**把 vendor_degraded_dates 字段静默收窄成 zero-bar 集合（我原 Option A 实现路径被否）；完整标记集保留供 diagnostic；可用性直接由精确排期收盘 bar 存在性＋finite 检查决定 |
 | 落点 | context.py `_prev_close_map`：NA 条件删标记子句、isnan→isfinite、新增 `prev_close_from_vendor_degraded` sidecar（S0Universe 新字段＋per-day sidecar 键）；入口 `structural_actuals_from`：`is None` 判缺失（聚合 reason 键经既有 F-14 词表映射自动正确、守恒）；`load_real_session_schedule` 不变（保留完整 20 日集） |
+
 | 等价性（B 条） | 合成逐日等价矩阵测试（七类案例逐日对 preflight 判定表）＋真实数据逐日等价：修复后 18 个 None 日与锁定 json missing_dates **逐日完全一致**；全 66 断言 all_pass=True 零失配 |
 | 结构结果（C 条） | 24→18、82→76、2800→2806、23→17；6 个"标记但有 bar"后继日恢复（sidecar=6）；1 首日＋12 排期收盘缺失＋5 零bar/部分缺失继续 NA；其余 58 断言逐位不变（机器验证） |
 | 测试（D 条） | 新增 5 测试（degraded+精确close→可用+diagnostic／degraded+close缺失→NA／非 finite→NA／逐日等价矩阵／actuals value-None 计缺失）；两判定性变异验收均红（重插标记子句 exit 1；回退 key-membership exit 1），恢复经哈希核对 |
 | 失败处置（E 条） | 行 9 授权、"+"失败行、attempts/S0-T001-A20260801T162047Z、incident 全保留；行 10 RUN_AUTHORIZATION_SUPERSEDED 精确引用行 9（reason_code=STAGE_B_ANCHOR_SEMANTICS_FIX）；地板 519→524；packet §0 context/入口两行哈希再渲染 |
+### IR-27 S0 封存批量方法裁决（APPROVED_BY_AARON 2026-08-10，S0-closeout 主线）
+
+程序记录：`AARON_S0_CLOSEOUT_DECISION_FORM_V1`（聊天交付，依赖排序）逐项附
+Fable 推荐；Aaron 裁复"逐项裁决全跟你推荐的方式做即可"并以自然语言启动
+PHASE C（其自设精确口令由制定者本人豁免——豁免作为程序事实入 Codex 包）。
+裁决值单源 = `contracts.aaron_ruled_methods()`（逐值 pin 于
+tests/test_aaron_rulings.py）；本表只记映射，不复述字面。
+
+| 项 | 裁决 | 生产 consumer | 行为测试 |
+|---|---|---|---|
+| DR-1 | spread 归约 B-i（交易窗 [600,944]，Q50(med)/Q50(p90)/Q50(p95)，linear，不舍入）＋ IR-7 定稿 Option i Primary（{1,2,Stress 有效 2,3}，语义=替代 per-side slip，"extra" 措辞正字）、Option ii(+1tick) 仅 sensitivity | costs.derive_spread_scalars / build_scenarios_from_method；入口 `_approved_injectables`（spread 表 sha256 钉 b6d6984f…） | test_costs.py DR-1/IR-7 组（窗界/插值/Stress 不复乘变异全红） |
+| DR-2 | vol20：simple、ddof=1、精确排期最后一分钟 close（IR-19/26 锚点）、r1 剔除补窗、全 Dev ex-post 三分位、§2 与附录 A 共用 mapping、<21 合格 close→vol_na 第四层 | dataset.build_vol20_regime_mapping(_from_universe)；prepare 绑定单一 mapping 至双 resolver | test_dr2_vol_regime.py（手算 pin/前视/守恒/ddof·log·r2 变异红） |
+| DR-3 | FP 构成 basis B：Hamilton over selected-TP、冻结字面缺额再分配（激活）、升序 tie-break、Σ守恒 | gridmix.fp_allocation_from_selected_tp → build_grid ruled 路径 | test_gridmix_rulings.py（基准对照/tie-break/守恒 raise） |
+| DR-4 | 完整合格序列、n1 剔除披露、每交易日均值 USD、每 seed 10k、引用 seed 7、percentile linear、CRN=同 θ 内 engine×scenario 共用 | stats.build_bootstrap_day_sequence / bootstrap_mean_ci_ruled；入口 day-state 编码 | test_bootstrap.py DR-4 组（CRN 熵/零填充/NA 计数变异红） |
+| DR-5 | K=200/seed、k 从 0、θ 入流、前缀嵌套、最大加倍 2、未收敛=infeasible_by_convergence；MC §5 四条在 MC 接线处生效 | gridmix repeat_* → build_grid ruled 路径 | test_gridmix_rulings.py（θ 入流/前缀嵌套变异红） |
+| DR-6 | event NA=F1 五层（IR-12/18 词表零新增） | dataset.event_stratum_of（入口＋evidence 均经此单点） | test_s0_dataset.py DR-6 组（None→NA_multi_event/未知 raise/守恒） |
+| DR-7 | stability 总体=双报（条件＋完整合格） | stability.build_stability_views populations 块＋check_populations（report 校验接线） | test_s0_stability.py（缺一总体即问题码） |
+| DR-8 | E2 最差日 P1/P5 估计量=linear | study.resolve_worst_day_estimator→_percentile（必传参数）；入口 estimator_status | test_s0_study.py（未裁 raise/lower 变异移动 P1P5/linear 位同） |
+| L-5 | 输出根=quant-data\itsf-runs（attempts 同根）、归档=整目录复制＋逐文件 SHA-256 复核、exact-set 零白名单维持 | contracts.RULED_*_ROOT＋RunConfig 字段＋runinfra.validate_output_roots（Stage-A 首门）＋archive_sealed_run；入口 GOVERNED_* 常量＋g_frozen 11 项 | test_s0_runner.py L-5 组（repo 内根拒绝/额外文件仍拒/归档失配/真实根不触碰夹具） |
+
+工程判断披露（Fable 裁定采纳，可由 Codex 复核升级）：
+(a) DR-4 CRN 流键含 block_len（block-5/21 不共流的既有 M6 设计约定；裁决
+范围是 engine×scenario 共享，两者不冲突）；(b) IR-7 Stress 存储值 1.0
+（pre-multiplier——全部消费者乘 friction_multiplier，存 2.0 即双计；接缝
+去乘＋有效值硬断言＋三值并列披露 adverse_ticks_disclosure）；(c) S2 两项
+子约定（straddle 边界 older<t<=newer；三分位 numpy linear＋下含边界）已
+具名披露待升级；(d) DR-2 的"合格日"=observed_rth 且 official_close 有限
+（含排期早收盘日、排除零 bar 日）。

@@ -39,12 +39,13 @@ import json
 import re
 from dataclasses import replace
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from test_s0_context import universe_of, weekdays, zero_open30_closes
 
-from itsf.contracts import CostScenarioParams
+from itsf.contracts import CostScenarioParams, aaron_ruled_methods
 from itsf.s0 import costs, study
 from itsf.s0.context import build_day_context
 from itsf.s0.dataset import ERA_ACTUAL, ERA_PROXY, build_s0_dataset
@@ -786,7 +787,15 @@ def test_the_theta_key_helper_is_stable_and_json_safe():
 
 def test_frozen_constants_are_module_level_and_not_parameters():
     """The frozen grid values are constants with citations, never arguments:
-    engines, era axis, budgets and the worst-day percentiles."""
+    engines, era axis, budgets and the worst-day percentiles.
+
+    DR-8 (2026-08-10) added `worst_day_estimator` / `estimator_test_only`.
+    Those are NOT frozen text: the frozen §7 table mandates the P1/P5 REPORT
+    and deliberately leaves the ESTIMATOR open, and Aaron ruled that open
+    sub-decision. A ruled METHOD travels as an explicit parameter (so no
+    hidden global can decide it); a FROZEN constant never does. The exact
+    parameter set is pinned so a third, un-declared knob cannot slip in.
+    """
     assert study.ENGINES == ("E1", "E2")
     assert study.FROZEN_THETAS == (0.5, 0.3)
     assert study.RISK_BUDGETS_USD == (50, 75, 100, 150)
@@ -794,7 +803,96 @@ def test_frozen_constants_are_module_level_and_not_parameters():
     assert study.ERA_AXIS == (ERA_PROXY, ERA_ACTUAL)
     assert study.BASE_SCENARIO_NAME == "Base"
     names = set(inspect.signature(build_study).parameters)
-    assert names == {"ds", "day_inputs", "scenarios", "thetas"}
+    assert names == {"ds", "day_inputs", "scenarios", "thetas",
+                     "worst_day_estimator", "estimator_test_only"}
+    # the ruled default is READ from the single ruled source, not restated
+    sig = inspect.signature(build_study)
+    assert (sig.parameters["worst_day_estimator"].default
+            == aaron_ruled_methods().worst_day_estimator)
+    assert sig.parameters["estimator_test_only"].default is False
+
+
+# ---------------------------------------------------------------------------
+# DR-8 — the worst-day P1/P5 estimator is a RULED method, threaded explicitly
+# ---------------------------------------------------------------------------
+
+# The interpolation-sensitive sample. 6 values -> numpy virtual index for P5
+# is (n-1)*0.05 = 0.25, i.e. strictly between order statistics 0 and 1, so
+# "linear" and "lower" MUST differ. This is the property the mutation test
+# below rests on, stated here rather than assumed.
+_INTERP_SENSITIVE = [-100.0, -40.0, -3.0, 5.0, 11.0, 42.0]
+
+
+def test_ruled_estimator_is_read_from_the_single_ruled_source():
+    assert study.RULED_WORST_DAY_ESTIMATOR == (
+        aaron_ruled_methods().worst_day_estimator)
+    # EV-12 binds to the module constant and cross-checks it against
+    # stability/stats; it must stay equal to the ruled value.
+    assert study.PERCENTILE_METHOD == study.RULED_WORST_DAY_ESTIMATOR
+
+
+@pytest.mark.parametrize("bad", ["", "LINEAR", "lower", "median_unbiased",
+                                 None, 7, True])
+def test_unknown_worst_day_estimator_raises(bad):
+    with pytest.raises(ValueError) as exc:
+        study.resolve_worst_day_estimator(bad)
+    assert f"worst_day_estimator_not_ruled:{bad}" in str(exc.value)
+
+
+def test_test_only_estimators_are_refused_on_the_production_path():
+    for name in sorted(study.TEST_ONLY_PERCENTILE_METHODS):
+        with pytest.raises(ValueError):
+            study.resolve_worst_day_estimator(name)          # test_only False
+        assert study.resolve_worst_day_estimator(name, True) == name
+
+
+def test_linear_reproduces_the_previous_hardcoded_behaviour():
+    """Bit-identical to the pre-DR-8 code path, which read the module
+    constant directly."""
+    ruled = study.RULED_WORST_DAY_ESTIMATOR
+    for q in study.WORST_DAY_PERCENTILES:
+        expected = float(np.percentile(np.asarray(_INTERP_SENSITIVE),
+                                       q, method=ruled))
+        assert study._percentile(_INTERP_SENSITIVE, q, ruled) == expected
+    assert study._worst_day_percentiles(_INTERP_SENSITIVE, ruled) == \
+        study._worst_day_percentiles(_INTERP_SENSITIVE)
+
+
+def test_estimator_parameter_is_live_mutation():
+    """Flip the estimator -> at least one P1/P5 output must move. If this
+    ever goes green with both estimators equal, the parameter is dead and the
+    computation is reading a hidden global again."""
+    ruled = study._worst_day_percentiles(_INTERP_SENSITIVE,
+                                         study.RULED_WORST_DAY_ESTIMATOR)
+    mutated = study._worst_day_percentiles(_INTERP_SENSITIVE, "lower")
+    assert any(ruled[k] != mutated[k] for k in ruled), (ruled, mutated)
+
+
+def test_build_study_threads_the_estimator_end_to_end():
+    _bars, _uni, ds = market()
+    inputs = build_inputs(*market())
+    ruled = build_study(ds, inputs, SCENARIOS)
+    mutated = build_study(ds, inputs, SCENARIOS,
+                          worst_day_estimator="lower",
+                          estimator_test_only=True)
+    block_r = ruled["per_theta"][K05]["executable"]["E2"]["Base"]
+    block_m = mutated["per_theta"][K05]["executable"]["E2"]["Base"]
+    # the ruled disclosure names the ruling, not an engineering convention
+    text = block_r["worst_day_report"]["percentile_estimator"]
+    assert "RULED" in text and "DR-8" in text
+    assert repr(study.RULED_WORST_DAY_ESTIMATOR) in text
+    assert "'lower'" in block_m["worst_day_report"]["percentile_estimator"]
+    # and the E2 worst-day report key set is unchanged (report.py pins it)
+    assert set(block_r["worst_day_report"]) == {
+        "frozen_mandatory", "percentile_estimator", "pooled", "by_era"}
+
+
+def test_build_study_refuses_an_unruled_estimator():
+    _bars, _uni, ds = market()
+    with pytest.raises(ValueError) as exc:
+        build_study(ds, build_inputs(*market()), SCENARIOS,
+                    worst_day_estimator="median_unbiased")
+    assert "worst_day_estimator_not_ruled:median_unbiased" in str(exc.value)
 
 
 def test_a_scenario_whose_key_disagrees_with_its_name_fails_closed():

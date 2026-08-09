@@ -67,7 +67,11 @@ from typing import Mapping, Sequence
 import numpy as np
 import pandas as pd
 
-from itsf.contracts import CostScenarioParams, TradePathRecord
+from itsf.contracts import (
+    CostScenarioParams,
+    TradePathRecord,
+    aaron_ruled_methods as _aaron_ruled_methods,
+)
 from itsf.s0 import costs, oracle, paths
 from itsf.s0.context import (
     PM_HI_MINUTE,
@@ -101,11 +105,22 @@ POOLED = "pooled"
 RISK_BUDGETS_USD = (50, 75, 100, 150)
 # frozen: S0 §7 table — E2 强制报告最差日 P1/P5.
 WORST_DAY_PERCENTILES = (1.0, 5.0)
-# numpy's default; stated because the frozen text mandates the P1/P5 report
-# without fixing an estimator. Linear interpolation between order statistics
-# (numpy `method="linear"`, the historical default) is the engineering
-# convention of this layer, disclosed here and in the output block.
-PERCENTILE_METHOD = "linear"
+# DR-8 (Aaron 2026-08-10) — the frozen text mandates the P1/P5 report without
+# fixing an estimator, and that sub-decision (DR-M6-H) is now RULED. The value
+# is READ from the single ruled source, never restated, and is threaded as an
+# EXPLICIT PARAMETER down to `_percentile` / `_worst_day_percentiles`; the
+# module constant below exists because EV-12 binds to
+# `study.PERCENTILE_METHOD` (and cross-checks it against
+# `stability.PERCENTILE_METHOD` / `stats.PERCENTILE_METHOD`) and because it
+# supplies the default for the two re-derivation helpers evidence.py calls
+# directly. `build_study` ALWAYS passes the estimator explicitly.
+RULED_WORST_DAY_ESTIMATOR: str = _aaron_ruled_methods().worst_day_estimator
+PERCENTILE_METHOD = RULED_WORST_DAY_ESTIMATOR
+# numpy estimators that are NOT the ruled one. Accepted ONLY under an
+# explicit test_only declaration, so a mutation test can prove the parameter
+# is live without opening a production override surface.
+TEST_ONLY_PERCENTILE_METHODS = frozenset(
+    {"lower", "higher", "nearest", "midpoint"})
 
 DETERMINISM_NOTE = (
     "study.py is a pure deterministic function of (dataset records, day "
@@ -237,21 +252,52 @@ def theta_key(theta: float) -> str:
     return f"theta_{theta:g}"
 
 
-def _percentile(values: Sequence[float], q: float) -> float | None:
+def resolve_worst_day_estimator(estimator: object,
+                                test_only: bool = False) -> str:
+    """DR-8 dispatch: the numpy `method=` string, or ValueError. Fail closed.
+
+    The ruled estimator is accepted always. The other numpy estimators are
+    accepted ONLY under an explicit `test_only` declaration (the same
+    discipline `ResolvedS0Methods.test_only` already carries), so a mutation
+    test can prove the parameter is live while the production path can only
+    ever compute the ruled statistic. Anything else — an unknown word, None,
+    a non-string — raises `worst_day_estimator_not_ruled:<value>`.
+    """
+    if isinstance(estimator, str):
+        if estimator == RULED_WORST_DAY_ESTIMATOR:
+            return estimator
+        if test_only and estimator in TEST_ONLY_PERCENTILE_METHODS:
+            return estimator
+    raise ValueError(f"worst_day_estimator_not_ruled:{estimator}")
+
+
+def _percentile(values: Sequence[float], q: float,
+                estimator: str) -> float | None:
+    """`estimator` is REQUIRED — there is deliberately no default here, so no
+    call site can compute a worst-day percentile off a hidden global."""
     if not len(values):
         return None
     return float(np.percentile(np.asarray(values, dtype=float), q,
-                               method=PERCENTILE_METHOD))
+                               method=estimator))
 
 
-def _worst_day_percentiles(values: Sequence[float]) -> dict[str, float | None]:
-    """frozen: S0 §7 table — 强制报告最差日 P1/P5 (E2)."""
-    return {f"P{q:g}": _percentile(values, q) for q in WORST_DAY_PERCENTILES}
+def _worst_day_percentiles(values: Sequence[float],
+                           estimator: str = PERCENTILE_METHOD,
+                           ) -> dict[str, float | None]:
+    """frozen: S0 §7 table — 强制报告最差日 P1/P5 (E2). DR-8 estimator."""
+    return {f"P{q:g}": _percentile(values, q, estimator)
+            for q in WORST_DAY_PERCENTILES}
 
 
 def _series_block(pairs: Sequence[tuple[str, float]],
-                  value_key: str = "daily_pnl_usd") -> dict[str, object]:
-    """(trade_date, USD) pairs -> a plain, JSON-safe descriptive block."""
+                  value_key: str = "daily_pnl_usd",
+                  estimator: str = PERCENTILE_METHOD) -> dict[str, object]:
+    """(trade_date, USD) pairs -> a plain, JSON-safe descriptive block.
+
+    `estimator` defaults to the module constant — which IS the ruled value —
+    for the independent re-derivation helpers that call this directly
+    (`s0/evidence.py`); `build_study` always passes it explicitly.
+    """
     vals = [float(v) for _d, v in pairs]
     total = float(sum(vals)) if vals else 0.0
     return {
@@ -261,20 +307,22 @@ def _series_block(pairs: Sequence[tuple[str, float]],
         "mean_usd": (total / len(vals)) if vals else None,
         "min_usd": min(vals) if vals else None,
         "max_usd": max(vals) if vals else None,
-        "worst_day_pnl_percentiles": _worst_day_percentiles(vals),
+        "worst_day_pnl_percentiles": _worst_day_percentiles(vals, estimator),
     }
 
 
 def _by_era_and_pooled(pairs_by_date: Sequence[tuple[str, float]],
                        era_of: Mapping[str, str],
                        value_key: str = "daily_pnl_usd",
+                       estimator: str = PERCENTILE_METHOD,
                        ) -> dict[str, object]:
     """frozen: S0 §6 L109-115 — the two era axes are reported SEPARATELY, and
     the pooled figure never replaces them."""
     out: dict[str, object] = {
-        POOLED: _series_block(pairs_by_date, value_key),
+        POOLED: _series_block(pairs_by_date, value_key, estimator),
         "by_era": {era: _series_block(
-            [(d, v) for d, v in pairs_by_date if era_of[d] == era], value_key)
+            [(d, v) for d, v in pairs_by_date if era_of[d] == era], value_key,
+            estimator)
             for era in ERA_AXIS},
     }
     return out
@@ -559,6 +607,8 @@ def build_study(ds: S0Dataset,
                 day_inputs: Mapping[str, StudyDayInput],
                 scenarios: Mapping[str, CostScenarioParams],
                 thetas: Sequence[float] = FROZEN_THETAS,
+                worst_day_estimator: str = RULED_WORST_DAY_ESTIMATOR,
+                estimator_test_only: bool = False,
                 ) -> dict[str, object]:
     """Build the S0 study record. Pure, deterministic, judgment-free.
 
@@ -577,6 +627,16 @@ def build_study(ds: S0Dataset,
     thetas
         A subset of the frozen pair (0.5 primary, 0.3 secondary); both are
         reported in full and neither is ever promoted after the fact.
+    worst_day_estimator
+        DR-8 (ruled 2026-08-10). The numpy `method=` string used for EVERY
+        P1/P5 worst-day percentile in this module. It travels on
+        `StudyConfig.methods.worst_day_estimator`, so the entry point passes
+        `config.methods.worst_day_estimator` explicitly; the default is the
+        ruled value read from `contracts.aaron_ruled_methods()`. An un-ruled
+        string raises ValueError (`worst_day_estimator_not_ruled:<value>`).
+    estimator_test_only
+        Mirrors `ResolvedS0Methods.test_only`. Only a test-only caller may
+        select a non-ruled numpy estimator.
 
     Returns
     -------
@@ -586,6 +646,8 @@ def build_study(ds: S0Dataset,
     _validate_scenarios(scenarios)
     theta_values = _validate_thetas(thetas)
     scenario_names = tuple(scenarios)
+    estimator = resolve_worst_day_estimator(worst_day_estimator,
+                                            estimator_test_only)
 
     records_sorted = sorted(ds.records, key=lambda r: r.trade_date)
     tradeable_days = [r for r in records_sorted if is_direction_tradeable(r)]
@@ -674,7 +736,7 @@ def build_study(ds: S0Dataset,
                      "at the most favourable in-window price, minus BASE "
                      "costs. Never an executable result and never compared to "
                      "a strategy claim."),
-            **_by_era_and_pooled(theo_pairs, era_of, "daily_usd"),
+            **_by_era_and_pooled(theo_pairs, era_of, "daily_usd", estimator),
         }
 
         executable: dict[str, dict[str, object]] = {}
@@ -691,7 +753,8 @@ def build_study(ds: S0Dataset,
             for name in scenario_names:
                 pnl = pnl_of[(engine, name)]
                 pairs = [(d, pnl[d]) for d in tp_days]
-                block = _by_era_and_pooled(pairs, era_of)
+                block = _by_era_and_pooled(pairs, era_of, "daily_pnl_usd",
+                                           estimator)
                 block["worst_day_report"] = {
                     # frozen: S0 §7 table — the P1/P5 worst-day report is
                     # MANDATORY for E2 (no stop); the same statistic is shown
@@ -699,10 +762,12 @@ def build_study(ds: S0Dataset,
                     # requirement.
                     "frozen_mandatory": engine == "E2",
                     "percentile_estimator": (
-                        f"numpy.percentile(method={PERCENTILE_METHOD!r}) — "
-                        "linear interpolation between order statistics; the "
+                        f"numpy.percentile(method={estimator!r}) — RULED by "
+                        "Aaron 2026-08-10 (DR-8, resolving DR-M6-H); the "
                         "frozen text mandates the P1/P5 report without fixing "
-                        "an estimator, so this choice is disclosed."),
+                        "an estimator, and this is the ruled sub-decision, "
+                        "not an engineering convention. Threaded in from "
+                        "methods.worst_day_estimator."),
                     POOLED: block[POOLED]["worst_day_pnl_percentiles"],
                     "by_era": {era: block["by_era"][era][
                         "worst_day_pnl_percentiles"] for era in ERA_AXIS},

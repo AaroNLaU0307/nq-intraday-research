@@ -137,6 +137,43 @@ M6.1.8 S1 — defect H-1: the Stage-E artifact LOG LINE burned real runs.
   Everything evidentiary is untouched: the manifest keeps the real names,
   the real digests and the existing order; the disk bytes, the hash chain
   and the formal report are byte-identical to before.
+
+M6.1.9 S3 — L-5 ruling (Aaron 2026-08-10): the repo lives inside an
+actively-syncing OneDrive tree, incompatible with the M6.1.7 exact-set
+disk invariant (a sync dropping such as `desktop.ini` is an undeclared
+file, which is a seal refusal, which burns a trial). Two additions, both
+scoped to the run-directory-lifecycle concern this module already owns:
+
+  (1) OUTPUT-ROOT VALIDATION GATE. `RunConfig` now carries `runs_root` /
+      `archive_root` (defaults = the ruled local, non-synced directories,
+      `contracts.RULED_RUNS_ROOT` / `RULED_ARCHIVE_ROOT`), and
+      `runs_dir`/`attempts_dir` are meant to resolve under `runs_root`.
+      `runinfra.validate_output_roots` is the fail-closed structural
+      checker; this module wires it in as an INTRINSIC Stage-A gate
+      (`output_roots_validated`) that always runs, first, regardless of
+      whatever the caller injected into `RunnerDeps.gates` — it is not
+      optional and not dependent on `scripts/s0_real_run.py` remembering
+      to add it, because a runner that can build/use `runs_dir` /
+      `attempts_dir` without ever having validated them is exactly the
+      defect class this ruling closes. The repo root it validates against
+      is derived from THIS MODULE's own on-disk location at runtime
+      (`_package_repo_root`), never hardcoded, so the gate is correct
+      regardless of where the repository happens to be checked out.
+
+  (2) POST-SEAL ARCHIVE STEP. After Stage F reaches `F_SEALED` (registry
+      COMPLETED already appended), `runinfra.archive_sealed_run` copies
+      the sealed run directory into `cfg.archive_root` and independently
+      re-verifies every file's bytes by SHA-256 on both sides. This runs
+      STRICTLY AFTER the run's own ok/exposure verdict is final: an
+      archive failure is recorded as a loud `archive_status` /
+      `archive_report` on the returned `RunOutcome` (see
+      `_archive_sealed_run`) but NEVER flips `RunOutcome.ok`, NEVER
+      un-seals the run and NEVER mutates `runs_dir` — the trial's
+      exposure is already burned and the sealed run directory is the
+      evidentiary record, so an archive-side problem is adjudicated
+      out of band, not laundered into a run failure it structurally
+      cannot be (there is no gate left to fail into; Stage F already
+      completed and the registry already carries COMPLETED).
 """
 from __future__ import annotations
 
@@ -198,6 +235,39 @@ def make_incident_id(*parts: object) -> str:
 
 def _sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def _package_repo_root() -> Path:
+    """The repository root, derived from THIS MODULE's own on-disk
+    location at runtime — never a hardcoded literal.
+
+    L-5 ruling (2026-08-10): the output-root validation gate needs to know
+    where the repo tree is so it can refuse a `runs_root`/`archive_root`
+    that lives inside it (or that contains it). `runner.py` lives at
+    `<repo>/src/itsf/s0/runner.py`, so the repo root is exactly three
+    parents up from this file's resolved location; deriving it this way
+    means the gate is correct wherever the repository happens to be
+    checked out, with no assumption baked in beyond this module's own
+    fixed position inside the package layout.
+    """
+    return Path(__file__).resolve().parents[3]
+
+
+def _output_roots_gate_check(config: RunConfig) -> tuple[bool, str]:
+    """Adapts `runinfra.validate_output_roots` (which raises) to the
+    `GateCheck` `(ok, detail)` shape used by every other Stage-A gate.
+
+    L-5 ruling. This is the ONLY place `_package_repo_root` is called from
+    the live lifecycle — a fresh derivation on every gate evaluation, never
+    cached, so the gate cannot go stale relative to wherever this
+    interpreter's copy of the repository actually lives.
+    """
+    try:
+        runinfra.validate_output_roots(config, _package_repo_root())
+    except RunGateError as exc:
+        return False, str(exc)
+    return True, ("runs_root/archive_root/runs_dir/attempts_dir validated "
+                  "against the repo tree (L-5)")
 
 
 def artifact_log_id(position: int) -> str:
@@ -330,6 +400,18 @@ class RunOutcome:
     runs_dir: Path | None = None
     incident_id: str = ""                  # opaque id; raw detail stays sealed
     stages_completed: tuple[str, ...] = field(default_factory=tuple)
+    # L-5 ruling (2026-08-10): the post-seal archive step
+    # (`runinfra.archive_sealed_run`) runs AFTER F_SEALED, on every run
+    # that reaches it (see `_archive_sealed_run`, called at the tail of
+    # `run()`). `archive_status` is "" for a run that never reached
+    # F_SEALED (the archive step is never attempted for a failed run);
+    # "archive_ok" or "archive_failed" thereafter. An "archive_failed"
+    # status NEVER flips `ok` to False and NEVER implies runs_dir was
+    # touched — exposure is already burned and the sealed run stays
+    # exactly as sealed; `archive_report` (a `runinfra.ArchiveReport`)
+    # carries the full per-file recheck manifest for adjudication.
+    archive_status: str = ""
+    archive_report: runinfra.ArchiveReport | None = None
 
 
 class S0Runner:
@@ -652,7 +734,19 @@ class S0Runner:
         # the PRE_RUN_ATTEMPT_FAILURE path (report + registry event), never
         # escape as a bare traceback with no record of the attempt.
         self._safe_log(f"stage={RunStage.A_PRECHECK.value} status=start")
-        for gate in d.gates:
+        # L-5 ruling (2026-08-10): the output-root validation gate is
+        # INTRINSIC to the Stage-A battery — built by the runner itself and
+        # run FIRST, ahead of whatever the caller injected into `d.gates`.
+        # It is not dependent on the entry script remembering to add it: a
+        # runner that could go on to build/use runs_dir/attempts_dir
+        # without ever having validated them is exactly the defect class
+        # this ruling closes, and `d.gates` is not this module's to trust
+        # blindly for a hard invariant it alone is responsible for.
+        stage_a_gates = (
+            GateCheck("output_roots_validated",
+                     lambda: _output_roots_gate_check(d.config)),
+            *d.gates)
+        for gate in stage_a_gates:
             try:
                 ok, detail = gate.check()
             except Exception as exc:                 # noqa: BLE001
@@ -931,9 +1025,48 @@ class S0Runner:
         d.append_registry_event("COMPLETED", "S0 report sealed")
         self._stages_done.append(RunStage.F_SEALED.value)
         self._safe_log(f"stage={RunStage.F_SEALED.value} status=end")
+
+        # ---- post-seal archive step (L-5 ruling, 2026-08-10) --------------
+        # Strictly AFTER the run's own ok/exposure verdict is final — see
+        # `_archive_sealed_run`'s docstring for why an archive-side problem
+        # can never flip this outcome or touch `rdir`.
+        archive_status, archive_report = self._archive_sealed_run(rdir)
+
         return RunOutcome(ok=True, terminal_stage=RunStage.F_SEALED,
                           exposure_consumed=True, runs_dir=rdir,
-                          stages_completed=tuple(self._stages_done))
+                          stages_completed=tuple(self._stages_done),
+                          archive_status=archive_status,
+                          archive_report=archive_report)
+
+    def _archive_sealed_run(
+            self, rdir: Path) -> tuple[str, runinfra.ArchiveReport]:
+        """L-5 ruling: copy the just-sealed run directory into
+        `cfg.archive_root` and independently re-verify every file's bytes
+        by SHA-256 on both sides (`runinfra.archive_sealed_run`). Called
+        EXACTLY ONCE, only after F_SEALED / registry COMPLETED.
+
+        Every path here returns a status string plus a real
+        `runinfra.ArchiveReport` (never a bare exception, never an
+        ad-hoc dict) — including the defensive `except` below, which
+        exists only because a caller-supplied `cfg.archive_root` could in
+        principle raise something `archive_sealed_run` itself does not
+        already catch (e.g. a hostile `__fspath__`); that too is captured
+        into the report rather than propagated, because an archive-side
+        exception must never be allowed to look like a run failure this
+        late in the lifecycle (the run's own ok/exposure verdict is
+        already final by the time this runs).
+        """
+        try:
+            report = runinfra.archive_sealed_run(rdir, self._d.config.archive_root)
+        except Exception as exc:                     # noqa: BLE001
+            report = runinfra.ArchiveReport(
+                ok=False, status="archive_failed", run_dir_name=rdir.name,
+                source_dir=str(rdir),
+                dest_dir=str(Path(self._d.config.archive_root) / rdir.name),
+                files=(),
+                errors=(f"archive_sealed_run raised {type(exc).__name__}: "
+                       f"{exc}",))
+        return report.status, report
 
 
 def append_registry_event_line(registry_path: Path, trial_id: str,

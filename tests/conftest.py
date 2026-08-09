@@ -14,8 +14,62 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
 import pandas as pd  # noqa: E402
+import pytest  # noqa: E402
 
 ET = ZoneInfo("America/New_York")
+
+
+@pytest.fixture(autouse=True)
+def _suite_guard_real_ruled_roots():
+    """SUITE-WIDE (conformance F4.1): no test anywhere may add/remove
+    top-level entries under the REAL L-5 ruled roots. Tolerant of
+    pre-existing real content; intolerant of any change across a test."""
+    from itsf.contracts import RULED_ARCHIVE_ROOT, RULED_RUNS_ROOT
+    roots = (Path(RULED_RUNS_ROOT), Path(RULED_ARCHIVE_ROOT))
+
+    def snap():
+        return {r: (frozenset(p.name for p in r.iterdir())
+                    if r.exists() else None) for r in roots}
+
+    before = snap()
+    yield
+    after = snap()
+    for r in roots:
+        assert after[r] == before[r], (
+            f"a test touched the REAL ruled root {r} — pass explicit "
+            "tmp_path-based runs_root/archive_root overrides")
+
+
+@pytest.fixture(autouse=True)
+def _block_real_archive_reads(monkeypatch):
+    """S0-closeout incident guard (2026-08-10): NO test may load bars from
+    the REAL data archive, ever.
+
+    Incident being prevented from recurring: after the ruled config sources
+    landed, `RealChain.prepare` proceeds past config resolution, so a chain
+    test that forgot its hermetic patches silently reached
+    `DevelopmentSignalLoader.load_real` against the real quant-data archive
+    (caught mid-run, process killed, no outcome values were computed or
+    viewed; disclosed in the closeout packet). This fixture makes that
+    failure LOUD and immediate for every test, permanently.
+
+    Narrow by design: synthetic `job_dir`s under tmp_path stay usable —
+    only the real archive tree is fenced.
+    """
+    from itsf.data.dbn_loader import DevelopmentSignalLoader
+
+    real = DevelopmentSignalLoader.load_real
+
+    def guarded(self, filename, source_format="dbn"):
+        p = str(self.job_dir).lower()
+        if "databento-archive" in p or p.startswith(r"c:\users\aaron\quant-data"):
+            raise RuntimeError(
+                "BLOCKED: test attempted to load real archive data "
+                f"({self.job_dir}) — patch RealChain._ensure or use "
+                "load_synthetic; real reads are forbidden in the suite")
+        return real(self, filename, source_format)
+
+    monkeypatch.setattr(DevelopmentSignalLoader, "load_real", guarded)
 
 
 def make_minute_bars(date: str, pattern: str = "trend_up",

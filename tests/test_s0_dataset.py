@@ -21,7 +21,8 @@ from test_s0_context import (
     zero_open30_closes,
 )
 
-from itsf.contracts import APPROVED_NA_REASONS
+from itsf.contracts import APPROVED_NA_REASONS, aaron_ruled_methods
+from itsf.s0 import dataset as dataset_mod
 from itsf.s0.context import (
     MICRO_ERA_BOUNDARY,
     NA_ADR14_WARMUP,
@@ -37,7 +38,9 @@ from itsf.s0.dataset import (
     DIAG_OPENING_NUMERATOR_ZERO,
     DIRECTION_DIRECTIONAL,
     Y6_RULE,
+    build_event_stratum_map,
     build_s0_dataset,
+    event_stratum_of,
 )
 
 # Past the 14-day ADR warm-up in a 30-weekday universe starting 2020-01-02.
@@ -692,6 +695,95 @@ def test_frequency_by_year_and_month_partition_the_records():
     by_month = ds.frequency["by_month"]
     assert sum(c["days_in_sample"] for c in by_month.values()) == len(ds.records)
     assert ds.frequency["thetas"] == {"primary": 0.5, "secondary": 0.3}
+
+
+# ---------------------------------------------------------------------------
+# DR-6 — the Appendix-A stratum key's EVENT axis (Aaron 2026-08-10)
+# ---------------------------------------------------------------------------
+
+RULED_EVENT_MAPPING = aaron_ruled_methods().event_na_mapping
+
+
+def test_ruled_event_mapping_is_read_from_the_single_ruled_source():
+    assert dataset_mod.RULED_EVENT_NA_MAPPING == RULED_EVENT_MAPPING
+    assert RULED_EVENT_MAPPING != dataset_mod.EVENT_NA_MAPPING_TEST_ONLY
+
+
+def test_five_strata_use_the_ir12_18_vocabulary_and_nothing_new():
+    """Zero new vocabulary: the five strata are exactly the F10 categories,
+    "none", and the IR-12/18 multi-event NA word the universe already uses."""
+    assert dataset_mod.EVENT_STRATA == ("CPI", "NFP", "FOMC", "none",
+                                        "NA_multi_event")
+    dates = weekdays("2020-01-02", 30)
+    uni = universe_of(dates)[1]
+    # the same five words S0Universe.f10_exclusive_counts partitions on
+    assert set(uni.f10_exclusive_counts()) == set(dataset_mod.EVENT_STRATA)
+
+
+def test_f10_none_maps_to_na_multi_event_and_the_day_is_kept():
+    for mapping, test_only in ((RULED_EVENT_MAPPING, False),
+                               (dataset_mod.EVENT_NA_MAPPING_TEST_ONLY, True)):
+        assert event_stratum_of(None, mapping, test_only) == "NA_multi_event"
+
+
+@pytest.mark.parametrize("flag", ["CPI", "NFP", "FOMC", "none"])
+def test_named_flags_pass_through_unchanged(flag):
+    assert event_stratum_of(flag, RULED_EVENT_MAPPING) == flag
+
+
+@pytest.mark.parametrize("bad", ["", "five_strata", "F1_five_stratum",
+                                 "unknown", "NA"])
+def test_unknown_event_mapping_raises(bad):
+    with pytest.raises(ValueError, match="not implemented"):
+        event_stratum_of(None, bad)
+
+
+def test_test_only_mapping_is_refused_on_the_production_path():
+    test_only_value = dataset_mod.EVENT_NA_MAPPING_TEST_ONLY
+    with pytest.raises(ValueError, match="TEST_ONLY"):
+        event_stratum_of(None, test_only_value)             # test_only False
+    assert event_stratum_of(None, test_only_value, True) == "NA_multi_event"
+
+
+def test_a_flag_outside_the_vocabulary_fails_closed():
+    with pytest.raises(ValueError, match="outside the five-stratum"):
+        event_stratum_of("PPI", RULED_EVENT_MAPPING)
+
+
+def test_five_stratum_partition_conserves_the_population():
+    """Counts sum to the total and no day is dropped — the load-bearing half
+    of the ruling ("days are NEVER dropped for event reasons")."""
+    flags = {
+        "2020-01-02": "CPI", "2020-01-03": "NFP", "2020-01-06": "FOMC",
+        "2020-01-07": "none", "2020-01-08": None, "2020-01-09": None,
+        "2020-01-10": "none",
+    }
+    out = build_event_stratum_map(flags, RULED_EVENT_MAPPING)
+    assert out["counts"] == {"CPI": 1, "NFP": 1, "FOMC": 1, "none": 2,
+                             "NA_multi_event": 2}
+    assert sum(out["counts"].values()) == len(flags)
+    assert set(out["stratum_of"]) == set(flags)          # no day dropped
+    assert out["conservation"]["counts_sum_to_population"] is True
+    assert out["strata"] == list(dataset_mod.EVENT_STRATA)
+
+
+def test_stratum_map_over_a_real_synthetic_universe_conserves():
+    dates = weekdays("2020-01-02", 30)
+    events = EventCalendar(cpi_dates=frozenset({dates[20]}),
+                           nfp_dates=frozenset({dates[20], dates[22]}),
+                           fomc_statement_dates=frozenset({dates[24]}))
+    bars, uni = universe_of(dates, events=events)
+    flags = {d: uni.events.encode_f10(d)
+             for d in uni.funnel.structurally_eligible}
+    out = build_event_stratum_map(flags, RULED_EVENT_MAPPING)
+    assert sum(out["counts"].values()) == len(flags)
+    # dates[20] is CPI+NFP -> F10 None -> NA_multi_event, day KEPT
+    assert out["stratum_of"][dates[20]] == "NA_multi_event"
+    assert out["stratum_of"][dates[22]] == "NFP"
+    assert out["stratum_of"][dates[24]] == "FOMC"
+    # and it agrees with the universe's own mutually-exclusive F10 partition
+    assert out["counts"] == uni.f10_exclusive_counts()
+    del bars
 
 
 def test_no_real_data_paths_referenced_in_this_test_file():

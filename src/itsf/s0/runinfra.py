@@ -17,10 +17,29 @@ Architecture (Aaron 2026-07-31 erratum, frozen for this task):
       canonicalize_manifest_record, compute_record_hash,
       verify_chain_records, validate_log_event, check_na_conservation,
       translate_na_reason, translate_preflight_assertions,
-      compare_preflight_assertions, render_failure_report
-  Narrow I/O adapter layer (exactly two functions):
+      compare_preflight_assertions, render_failure_report,
+      validate_output_roots
+  Narrow I/O adapter layer:
       append_manifest_record(path, record)
       write_failure_report(directory, rendered)
+      archive_sealed_run(runs_dir, archive_root)      # L-5 ruling, S3/M6.1.9
+
+  L-5 ruling (Aaron 2026-08-10, S3/M6.1.9): the repo lives inside an
+  actively-syncing OneDrive tree, which is incompatible with the M6.1.7
+  exact-set disk invariant (a sync dropping such as `desktop.ini` is an
+  undeclared file, which is a seal refusal, which burns a trial). The
+  ruling moves the governed output roots to dedicated LOCAL, non-synced
+  directories (`contracts.RULED_RUNS_ROOT` / `RULED_ARCHIVE_ROOT`).
+  `validate_output_roots` is the fail-closed structural gate that enforces
+  the new roots are disjoint from the repo tree and from each other, and
+  that `RunConfig.runs_dir`/`attempts_dir` resolve under `RunConfig.
+  runs_root`; `archive_sealed_run` is the post-seal narrow I/O step that
+  copies a completed run directory into the archive root and independently
+  re-verifies every file's bytes by SHA-256 on both sides after the copy.
+  Neither function creates or touches an attempt/run root directory's
+  CONTENTS — `validate_output_roots` performs no I/O beyond path
+  resolution, and `archive_sealed_run` only ever READS `runs_dir` (never
+  writes into it) while writing exclusively under `archive_root`.
 
 Hard constraints honored throughout this module:
   - zero real-data access; zero network access;
@@ -93,6 +112,157 @@ _FILE_REQUIRED_KEYS = frozenset(
 _SEAL_REQUIRED_KEYS = frozenset(
     {"record_type", "stage", "sealed_record_hash", "previous_record_hash"}
 )
+
+
+# =========================================================================
+# 0. Output-root governance (L-5 ruling, 2026-08-10) — pure logic
+# =========================================================================
+#
+# The repo lives inside an actively-syncing OneDrive tree. The M6.1.7
+# exact-set disk invariant (a run directory's contents must EQUAL its
+# declared set, or the run is refused as sealed) makes any sync-tool
+# dropping — `desktop.ini`, a `*.tmp` file, a sync client's own
+# subdirectory — an automatic `disk_extra_file` refusal that burns a
+# trial. Aaron's ruling is to move the governed output roots OUT of the
+# repo tree entirely, to dedicated local, non-synced directories
+# (`contracts.RULED_RUNS_ROOT` / `RULED_ARCHIVE_ROOT`), rather than widen
+# the exact-set invariant with a whitelist (a whitelist would weaken the
+# "declared set == disk contents" invariant the M6.1.7 closeout exists to
+# guarantee). `validate_output_roots` is the fail-closed structural gate
+# that enforces the new roots are actually disjoint from the repo tree
+# and from each other.
+
+
+def _disjoint(a: Path, b: Path) -> bool:
+    """True iff neither RESOLVED path is an ancestor of (or equal to) the
+    other. Two equal paths are NOT disjoint (each is trivially a "subpath"
+    of the other), so this also catches the `a == b` case without a
+    separate comparison."""
+    return not (a.is_relative_to(b) or b.is_relative_to(a))
+
+
+def _strictly_under(child: Path, ancestor: Path) -> bool:
+    """True iff RESOLVED `child` is a PROPER descendant of RESOLVED
+    `ancestor` — i.e. under it, but not equal to it."""
+    return child != ancestor and child.is_relative_to(ancestor)
+
+
+def _absolute_path_field(cfg_value: object, field_name: str) -> Path:
+    """`RunConfig` fields are typed `str` but nothing enforces that at
+    runtime (a plain frozen dataclass performs no field validation), so
+    every value this gate reads is re-checked here before use: must be a
+    non-empty `str`, and must be an absolute path. Raises RunGateError
+    (never a bare TypeError/ValueError) on any defect, matching the
+    fail-closed contract of the rest of this gate."""
+    if not isinstance(cfg_value, str) or not cfg_value:
+        raise RunGateError(
+            f"validate_output_roots: RunConfig.{field_name} must be a "
+            f"non-empty str, got {cfg_value!r}"
+        )
+    p = Path(cfg_value)
+    if not p.is_absolute():
+        raise RunGateError(
+            f"validate_output_roots: RunConfig.{field_name} must be an "
+            f"absolute path, got {cfg_value!r}"
+        )
+    return p
+
+
+def validate_output_roots(cfg: RunConfig, repo_root: Path) -> None:
+    """Fail-closed (L-5 ruling) gate over the FOUR governed output paths
+    on `cfg`: `runs_root`, `archive_root`, `runs_dir`, `attempts_dir`.
+
+    Raises `RunGateError` unless ALL of the following hold (checked in
+    this order, so the FIRST violation found is the one reported):
+
+      1. `cfg.runs_root` and `cfg.archive_root` are each a non-empty,
+         ABSOLUTE path string;
+      2. `repo_root` is an absolute path (a defensive check on the
+         caller — the runner derives it from its own on-disk location,
+         never from a literal, so this should never fire in practice);
+      3. `cfg.runs_root` is fully DISJOINT from `repo_root` — neither is
+         an ancestor of, nor equal to, the other. Same for
+         `cfg.archive_root`. This is the L-5 ruling's central invariant:
+         a governed output root living inside the actively-syncing repo
+         tree (or the repo tree living inside one, e.g. a mistakenly
+         inverted config) is exactly the defect being closed;
+      4. `cfg.runs_root` and `cfg.archive_root` are themselves fully
+         DISJOINT from EACH OTHER (equal, or one nested inside the
+         other, are both refused);
+      5. `cfg.runs_dir` and `cfg.attempts_dir` are each a non-empty,
+         absolute path string that resolves STRICTLY under (a proper
+         descendant of, never equal to) `cfg.runs_root`.
+
+    Pure path arithmetic: `Path.resolve()` WITHOUT `strict=True`, so this
+    works correctly before any directory in the chain has been created
+    (the ruled roots are provisioned lazily, on first real use, not by
+    this gate) — the gate never touches the filesystem beyond whatever
+    symlink-normalisation `resolve()` itself performs, and it never
+    creates, deletes or lists a directory.
+
+    This function RAISES on failure (never returns a `(bool, str)`
+    tuple) — it is a hard invariant checker in the same family as
+    `check_na_conservation`'s underlying arithmetic, not a `GateCheck`
+    predicate. A caller that needs the `(ok, detail)` shape (the runner's
+    Stage-A gate battery) wraps this call; see `runner.py`.
+    """
+    if not isinstance(cfg, RunConfig):
+        raise RunGateError(
+            "validate_output_roots: cfg must be a RunConfig instance, got "
+            f"{type(cfg).__name__}"
+        )
+    if not isinstance(repo_root, Path):
+        raise RunGateError(
+            "validate_output_roots: repo_root must be a pathlib.Path "
+            f"instance, got {type(repo_root).__name__}"
+        )
+    if not repo_root.is_absolute():
+        raise RunGateError(
+            f"validate_output_roots: repo_root must be an absolute path, "
+            f"got {repo_root}"
+        )
+
+    runs_root_p = _absolute_path_field(cfg.runs_root, "runs_root")
+    archive_root_p = _absolute_path_field(cfg.archive_root, "archive_root")
+
+    repo_root_r = repo_root.resolve()
+    runs_root_r = runs_root_p.resolve()
+    archive_root_r = archive_root_p.resolve()
+
+    if not _disjoint(runs_root_r, repo_root_r):
+        raise RunGateError(
+            f"validate_output_roots: runs_root ({runs_root_r}) and the "
+            f"repo tree ({repo_root_r}) must be fully disjoint (L-5 "
+            f"ruling) — one contains, or equals, the other"
+        )
+    if not _disjoint(archive_root_r, repo_root_r):
+        raise RunGateError(
+            f"validate_output_roots: archive_root ({archive_root_r}) and "
+            f"the repo tree ({repo_root_r}) must be fully disjoint (L-5 "
+            f"ruling) — one contains, or equals, the other"
+        )
+    if not _disjoint(runs_root_r, archive_root_r):
+        raise RunGateError(
+            f"validate_output_roots: runs_root ({runs_root_r}) and "
+            f"archive_root ({archive_root_r}) must be fully disjoint — "
+            f"one contains, or equals, the other"
+        )
+
+    runs_dir_p = _absolute_path_field(cfg.runs_dir, "runs_dir")
+    attempts_dir_p = _absolute_path_field(cfg.attempts_dir, "attempts_dir")
+    runs_dir_r = runs_dir_p.resolve()
+    attempts_dir_r = attempts_dir_p.resolve()
+
+    if not _strictly_under(runs_dir_r, runs_root_r):
+        raise RunGateError(
+            f"validate_output_roots: runs_dir ({runs_dir_r}) does not "
+            f"resolve strictly under runs_root ({runs_root_r})"
+        )
+    if not _strictly_under(attempts_dir_r, runs_root_r):
+        raise RunGateError(
+            f"validate_output_roots: attempts_dir ({attempts_dir_r}) does "
+            f"not resolve strictly under runs_root ({runs_root_r})"
+        )
 
 
 # =========================================================================
@@ -1092,3 +1262,166 @@ def write_failure_report(directory: str | Path, rendered: FailureReport) -> dict
         encoding="utf-8",
     )
     return {"markdown": md_path, "json": json_path}
+
+
+# =========================================================================
+# 6. Post-seal archive step (L-5 ruling, 2026-08-10) — narrow I/O
+# =========================================================================
+
+
+@dataclass(frozen=True)
+class ArchiveFileRecheck:
+    """One file's post-copy recheck record — the exact evidence a `path,
+    bytes, sha256, match` receipt is meant to be. `source_bytes`/
+    `dest_bytes`/`*_sha256` are ``None`` only when the file could not be
+    read/copied at all (a hard per-file failure, e.g. a permissions error
+    mid-copy); a completed copy always carries real numbers on both
+    sides, even when they disagree."""
+
+    relative_path: str                 # POSIX-separated, relative to the run dir root
+    source_bytes: int | None
+    dest_bytes: int | None
+    source_sha256: str | None
+    dest_sha256: str | None
+    match: bool
+
+
+@dataclass(frozen=True)
+class ArchiveReport:
+    """The full result of one `archive_sealed_run` call. `status` is the
+    "loud" terminal-state word the runner records on `RunOutcome`:
+    ``"archive_ok"`` (ok=True, every file matched) or ``"archive_failed"``
+    (ok=False — at least one copy/re-read/mismatch problem; `errors`
+    carries a human-readable line per problem and `files` carries the
+    full per-file recheck manifest, matched and mismatched entries
+    alike)."""
+
+    ok: bool
+    status: str                        # "archive_ok" | "archive_failed"
+    run_dir_name: str
+    source_dir: str
+    dest_dir: str
+    files: tuple[ArchiveFileRecheck, ...]
+    errors: tuple[str, ...]
+
+
+_ARCHIVE_OK = "archive_ok"
+_ARCHIVE_FAILED = "archive_failed"
+
+
+def archive_sealed_run(runs_dir: str | Path,
+                       archive_root: str | Path) -> ArchiveReport:
+    """Copy a SEALED run directory into ``archive_root/<run-dir-name>/``
+    and independently RE-READ + re-hash every file on BOTH sides after
+    the copy (L-5 ruling, 2026-08-10 — "Archive = after a run completes,
+    full per-run directory copy into archive_root with a per-file SHA-256
+    recheck").
+
+    MUST be called only AFTER the run has reached `F_SEALED` — this
+    function performs no stage/seal check itself (the caller, `runner.py`,
+    already established that by construction: it is called from the one
+    place in `run()` that follows the F_SEALED registry append) — but it
+    is otherwise a NARROW, SELF-CONTAINED I/O step: it takes a directory
+    path and a destination root and does exactly one thing.
+
+    NEVER MUTATES `runs_dir` IN ANY WAY. Every filesystem write this
+    function performs lands under `archive_root`; `runs_dir` is opened
+    exclusively for reading (`Path.is_file` / `Path.read_bytes`). A
+    mismatch or a copy failure is reported in the returned `ArchiveReport`
+    (`status="archive_failed"`) and NOTHING about the sealed run directory
+    is touched, deleted, moved or rewritten — exposure was already burned
+    at `RUN_STARTED` and the sealed run directory IS the evidentiary
+    record; an archive-side problem must never retroactively un-seal it
+    or be allowed to mutate it while trying to fix itself. This function
+    never raises for a per-file problem (copy failure, post-copy re-read
+    failure, digest mismatch) — every such problem is captured into the
+    returned report instead, so the caller always gets a structured
+    result to attach to the run's terminal state. It raises only
+    `FileNotFoundError` if `runs_dir` itself is not an existing directory
+    (a caller error: this function is never the thing that creates a run
+    directory) — see `ArchiveReport.status == "archive_failed"` for every
+    other failure mode, including the destination-root itself being
+    uncreatable.
+
+    Refuses (as an `archive_failed` report, not an exception) if
+    ``archive_root/<run-dir-name>/`` already exists — this function
+    never overwrites a prior archive copy.
+    """
+    src = Path(runs_dir)
+    if not src.is_dir():
+        raise FileNotFoundError(
+            "archive_sealed_run: runs_dir does not exist or is not a "
+            f"directory (archive_sealed_run never creates a run "
+            f"directory): {src}"
+        )
+    dest_root = Path(archive_root)
+    dest = dest_root / src.name
+
+    try:
+        dest_root.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        return ArchiveReport(
+            ok=False, status=_ARCHIVE_FAILED, run_dir_name=src.name,
+            source_dir=str(src), dest_dir=str(dest), files=(),
+            errors=(f"archive_root could not be created: "
+                   f"{type(exc).__name__}: {exc}",))
+
+    if dest.exists():
+        return ArchiveReport(
+            ok=False, status=_ARCHIVE_FAILED, run_dir_name=src.name,
+            source_dir=str(src), dest_dir=str(dest), files=(),
+            errors=(f"archive destination already exists (refusing to "
+                   f"overwrite a prior archive copy): {dest}",))
+
+    errors: list[str] = []
+    files: list[ArchiveFileRecheck] = []
+
+    source_files = sorted(p for p in src.rglob("*") if p.is_file())
+    for source_path in source_files:
+        rel = source_path.relative_to(src).as_posix()
+        dest_path = dest / source_path.relative_to(src)
+        try:
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            dest_path.write_bytes(source_path.read_bytes())
+        except OSError as exc:
+            msg = f"{rel}: copy failed: {type(exc).__name__}: {exc}"
+            errors.append(msg)
+            files.append(ArchiveFileRecheck(
+                relative_path=rel, source_bytes=None, dest_bytes=None,
+                source_sha256=None, dest_sha256=None, match=False))
+            continue
+
+        # THE RECHECK. Independent re-read of BOTH sides after the copy —
+        # never reusing the bytes read during the copy itself — so this
+        # is a genuine post-write proof, not a re-statement of the value
+        # the copy loop already believed.
+        try:
+            source_reread = source_path.read_bytes()
+            dest_reread = dest_path.read_bytes()
+        except OSError as exc:
+            msg = f"{rel}: post-copy re-read failed: {type(exc).__name__}: {exc}"
+            errors.append(msg)
+            files.append(ArchiveFileRecheck(
+                relative_path=rel, source_bytes=None, dest_bytes=None,
+                source_sha256=None, dest_sha256=None, match=False))
+            continue
+
+        source_sha = hashlib.sha256(source_reread).hexdigest()
+        dest_sha = hashlib.sha256(dest_reread).hexdigest()
+        match = (source_sha == dest_sha
+                 and len(source_reread) == len(dest_reread))
+        if not match:
+            errors.append(
+                f"{rel}: sha256/bytes mismatch after copy "
+                f"(source={source_sha}:{len(source_reread)} "
+                f"dest={dest_sha}:{len(dest_reread)})")
+        files.append(ArchiveFileRecheck(
+            relative_path=rel, source_bytes=len(source_reread),
+            dest_bytes=len(dest_reread), source_sha256=source_sha,
+            dest_sha256=dest_sha, match=match))
+
+    ok = not errors
+    return ArchiveReport(
+        ok=ok, status=_ARCHIVE_OK if ok else _ARCHIVE_FAILED,
+        run_dir_name=src.name, source_dir=str(src), dest_dir=str(dest),
+        files=tuple(files), errors=tuple(errors))

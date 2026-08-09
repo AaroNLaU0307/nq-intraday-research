@@ -186,6 +186,15 @@ def _real_pieces() -> dict:
               for s in evidence.day_strata}
     feasibility: dict = {}
     bootstrap_ci: dict = {}
+    # DR-4 (Aaron 2026-08-10): the published per-seed mean is the RULED
+    # full-eligible-sequence statistic — zero-filled sat-out days add
+    # nothing to the sum, NA days drop with a disclosed count — and the
+    # cell carries the sequence accounting the reconciler cross-pins.
+    n_eligible = len(ds.records)
+    n_ruled = sum(1 for r in ds.records
+                  if r.labels.y_cont is not None
+                  and int(r.labels.d_open or 0) != 0)
+    n_na_dropped = n_eligible - n_ruled
     for t, tblock in study["per_theta"].items():
         p = tblock["frequency"]["pooled"]["continuation_base_rate_p"]
         for eng in ENGINES:
@@ -193,7 +202,7 @@ def _real_pieces() -> dict:
                 d_tp = tblock["d_tp"][eng][scn]
                 d_fp = tblock["d_fp"][eng][scn]
                 series = [d_tp[d] for d in sorted(d_tp)]
-                mean = float(np.asarray(series, dtype=float).mean())
+                mean = (float(sum(series)) / n_ruled) if n_ruled else 0.0
                 for blk in BLOCKS:
                     bootstrap_ci[f"{t}|{eng}|{scn}|block{blk}"] = {
                         "per_seed": {
@@ -202,6 +211,9 @@ def _real_pieces() -> dict:
                                      "block_len": blk}
                             for s in (7, 13, 31)},
                         "quoted_seed": 7,
+                        "n_days_in_sequence": n_ruled,
+                        "n_oracle_traded_days": len(series),
+                        "n_na_days_dropped": n_na_dropped,
                         "convergence": {"max_abs_ci_lo_diff": 0.0,
                                         "max_abs_ci_hi_diff": 0.0}}
                 strata = {d: (d[:4], vol_of[d], event_of[d])
@@ -2114,9 +2126,13 @@ def test_honest_run_marker_text_is_byte_stable():
     assert ("PARTIAL:governance.frozen_hashes:EV-13 comparison did not run "
             "over a non-empty observed set — the seal-boundary equality "
             "stays tautological (matrix L127)") in markers
-    assert ("PARTIAL:usd_layer:DR-1 — EVERY USD figure in the sealed "
-            "report inherits an unruled cost input, including the AF2 atom "
-            "itself (matrix L132/S6.3)") in markers
+    # S0 closeout (2026-08-10): the marker was rewritten for the RULED
+    # posture (conformance F6.1) — the pin moves with the correction.
+    assert ("PARTIAL:usd_layer:USD figures inherit the DR-1 RULED cost "
+            "input; the ruling closed the definition gap — the residual "
+            "is that this module re-verifies fills against EV-4 "
+            "snapshots, not against the raw cost table "
+            "(matrix L132/S6.3)") in markers
 
 
 def test_a_check_that_never_ran_is_reported_by_the_registry():

@@ -62,6 +62,7 @@ intersection is empty on the approved input set, so no current number moves.
 """
 from __future__ import annotations
 
+import bisect
 import math
 from collections import Counter
 from dataclasses import asdict, dataclass, replace
@@ -75,6 +76,7 @@ from itsf.contracts import (
     DayFeatures,
     DayLabels,
     NAConservationError,
+    aaron_ruled_methods as _aaron_ruled_methods,
 )
 from itsf.data.roles import ROLE_WINDOWS as _ROLE_WINDOWS_IMPORT, DataRole
 from itsf.s0 import features as features_mod
@@ -775,4 +777,480 @@ def build_frequency_structure(records: Sequence[DayRecord]
         "overall": overall,
         "note": ("structure only; appendix-A grid expectations and any GO/STOP "
                  "reading are downstream of S0"),
+    }
+
+
+# ===========================================================================
+# DR-2 — the vol20 volatility-regime producer (Aaron 2026-08-10)
+# ===========================================================================
+#
+# ONE PRODUCER, TWO CONSUMERS. The ruled `mapping_scope` says the SAME vol20
+# mapping feeds both the S0 §2 descriptive stability axis (s0/stability.py's
+# `vol_axis`) and the Appendix-A sampling stratum key's volatility axis
+# (gridmix / evidence). This module computes it exactly ONCE; both consumers
+# read the SAME `Vol20RegimeMapping.label_of`. A second computation anywhere
+# is a defect, not an optimisation.
+#
+# Every ruled literal below is READ from `contracts.aaron_ruled_methods()` and
+# only ever COMPARED against — no ruled string is restated here.
+
+_RULED_VOL = _aaron_ruled_methods().volatility_regime
+RULED_VOL_CLOSE_SOURCE: str = _RULED_VOL.close_source
+RULED_VOL_RETURN_BASIS: str = _RULED_VOL.return_basis
+RULED_VOL_ROLL_CROSSING_RULE: str = _RULED_VOL.roll_crossing_rule
+RULED_VOL_TERCILE_REFERENCE: str = _RULED_VOL.tercile_reference
+RULED_VOL_NA_RULE: str = _RULED_VOL.na_rule
+RULED_VOL_MAPPING_SCOPE: str = _RULED_VOL.mapping_scope
+del _RULED_VOL
+
+#: vol20 window: 20 simple returns over 21 qualifying closes.
+VOL20_N_RETURNS = 20
+VOL20_N_CLOSES = VOL20_N_RETURNS + 1
+
+#: Tercile bucket vocabulary. NOT a ruled literal (the ruling fixes the
+#: METHOD — three terciles plus a fourth NA stratum — not the bucket spelling),
+#: so these are disclosed engineering names. `VOL_NA_LABEL` intentionally
+#: equals `stability.VOL_NA_BUCKET`: the ruled fourth stratum and the §2 NA
+#: bucket are the SAME set, and stability.py's pre-ruling collision guard was
+#: removed for exactly that reason.
+VOL_TERCILE_LABELS: tuple[str, str, str] = ("T1", "T2", "T3")
+VOL_NA_LABEL = "vol_na"
+VOL_ALL_LABELS = VOL_TERCILE_LABELS + (VOL_NA_LABEL,)
+
+#: Tercile cut points and the quantile estimator. The ruling fixes WHICH
+#: sample the thresholds come from (the full Development sample, ex post); the
+#: estimator and the boundary side are disclosed engineering conventions,
+#: pinned here and in tests so a silent change is impossible:
+#:   thresholds = numpy.quantile(v, [1/3, 2/3], method="linear")
+#:   label      = T1 if v <= q1 else T2 if v <= q2 else T3   (LOWER-inclusive)
+VOL_TERCILE_QUANTILES: tuple[float, float] = (1.0 / 3.0, 2.0 / 3.0)
+VOL_QUANTILE_METHOD = "linear"
+VOL_TERCILE_BOUNDARY_CONVENTION = "lower_inclusive_le_threshold"
+
+#: Per-day NA causes (diagnostics only — a vol_na day is NEVER deleted and
+#: never enters a tercile; it is the ruled FOURTH stratum).
+VOL_NA_INSUFFICIENT_HISTORY = "fewer_than_21_qualifying_prior_closes"
+VOL_NA_COMPONENT_UNUSABLE = "vol20_return_component_unusable"
+
+#: The straddle test. The roll interval switches at the START of its first
+#: RTH session, so a return whose two closes sit on OPPOSITE sides of a roll
+#: transition date compares two different contracts. DISCLOSED ENGINEERING
+#: DEFINITION of "straddle" (the ruling fixes drop-and-extend, not the
+#: boundary): a return (older -> newer) straddles iff some roll transition
+#: date t satisfies `older < t <= newer`, i.e. the transition session is the
+#: newer close's own session or any session skipped between the two.
+VOL_ROLL_STRADDLE_CONVENTION = "older_lt_transition_le_newer"
+
+
+class Vol20InputError(ValueError):
+    """The vol20 producer was handed an input it cannot use as specified."""
+
+
+class VolConservationError(ValueError):
+    """T1 u T2 u T3 u vol_na does not reproduce the full day set."""
+
+
+@dataclass(frozen=True, eq=False)
+class Vol20RegimeMapping:
+    """The ONE ruled vol20 mapping. Consumed by §2 AND by Appendix A.
+
+    vol20
+        date -> float | None (None == the ruled fourth stratum).
+    label_of
+        date -> one of VOL_ALL_LABELS. TOTAL over `days` by construction.
+    thresholds
+        (q1, q2) computed ONCE over the FULL Development sample's defined
+        vol20 values, or None when no day has a defined vol20.
+    ex_post
+        Always True and stated in words: these thresholds are computed on the
+        whole Development sample and are therefore a DESCRIPTIVE, ex-post
+        stratification. They are NOT a point-in-time signal and must never be
+        described as one anywhere downstream.
+    """
+    days: tuple[str, ...]
+    vol20: Mapping[str, float | None]
+    label_of: Mapping[str, str]
+    na_cause: Mapping[str, str]
+    thresholds: tuple[float, float] | None
+    counts: Mapping[str, int]
+    n_qualifying_closes: int
+    n_roll_crossing_returns_dropped: int
+    method_disclosure: Mapping[str, object]
+    conservation: Mapping[str, bool]
+
+    @property
+    def ex_post(self) -> bool:
+        return True
+
+
+def _validate_vol_method(method) -> int:
+    """Fail-closed dispatch on the ruled `VolatilityRegimeMethod` fields.
+
+    Returns the ddof to use. Every STRING field must equal the ruled value
+    (read from `contracts.aaron_ruled_methods()`); anything else raises,
+    because a producer that quietly accepted an un-ruled `return_basis` would
+    silently publish a different statistic under the same name.
+    """
+    for name, ruled in (
+            ("close_source", RULED_VOL_CLOSE_SOURCE),
+            ("return_basis", RULED_VOL_RETURN_BASIS),
+            ("roll_crossing_rule", RULED_VOL_ROLL_CROSSING_RULE),
+            ("tercile_reference", RULED_VOL_TERCILE_REFERENCE),
+            ("na_rule", RULED_VOL_NA_RULE),
+            ("mapping_scope", RULED_VOL_MAPPING_SCOPE)):
+        got = getattr(method, name, None)
+        if got != ruled:
+            raise ValueError(
+                f"volatility_regime.{name}_not_ruled:{got} — fail closed "
+                "(the only accepted value is the one carried by "
+                "contracts.aaron_ruled_methods().volatility_regime)")
+    ddof = getattr(method, "ddof", None)
+    if isinstance(ddof, bool) or not isinstance(ddof, int) or ddof < 0:
+        raise ValueError(f"volatility_regime.ddof_invalid:{ddof!r}")
+    return int(ddof)
+
+
+def qualifying_rth_closes(universe) -> tuple[tuple[str, float], ...]:
+    """The ordered (date, close) sequence the vol20 window walks.
+
+    `close` is `DaySummary.official_close` — the EXACT scheduled last
+    1-minute RTH bar close of that session (regular day 15:59; scheduled
+    early close = its own final scheduled bar). That is the IR-19/26 anchor
+    DEFINITION POINT and it is REUSED here, never re-derived: this function
+    contains no minute arithmetic at all.
+
+    A day QUALIFIES iff it is an observed RTH session (funnel level L1 — the
+    zero-bar days are already gone) AND its exact scheduled close bar exists
+    and is finite (IR-26 rule 7: existence + finiteness decide, never
+    last-available / nearest-bar / fill). Early closes qualify; the frozen
+    L44 exclusion of early-close days is a FEATURE-CONSTRUCTION exclusion and
+    says nothing about whether that session had a close.
+    """
+    out: list[tuple[str, float]] = []
+    for d in universe.funnel.observed_rth:
+        s = universe.summaries.get(d)
+        if s is None:
+            continue
+        c = s.official_close
+        if c is None or not np.isfinite(c):
+            continue
+        out.append((d, float(c)))
+    out.sort()
+    return tuple(out)
+
+
+def _straddles_roll(older: str, newer: str,
+                    roll_transition_dates: Sequence[str]) -> bool:
+    return any(older < t <= newer for t in roll_transition_dates)
+
+
+def _vol20_for_day(day: str, dates: Sequence[str], closes: Sequence[float],
+                   roll_transition_dates: Sequence[str], ddof: int,
+                   ) -> tuple[float | None, str, int]:
+    """(vol20 | None, na_cause, n_roll_crossing_returns_dropped) for one day.
+
+    NO LOOK-AHEAD BY CONSTRUCTION: only qualifying closes STRICTLY earlier
+    than `day` are readable (the slice endpoint is `bisect_left(dates, day)`,
+    so `day`'s own close is excluded even when `day` is itself a qualifying
+    session). Rule r1: a return whose two closes straddle a roll transition
+    is DROPPED and the walk continues one day further back, so the window
+    EXTENDS until 20 usable returns exist.
+    """
+    idx = bisect.bisect_left(dates, day)
+    rets: list[float] = []
+    dropped = 0
+    j = idx - 1
+    while j >= 1 and len(rets) < VOL20_N_RETURNS:
+        older_d, newer_d = dates[j - 1], dates[j]
+        if _straddles_roll(older_d, newer_d, roll_transition_dates):
+            dropped += 1
+            j -= 1
+            continue                       # r1: drop AND extend
+        c0, c1 = closes[j - 1], closes[j]
+        if not (math.isfinite(c0) and math.isfinite(c1)) or c0 == 0.0:
+            # A component that cannot form a simple return. The day goes to
+            # the ruled fourth stratum rather than to a shortened window.
+            return None, VOL_NA_COMPONENT_UNUSABLE, dropped
+        rets.append((c1 - c0) / c0)        # simple return (ruled basis)
+        j -= 1
+    if len(rets) < VOL20_N_RETURNS:
+        return None, VOL_NA_INSUFFICIENT_HISTORY, dropped
+    return (float(np.std(np.asarray(rets, dtype=float), ddof=ddof)), "",
+            dropped)
+
+
+def vol_tercile_thresholds(values: Sequence[float]
+                           ) -> tuple[float, float] | None:
+    """The two ex-post cut points, computed ONCE over the FULL sample.
+
+    `None` when no day has a defined vol20 (then every day is vol_na and
+    there is nothing to cut).
+    """
+    vals = [float(v) for v in values]
+    if not vals:
+        return None
+    q1, q2 = np.quantile(np.asarray(vals, dtype=float),
+                         list(VOL_TERCILE_QUANTILES),
+                         method=VOL_QUANTILE_METHOD)
+    return (float(q1), float(q2))
+
+
+def vol_tercile_label(value: float | None,
+                      thresholds: tuple[float, float] | None) -> str:
+    """LOWER-INCLUSIVE tercile assignment; `None` -> the ruled 4th stratum."""
+    if value is None or thresholds is None:
+        return VOL_NA_LABEL
+    q1, q2 = thresholds
+    if value <= q1:
+        return VOL_TERCILE_LABELS[0]
+    if value <= q2:
+        return VOL_TERCILE_LABELS[1]
+    return VOL_TERCILE_LABELS[2]
+
+
+def assert_vol_conservation(days: Sequence[str],
+                            label_of: Mapping[str, str],
+                            vol20: Mapping[str, float | None],
+                            ) -> tuple[dict[str, int], dict[str, bool]]:
+    """T1 u T2 u T3 u vol_na == the full day set, or `VolConservationError`.
+
+    Separated from the producer so the MACHINE ASSERTION itself is directly
+    testable: a corrupted label map must be refused here, not merely trusted
+    because the producer happened to build a consistent one.
+    """
+    day_set = set(days)
+    counts = {lab: 0 for lab in VOL_ALL_LABELS}
+    unknown: list[str] = []
+    for d, lab in label_of.items():
+        if lab in counts:
+            counts[lab] += 1
+        else:
+            unknown.append(f"{d}:{lab}")
+
+    buckets = {lab: {d for d, la in label_of.items() if la == lab}
+               for lab in VOL_ALL_LABELS}
+    union: set[str] = set()
+    disjoint = True
+    for lab in VOL_ALL_LABELS:
+        if union & buckets[lab]:
+            disjoint = False
+        union |= buckets[lab]
+    partition_ok = union == day_set
+    counts_ok = sum(counts.values()) == len(day_set) and not unknown
+    na_matches = counts[VOL_NA_LABEL] == sum(
+        1 for d in day_set if vol20.get(d) is None)
+    conservation = {
+        "strata_are_disjoint": disjoint,
+        "strata_union_equals_day_set": partition_ok,
+        "counts_sum_to_day_set": counts_ok,
+        "vol_na_count_equals_undefined_vol20": na_matches,
+    }
+    if not all(conservation.values()):
+        raise VolConservationError(
+            "vol20 strata do not conserve the day set: "
+            + ", ".join(f"{k}={v}" for k, v in conservation.items())
+            + f" (|days|={len(day_set)}, counts={counts}"
+            + (f", labels outside {VOL_ALL_LABELS}: {unknown[:5]}"
+               if unknown else "") + ")")
+    return counts, conservation
+
+
+def build_vol20_regime_mapping(days: Sequence[str],
+                               qualifying_closes: Sequence[tuple[str, float]],
+                               roll_transition_dates: Sequence[str],
+                               method) -> Vol20RegimeMapping:
+    """DR-2 — the ruled vol20 mapping over `days`. Pure; no I/O, no clock.
+
+    Parameters
+    ----------
+    days
+        The FULL Development sample day set to label (every structurally
+        eligible day). The tercile thresholds are computed ONCE over exactly
+        this sample — that is what `tercile_reference` ruled — which makes
+        them EX-POST DESCRIPTIVE, stated as such in `method_disclosure`.
+    qualifying_closes
+        Ordered (date, exact scheduled last-1m RTH close) pairs, i.e.
+        `qualifying_rth_closes(universe)`.
+    roll_transition_dates
+        The F11 roll transition session dates (`universe.roll_transition_dates`).
+    method
+        A `contracts.VolatilityRegimeMethod`; every ruled string field must
+        match the ruled value (fail closed) and `ddof` is consumed LIVE.
+    """
+    ddof = _validate_vol_method(method)
+    pairs = list(qualifying_closes)
+    if any(pairs[i][0] >= pairs[i + 1][0] for i in range(len(pairs) - 1)):
+        raise Vol20InputError(
+            "qualifying_closes must be strictly date-ascending and unique — "
+            "fail closed (the window walk indexes it positionally)")
+    dates = [d for d, _c in pairs]
+    closes = [c for _d, c in pairs]
+    roll_dates = tuple(sorted(set(roll_transition_dates)))
+
+    day_list = tuple(sorted(set(days)))
+    if len(day_list) != len(list(days)):
+        raise Vol20InputError("days contains duplicates — fail closed")
+
+    vol20: dict[str, float | None] = {}
+    na_cause: dict[str, str] = {}
+    dropped_total = 0
+    for d in day_list:
+        value, cause, dropped = _vol20_for_day(d, dates, closes, roll_dates,
+                                               ddof)
+        vol20[d] = value
+        dropped_total += dropped
+        if value is None:
+            na_cause[d] = cause
+
+    thresholds = vol_tercile_thresholds(
+        [v for v in vol20.values() if v is not None])
+    label_of = {d: vol_tercile_label(vol20[d], thresholds) for d in day_list}
+
+    counts, conservation = assert_vol_conservation(day_list, label_of, vol20)
+
+    disclosure = {
+        "producer": "itsf.s0.dataset.build_vol20_regime_mapping",
+        "close_source": RULED_VOL_CLOSE_SOURCE,
+        "close_source_implementation": (
+            "context.DaySummary.official_close over "
+            "EligibilityFunnel.observed_rth — the IR-19/26 anchor definition "
+            "point, reused not re-derived"),
+        "return_basis": RULED_VOL_RETURN_BASIS,
+        "ddof": ddof,
+        "n_returns": VOL20_N_RETURNS,
+        "n_closes": VOL20_N_CLOSES,
+        "roll_crossing_rule": RULED_VOL_ROLL_CROSSING_RULE,
+        "roll_straddle_convention": VOL_ROLL_STRADDLE_CONVENTION,
+        "tercile_reference": RULED_VOL_TERCILE_REFERENCE,
+        "tercile_reference_is_ex_post": True,
+        "tercile_reference_note": (
+            "thresholds are computed ONCE over the FULL Development sample "
+            "and are therefore EX-POST DESCRIPTIVE stratification, never a "
+            "point-in-time signal"),
+        "tercile_quantiles": list(VOL_TERCILE_QUANTILES),
+        "tercile_quantile_method": VOL_QUANTILE_METHOD,
+        "tercile_boundary_convention": VOL_TERCILE_BOUNDARY_CONVENTION,
+        "na_rule": RULED_VOL_NA_RULE,
+        "mapping_scope": RULED_VOL_MAPPING_SCOPE,
+        "mapping_scope_note": (
+            "ONE producer; the S0 §2 stability vol axis and the Appendix-A "
+            "stratum key volatility axis read the SAME label_of mapping"),
+        "no_lookahead": (
+            "only qualifying closes strictly earlier than the labelled day "
+            "are readable (lag endpoint d-1)"),
+    }
+    return Vol20RegimeMapping(
+        days=day_list,
+        vol20=dict(vol20),
+        label_of=dict(label_of),
+        na_cause=dict(na_cause),
+        thresholds=thresholds,
+        counts=counts,
+        n_qualifying_closes=len(pairs),
+        n_roll_crossing_returns_dropped=dropped_total,
+        method_disclosure=disclosure,
+        conservation=conservation)
+
+
+def build_vol20_regime_mapping_from_universe(universe, method,
+                                             days: Sequence[str] | None = None,
+                                             ) -> Vol20RegimeMapping:
+    """`build_vol20_regime_mapping` wired to an assembled `S0Universe`.
+
+    `days` defaults to the structurally eligible population — the S0 §2 /
+    Appendix-A day universe. Nothing here reads bars: the closes come from
+    the summaries the universe already computed.
+    """
+    return build_vol20_regime_mapping(
+        days=(tuple(universe.funnel.structurally_eligible) if days is None
+              else tuple(days)),
+        qualifying_closes=qualifying_rth_closes(universe),
+        roll_transition_dates=tuple(sorted(universe.roll_transition_dates)),
+        method=method)
+
+
+# ===========================================================================
+# DR-6 — the Appendix-A stratum key's EVENT axis (Aaron 2026-08-10)
+# ===========================================================================
+#
+# Five strata, IR-12/18 vocabulary, ZERO new words. F10 `None` (the IR-12/18
+# multi-event NA) maps to NA_multi_event. NO DAY IS EVER DROPPED for an event
+# reason. The ruled mapping string is read from the single ruled source and
+# only compared against; the pre-ruling TEST_ONLY string still works in
+# tests and is REFUSED on a production path (existing test_only discipline).
+
+RULED_EVENT_NA_MAPPING: str = _aaron_ruled_methods().event_na_mapping
+
+#: The pre-ruling synthetic mapping. TEST_ONLY: accepted only when the caller
+#: declares `test_only=True` (i.e. `ResolvedS0Methods.test_only`).
+EVENT_NA_MAPPING_TEST_ONLY = "five_stratum"
+
+#: The five strata (IR-12/18 vocabulary — same words F10 already uses; see
+#: context.F10_CATEGORIES and S0Universe.f10_exclusive_counts).
+EVENT_STRATUM_NA_MULTI = "NA_multi_event"
+EVENT_STRATA: tuple[str, ...] = ("CPI", "NFP", "FOMC", "none",
+                                 EVENT_STRATUM_NA_MULTI)
+
+
+def event_stratum_of(flag: str | None, event_na_mapping: str,
+                     test_only: bool = False) -> str:
+    """One F10 flag -> its Appendix-A event stratum. Fail closed.
+
+    `flag is None` is the IR-12/18 multi-event NA and maps to
+    ``NA_multi_event``; it is NEVER a reason to drop the day. An unknown
+    mapping string raises (the pre-ruling behaviour, preserved), and the
+    TEST_ONLY mapping raises unless the caller declares itself test-only.
+    """
+    if event_na_mapping == RULED_EVENT_NA_MAPPING:
+        pass
+    elif event_na_mapping == EVENT_NA_MAPPING_TEST_ONLY:
+        if not test_only:
+            raise ValueError(
+                f"event_na_mapping {event_na_mapping!r} is TEST_ONLY and is "
+                "refused on the production path (fail closed)")
+    else:
+        raise ValueError(
+            f"event-NA stratum mapping {event_na_mapping!r} not implemented "
+            "— only the value carried by "
+            "contracts.aaron_ruled_methods().event_na_mapping (or the "
+            "TEST_ONLY synthetic mapping, under test_only) is accepted")
+    if flag is None:
+        return EVENT_STRATUM_NA_MULTI
+    stratum = str(flag)
+    if stratum not in EVENT_STRATA:
+        raise ValueError(
+            f"F10 flag {flag!r} is outside the five-stratum IR-12/18 "
+            f"vocabulary {EVENT_STRATA} — fail closed (no new vocabulary)")
+    return stratum
+
+
+def build_event_stratum_map(flag_by_date: Mapping[str, str | None],
+                            event_na_mapping: str,
+                            test_only: bool = False) -> dict[str, object]:
+    """date -> event stratum, plus the five-stratum partition counts.
+
+    Conservation is machine-checked here: the five counts must sum to the
+    population, because "days are NEVER dropped for event reasons" is the
+    load-bearing half of the ruling.
+    """
+    stratum_of = {d: event_stratum_of(f, event_na_mapping, test_only)
+                  for d, f in flag_by_date.items()}
+    counts = {s: 0 for s in EVENT_STRATA}
+    for s in stratum_of.values():
+        counts[s] += 1
+    total = sum(counts.values())
+    if total != len(flag_by_date):
+        raise NAConservationError(
+            f"event stratum partition {counts} sums to {total}, not "
+            f"{len(flag_by_date)} — days must never be dropped for an event "
+            "reason (DR-6)")
+    return {
+        "mapping": event_na_mapping,
+        "strata": list(EVENT_STRATA),
+        "stratum_of": stratum_of,
+        "counts": counts,
+        "conservation": {
+            "counts_sum_to_population": True,
+            "no_day_dropped": len(stratum_of) == len(flag_by_date),
+        },
     }

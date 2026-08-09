@@ -936,11 +936,19 @@ def capture_evidence(ds, bars_by_date, compute_result, config, *,
             event_stratum = str(flag)
             event_final = str(flag)
         else:
-            # IR-12/18 vocabulary is only reachable under the RULED mapping;
-            # otherwise the existing UNRESOLVED marker, never an invention.
+            # IR-12/18 vocabulary is only reachable under a ruled/TEST_ONLY
+            # mapping; otherwise the existing UNRESOLVED marker, never an
+            # invention. Routed through the DR-6 consumer (Aaron 2026-08-10)
+            # so this module cannot drift from dataset.event_stratum_of —
+            # the TEST_ONLY synthetic value stays test-gated there.
             event_final = "NA_multi_event"
-            event_stratum = ("NA_multi_event" if event_rule == "five_stratum"
-                             else UNRESOLVED_EVENT_STRATUM)
+            try:
+                from itsf.s0.dataset import event_stratum_of as _eso
+                event_stratum = str(_eso(flag, event_rule,
+                                         bool(getattr(methods, "test_only",
+                                                      False))))
+            except Exception:                            # noqa: BLE001
+                event_stratum = UNRESOLVED_EVENT_STRATUM
         classes = {}
         for theta in theta_values:
             if not f.oracle_candidate:
@@ -2496,45 +2504,55 @@ PROVENANCE_REGISTRY: Mapping[str, ProvKeySpec] = MappingProxyType({
 
 # The unconditional disclosure markers: never field-conditional, so they are
 # a frozen TABLE rather than literals inside a marker-assembling function.
+# S0 closeout (Aaron 2026-08-10): the eight DR rulings LANDED — every marker
+# below states the REMAINING verification gap truthfully, never a "pending
+# ruling" that no longer pends. A sealed release must not publish a
+# disclosure asserting rulings were unmade (conformance finding F6.1).
 PERMANENT_MARKERS: tuple = (
     f"{PARTIAL_PREFIX}oracle_daily.worst_day_pnl_percentiles:"
-    "DR-8 (DR-M6-H) — the P1/P5 sample-quantile estimator is UNAPPROVED "
-    "(matrix L029/L033); EV-12 binds the constant, the VALUE is not "
-    "approvable",
+    "DR-8 RULED (linear, 2026-08-10) — EV-12 binds the estimator constant "
+    "and the ruling; the percentile VALUES still have no independent "
+    "re-computation here (matrix L029/L033)",
     f"{PARTIAL_PREFIX}theoretical_oracle.worst_day_pnl_percentiles:"
-    "DR-8 (DR-M6-H) — same estimator gap (matrix L039)",
+    "DR-8 RULED — same residual value-replay gap (matrix L039)",
     f"{PARTIAL_PREFIX}stability_views:"
-    "DR-7 (DR-M6-G) — the view population (D_TP-conditional vs full "
-    "eligible) is unruled; matrix S6.1: these cells can be made "
-    "reproducible, never correct, before the ruling",
+    "DR-7 RULED (both populations, 2026-08-10) — cells are reproducible "
+    "and population-tagged; per-view value replay remains out of evidence "
+    "scope (matrix S6.1)",
     f"{PARTIAL_PREFIX}stability_views.vol_terciles:"
-    "DR-2 (DR-M6-B-v2) — NO atom exists at any point in the chain "
-    "(matrix L078); EV-5 captures the axis with its UNRESOLVED label",
+    "DR-2 RULED (2026-08-10) — the vol20 axis has a ruled producer "
+    "(dataset.build_vol20_regime_mapping); EV-5 carries its labels, but "
+    "this module still holds NO close-series atom to re-derive them from "
+    "(matrix L078 residual)",
     f"{PARTIAL_PREFIX}bootstrap_ci.ci_lo_ci_hi:"
     "no 10,000-resample replay is performed here (32 cells x 3 seeds); "
-    "EV-7 binds the INPUT SERIES digest only (matrix L082)",
+    "EV-7 binds the INPUT SERIES digest and the DR-4 ruled-sequence "
+    "counts only (matrix L082)",
     f"{PARTIAL_PREFIX}feasibility_grid.per_seed:"
-    "DR-2 + DR-3 + DR-6 — the stratum key is (year, volatility_regime, "
-    "event_flag) and two axes have no defined vocabulary; matrix S6.2: "
-    "EV-6 captures a reproducible record of an UNDEFINED partition, "
-    "which is not a replayable pool",
+    "DR-2/3/6 RULED (2026-08-10) — the stratum key vocabulary is defined "
+    "and draws are membership-checked (CR-8); full per-seed RNG replay "
+    "of the DR-5 K-repeat streams stays out of evidence scope",
     f"{PARTIAL_PREFIX}sizing_outputs.cost_layer:"
-    "DR-1 (DR-M6-A-v2 + IR-7) — the spread reduction rule and the "
-    "adverse-slippage vector are unruled; EV-4 captures the scenario "
-    "objects, it does not make the cost model final (matrix S6.3)",
+    "DR-1 RULED (B-i + IR-7 Option i, 2026-08-10) — EV-4 snapshots the "
+    "scenario objects; the B-i reduction from the locked spread table is "
+    "verified at the injectable source (sha256 pin), not re-derived here "
+    "(matrix S6.3 residual)",
     f"{PARTIAL_PREFIX}usd_layer:"
-    "DR-1 — EVERY USD figure in the sealed report inherits an unruled "
-    "cost input, including the AF2 atom itself (matrix L132/S6.3)",
+    "USD figures inherit the DR-1 RULED cost input; the ruling closed the "
+    "definition gap — the residual is that this module re-verifies fills "
+    "against EV-4 snapshots, not against the raw cost table "
+    "(matrix L132/S6.3)",
     f"{PARTIAL_PREFIX}structural.na_table.reasons:"
     "CR-1 — EV-8 closes the na/not_na COUNT level with a structurally "
     "different null scan, but the per-date NA-REASON attribution still "
     "has ONE preimage (DayRecord.*_na_reasons); reason-level counts "
     "stay producer-only",
     f"{PARTIAL_PREFIX}day_strata:"
-    "DR-2 + DR-6 — EV-5 is consumed (tp_fp_class vs EV-1, CR-4 epoch "
-    "convention, era) but its volatility_regime and event_stratum axes "
-    "carry UNRESOLVED vocabulary and cannot be checked against anything "
-    "(matrix L144)",
+    "DR-2/DR-6 RULED (2026-08-10) — EV-5 is consumed (tp_fp_class vs "
+    "EV-1, CR-4 epoch convention, era) and both axes now carry ruled "
+    "vocabulary; the residual is that the per-day vol labels are "
+    "producer-derived, with no close-series atom here to re-derive them "
+    "(matrix L144 residual)",
     f"{PARTIAL_PREFIX}{_S_FAV_TS}:"
     "M6.1.4-R2 leaf lineage — EV-2's favourable-extreme TIMESTAMP has no "
     "captured preimage (the bars are process-local) and reaches no sealed "
@@ -5228,6 +5246,24 @@ def _reconcile_bootstrap(evidence, formal, d_tp, membership, problems) -> int:
     payload's own key set."""
     by_cell = {f.cell_key: f for f in evidence.bootstrap_inputs}
     cells_f = _get(formal, "bootstrap_ci")
+    # DR-4 (Aaron 2026-08-10): the published per-seed mean is the RULED
+    # population statistic — full eligible trading-day sequence, oracle days
+    # carrying P&L, eligible-but-unselected days zero-filled, NA days
+    # (undeterminable direction / Y_cont NA) dropped n1-style. Zero-filled
+    # days add nothing to the sum, so the independent expectation is
+    # series_sum / n_ruled, with n_ruled REBUILT here from EV-1 day facts
+    # (theta-independent by construction: the NA predicate does not read
+    # theta). The TP-only series mean stays what the ORACLE pooled mean is
+    # compared against — the two are different statistics under the ruling.
+    _n_eligible = 0
+    _n_ruled = 0
+    for _f in evidence.day_facts:
+        _n_eligible += 1
+        _y = getattr(_f, "y_cont", None)
+        _d = getattr(_f, "d_open", 0)
+        if _y is not None and int(_d or 0) != 0:
+            _n_ruled += 1
+    _n_na_dropped = _n_eligible - _n_ruled
     # The frozen §9 block axis is EV-7's own; a cell whose block_len is not
     # on it (or a payload whose A7 key set does not cover the full
     # theta x engine x scenario x block product) is refused here rather
@@ -5279,6 +5315,18 @@ def _reconcile_bootstrap(evidence, formal, d_tp, membership, problems) -> int:
             problems.append(
                 f"evidence_cr2_oracle_mean_vs_series:{key}:"
                 f"{pooled_mean!r}!={fact.series_mean_sum_over_n!r}")
+        # DR-4 ruled-sequence accounting published on the cell must agree
+        # with the EV-1-rebuilt counts and the TP-series facts.
+        ruled_mean = ((fact.series_sum / _n_ruled)
+                      if _n_ruled else None)
+        for pub_key, want in (("n_days_in_sequence", _n_ruled),
+                              ("n_oracle_traded_days", fact.n),
+                              ("n_na_days_dropped", _n_na_dropped)):
+            got = _get(cell, pub_key)
+            if got != want:
+                problems.append(
+                    f"evidence_dr4_sequence_count:{key}:{pub_key}:"
+                    f"{got!r}!={want!r}")
         per_seed = _get(cell, "per_seed")
         for seed in fact.seeds:
             entry = _get(per_seed, str(seed))
@@ -5287,11 +5335,10 @@ def _reconcile_bootstrap(evidence, formal, d_tp, membership, problems) -> int:
             if not isinstance(entry, Mapping):
                 problems.append(f"evidence_bootstrap_seed_missing:{key}:{seed}")
                 continue
-            if not _eq_number_or_none(_get(entry, "mean"),
-                                      fact.series_mean_numpy):
+            if not _eq_number_or_none(_get(entry, "mean"), ruled_mean):
                 problems.append(
                     f"evidence_cr2_bootstrap_mean_vs_series:{key}:{seed}:"
-                    f"{_get(entry, 'mean')!r}!={fact.series_mean_numpy!r}")
+                    f"{_get(entry, 'mean')!r}!={ruled_mean!r}")
             if _get(entry, "n_boot") != fact.n_boot:
                 problems.append(f"evidence_bootstrap_n_boot:{key}:{seed}")
             if _get(entry, "block_len") != fact.block_len:

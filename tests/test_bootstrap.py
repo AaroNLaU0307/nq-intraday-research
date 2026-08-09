@@ -402,3 +402,314 @@ def test_run_real_study_blocked_without_flags(tmp_path):
     with pytest.raises(RunBlockedError):
         run_real_study(g9_flag=tmp_path / "no_g9.flag",
                        second_copy_flag=tmp_path / "no_copy.flag")
+
+
+# ===========================================================================
+# DR-4 (Aaron 2026-08-10) — itsf.s0.stats as the production consumer of the
+# ruled `contracts.BootstrapMethod`. The ruled instance is IMPORTED from
+# contracts; no ruling literal is restated here. Every day sequence below is
+# fabricated — no archive, no clock, no module-level RNG state.
+# ===========================================================================
+import dataclasses as _dc
+import inspect as _inspect
+
+from itsf.contracts import aaron_ruled_methods as _ruled_methods
+from itsf.s0 import stats as s0_stats
+
+RULED_BOOT = _ruled_methods().bootstrap_method
+
+# 10 structurally-eligible trading days: 5 traded, 3 sat out, 2 NA.
+# Traded P&L sums to 500.0, so the two candidate statistics are far apart:
+#   per-TRADING-day mean (ruled) = 500 / 8 = 62.5
+#   per-ORACLE-day mean (not ruled) = 500 / 5 = 100.0
+DAY_STATES = [
+    ("2026-01-02", "oracle_traded", 100.0),
+    ("2026-01-05", "eligible_not_selected", None),
+    ("2026-01-06", "oracle_traded", 200.0),
+    ("2026-01-07", "na", None),
+    ("2026-01-08", "eligible_not_selected", 0.0),
+    ("2026-01-09", "oracle_traded", -50.0),
+    ("2026-01-12", "na", None),
+    ("2026-01-13", "oracle_traded", 150.0),
+    ("2026-01-14", "eligible_not_selected", None),
+    ("2026-01-15", "oracle_traded", 100.0),
+]
+THETA_PRIMARY = 0.5
+THETA_SECONDARY = 0.3
+
+
+def _sequence(states=None, method=None):
+    return s0_stats.build_bootstrap_day_sequence(
+        DAY_STATES if states is None else states,
+        RULED_BOOT if method is None else method)
+
+
+# --- the ruled POPULATION ---------------------------------------------------
+
+def test_dr4_sequence_zero_fills_sat_out_days_and_drops_na_with_a_count():
+    seq = _sequence()
+    assert seq["dates"] == ("2026-01-02", "2026-01-05", "2026-01-06",
+                            "2026-01-08", "2026-01-09", "2026-01-13",
+                            "2026-01-14", "2026-01-15")
+    assert seq["series"] == (100.0, 0.0, 200.0, 0.0, -50.0, 150.0, 0.0, 100.0)
+    assert seq["n_days_in_sequence"] == 8
+    assert seq["n_oracle_traded_days"] == 5
+    assert seq["n_eligible_not_selected_days"] == 3
+    # rule n1: NA days DROPPED, count disclosed and never silently discarded
+    assert seq["n_na_days_dropped"] == 2
+    assert seq["na_dates"] == ("2026-01-07", "2026-01-12")
+    assert "2026-01-07" not in seq["dates"]
+    assert seq["population"] == RULED_BOOT.population
+    assert seq["na_day_rule"] == RULED_BOOT.na_day_rule
+    assert seq["statistic"] == RULED_BOOT.statistic
+
+
+def test_dr4_statistic_is_the_per_trading_day_mean_not_the_per_oracle_day_mean():
+    """MUTATION GUARD: the two candidate statistics differ on this fixture."""
+    seq = _sequence()
+    per_trading_day = sum(seq["series"]) / len(seq["series"])
+    traded = [v for v in seq["series"] if v != 0.0]
+    per_oracle_day = sum(traded) / len(traded)
+    assert per_trading_day == pytest.approx(62.5)
+    assert per_oracle_day == pytest.approx(100.0)
+    out = s0_stats.bootstrap_mean_ci_ruled(seq, theta=THETA_PRIMARY,
+                                           method=RULED_BOOT, block_len=5.0,
+                                           n_boot=30)
+    assert out["quoted"]["mean"] == pytest.approx(per_trading_day)
+    assert out["quoted"]["mean"] != pytest.approx(per_oracle_day)
+
+
+def test_dr4_sequence_rejects_unruled_states_and_disordered_dates():
+    with pytest.raises(ValueError, match="bootstrap_day_state_not_ruled:frozen_excluded"):
+        _sequence([("2026-01-02", "frozen_excluded", None)])
+    with pytest.raises(ValueError, match="not_in_ascending_date_order"):
+        _sequence([("2026-01-06", "oracle_traded", 1.0),
+                   ("2026-01-02", "oracle_traded", 1.0)])
+    with pytest.raises(ValueError, match="duplicate_trade_date"):
+        _sequence([("2026-01-02", "oracle_traded", 1.0),
+                   ("2026-01-02", "oracle_traded", 1.0)])
+    with pytest.raises(ValueError, match="oracle_traded_day_missing_pnl"):
+        _sequence([("2026-01-02", "oracle_traded", None)])
+    with pytest.raises(ValueError, match="eligible_not_selected_day_carries_pnl"):
+        _sequence([("2026-01-02", "eligible_not_selected", 12.0)])
+
+
+def test_dr4_unruled_population_na_or_statistic_strings_are_refused():
+    for field, value, code in (
+            ("population", "oracle_traded_days_only",
+             "bootstrap_population_not_ruled:oracle_traded_days_only"),
+            ("na_day_rule", "n2_zero_fill",
+             "bootstrap_na_day_rule_not_ruled:n2_zero_fill"),
+            ("statistic", "per_oracle_day_mean_usd",
+             "bootstrap_statistic_not_ruled:per_oracle_day_mean_usd")):
+        method = _dc.replace(RULED_BOOT, **{field: value})
+        with pytest.raises(ValueError, match=code):
+            _sequence(method=method)
+
+
+def test_dr4_ruled_entry_refuses_a_bare_series():
+    """A plain list is the PRE-ruling population and is invisible as such."""
+    for bogus in ([100.0, 200.0, -50.0], {"series": [1.0, 2.0]}, None):
+        with pytest.raises(
+                ValueError,
+                match="bootstrap_population_not_from_ruled_sequence_builder"):
+            s0_stats.bootstrap_mean_ci_ruled(bogus, theta=THETA_PRIMARY,
+                                             method=RULED_BOOT, block_len=5.0,
+                                             n_boot=10)
+
+
+def test_dr4_na_count_travels_all_the_way_into_the_result():
+    out = s0_stats.bootstrap_mean_ci_ruled(_sequence(), theta=THETA_PRIMARY,
+                                           method=RULED_BOOT, block_len=5.0,
+                                           n_boot=20)
+    assert out["n_na_days_dropped"] == 2
+    assert out["na_dates"] == ["2026-01-07", "2026-01-12"]
+    assert out["n_days_in_sequence"] == 8
+    assert "n_na_days_dropped = 2" in out["method"]
+
+
+# --- CRN scope: shared within theta across engine x scenario ----------------
+
+def test_dr4_crn_streams_are_identical_across_engine_and_scenario():
+    """The E1/Base call and the E2/Severe call ARE these two calls: engine and
+    scenario are not parameters, so they cannot key the stream."""
+    kw = dict(theta=THETA_PRIMARY, master_seed=7, block_len=5.0, n_boot=12,
+              method=RULED_BOOT)
+    e1_base = s0_stats.crn_resample_indices(8, **kw)
+    e2_severe = s0_stats.crn_resample_indices(8, **kw)
+    assert np.array_equal(e1_base, e2_severe)
+    assert e1_base.shape == (12, 8)
+
+
+def test_dr4_crn_signature_cannot_take_an_engine_or_a_scenario():
+    for fn in (s0_stats.crn_stream_entropy, s0_stats.crn_resample_indices,
+               s0_stats.resample_means_crn):
+        params = {p.lower() for p in _inspect.signature(fn).parameters}
+        assert not (params & {"engine", "eng", "scenario", "scn",
+                              "cost_scenario"}), fn.__name__
+
+
+def test_dr4_crn_streams_differ_across_theta_and_across_seed():
+    base = s0_stats.crn_resample_indices(8, theta=THETA_PRIMARY, master_seed=7,
+                                         block_len=5.0, n_boot=12,
+                                         method=RULED_BOOT)
+    other_theta = s0_stats.crn_resample_indices(
+        8, theta=THETA_SECONDARY, master_seed=7, block_len=5.0, n_boot=12,
+        method=RULED_BOOT)
+    other_seed = s0_stats.crn_resample_indices(
+        8, theta=THETA_PRIMARY, master_seed=13, block_len=5.0, n_boot=12,
+        method=RULED_BOOT)
+    other_block = s0_stats.crn_resample_indices(
+        8, theta=THETA_PRIMARY, master_seed=7, block_len=21.0, n_boot=12,
+        method=RULED_BOOT)
+    assert not np.array_equal(base, other_theta)
+    assert not np.array_equal(base, other_seed)
+    assert not np.array_equal(base, other_block)
+
+
+def test_dr4_crn_entropy_is_exactly_theta_seed_and_block():
+    entropy = s0_stats.crn_stream_entropy(THETA_PRIMARY, 7, 5.0, RULED_BOOT)
+    assert entropy == [7, s0_stats.STATS_STREAM_TAG,
+                       s0_stats.theta_stream_key(THETA_PRIMARY),
+                       s0_stats.block_stream_key(5.0)]
+    assert s0_stats.theta_stream_key(THETA_PRIMARY) == 500
+    assert s0_stats.theta_stream_key(THETA_SECONDARY) == 300
+
+
+def test_dr4_mutation_keying_the_stream_on_the_engine_would_break_crn():
+    """MUTATION GUARD, shown rather than asserted in prose: adding the engine
+    to the entropy makes E1 and E2 draw DIFFERENT day-index sequences, which
+    is exactly what `shared_within_theta_engine_scenario` forbids."""
+    ruled = s0_stats.crn_stream_entropy(THETA_PRIMARY, 7, 5.0, RULED_BOOT)
+    with_e1 = ruled + [1]
+    with_e2 = ruled + [2]
+
+    def draws(entropy):
+        rng = np.random.default_rng(entropy)
+        return np.stack([stationary_bootstrap_indices(8, 5.0, rng=rng)
+                         for _ in range(12)])
+
+    assert not np.array_equal(draws(with_e1), draws(with_e2))
+    assert np.array_equal(draws(ruled), draws(ruled))
+
+
+def test_dr4_resample_streams_are_prefix_nested_under_doubling():
+    kw = dict(theta=THETA_PRIMARY, master_seed=7, block_len=5.0,
+              method=RULED_BOOT)
+    short = s0_stats.crn_resample_indices(8, n_boot=10, **kw)
+    long = s0_stats.crn_resample_indices(8, n_boot=20, **kw)
+    assert np.array_equal(long[:10], short)
+
+
+def test_dr4_resample_means_use_the_same_stream_as_the_index_view():
+    seq = _sequence()
+    values = np.asarray(seq["series"], dtype=float)
+    idx = s0_stats.crn_resample_indices(len(values), theta=THETA_PRIMARY,
+                                        master_seed=7, block_len=5.0,
+                                        n_boot=15, method=RULED_BOOT)
+    means = s0_stats.resample_means_crn(values, theta=THETA_PRIMARY,
+                                        master_seed=7, block_len=5.0,
+                                        n_boot=15, method=RULED_BOOT)
+    assert np.allclose(means, values[idx].mean(axis=1))
+
+
+def test_dr4_unruled_crn_scope_is_refused():
+    method = _dc.replace(RULED_BOOT, crn_scope="shared_within_engine")
+    with pytest.raises(ValueError,
+                       match="bootstrap_crn_scope_not_ruled:shared_within_engine"):
+        s0_stats.crn_stream_entropy(THETA_PRIMARY, 7, 5.0, method)
+
+
+# --- per-seed budget, quoted seed, percentile interpolation -----------------
+
+def test_dr4_n_boot_is_per_seed_and_the_total_is_three_times_it():
+    out = s0_stats.bootstrap_mean_ci_ruled(_sequence(), theta=THETA_PRIMARY,
+                                           method=RULED_BOOT, block_len=5.0,
+                                           n_boot=40)
+    assert set(out["per_seed"]) == set(contracts.RESEARCH_BOOTSTRAP_SEEDS)
+    for seed, row in out["per_seed"].items():
+        assert row["n_boot"] == 40, seed
+    assert out["n_boot_per_seed"] is True
+    assert out["n_boot_total"] == 40 * len(contracts.RESEARCH_BOOTSTRAP_SEEDS)
+    assert "resamples PER SEED" in out["method"]
+
+
+def test_dr4_n_boot_per_seed_false_is_refused():
+    method = _dc.replace(RULED_BOOT, n_boot_per_seed=False)
+    with pytest.raises(ValueError,
+                       match="bootstrap_n_boot_per_seed_not_ruled:False"):
+        s0_stats.bootstrap_mean_ci_ruled(_sequence(), theta=THETA_PRIMARY,
+                                         method=method, block_len=5.0,
+                                         n_boot=10)
+
+
+def test_dr4_quoted_seed_is_parsed_from_the_rule_not_restated():
+    assert s0_stats.ruled_quoted_seed(RULED_BOOT) == 7
+    out = s0_stats.bootstrap_mean_ci_ruled(_sequence(), theta=THETA_PRIMARY,
+                                           method=RULED_BOOT, block_len=5.0,
+                                           n_boot=20)
+    assert out["quoted_seed"] == 7
+    assert out["quoted"] is out["per_seed"][7]
+    # the rule really drives the selection: point it at another frozen seed
+    alt = _dc.replace(RULED_BOOT, quoted_seed_rule="fixed_seed_31")
+    assert s0_stats.ruled_quoted_seed(alt) == 31
+    out_alt = s0_stats.bootstrap_mean_ci_ruled(_sequence(),
+                                               theta=THETA_PRIMARY,
+                                               method=alt, block_len=5.0,
+                                               n_boot=20)
+    assert out_alt["quoted_seed"] == 31
+    assert out_alt["quoted"] is out_alt["per_seed"][31]
+    assert out_alt["per_seed"][7] == out["per_seed"][7]      # CRN unchanged
+
+
+def test_dr4_unruled_quoted_seed_rules_are_refused():
+    for rule, code in (("best_of_three", "bootstrap_quoted_seed_rule_not_ruled"),
+                       ("fixed_seed_", "bootstrap_quoted_seed_rule_not_ruled"),
+                       ("fixed_seed_99",
+                        "bootstrap_quoted_seed_not_a_research_seed:99")):
+        with pytest.raises(ValueError, match=code):
+            s0_stats.ruled_quoted_seed(
+                _dc.replace(RULED_BOOT, quoted_seed_rule=rule))
+
+
+def test_dr4_unruled_percentile_interpolation_is_refused():
+    method = _dc.replace(RULED_BOOT, percentile_interpolation="nearest")
+    with pytest.raises(
+            ValueError,
+            match="bootstrap_percentile_interpolation_not_ruled:nearest"):
+        s0_stats.bootstrap_mean_ci_ruled(_sequence(), theta=THETA_PRIMARY,
+                                         method=method, block_len=5.0,
+                                         n_boot=10)
+
+
+def test_dr4_only_the_frozen_research_seeds_may_run():
+    with pytest.raises(ValueError, match="RESEARCH_BOOTSTRAP_SEEDS"):
+        s0_stats.bootstrap_mean_ci_ruled(_sequence(), theta=THETA_PRIMARY,
+                                         method=RULED_BOOT, block_len=5.0,
+                                         n_boot=10, master_seeds=(7,))
+    with pytest.raises(ValueError, match="not_a_research_seed"):
+        s0_stats.crn_stream_entropy(THETA_PRIMARY, 5, 5.0, RULED_BOOT)
+
+
+def test_dr4_theta_must_be_seedable():
+    for bad in (float("nan"), -0.5):
+        with pytest.raises(ValueError):
+            s0_stats.theta_stream_key(bad)
+
+
+def test_dr4_result_carries_the_full_disclosure():
+    out = s0_stats.bootstrap_mean_ci_ruled(_sequence(), theta=THETA_PRIMARY,
+                                           method=RULED_BOOT, block_len=5.0,
+                                           n_boot=20)
+    assert out["population"] == RULED_BOOT.population
+    assert out["statistic"] == RULED_BOOT.statistic
+    assert out["crn_scope"] == RULED_BOOT.crn_scope
+    assert out["theta"] == THETA_PRIMARY
+    assert out["theta_stream_key"] == 500
+    assert out["crn_stream_entropy_by_seed"][7] == (
+        s0_stats.crn_stream_entropy(THETA_PRIMARY, 7, 5.0, RULED_BOOT))
+    for token in (RULED_BOOT.population, RULED_BOOT.statistic,
+                  RULED_BOOT.crn_scope, RULED_BOOT.na_day_rule,
+                  RULED_BOOT.quoted_seed_rule):
+        assert token in out["method"], token
+    assert out["convergence"]["max_abs_ci_lo_diff"] >= 0.0

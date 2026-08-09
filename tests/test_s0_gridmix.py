@@ -434,6 +434,6 @@ def test_method_string_discloses_the_whole_recipe():
     for fragment in ("round_half_up", "banker", "largest-remainder",
                      "UNIFORM WITHOUT REPLACEMENT", "infeasible_by_sample",
                      "magnitude-", "[7, 13, 31]", "GRID_STREAM_TAG",
-                     "DR-M6-B", "realized", "N = 252",
+                     "RULED by DR-2", "realized", "N = 252",
                      "no H1 performance claim"):
         assert fragment in method, fragment

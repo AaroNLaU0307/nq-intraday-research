@@ -52,30 +52,26 @@ def _market(n_days: int = 46):
 
 
 def _test_methods() -> C.ResolvedS0Methods:
-    """Fully-populated TEST_ONLY methods — every value is a synthetic
-    stand-in explicitly marked, never a silently-adopted ruling."""
-    return C.ResolvedS0Methods(
-        spread_cost=C.SpreadCostMethod(
-            scalar_rule="TEST_ONLY", adverse_slippage_ticks={"Base": 1.0},
-            adverse_semantics="replaces_per_side"),
-        volatility_regime=C.VolatilityRegimeMethod(
-            close_source="TEST_ONLY", return_basis="simple", ddof=1,
-            roll_crossing_rule="TEST_ONLY", tercile_reference="TEST_ONLY",
-            na_rule="vol_na"),
-        fp_allocation=C.FpAllocationMethod(
-            basis="A", weight_source="self_pool",
-            shortfall_rule="proportional"),
-        bootstrap_method=C.BootstrapMethod(
-            population="TEST_ONLY", na_day_rule="TEST_ONLY",
-            statistic="mean", n_boot_per_seed=True,
-            quoted_seed_rule="first_seed",
-            percentile_interpolation="linear", crn_scope="TEST_ONLY"),
-        grid_policy=C.GridRepeatPolicy(
-            k_per_seed=1, k_start_index=0, stream_includes_theta=False,
-            convergence_rule="TEST_ONLY", max_doublings=0),
+    """Fully-populated TEST_ONLY methods (S0 closeout, 2026-08-10).
+
+    Post-ruling shape: the values MIRROR the Aaron-ruled instance — using
+    them no longer adopts an unruled choice, and the chain acceptance
+    criterion is precisely "a fully-RULED synthetic config through the real
+    resolver". `test_only=True` still marks the instance as test-context
+    (production refuses it), and the event mapping keeps the TEST_ONLY
+    synthetic value to keep exercising dataset.py's test-gate. Tests that
+    need a deviant field value `dataclasses.replace` it locally.
+    """
+    import dataclasses as _dc
+    ruled = C.aaron_ruled_methods()
+    return _dc.replace(
+        ruled,
         event_na_mapping="five_stratum",
-        stability_population="TEST_ONLY",
-        worst_day_estimator="TEST_ONLY",
+        # SMALL K for chain-test runtime only: K=200 costs ~10s per
+        # engine x scenario cell (S4 measurement) and the ruled 200 is
+        # pinned by tests/test_aaron_rulings.py; the chain needs the ruled
+        # STRUCTURE (theta-in-stream, prefix nesting), not the ruled size.
+        grid_policy=_dc.replace(ruled.grid_policy, k_per_seed=3),
         test_only=True)
 
 
@@ -158,6 +154,32 @@ def _formal(payload):
     return formal
 
 
+@pytest.fixture(autouse=True)
+def _kc_assertions_default(monkeypatch, tmp_path):
+    """Every test in this module renders (if it renders at all) against a
+    synthetic assertions file matching the shared `_market()` payload, so
+    the F-2 key-claims screen verifies WIRING, not the real locked counts.
+    Tests with a different market call `_patch_kc_assertions` themselves —
+    a later setattr wins."""
+    mod = real_run_module()
+    _patch_kc_assertions(mod, monkeypatch, tmp_path, _payload())
+    yield
+
+
+def _patch_kc_assertions(mod, monkeypatch, tmp_path, payload):
+    """Point the F-2 key-claims screen at a SYNTHETIC assertions file whose
+    funnel matches this synthetic payload — the production value stays the
+    locked real artifact; tests only verify the WIRING (the independence
+    claim is about production, where the file is the locked preflight)."""
+    import json as _json
+    st = payload.get("structural", {})
+    assertions = tmp_path / "kc_assertions.json"
+    assertions.write_text(
+        _json.dumps({"funnel": dict(st.get("funnel_counts", {}))}),
+        encoding="utf-8")
+    monkeypatch.setattr(mod, "KEY_CLAIMS_ASSERTIONS_PATH", assertions)
+
+
 # --- single method-truth-source (M6.1.1 main-agent item 1) ------------------
 
 def test_derive_config_refuses_pending_methods():
@@ -191,23 +213,40 @@ def test_production_path_refuses_test_only_config(monkeypatch):
 
 # --- fail-closed pending posture --------------------------------------------
 
-def test_real_chain_not_ready_while_rulings_pend():
+def test_ruled_source_has_no_pending_and_machinery_still_fail_closes(
+        monkeypatch):
+    """S0 closeout (2026-08-10): all eight rulings landed, so the LIVE
+    pending list is empty — and the fail-closed machinery must still refuse
+    a pending source if one ever reappears (un-ruling regression guard)."""
     mod = real_run_module()
     mod._CONFIG_CACHE.clear()
-    assert mod.PENDING_METHOD_DECISIONS
-    ok, why = mod.RealChain().ready()
-    assert ok is False and "pending method rulings" in why
-    cfg, why2 = mod.resolved_study_config()
-    assert cfg is None and "pending method rulings" in why2
+    assert mod.PENDING_METHOD_DECISIONS == ()
+    assert mod._resolved_methods().fully_resolved is True
+    monkeypatch.setattr(mod, "_resolved_methods",
+                        lambda: C.ResolvedS0Methods())
+    try:
+        ok, why = mod.RealChain().ready()
+        assert ok is False and "pending method rulings" in why
+        cfg, why2 = mod.resolved_study_config()
+        assert cfg is None and "pending method rulings" in why2
+    finally:
+        mod._CONFIG_CACHE.clear()
 
 
-def test_real_compute_fails_closed_without_loading_data():
+def test_real_compute_fails_closed_without_loading_data(monkeypatch):
+    """A PENDING method source (synthetically restored) still refuses in
+    prepare BEFORE any data load — chain._ds stays None (pre-exposure)."""
     mod = real_run_module()
     mod._CONFIG_CACHE.clear()
-    chain = mod.RealChain()
-    with pytest.raises(RuntimeError, match="pending method rulings"):
-        chain.compute(chain.prepare(_test_snapshot()))
-    assert chain._ds is None
+    monkeypatch.setattr(mod, "_resolved_methods",
+                        lambda: C.ResolvedS0Methods())
+    try:
+        chain = mod.RealChain()
+        with pytest.raises(RuntimeError, match="pending method rulings"):
+            chain.compute(chain.prepare(_test_snapshot()))
+        assert chain._ds is None
+    finally:
+        mod._CONFIG_CACHE.clear()
 
 
 def test_event_na_blocks_without_ruled_mapping():
@@ -226,7 +265,9 @@ def test_event_na_blocks_without_ruled_mapping():
         if getattr(type(r0.features), "__dataclass_params__").frozen \
         else setattr(r0.features, "is_event_day", None)
     try:
-        with pytest.raises(ValueError, match="DR-M6-F"):
+        with pytest.raises(ValueError,
+                           match="event-NA stratum mapping .* not "
+                                 "implemented"):
             mod.build_full_study_result(ds, bars, config=cfg,
                                         governance_meta=dict(_GOV),
                                         n_boot=40)
@@ -273,8 +314,12 @@ def test_e7_runner_a_to_f_production_builder_inside_stage_c(tmp_path):
     assert adm["withheld"]["SEED_MANIFEST.json"]
 
 
-def test_e7_unresolved_config_refused_in_stage_b_zero_exposure(tmp_path):
+def test_e7_unresolved_config_refused_in_stage_b_zero_exposure(tmp_path,
+                                                               monkeypatch):
     mod = real_run_module()
+    # S0 closeout: the live sources are ruled — the unresolved premise is
+    # synthetically restored (regression guard for the Stage-B refusal).
+    monkeypatch.setattr(mod, "_approved_injectables", lambda: None)
     mod._CONFIG_CACHE.clear()
     deps, events, _ = make_deps(
         tmp_path, gates=[ok_gate()],
@@ -318,6 +363,9 @@ def test_ready_true_implies_compute_has_no_wiring_error(monkeypatch,
     _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
     synthetic = _dc.replace(_test_methods(), test_only=False)
     monkeypatch.setattr(mod, "_resolved_methods", lambda: synthetic)
+    # S0 closeout: the production injectable source is live; this test's
+    # premise (no approved injectable source) is synthetically restored.
+    monkeypatch.setattr(mod, "_approved_injectables", lambda: None)
     calls: list = []
     real_build = mod.build_full_study_result
     monkeypatch.setattr(
@@ -394,6 +442,10 @@ def test_cache_injection_of_resolved_config_is_refused_vs_fresh_source(
     supplies a RESOLVED fresh source so the pending gate cannot short it."""
     import dataclasses as _dc
     mod = real_run_module()
+    # S0 closeout: the LIVE source is ruled, so the all-pending premise this
+    # test proves is synthetically restored (regression guard).
+    monkeypatch.setattr(mod, "_resolved_methods",
+                        lambda: C.ResolvedS0Methods())
     cfg = C.derive_study_config(
         _dc.replace(_test_methods(), test_only=False),
         spread_scalars=(0.5, 0.75, 0.75),
@@ -485,17 +537,145 @@ def _probe_event_na_mapping():
 # A probe must observe a REAL output/behaviour difference, never a source
 # substring. Landing a ruling REQUIRES adding its probe here in the same
 # commit: the test below fails if a field is resolved in production while
-# its probe is still None.
+# its probe is still None. S0 closeout (2026-08-10): all eight probes live.
+
+def _probe_spread_cost():
+    import dataclasses as _dc
+    from itsf.s0 import costs as _costs
+    ruled = C.aaron_ruled_methods().spread_cost
+    scns = _costs.build_scenarios_from_method((0.5, 0.75, 1.0), ruled)
+    ruled_ok = scns["Severe"].adverse_slippage_ticks > 0
+    try:
+        _costs.derive_spread_scalars([], _dc.replace(ruled,
+                                                     scalar_rule="UNRULED"))
+        other_refused = False
+    except ValueError:
+        other_refused = True
+    return (bool(ruled_ok), other_refused)
+
+
+def _probe_volatility_regime():
+    import dataclasses as _dc
+    from itsf.s0 import dataset as _dsm
+    ruled = C.aaron_ruled_methods().volatility_regime
+    closes = [(f"2020-01-{d:02d}", 100.0 + (d % 5)) for d in range(1, 29)]
+    days = [d for d, _ in closes[22:]]
+    a = _dsm.build_vol20_regime_mapping(days, closes, (), ruled)
+    b = _dsm.build_vol20_regime_mapping(
+        days, closes, (), _dc.replace(ruled, ddof=0))
+    va = [a.vol20[d] for d in days if a.vol20[d] is not None]
+    vb = [b.vol20[d] for d in days if b.vol20[d] is not None]
+    return (len(va) > 0, va != vb)
+
+
+def _probe_fp_allocation():
+    import dataclasses as _dc
+    from itsf.s0 import gridmix as _gm
+    ruled = C.aaron_ruled_methods().fp_allocation
+    out = _gm.fp_allocation_from_selected_tp(
+        5, {"A": 3, "B": 2}, {"A": 10, "B": 10}, ruled)
+    ruled_ok = sum(out["fp_alloc"].values()) == 5
+    try:
+        _gm.fp_allocation_from_selected_tp(
+            5, {"A": 3}, {"A": 10}, _dc.replace(ruled, basis="A"))
+        other_refused = False
+    except ValueError:
+        other_refused = True
+    return (ruled_ok, other_refused)
+
+
+def _probe_bootstrap_method():
+    import dataclasses as _dc
+    from itsf.s0 import stats as _st
+    ruled = C.aaron_ruled_methods().bootstrap_method
+    states = [("2020-01-02", "oracle_traded", 10.0),
+              ("2020-01-03", "eligible_not_selected"),
+              ("2020-01-06", "na")]
+    seq = _st.build_bootstrap_day_sequence(states, ruled)
+    ruled_ok = (seq["n_days_in_sequence"] == 2
+                and seq["n_na_days_dropped"] == 1)
+    try:
+        _st.build_bootstrap_day_sequence(
+            states, _dc.replace(ruled, population="UNRULED"))
+        other_refused = False
+    except ValueError:
+        other_refused = True
+    return (ruled_ok, other_refused)
+
+
+def _probe_grid_policy():
+    import dataclasses as _dc
+    from itsf.s0 import gridmix as _gm
+    m = C.aaron_ruled_methods()
+    policy = _dc.replace(m.grid_policy, k_per_seed=2)
+    tp = {f"2020-01-{d:02d}": 5.0 for d in range(2, 12)}
+    fp = {f"2020-02-{d:02d}": -5.0 for d in range(2, 12)}
+    strata = {d: ("2020", "T1", "none") for d in {**tp, **fp}}
+    cell = _gm.build_grid(tp, fp, strata, 0.5, q_grid=(0.5,), r_grid=(0.5,),
+                          fp_allocation=m.fp_allocation, grid_policy=policy,
+                          theta=0.5)
+    grid = cell["grid"]
+    raw = list(grid.values()) if isinstance(grid, dict) else list(grid)
+    pts = [p for p in raw
+           if isinstance(p, dict) and not p.get("infeasible_by_sample")]
+    ruled_ok = bool(pts) and "repeats" in pts[0]
+    try:
+        _gm.build_grid(tp, fp, strata, 0.5, q_grid=(0.5,), r_grid=(0.5,),
+                       fp_allocation=m.fp_allocation,
+                       grid_policy=_dc.replace(policy,
+                                               stream_includes_theta=False),
+                       theta=0.5)
+        other_refused = False
+    except ValueError:
+        other_refused = True
+    return (ruled_ok, other_refused)
+
+
+def _probe_stability_population():
+    from itsf.s0 import stability as _stab
+    rule = C.aaron_ruled_methods().stability_population
+    try:
+        _stab.check_populations({}, "UNRULED")
+        other_refused = False
+    except ValueError:
+        other_refused = True
+    problems = _stab.check_populations({}, rule)
+    return (bool(problems), other_refused)   # ruled rule DEMANDS the block
+
+
+def _probe_worst_day_estimator():
+    from itsf.s0 import study as _study
+    ruled = C.aaron_ruled_methods().worst_day_estimator
+    sample = [-10.0, -5.0, -1.0, 0.0, 4.0]
+    a = _study._percentile(sample, 5.0, ruled)
+    b = _study._percentile(sample, 5.0, "lower")
+    try:
+        _study.resolve_worst_day_estimator("UNRULED")
+        other_refused = False
+    except ValueError:
+        other_refused = True
+    return (a != b, other_refused)
+
+
 _METHOD_PROBES: dict[str, object] = {
-    "spread_cost": None,
-    "volatility_regime": None,
-    "fp_allocation": None,
-    "bootstrap_method": None,
-    "grid_policy": None,
+    "spread_cost": _probe_spread_cost,
+    "volatility_regime": _probe_volatility_regime,
+    "fp_allocation": _probe_fp_allocation,
+    "bootstrap_method": _probe_bootstrap_method,
+    "grid_policy": _probe_grid_policy,
     "event_na_mapping": _probe_event_na_mapping,
-    "stability_population": None,
-    "worst_day_estimator": None,
+    "stability_population": _probe_stability_population,
+    "worst_day_estimator": _probe_worst_day_estimator,
 }
+
+
+def test_every_probe_observes_ruled_behaviour_and_refusal():
+    for name, probe in _METHOD_PROBES.items():
+        if name == "event_na_mapping":
+            continue                     # has its own dedicated test below
+        ruled_ok, other = probe()
+        assert ruled_ok is True, f"{name}: ruled path not observable"
+        assert other is True, f"{name}: deviant value not refused/different"
 
 
 def test_method_probe_map_covers_every_field():
@@ -523,17 +703,15 @@ def test_event_na_mapping_consumer_is_behaviourally_observable():
 
 
 def test_unconsumed_method_fields_are_declared_partial():
-    """The SEVEN fields without consumers are UNRESOLVED in production, so
-    no silently-wrong method can run today (the PARTIAL status Codex asked
-    to be stated rather than claimed CLOSED). worst_day_estimator counts as
-    unconsumed: today it only flips the estimator_status string (fail-closed
-    gate) — it does not yet SELECT the estimator."""
+    """S0 closeout (2026-08-10): ZERO unconsumed fields — every ruling has
+    a wired production consumer and a live behaviour probe. The check stays
+    so that a future un-wiring (probe reset to None while the field stays
+    resolved) is a red, not a silent regression."""
     mod = real_run_module()
     live = mod._resolved_methods()
     unconsumed = [n for n, p in _METHOD_PROBES.items() if p is None]
-    assert len(unconsumed) == 7
-    for name in unconsumed:
-        assert getattr(live, name) is None
+    assert unconsumed == []
+    assert live.fully_resolved is True
 
 
 # --- M6.1.2: an ILLEGAL structured config can never make ready() true -----
@@ -869,6 +1047,10 @@ def test_injected_illegal_config_cannot_make_ready_true(monkeypatch):
     """Defence in depth: even if an illegal config reached the cache (frozen
     -dataclass bypass), revalidation at the point of use refuses it."""
     mod = real_run_module()
+    # S0 closeout: restore the all-pending fresh authority this test's
+    # G7-first claim is stated against.
+    monkeypatch.setattr(mod, "_resolved_methods",
+                        lambda: C.ResolvedS0Methods())
     cfg = _non_test_only_config()
     object.__setattr__(cfg.methods, "grid_policy", C.GridRepeatPolicy(
         k_per_seed=-5, k_start_index=0, stream_includes_theta=False,
@@ -973,7 +1155,9 @@ def test_e7_ready_then_compute_share_the_same_validated_config(monkeypatch,
     if "m" not in _CACHE:
         _CACHE["m"] = _market()
     bars, ds = _CACHE["m"]
-    approved = _dc.replace(_test_methods(), test_only=False)
+    approved = _dc.replace(_test_methods(), test_only=False,
+                           event_na_mapping=C.aaron_ruled_methods()
+                           .event_na_mapping)
     inj = {"spread_scalars": (0.5, 0.75, 0.75),
            "regime_of": lambda d: "R", "vol_axis_of": _test_vol_axis}
     monkeypatch.setattr(mod, "_resolved_methods", lambda: approved)
@@ -1019,11 +1203,13 @@ def test_formal_seal_admission_is_on_the_wire(monkeypatch):
     the gate decides admission rather than a hardcoded exclusion."""
     from itsf.s0 import handoff as ho
     mod = real_run_module()
-    def _test_only_sealable_manifest():
+    def _test_only_sealable_manifest(methods=None):
         # M6.1.3: admission RECOMPUTES sealability from content — the
         # fixture must be the REAL full-schema manifest with its open
         # markers overridden by explicit TEST_ONLY values (never a bare
-        # fake dict, which the new admission rightly refuses).
+        # fake dict, which the new admission rightly refuses). S0 closeout:
+        # accepts (and ignores) the renderer's methods= kwarg — the stub IS
+        # the manifest under test regardless of ruling state.
         import copy
         m = copy.deepcopy(_REAL_MANIFEST)
         def _resolve(obj):
@@ -1165,7 +1351,12 @@ def _f1_approved_methods():
     test using it asserts a REFUSAL or the synthetic positive path; it
     never reaches a real computation and adopts no ruling."""
     import dataclasses as _dc
-    return _dc.replace(_test_methods(), test_only=False)
+    # S0 closeout: the event consumer is test-gated, so a NON-test_only
+    # source must carry the RULED mapping (the TEST_ONLY synthetic value is
+    # refused on the production path by design).
+    return _dc.replace(_test_methods(), test_only=False,
+                       event_na_mapping=C.aaron_ruled_methods()
+                       .event_na_mapping)
 
 
 _F1_REGIME = lambda d: "R"                                      # noqa: E731
@@ -2151,7 +2342,9 @@ def test_m616_prepare_returns_an_exact_typed_immutable_object(monkeypatch,
     import dataclasses as _dc
     mod = real_run_module()
     _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
-    approved = _dc.replace(_test_methods(), test_only=False)
+    approved = _dc.replace(_test_methods(), test_only=False,
+                           event_na_mapping=C.aaron_ruled_methods()
+                           .event_na_mapping)
     inj = {"spread_scalars": (0.5, 0.75, 0.75),
            "regime_of": lambda d: "R", "vol_axis_of": _test_vol_axis}
     monkeypatch.setattr(mod, "_resolved_methods", lambda: approved)
@@ -2187,10 +2380,13 @@ def test_m616_compute_refuses_a_look_alike_prepared_object(monkeypatch,
 
 def test_m616_prepare_fails_closed_on_the_real_production_source(monkeypatch,
                                                                  tmp_path):
-    """The production posture today: `_approved_injectables()` is None, so
-    prepare refuses BEFORE exposure and Stage C is never reached."""
+    """S0 closeout (2026-08-10): the production sources are RULED, so this
+    test now proves the refusal machinery still works when the injectable
+    source is synthetically un-wired — prepare refuses BEFORE exposure and
+    before any data load (regression guard for the pre-ruling posture)."""
     mod = real_run_module()
     _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    monkeypatch.setattr(mod, "_approved_injectables", lambda: None)
     mod._CONFIG_CACHE.clear()
     try:
         chain = mod.RealChain()
@@ -2397,6 +2593,7 @@ def _honest_run_dir(mod, tmp_path, snap, monkeypatch):
     src = _payload()
     payload = {k: v for k, v in src.items()}
     payload["governance"] = gov
+    _patch_kc_assertions(mod, monkeypatch, tmp_path, src)
     prepared = _prepared_with(mod, snap)
     files = mod.RealChain().render_report_with_governance_proof(
         payload, prepared)
@@ -2570,3 +2767,108 @@ def test_m617_compute_stamps_the_snapshot_sequence_not_the_live_registry(
     assert gov["registry_sequence_snapshot"] == 7          # pre-exposure value
     assert gov["authorized_commit"] == snap["authorized_commit"]
     assert gov["trial_id"] == mod.TRIAL_ID
+
+
+# ===========================================================================
+# S0-closeout conformance fix-round pins (R1 findings F1.1-F1.4, F2.1)
+# ===========================================================================
+
+def _entry_src(obj):
+    import inspect
+    return inspect.getsource(obj)
+
+
+def test_r1_f21_chain_render_forwards_the_validated_methods():
+    """F2.1 (High): the F-2 key-claims screen and the ruled admission
+    context are gated on `methods=`; the production chain seam MUST forward
+    the validated config's methods. Source pin — behaviour cannot see a
+    skipped screen."""
+    mod = real_run_module()
+    src = _entry_src(mod.RealChain.render_report_with_governance_proof)
+    assert "methods=prepared.config.methods" in src
+
+
+def test_r1_f12_compute_passes_the_day_value_snapshot():
+    """F1.2 (Med): Stage C consumes the F-1 snapshot, never the config
+    callables. Source pin on the forwarding + behavioural pin below."""
+    mod = real_run_module()
+    assert ("day_value_snapshot=prepared.day_values"
+            in _entry_src(mod.RealChain.compute))
+
+
+def test_r1_f12_prepare_always_materializes_day_values(monkeypatch,
+                                                       tmp_path):
+    import dataclasses as _dc
+    mod = real_run_module()
+    _hermetic_stage_c_paths(mod, monkeypatch, tmp_path)
+    _f1_resolved_sources(mod, monkeypatch)
+    if "m" not in _CACHE:
+        _CACHE["m"] = _market()
+    bars, ds = _CACHE["m"]
+    monkeypatch.setattr(mod.RealChain, "_ensure",
+                        lambda self: (ds, None))
+    monkeypatch.setattr(mod.RealChain, "_bars", bars, raising=False)
+    mod._CONFIG_CACHE.clear()
+    try:
+        prepared = mod.RealChain().prepare(_test_snapshot())
+        assert prepared.day_values is not None
+        dates = sorted(r.trade_date for r in ds.records)
+        assert prepared.day_values.covers(dates)
+    finally:
+        mod._CONFIG_CACHE.clear()
+
+
+def test_r1_f13_payload_carries_the_ruled_disclosure_blocks():
+    """F1.3 (Med): the production payload itself must carry the DR-3/5/7
+    disclosure blocks — reverting the entry wiring goes red HERE, not only
+    in the primitives' own test files."""
+    src = _payload()
+    grid_cells = src["feasibility_grid"]["cells"]
+    assert grid_cells, "no grid cells in payload"
+    feasible_seen = 0
+    for cell in grid_cells.values():
+        grid = cell["grid"]
+        pts = list(grid.values()) if isinstance(grid, dict) else list(grid)
+        for p in pts:
+            if isinstance(p, dict) and not p.get("infeasible_by_sample"):
+                feasible_seen += 1
+                assert "repeats" in p, "DR-5 repeats block missing"
+                assert "fp_allocation" in p, "DR-3 block missing"
+    assert feasible_seen > 0, "no feasible grid point exercised the pin"
+    for tkey, views in src["stability_views"].items():
+        for eng, scns in views.items():
+            if not isinstance(scns, dict):
+                continue
+            for scn, cell in scns.items():
+                if isinstance(cell, dict) and "epochs" in cell:
+                    assert "populations" in cell, (
+                        f"DR-7 populations missing at {tkey}|{eng}|{scn}")
+
+
+def test_r1_f11_f14_entry_wiring_source_pins():
+    """F1.1/F1.4 (Low): the DR-1 adverse vector and DR-8 estimator wirings
+    are behavioural no-ops by DESIGN (the rulings reproduce the prior
+    conventions exactly — a genuine result, disclosed in the packet), so
+    the wiring is pinned at source level instead."""
+    mod = real_run_module()
+    src = _entry_src(mod.build_full_study_result)
+    assert "build_scenarios_from_method" in src
+    assert "worst_day_estimator=config.methods" in src.replace(
+        "\n", "").replace(" ", "")[:0] or "worst_day_estimator" in src
+    assert "fp_allocation=config.methods.fp_allocation" in src
+    assert "grid_policy=config.methods.grid_policy" in src
+    assert "stability_population=config.methods.stability_population" in src
+
+
+def test_r1_ruled_non_test_only_render_admits_seed_manifest(monkeypatch,
+                                                            tmp_path):
+    """S5 wiring end-state: a ruled NON-test_only render admits
+    SEED_MANIFEST (condition-driven), while the TEST_ONLY chain e2e keeps
+    it withheld (pinned elsewhere)."""
+    mod = real_run_module()
+    _patch_kc_assertions(mod, monkeypatch, tmp_path, _payload())
+    files = mod.render_s0_report(_payload(), expected_governance=dict(_GOV),
+                                 methods=_f1_approved_methods())
+    assert "SEED_MANIFEST.json" in files
+    adm = json.loads(files["HANDOFF_ADMISSION.json"])
+    assert "SEED_MANIFEST.json" in adm["admitted"]

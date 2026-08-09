@@ -22,7 +22,8 @@ from pathlib import Path
 
 import pytest
 
-from itsf.contracts import (NAConservationError, RunConfig, RunGateError,
+from itsf.contracts import (RULED_ARCHIVE_ROOT, RULED_RUNS_ROOT,
+                            NAConservationError, RunConfig, RunGateError,
                             RunStage, TrialState)
 from itsf.s0 import runinfra
 from itsf.s0.runner import (
@@ -38,6 +39,77 @@ CLOCK = "2026-07-31T12:00:00+00:00"
 REPO = Path(__file__).resolve().parents[1]
 
 _SCRIPT_CACHE: dict[str, object] = {}
+
+
+# ===========================================================================
+# L-5 ruling (2026-08-10) — real-ruled-root guard + tmp_path fixture helpers
+# ===========================================================================
+#
+# CRITICAL (S3 file-ownership mandate): this test file must NEVER create a
+# directory under the REAL ruled roots (contracts.RULED_RUNS_ROOT /
+# RULED_ARCHIVE_ROOT). `make_deps` (above) and `_tmp_output_roots` (below)
+# are the two places a RunConfig gets built in this file, and both pass
+# EXPLICIT tmp_path-derived runs_root/archive_root — but a fixture default
+# is exactly the kind of thing that silently rots, so this autouse guard is
+# the INDEPENDENT, structural proof: it inspects the real filesystem
+# itself, before and after EVERY test collected from this file, rather
+# than trusting any single test (existing or future) to remember the rule.
+
+_REAL_RULED_ROOTS: tuple[Path, ...] = (Path(RULED_RUNS_ROOT),
+                                       Path(RULED_ARCHIVE_ROOT))
+
+
+def _real_ruled_root_snapshot() -> dict[Path, frozenset[str] | None]:
+    """`None` for a root that does not exist at all; otherwise the set of
+    its top-level entry names. Deliberately tolerant of the root ALREADY
+    holding real content (e.g. this machine has run real S0 trials before)
+    — the guard's job is to prove this TEST FILE never ADDS to it, not to
+    assert it is empty, which would be a false claim on a machine with
+    real prior history."""
+    snap: dict[Path, frozenset[str] | None] = {}
+    for root in _REAL_RULED_ROOTS:
+        snap[root] = (frozenset(p.name for p in root.iterdir())
+                     if root.exists() else None)
+    return snap
+
+
+@pytest.fixture(autouse=True)
+def _guard_real_ruled_roots_untouched():
+    """Runs around every test in this module. Fails loudly if the set of
+    top-level entries under either real ruled root changes across the
+    test — that is the only way a directory could have been created (or
+    removed) there by something this file did."""
+    before = _real_ruled_root_snapshot()
+    yield
+    after = _real_ruled_root_snapshot()
+    for root in _REAL_RULED_ROOTS:
+        assert after[root] == before[root], (
+            f"a test in this file touched the REAL ruled root {root} "
+            f"(top-level entries before={before[root]!r} "
+            f"after={after[root]!r}) — every RunConfig built in this file "
+            "must pass an explicit tmp_path-based runs_root/archive_root "
+            "override; never rely on RunConfig's ruled defaults inside a "
+            "test")
+
+
+def _tmp_output_roots(tmp_path: Path, *, trial: str = "S0-T001",
+                      stamp: str = "20260810T000000Z"):
+    """Explicit tmp_path-derived governed roots for a test that
+    specifically exercises the L-5 root-governance gate or the archive
+    step. `runs_root` and `archive_root` are SIBLINGS (so neither can ever
+    contain the other by construction), mirroring the production layout
+    `<runs_root>/runs/<trial>_<stamp>/` and `<runs_root>/attempts/<id>/`.
+
+    Returns (runs_root, archive_root, runs_dir, attempts_dir), all
+    `Path` objects, none created on disk yet — callers pass them straight
+    into `make_deps(..., runs_root=..., archive_root=..., runs_dir=...,
+    attempts_dir=...)`.
+    """
+    runs_root = tmp_path / "governed" / "runs_root"
+    archive_root = tmp_path / "governed" / "archive_root"
+    runs_dir = runs_root / "runs" / f"{trial}_{stamp}"
+    attempts_dir = runs_root / "attempts" / f"{trial}-A001_{stamp}"
+    return runs_root, archive_root, runs_dir, attempts_dir
 
 
 def real_run_module():
@@ -93,13 +165,44 @@ def default_post_write_verify(runs_dir: Path, written, prepared):
 def make_deps(tmp_path: Path, *, gates=(), b_checks=(),
               compute=None, integrity=(), renderer=None,
               registry_events=None, log=None, append_event=None,
-              runs_dir=None, prepare=None, post_write_verify=None):
+              runs_dir=None, attempts_dir=None, runs_root=None,
+              archive_root=None, prepare=None, post_write_verify=None):
+    """L-5 ruling (2026-08-10) fixture defaults, added without changing any
+    EXISTING call site's behaviour.
+
+    `runs_root` defaults to `tmp_path` itself; `archive_root` defaults to a
+    SIBLING of `tmp_path` (a directory named from `tmp_path`'s own name,
+    created next to it) so the two governed roots are disjoint by
+    construction without needing every caller to think about it. Every
+    call site in THIS repo that predates the L-5 root-governance gate
+    already places `runs_dir`/`attempts_dir` somewhere under `tmp_path`
+    (the historical defaults `tmp_path/"runs"/"S0-T001"` and
+    `tmp_path/"attempts"/"A001"`, or an explicit override that is still a
+    `tmp_path` descendant, e.g. `tmp_path / "runs" / "<stamp>"`) — so
+    defaulting `runs_root` to `tmp_path` reproduces the OLD default
+    `runs_dir`/`attempts_dir` values EXACTLY and keeps every such override
+    validating cleanly under the new gate, with zero call-site changes.
+
+    A test that specifically exercises the L-5 gate or the archive step
+    passes explicit tmp_path-derived roots (see `_tmp_output_roots`).
+    This fixture NEVER points at the real ruled roots
+    (`contracts.RULED_RUNS_ROOT` / `RULED_ARCHIVE_ROOT`) — independently
+    checked by the autouse `_guard_real_ruled_roots_untouched` fixture
+    below, which runs around every test in this file.
+    """
+    resolved_runs_root = Path(runs_root) if runs_root is not None else tmp_path
+    resolved_archive_root = (Path(archive_root) if archive_root is not None
+                             else tmp_path.parent / f"{tmp_path.name}__archive_root")
     cfg = RunConfig(trial_id="S0-T001",
                     authorized_commit="a" * 40,
                     engineering_seed=20260731,
-                    attempts_dir=str(tmp_path / "attempts" / "A001"),
-                    runs_dir=str(runs_dir or (tmp_path / "runs" / "S0-T001")),
-                    assertions_path=str(tmp_path / "assertions.json"))
+                    attempts_dir=str(attempts_dir or
+                                     (resolved_runs_root / "attempts" / "A001")),
+                    runs_dir=str(runs_dir or
+                                (resolved_runs_root / "runs" / "S0-T001")),
+                    assertions_path=str(tmp_path / "assertions.json"),
+                    runs_root=str(resolved_runs_root),
+                    archive_root=str(resolved_archive_root))
     events = registry_events if registry_events is not None else []
 
     def default_append(ev, note):
@@ -892,7 +995,7 @@ def test_pytest_gate_floor_is_the_audit_baseline():
     """SA-10 N3: the floor tracks the CURRENT suite, closing the
     silent-collection-drop headroom."""
     mod = real_run_module()
-    assert mod.MIN_COLLECTED_TESTS == 2220
+    assert mod.MIN_COLLECTED_TESTS == 2495
 
 
 # ===========================================================================
@@ -2693,3 +2796,513 @@ def test_h1_log_errors_checkpoint_follows_record_artifacts():
     checkpoint = after[idx_check:idx_stage_done]
     assert '"log_guard"' in checkpoint
     assert "RunStage.E_REPORT" in checkpoint
+
+
+# ===========================================================================
+# L-5 ruling (2026-08-10) — output-root validation gate + post-seal archive
+# ===========================================================================
+#
+# Deliverables covered in this section:
+#   1. validate_output_roots direct unit tests (runinfra, pure logic)
+#   2. the intrinsic Stage-A gate wiring in runner.py: order, naming, the
+#      repo-runs/ refusal (never creates a directory under the repo tree)
+#   3. the post-seal archive step: success + injected-mismatch paths
+#   4. the exact-set disk proof on the new root: full pipeline COMPLETED,
+#      zero-whitelist extra-file refusal, attempts/ under the same root
+
+
+def _rc(**overrides) -> RunConfig:
+    """Minimal RunConfig for direct `validate_output_roots` unit tests —
+    every field the gate does not care about is a fixed sentinel."""
+    base = dict(trial_id="S0-T001", authorized_commit="a" * 40,
+               engineering_seed=1, attempts_dir="UNSET", runs_dir="UNSET",
+               assertions_path="UNSET", runs_root="UNSET",
+               archive_root="UNSET")
+    base.update(overrides)
+    return RunConfig(**base)
+
+
+# --- 1. validate_output_roots — direct unit tests (runinfra) ---------------
+
+
+def test_validate_output_roots_passes_with_disjoint_tmp_roots(tmp_path):
+    runs_root = tmp_path / "runs_root"
+    archive_root = tmp_path / "archive_root"
+    cfg = _rc(runs_root=str(runs_root), archive_root=str(archive_root),
+             runs_dir=str(runs_root / "runs" / "S0-T001"),
+             attempts_dir=str(runs_root / "attempts" / "A001"))
+    runinfra.validate_output_roots(cfg, REPO)          # must not raise
+
+
+def test_validate_output_roots_refuses_non_runconfig_cfg():
+    with pytest.raises(RunGateError, match="RunConfig"):
+        runinfra.validate_output_roots(object(), REPO)
+
+
+def test_validate_output_roots_refuses_non_path_repo_root(tmp_path):
+    runs_root = tmp_path / "runs_root"
+    cfg = _rc(runs_root=str(runs_root),
+             archive_root=str(tmp_path / "archive_root"),
+             runs_dir=str(runs_root / "runs" / "S0-T001"),
+             attempts_dir=str(runs_root / "attempts" / "A001"))
+    with pytest.raises(RunGateError, match="repo_root"):
+        runinfra.validate_output_roots(cfg, str(REPO))
+
+
+def test_validate_output_roots_refuses_relative_runs_root(tmp_path):
+    cfg = _rc(runs_root="relative/runs_root",
+             archive_root=str(tmp_path / "archive_root"),
+             runs_dir=str(tmp_path / "runs_root" / "runs" / "S0-T001"),
+             attempts_dir=str(tmp_path / "runs_root" / "attempts" / "A001"))
+    with pytest.raises(RunGateError, match="runs_root"):
+        runinfra.validate_output_roots(cfg, REPO)
+
+
+def test_validate_output_roots_refuses_relative_archive_root(tmp_path):
+    runs_root = tmp_path / "runs_root"
+    cfg = _rc(runs_root=str(runs_root), archive_root="relative/archive",
+             runs_dir=str(runs_root / "runs" / "S0-T001"),
+             attempts_dir=str(runs_root / "attempts" / "A001"))
+    with pytest.raises(RunGateError, match="archive_root"):
+        runinfra.validate_output_roots(cfg, REPO)
+
+
+def test_validate_output_roots_refuses_relative_runs_dir(tmp_path):
+    runs_root = tmp_path / "runs_root"
+    cfg = _rc(runs_root=str(runs_root),
+             archive_root=str(tmp_path / "archive_root"),
+             runs_dir="relative/runs_dir",
+             attempts_dir=str(runs_root / "attempts" / "A001"))
+    with pytest.raises(RunGateError, match="runs_dir"):
+        runinfra.validate_output_roots(cfg, REPO)
+
+
+def test_validate_output_roots_refuses_runs_root_inside_repo_tree(tmp_path):
+    """The exact historical bug this ruling closes:
+    `RUNS_ROOT = REPO / "runs"`."""
+    runs_root = REPO / "runs"
+    cfg = _rc(runs_root=str(runs_root),
+             archive_root=str(tmp_path / "archive_root"),
+             runs_dir=str(runs_root / "runs" / "S0-T001"),
+             attempts_dir=str(runs_root / "attempts" / "A001"))
+    with pytest.raises(RunGateError, match="disjoint"):
+        runinfra.validate_output_roots(cfg, REPO)
+
+
+def test_validate_output_roots_refuses_repo_root_nested_inside_runs_root(tmp_path):
+    """The INVERTED containment case: runs_root is an ANCESTOR of the repo
+    root. Disjointness must be checked in both directions."""
+    runs_root = REPO.parent
+    cfg = _rc(runs_root=str(runs_root),
+             archive_root=str(tmp_path / "archive_root"),
+             runs_dir=str(runs_root / "runs" / "S0-T001"),
+             attempts_dir=str(runs_root / "attempts" / "A001"))
+    with pytest.raises(RunGateError, match="disjoint"):
+        runinfra.validate_output_roots(cfg, REPO)
+
+
+def test_validate_output_roots_refuses_archive_root_inside_repo_tree(tmp_path):
+    runs_root = tmp_path / "runs_root"
+    cfg = _rc(runs_root=str(runs_root), archive_root=str(REPO / "archive"),
+             runs_dir=str(runs_root / "runs" / "S0-T001"),
+             attempts_dir=str(runs_root / "attempts" / "A001"))
+    with pytest.raises(RunGateError, match="disjoint"):
+        runinfra.validate_output_roots(cfg, REPO)
+
+
+def test_validate_output_roots_refuses_archive_root_equal_to_runs_root(tmp_path):
+    shared = tmp_path / "shared_root"
+    cfg = _rc(runs_root=str(shared), archive_root=str(shared),
+             runs_dir=str(shared / "runs" / "S0-T001"),
+             attempts_dir=str(shared / "attempts" / "A001"))
+    with pytest.raises(RunGateError, match="disjoint"):
+        runinfra.validate_output_roots(cfg, REPO)
+
+
+def test_validate_output_roots_refuses_archive_root_nested_inside_runs_root(tmp_path):
+    runs_root = tmp_path / "runs_root"
+    cfg = _rc(runs_root=str(runs_root),
+             archive_root=str(runs_root / "archive_root"),
+             runs_dir=str(runs_root / "runs" / "S0-T001"),
+             attempts_dir=str(runs_root / "attempts" / "A001"))
+    with pytest.raises(RunGateError, match="disjoint"):
+        runinfra.validate_output_roots(cfg, REPO)
+
+
+def test_validate_output_roots_refuses_runs_root_nested_inside_archive_root(tmp_path):
+    archive_root = tmp_path / "archive_root"
+    runs_root = archive_root / "runs_root"
+    cfg = _rc(runs_root=str(runs_root), archive_root=str(archive_root),
+             runs_dir=str(runs_root / "runs" / "S0-T001"),
+             attempts_dir=str(runs_root / "attempts" / "A001"))
+    with pytest.raises(RunGateError, match="disjoint"):
+        runinfra.validate_output_roots(cfg, REPO)
+
+
+def test_validate_output_roots_refuses_runs_dir_not_under_runs_root(tmp_path):
+    runs_root = tmp_path / "runs_root"
+    elsewhere = tmp_path / "elsewhere" / "S0-T001"
+    cfg = _rc(runs_root=str(runs_root),
+             archive_root=str(tmp_path / "archive_root"),
+             runs_dir=str(elsewhere),
+             attempts_dir=str(runs_root / "attempts" / "A001"))
+    with pytest.raises(RunGateError, match="runs_dir"):
+        runinfra.validate_output_roots(cfg, REPO)
+
+
+def test_validate_output_roots_refuses_runs_dir_equal_to_runs_root(tmp_path):
+    """`runs_dir` must resolve STRICTLY under `runs_root` — equal is not
+    good enough (it must be a proper descendant)."""
+    runs_root = tmp_path / "runs_root"
+    cfg = _rc(runs_root=str(runs_root),
+             archive_root=str(tmp_path / "archive_root"),
+             runs_dir=str(runs_root),
+             attempts_dir=str(runs_root / "attempts" / "A001"))
+    with pytest.raises(RunGateError, match="runs_dir"):
+        runinfra.validate_output_roots(cfg, REPO)
+
+
+def test_validate_output_roots_refuses_attempts_dir_not_under_runs_root(tmp_path):
+    runs_root = tmp_path / "runs_root"
+    cfg = _rc(runs_root=str(runs_root),
+             archive_root=str(tmp_path / "archive_root"),
+             runs_dir=str(runs_root / "runs" / "S0-T001"),
+             attempts_dir=str(tmp_path / "elsewhere" / "A001"))
+    with pytest.raises(RunGateError, match="attempts_dir"):
+        runinfra.validate_output_roots(cfg, REPO)
+
+
+def test_runconfig_defaults_are_the_ruled_roots():
+    """Sanity check on the contracts.py interface this gate depends on."""
+    cfg = RunConfig(trial_id="x", authorized_commit="a" * 40,
+                    engineering_seed=1, attempts_dir="a", runs_dir="r",
+                    assertions_path="p")
+    assert cfg.runs_root == RULED_RUNS_ROOT
+    assert cfg.archive_root == RULED_ARCHIVE_ROOT
+
+
+# --- 2. the intrinsic Stage-A gate wiring (runner.py) -----------------------
+
+
+def test_output_roots_gate_refuses_runs_root_inside_repo_tree_via_runner(tmp_path):
+    """Deliverable 2: a config whose runs_root/runs_dir sits inside the
+    repo tree (the exact historical bug, `RUNS_ROOT = REPO / "runs"`) is
+    refused by the runner's own Stage-A gate, pre-exposure — and NOTHING
+    is ever created under the repo tree in the process. `attempts_dir` is
+    kept on a SAFE tmp_path location (a pre-run-attempt failure DOES
+    create the attempts directory, via `_attempt_dir()`, so it must never
+    be allowed to default to somewhere inside the bad runs_root)."""
+    bad_runs_root = REPO / "runs"
+    safe_attempts_dir = tmp_path / "attempts" / "A001"
+    safe_archive_root = tmp_path / "archive_root"
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()],
+        runs_root=bad_runs_root,
+        runs_dir=bad_runs_root / "runs" / "S0-T001_20260810T000000Z",
+        attempts_dir=safe_attempts_dir,
+        archive_root=safe_archive_root)
+    out = S0Runner(deps).run()
+    assert out.ok is False
+    assert out.failure_kind == "pre_run_attempt"
+    assert out.failed_gate == "output_roots_validated"
+    assert out.terminal_stage == RunStage.A_PRECHECK
+    assert out.exposure_consumed is False
+    assert [e for e, _ in events] == ["PRE_RUN_ATTEMPT_FAILURE"]
+    # the hard constraint, proven directly against the real filesystem:
+    # nothing landed under the repo tree at all.
+    assert not bad_runs_root.exists()
+    assert not (REPO / "runs").exists()
+    # the attempts artifacts DID land, but only in the safe tmp location
+    assert (safe_attempts_dir / "PRE_RUN_ATTEMPT_FAILURE.md").exists()
+
+
+def test_output_roots_gate_runs_before_any_injected_stage_a_gate(tmp_path):
+    """Proves the intrinsic gate runs FIRST: an injected gate that would
+    otherwise pass never even executes when the roots are bad."""
+    calls: list[str] = []
+
+    def tracking_gate():
+        calls.append("injected_gate_ran")
+        return True, "ok"
+
+    bad_runs_root = REPO / "runs"
+    deps, events, _ = make_deps(
+        tmp_path, gates=[GateCheck("tracked", tracking_gate)],
+        runs_root=bad_runs_root,
+        runs_dir=bad_runs_root / "runs" / "S0-T001",
+        attempts_dir=tmp_path / "attempts" / "A001",
+        archive_root=tmp_path / "archive_root")
+    out = S0Runner(deps).run()
+    assert out.failed_gate == "output_roots_validated"
+    assert calls == []                     # the injected gate never ran
+    assert not bad_runs_root.exists()
+
+
+def test_output_roots_gate_unconditional_even_with_zero_injected_gates(tmp_path):
+    """The intrinsic gate does not depend on the caller (the entry
+    script) remembering to wire anything into `d.gates` — an EMPTY gate
+    list still refuses a bad runs_root."""
+    bad_runs_root = REPO / "runs"
+    deps, events, _ = make_deps(
+        tmp_path, gates=[],
+        runs_root=bad_runs_root,
+        runs_dir=bad_runs_root / "runs" / "S0-T001",
+        attempts_dir=tmp_path / "attempts" / "A001",
+        archive_root=tmp_path / "archive_root")
+    out = S0Runner(deps).run()
+    assert out.failed_gate == "output_roots_validated"
+    assert not bad_runs_root.exists()
+
+
+# --- 3. post-seal archive step -----------------------------------------—---
+
+
+def test_archive_sealed_run_success_full_recheck_manifest(tmp_path):
+    src = tmp_path / "runs_root" / "runs" / "S0-T001_20260810T000000Z"
+    src.mkdir(parents=True)
+    (src / "S0_REPORT.md").write_bytes(b"sealed report body\n")
+    (src / "manifest.jsonl").write_bytes(b'{"a":1}\n')
+    nested = src / "sub"
+    nested.mkdir()
+    (nested / "leaf.txt").write_bytes(b"leaf bytes")
+    archive_root = tmp_path / "archive_root"
+
+    report = runinfra.archive_sealed_run(src, archive_root)
+
+    assert report.ok is True
+    assert report.status == "archive_ok"
+    assert report.errors == ()
+    assert report.run_dir_name == src.name
+    by_rel = {f.relative_path: f for f in report.files}
+    assert set(by_rel) == {"S0_REPORT.md", "manifest.jsonl", "sub/leaf.txt"}
+    for rel, rec in by_rel.items():
+        assert rec.match is True
+        assert rec.source_sha256 == rec.dest_sha256
+        assert rec.source_bytes == rec.dest_bytes
+        dest_path = archive_root / src.name / rel
+        assert dest_path.read_bytes() == (src / rel).read_bytes()
+    # nothing about the SOURCE (sealed run) directory was touched
+    assert (src / "S0_REPORT.md").read_bytes() == b"sealed report body\n"
+
+
+def test_archive_sealed_run_detects_injected_mismatch(tmp_path, monkeypatch):
+    """Injected-mismatch path: the DEST-side write is tampered with after
+    the source is read, simulating a copy that silently corrupted one
+    file. The independent re-read + re-hash on both sides must catch it."""
+    src = tmp_path / "runs_root" / "runs" / "S0-T001_20260810T000000Z"
+    src.mkdir(parents=True)
+    (src / "S0_REPORT.md").write_bytes(b"sealed report body\n")
+    (src / "manifest.jsonl").write_bytes(b'{"a":1}\n')
+    archive_root = tmp_path / "archive_root"
+
+    real_write_bytes = Path.write_bytes
+
+    def tampering_write_bytes(self, data):
+        if self.name == "manifest.jsonl" and archive_root.name in self.parts:
+            data = data + b"TAMPERED"
+        return real_write_bytes(self, data)
+
+    monkeypatch.setattr(Path, "write_bytes", tampering_write_bytes)
+
+    report = runinfra.archive_sealed_run(src, archive_root)
+
+    assert report.ok is False
+    assert report.status == "archive_failed"
+    assert report.errors
+    by_rel = {f.relative_path: f for f in report.files}
+    assert by_rel["manifest.jsonl"].match is False
+    assert by_rel["S0_REPORT.md"].match is True
+    # the SOURCE (sealed run) file is untouched by the injected tamper
+    assert (src / "manifest.jsonl").read_bytes() == b'{"a":1}\n'
+
+
+def test_archive_sealed_run_refuses_missing_runs_dir(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        runinfra.archive_sealed_run(tmp_path / "does_not_exist",
+                                    tmp_path / "archive_root")
+
+
+def test_archive_sealed_run_refuses_existing_destination(tmp_path):
+    src = tmp_path / "runs_root" / "runs" / "S0-T001"
+    src.mkdir(parents=True)
+    (src / "a.txt").write_bytes(b"x")
+    archive_root = tmp_path / "archive_root"
+    (archive_root / src.name).mkdir(parents=True)
+
+    report = runinfra.archive_sealed_run(src, archive_root)
+    assert report.ok is False
+    assert report.status == "archive_failed"
+    assert any("already exists" in e for e in report.errors)
+
+
+def test_archive_step_failure_does_not_unseal_or_flip_ok(tmp_path, monkeypatch):
+    """Deliverable 3: any mismatch/copy failure keeps the run SEALED —
+    `ok` stays True, `terminal_stage` stays F_SEALED, the registry keeps
+    COMPLETED, and runs_dir is untouched — while archive_status/
+    archive_report loudly record the problem."""
+    runs_root, archive_root, runs_dir, attempts_dir = _tmp_output_roots(tmp_path)
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()],
+        runs_root=runs_root, archive_root=archive_root,
+        runs_dir=runs_dir, attempts_dir=attempts_dir)
+
+    def failing_archive(rdir, aroot):
+        return runinfra.ArchiveReport(
+            ok=False, status="archive_failed", run_dir_name=rdir.name,
+            source_dir=str(rdir), dest_dir=str(Path(aroot) / rdir.name),
+            files=(), errors=("synthetic injected archive failure",))
+
+    monkeypatch.setattr(runinfra, "archive_sealed_run", failing_archive)
+    out = S0Runner(deps).run()
+
+    assert out.ok is True                          # the run STAYS sealed
+    assert out.terminal_stage == RunStage.F_SEALED
+    assert out.exposure_consumed is True
+    assert out.archive_status == "archive_failed"
+    assert out.archive_report.errors == ("synthetic injected archive failure",)
+    assert events[-1][0] == "COMPLETED"             # registry unaffected
+    assert (runs_dir / "S0_REPORT.md").exists()     # sealed run dir intact
+    assert not (archive_root / runs_dir.name).exists()
+
+
+def test_archive_step_exception_is_captured_not_propagated(tmp_path, monkeypatch):
+    runs_root, archive_root, runs_dir, attempts_dir = _tmp_output_roots(tmp_path)
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()],
+        runs_root=runs_root, archive_root=archive_root,
+        runs_dir=runs_dir, attempts_dir=attempts_dir)
+
+    def exploding_archive(rdir, aroot):
+        raise RuntimeError("synthetic archive-side crash")
+
+    monkeypatch.setattr(runinfra, "archive_sealed_run", exploding_archive)
+    out = S0Runner(deps).run()
+
+    assert out.ok is True
+    assert out.archive_status == "archive_failed"
+    assert out.archive_report is not None
+    assert "synthetic archive-side crash" in out.archive_report.errors[0]
+
+
+def test_archive_step_never_attempted_for_a_failed_run(tmp_path):
+    """The archive step is called EXACTLY once, only after F_SEALED — a
+    run that fails earlier never triggers it and never touches
+    archive_root at all."""
+    runs_root, archive_root, runs_dir, attempts_dir = _tmp_output_roots(tmp_path)
+
+    def broken(prepared):
+        raise ValueError("synthetic compute crash")
+
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()], compute=broken,
+        runs_root=runs_root, archive_root=archive_root,
+        runs_dir=runs_dir, attempts_dir=attempts_dir)
+    out = S0Runner(deps).run()
+
+    assert out.ok is False
+    assert out.archive_status == ""
+    assert out.archive_report is None
+    assert not archive_root.exists()
+
+
+# --- 4. exact-set proof on the new root -------------------------------------
+
+
+def test_full_synthetic_pipeline_reaches_completed_with_new_root_wiring(tmp_path):
+    """Deliverable 4, part 1 (+ exercises deliverable 3's success path):
+    the full synthetic A-to-F pipeline reaches COMPLETED with the new
+    runs_root/archive_root wiring, and the post-seal archive step lands a
+    byte-identical copy under archive_root."""
+    runs_root, archive_root, runs_dir, attempts_dir = _tmp_output_roots(tmp_path)
+    deps, events, logs = make_deps(
+        tmp_path, gates=[ok_gate("g1")],
+        b_checks=[GateCheck("b1", lambda: (True, "ok"))],
+        integrity=[lambda r: (True, "ok")],
+        runs_root=runs_root, archive_root=archive_root,
+        runs_dir=runs_dir, attempts_dir=attempts_dir)
+    out = S0Runner(deps).run()
+
+    assert out.ok is True
+    assert out.stages_completed == ("A_PRECHECK", "B_LOAD_VALIDATE",
+                                    "C_COMPUTE", "D_INTEGRITY", "E_REPORT",
+                                    "F_SEALED")
+    assert out.runs_dir == runs_dir
+    assert runs_dir.resolve().is_relative_to(runs_root.resolve())
+    assert (runs_dir / "S0_REPORT.md").exists()
+    assert [e for e, _ in events][0] == "RUN_STARTED"
+    assert [e for e, _ in events][-1] == "COMPLETED"
+    # the archive step also ran, over the SAME roots, and succeeded
+    assert out.archive_status == "archive_ok"
+    assert out.archive_report.ok is True
+    archived_dir = archive_root / runs_dir.name
+    assert (archived_dir / "S0_REPORT.md").read_bytes() == \
+        (runs_dir / "S0_REPORT.md").read_bytes()
+
+
+def test_extra_file_in_run_dir_fails_exact_set_disk_proof_zero_whitelist(tmp_path):
+    """Deliverable 4, part 2: zero-whitelist stays. A stray file planted
+    in the run directory before the post-write verification seam runs —
+    the synthetic analog of a OneDrive sync artifact (`desktop.ini`,
+    `*.tmp`) landing in the run dir, which is exactly the L-5 scenario —
+    must fail the disk proof. No filename is exempted; this mirrors
+    output_proof.py's `REFUSAL_DISK_EXTRA_FILE` zero-whitelist discipline
+    (exercised against the real production checker in
+    tests/test_m6_chain.py) as the synthetic-harness analog, run through
+    S0Runner's own post-write verification seam."""
+    runs_root, archive_root, runs_dir, attempts_dir = _tmp_output_roots(tmp_path)
+
+    def exact_set_post_write_verify(rdir, written, prepared):
+        declared = {name for name, _ in written}
+        on_disk = {p.name for p in rdir.iterdir() if p.is_file()}
+        extra = on_disk - declared
+        if extra:
+            return False, f"disk_extra_file: {sorted(extra)}"
+        for name, data in written:
+            if (rdir / name).read_bytes() != data:
+                return False, f"byte mismatch: {name}"
+        return True, f"{len(written)} artifact(s) byte-verified, zero extras"
+
+    def compute_with_stray_file(prepared):
+        # The run directory already exists here — Stage C runs strictly
+        # after the atomic run-start creates it (packet §6).
+        (runs_dir / "desktop.ini").write_bytes(b"[stray sync artifact]")
+        return {"sentinel": True}
+
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()], compute=compute_with_stray_file,
+        post_write_verify=exact_set_post_write_verify,
+        runs_root=runs_root, archive_root=archive_root,
+        runs_dir=runs_dir, attempts_dir=attempts_dir)
+    out = S0Runner(deps).run()
+
+    assert out.ok is False
+    assert out.failure_kind == "run_failure"
+    assert out.terminal_stage == RunStage.E_REPORT
+    assert out.failed_gate == "post_write_verify"
+    assert out.exposure_consumed is True            # trial already burned
+    assert (runs_dir / "desktop.ini").exists()       # nothing deleted
+    assert [e for e, _ in events][0] == "RUN_STARTED"
+    assert [e for e, _ in events][-1] == "FAILED"
+    # a failed run never reaches the archive step
+    assert out.archive_status == ""
+
+
+def test_attempts_dir_lands_under_same_runs_root_as_runs_dir(tmp_path):
+    """Deliverable 4, part 3: attempts/ migrates to the SAME root as
+    runs/. Exercised via an ordinary Stage-A gate failure (unrelated to
+    output-root validation) so the attempts directory actually gets
+    created on disk, then checked against runs_root."""
+    runs_root, archive_root, runs_dir, attempts_dir = _tmp_output_roots(tmp_path)
+    deps, events, _ = make_deps(
+        tmp_path, gates=[bad_gate("some_other_gate")],
+        runs_root=runs_root, archive_root=archive_root,
+        runs_dir=runs_dir, attempts_dir=attempts_dir)
+    out = S0Runner(deps).run()
+
+    assert out.failure_kind == "pre_run_attempt"
+    assert out.failed_gate == "some_other_gate"
+    assert out.attempts_dir is not None
+    assert out.attempts_dir.is_dir()
+    assert out.attempts_dir.resolve().is_relative_to(runs_root.resolve())
+    assert runs_dir.resolve().is_relative_to(runs_root.resolve())
+    assert not Path(deps.config.runs_dir).exists()   # never reached Stage C

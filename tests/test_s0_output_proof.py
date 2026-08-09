@@ -990,7 +990,11 @@ def test_the_module_exposes_no_generator_entry_point():
         "REFUSAL_DECLARED_FILE_MISSING", "REFUSAL_DISK_EXTRA_FILE",
         "REFUSAL_DECLARED_BYTES_MISMATCH", "REFUSAL_DECLARED_SHA256_MISMATCH",
         "REFUSAL_CLASSES", "ProofRefused", "SourceContext", "GovernanceProof",
-        "DraftScreen", "prove_governance", "screen_governance_draft")
+        "DraftScreen", "prove_governance", "screen_governance_draft",
+        # F-2 key-claims release gate (S0 closeout, Aaron ruling 2026-08-10):
+        # a deliberate main-agent interface extension — checker surface only.
+        "KEY_CLAIM_IDS", "ResearchClaimsContext", "KeyClaimsReport",
+        "verify_key_claims")
     public = {name: getattr(op, name) for name in dir(op)
               if not name.startswith("_")}
     # the expected-tree builder is not reachable under any public name
@@ -1000,7 +1004,8 @@ def test_the_module_exposes_no_generator_entry_point():
     callables = {n for n, v in public.items()
                  if callable(v) and not isinstance(v, type)
                  and getattr(v, "__module__", None) == op.__name__}
-    assert callables == {"prove_governance", "screen_governance_draft"}
+    assert callables == {"prove_governance", "screen_governance_draft",
+                         "verify_key_claims"}
     # and no public name advertises production of content
     assert not any(n.startswith(("build_", "make_", "render_", "generate_",
                                  "emit_", "patch_", "fix_", "write_", "to_"))

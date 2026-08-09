@@ -34,7 +34,8 @@ RESEARCH_BOOTSTRAP_SEEDS: tuple[int, int, int] = (7, 13, 31)
 # derivation). Equality is only meaningful if both sides are in one canonical
 # form, so every numeric injectable is reduced to a plain Python float at
 # construction. None of this adopts, ranks or narrows any unruled research
-# choice (DR-1 / DR-M6-A-v2 stays open): it is representation only.
+# choice: it is representation only (DR-1 was later ruled 2026-08-10;
+# this layer still adopts nothing).
 
 #: The EXACT key set a `_approved_injectables()` source must return. Exact,
 #: not minimal: an extra key is a defect, not a harmless addition, because
@@ -210,7 +211,8 @@ class SpreadCostMethod:                    # DR-M6-A-v2 + IR-7
     and compares equal to the plain dict it wraps, so equality-based gates and
     `dataclasses.replace()` are unaffected. A NON-Mapping value is left
     untouched so `structural_problems()` still reports it."""
-    scalar_rule: str                       # e.g. "B-i" once ruled
+    scalar_rule: str                       # ruled 2026-08-10: B-i (see
+                                           # aaron_ruled_methods)
     adverse_slippage_ticks: object         # Mapping[str, float] per scenario
     adverse_semantics: str                 # "replaces_per_side" (documented)
 
@@ -228,6 +230,11 @@ class VolatilityRegimeMethod:              # DR-M6-B-v2
     roll_crossing_rule: str
     tercile_reference: str
     na_rule: str
+    # DR-2 ruling (2026-08-10): the SAME vol20 mapping feeds both the S0 §2
+    # descriptive stability axis and the Appendix-A sampling stratum key.
+    # Default IS the ruled value (not an unruled fallback); TEST_ONLY
+    # construction sites inherit it unless they explicitly override.
+    mapping_scope: str = "shared_s2_and_appendixA"
 
 
 @dataclass(frozen=True)
@@ -387,7 +394,7 @@ class ResolvedS0Methods:
         if isinstance(self.volatility_regime, VolatilityRegimeMethod):
             v = self.volatility_regime
             for name in ("close_source", "return_basis", "roll_crossing_rule",
-                         "tercile_reference", "na_rule"):
+                         "tercile_reference", "na_rule", "mapping_scope"):
                 _str("volatility_regime", name, getattr(v, name))
             _int("volatility_regime", "ddof", v.ddof, minimum=0)
 
@@ -432,6 +439,102 @@ class ResolvedS0Methods:
         if not isinstance(self.test_only, bool):
             problems.append("methods.test_only_not_a_bool")
         return problems
+
+
+# --- AARON S0-CLOSEOUT RULINGS (2026-08-10) ---------------------------------
+# Ruling record: AARON_S0_CLOSEOUT_DECISION_FORM_V1 was delivered in chat with
+# one recommended option per item; Aaron ruled "逐项裁决全跟你推荐的方式做即可"
+# (2026-08-10, S0-closeout mainline session). The exact-phrase PHASE-C trigger
+# was waived by its own author; the waiver is disclosed in the final Codex
+# packet. IR-27 (IMPLEMENTATION_RESOLUTIONS.md) carries the item-by-item map.
+# THESE VALUES ARE THE SINGLE RULED SOURCE — consumers read them structurally
+# from `aaron_ruled_methods()`; no consumer may re-state a ruled literal.
+
+#: IR-7 Option i (Primary): per-scenario adverse-slippage ticks, EFFECTIVE
+#: values. Stress carries the already-multiplied 2.0 (Base 1 x2) — consumers
+#: must NOT apply friction_multiplier to adverse ticks again. Option ii
+#: (+1 tick) is a SENSITIVITY channel, never Primary.
+AARON_RULED_ADVERSE_TICKS_PRIMARY: Mapping[str, float] = MappingProxyType({
+    "Base": 1.0, "Conservative": 2.0, "Stress": 2.0, "Severe": 3.0})
+AARON_RULED_ADVERSE_TICKS_SENSITIVITY: Mapping[str, float] = MappingProxyType({
+    "Base": 2.0, "Conservative": 3.0, "Stress": 3.0, "Severe": 4.0})
+
+
+def aaron_ruled_methods() -> "ResolvedS0Methods":
+    """The fully-resolved method set per Aaron's 2026-08-10 rulings.
+
+    DR-1  spread reduction B-i (trading-window slots [600,944]; the triple is
+          (Q50(med_s), Q50(p90_s), Q50(p95_s)) — equal-weight slots, numpy
+          linear interpolation, no rounding) + IR-7 Option i Primary adverse
+          vector, semantics = REPLACE the regular per-side slip (wording fix
+          of the old "extra" comment; the implementation always replaced).
+    DR-2  vol20: simple returns, ddof=1, close = exact scheduled last 1-minute
+          RTH bar close (IR-19/26 anchor point), roll-crossing return dropped
+          and window extended (r1), terciles bounded on the FULL Development
+          sample (ex-post descriptive), shared mapping (§2 + Appendix A),
+          <21 qualifying closes -> vol_na fourth stratum (day kept).
+    DR-3  FP allocation follows the SELECTED TP composition (Hamilton), with
+          the frozen-literal shortfall redistribution over remaining strata.
+    DR-4  bootstrap: full eligible trading-day sequence; NA days dropped from
+          the sequence with disclosed count (n1); statistic = per-trading-day
+          mean USD; 10,000 resamples PER seed; quoted seed 7; percentile
+          interpolation linear; CRN shared within theta across
+          engine x scenario.
+    DR-5  grid: K=200 per seed per cell, k from 0, theta in the RNG stream,
+          max 2 doublings, unconverged -> infeasible_by_convergence
+          (fail-closed marker); full MC §5 four-rule battery applies at the
+          MC wiring (cross-reference, not restated here).
+    DR-6  event NA mapping F1: five strata {CPI, NFP, FOMC, none,
+          NA_multi_event} — IR-12/18 vocabulary, zero new vocabulary.
+    DR-7  stability views: BOTH populations reported (D_TP-conditional and
+          full structurally-eligible sequence).
+    DR-8  E2 worst-day P1/P5 sample-quantile estimator: linear.
+    """
+    return ResolvedS0Methods(
+        spread_cost=SpreadCostMethod(
+            scalar_rule="B_i_trading_window_q50med_q50p90_q50p95",
+            adverse_slippage_ticks=AARON_RULED_ADVERSE_TICKS_PRIMARY,
+            adverse_semantics="replaces_per_side"),
+        volatility_regime=VolatilityRegimeMethod(
+            close_source="exact_scheduled_last_1m_close",
+            return_basis="simple",
+            ddof=1,
+            roll_crossing_rule="r1_drop_and_extend",
+            tercile_reference="full_development_expost",
+            na_rule="vol_na_fourth_stratum",
+            mapping_scope="shared_s2_and_appendixA"),
+        fp_allocation=FpAllocationMethod(
+            basis="B",
+            weight_source="selected_tp_composition",
+            shortfall_rule="frozen_literal_redistribute_remaining_fp"),
+        bootstrap_method=BootstrapMethod(
+            population="full_eligible_trading_day_sequence",
+            na_day_rule="n1_drop_from_sequence_disclose_count",
+            statistic="per_trading_day_mean_usd",
+            n_boot_per_seed=True,
+            quoted_seed_rule="fixed_seed_7",
+            percentile_interpolation="linear",
+            crn_scope="shared_within_theta_engine_scenario"),
+        grid_policy=GridRepeatPolicy(
+            k_per_seed=200,
+            k_start_index=0,
+            stream_includes_theta=True,
+            convergence_rule="mc_spec_s5_four_rules_at_mc_wiring",
+            max_doublings=2),
+        event_na_mapping="F1_five_stratum_ir12_18_vocab",
+        stability_population="both_conditional_and_full_eligible",
+        worst_day_estimator="linear",
+        test_only=False)
+
+
+# --- L-5 ruling (2026-08-10): dedicated LOCAL, NON-CLOUD-SYNCED output
+# roots. The repo lives inside an actively-syncing OneDrive tree; the
+# M6.1.7 exact-set disk invariant makes any sync droppings
+# (desktop.ini/*.tmp) a seal-refusal that burns a trial. Ruled values —
+# not unruled defaults. attempts/ migrates to the SAME root (ruled);
+# archive copies get per-file SHA-256 recheck. Zero-whitelist stays.
+RULED_RUNS_ROOT = r"C:\Users\Aaron\quant-data\itsf-runs"
+RULED_ARCHIVE_ROOT = r"C:\Users\Aaron\quant-data\itsf-runs-archive"
 
 
 @dataclass(frozen=True)
@@ -681,7 +784,11 @@ class CostScenarioParams:
     name: str                          # Base | Conservative | Stress | Severe
     spread_points: float               # full width for the applicable minute
     slippage_ticks_per_side: float
-    adverse_slippage_ticks: float      # extra for stop fills
+    adverse_slippage_ticks: float      # ticks REPLACING the per-side slip on
+                                       # stop fills, PRE-friction_multiplier
+                                       # (IR-7 ruled 2026-08-10; the old
+                                       # "extra" wording was wrong — the
+                                       # implementation always replaced)
     friction_multiplier: float = 1.0   # Stress = Base market friction x2
     platform_fee_rt_usd: float = S0_PLATFORM_FEE_RT_USD
 
@@ -841,9 +948,16 @@ class RunConfig:
     # NEVER a research RNG seed — research randomness derives exclusively
     # from RESEARCH_BOOTSTRAP_SEEDS (7/13/31, frozen S0 §9/App A).
     engineering_seed: int
-    attempts_dir: str                     # attempts/<trial>-A<seq>_<UTC>/
-    runs_dir: str                         # runs/<trial>_<UTC>/ (Stage C entry)
+    attempts_dir: str                     # <runs_root>/attempts/<trial>-A<seq>/
+    runs_dir: str                         # <runs_root>/runs/<trial>_<UTC>/
     assertions_path: str                  # expected_preflight_assertions json
+    # L-5 ruling (2026-08-10): the governed output roots. Defaults ARE the
+    # ruled values (RULED_RUNS_ROOT / RULED_ARCHIVE_ROOT), not unruled
+    # fallbacks. Both enter the environment lock; runs_dir/attempts_dir must
+    # resolve UNDER runs_root, and runs_root must NOT be inside the repo
+    # tree (enforced by the runner stack, tested in test_s0_runner).
+    runs_root: str = RULED_RUNS_ROOT
+    archive_root: str = RULED_ARCHIVE_ROOT
 
 
 @dataclass

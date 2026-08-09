@@ -91,7 +91,7 @@ so their sample mean can never differ), and an optional "quoted" block, if
 present, must equal `per_seed[7]` verbatim. (4) P1 <= P5 is now checked as
 a numeric-ordering invariant everywhere a worst-day percentile pair
 appears — independent of, and never approving, the disclosed-but-
-UNAPPROVED numpy linear-interpolation ESTIMATOR itself (DR-M6-H). (5) A4
+RULED numpy linear-interpolation ESTIMATOR (DR-8, 2026-08-10). (5) A4
 e2_worst_days now carries a mandatory `estimator_status`; sealing REQUIRES
 it read exactly "resolved" — the real producer's default posture (DR-M6-H
 open, no config resolves `worst_day_estimator`) emits
@@ -632,10 +632,9 @@ _SEALED_RECORD_FIELD_TYPES: Mapping[str, object] = {
 #
 # This is a STRUCTURAL/NUMERIC sanity invariant of any real percentile pair
 # (the 1st percentile of a distribution can never exceed its 5th), and is
-# checked independently of, and is NEVER a proxy for, approving numpy's
-# linear-interpolation ESTIMATOR itself — `PERCENTILE_METHOD = "linear"`
-# (study.py / stability.py) remains an UNAPPROVED engineering convention
-# pending the DR-M6-H ruling (mission item 5(a)/(b) below); this boundary
+# checked independently of numpy's linear-interpolation ESTIMATOR —
+# `PERCENTILE_METHOD = "linear"` (study.py / stability.py) is the DR-8
+# RULED estimator (Aaron 2026-08-10; mission item 5(a)/(b) below); this boundary
 # never describes it as frozen or approved.
 # ---------------------------------------------------------------------------
 def _check_p1_le_p5(pct, path: str, problems: list[str]) -> None:
@@ -748,14 +747,28 @@ _SIZING_COVERAGE_BUDGET_ROW_ALLOWED_KEYS: frozenset[str] = frozenset({
 _FREQUENCY_CELL_ALLOWED_KEYS: frozenset[str] = frozenset({
     "denominator_definition", "note", "pooled", "by_era", "by_year"})
 
-# A2b stability_views — stability.py `_engine_scenario_view` (5 keys).
+# A2b stability_views — stability.py `_engine_scenario_view` (5 keys), plus
+# the DR-7 ruled `populations` block (Aaron 2026-08-10: BOTH the
+# D_TP-conditional and the full-eligible population are reported). The key is
+# validated when present (stability.check_populations); its PRESENCE on the
+# production path is pinned by the entry-chain tests, not here, so
+# pre-ruling-shaped synthetic payloads remain constructible in tests.
 _STABILITY_ENGINE_SCENARIO_CELL_ALLOWED_KEYS: frozenset[str] = frozenset({
     "epochs", "by_year", "leave_one_year_out", "by_direction",
-    "vol_terciles"})
+    "vol_terciles", "populations"})
 
-# A7 bootstrap_ci — stats.py `bootstrap_mean_ci`'s real return shape.
+# A7 bootstrap_ci — stats.py `bootstrap_mean_ci`'s real return shape, plus
+# the DR-4 ruled-path disclosure keys emitted by `bootstrap_mean_ci_ruled`
+# (Aaron 2026-08-10): the population/statistic/NA-drop accounting IS the A7
+# statistic-definition annotation the decision packet mandated, so these are
+# allowed by name, never as a wildcard.
 _BOOTSTRAP_CELL_ALLOWED_KEYS: frozenset[str] = frozenset({
-    "per_seed", "convergence", "quoted_seed", "quoted", "method"})
+    "per_seed", "convergence", "quoted_seed", "quoted", "method",
+    "quoted_seed_rule", "n_boot_per_seed", "n_boot_total", "theta",
+    "theta_stream_key", "crn_scope", "crn_stream_entropy_by_seed",
+    "population", "statistic", "na_day_rule", "n_days_in_sequence",
+    "n_oracle_traded_days", "n_eligible_not_selected_days",
+    "n_na_days_dropped", "na_dates"})
 # stats.py per_seed[seed] entry (5 keys — "mean" was previously unchecked).
 _BOOTSTRAP_SEED_ENTRY_ALLOWED_KEYS: frozenset[str] = frozenset({
     "mean", "ci_lo", "ci_hi", "n_boot", "block_len"})
@@ -768,7 +781,11 @@ _GRID_POINT_BASE_ALLOWED_KEYS: frozenset[str] = frozenset({
     "target_precision", "target_recall", "n_tp_target", "n_fp_target",
     "F_expected", "infeasible_by_sample", "per_seed"})
 _GRID_POINT_ALLOWED_KEYS: frozenset[str] = frozenset(
-    _GRID_POINT_BASE_ALLOWED_KEYS | {"infeasible_reason"})
+    # DR-3/DR-5 (Aaron 2026-08-10): feasible points on the ruled grid path
+    # carry the fp_allocation and repeats disclosure blocks; infeasible
+    # points keep the base shape (producer-pinned in test_gridmix_rulings).
+    _GRID_POINT_BASE_ALLOWED_KEYS | {"infeasible_reason", "fp_allocation",
+                                     "repeats"})
 
 # A9 mc_handoff_manifest — the TWO-CALL contract's union: pre-injection
 # {"counts"} and post-injection {"counts", "files", "sealed_files",
@@ -1980,10 +1997,10 @@ def _validate_formal_payload_inner(payload, expected_governance,
                             problems)
 
             # mission item 5(b) — P1/P5 GOVERNANCE (M-1, mandatory): the
-            # numpy linear-interpolation percentile estimator is an
-            # UNAPPROVED engineering convention pending the DR-M6-H ruling
-            # (frozen §7 mandates only THAT a P1/P5 report exist, never
-            # which estimator computes it) — a formal report must carry an
+            # linear percentile estimator is the DR-8 RULED value (Aaron
+            # 2026-08-10; frozen §7 mandates only THAT a P1/P5 report
+            # exist, never which estimator computes it) — a formal report
+            # must carry an
             # explicit `estimator_status` on every E2 worst-day cell, and
             # sealing REQUIRES it read EXACTLY "resolved". While DR-M6-H
             # pends, the producer emits "unresolved_DR-M6-H"
@@ -2131,6 +2148,18 @@ def _validate_formal_payload_inner(payload, expected_governance,
                     cell, _STABILITY_ENGINE_SCENARIO_CELL_ALLOWED_KEYS,
                     f"stability_views|{tkey}|{eng}|{scn}", problems,
                     code="stability_views_cell_unknown_key")
+                # DR-7 (Aaron 2026-08-10): a cell CARRYING a populations
+                # block must satisfy the ruled both-populations shape; the
+                # rule string is read from the single ruled source, never
+                # from the payload under test.
+                if isinstance(cell.get("populations"), dict):
+                    from itsf.contracts import aaron_ruled_methods as _arm
+                    from itsf.s0 import stability as _stab
+                    for code in _stab.check_populations(
+                            cell, _arm().stability_population):
+                        problems.append(
+                            f"stability_views_populations:{tkey}|{eng}|"
+                            f"{scn}:{code}")
                 epochs = cell.get("epochs")
                 # structural extras allowed: outside_epochs bucket (days
                 # beyond the three frozen epochs, disclosed not dropped)
@@ -2186,7 +2215,8 @@ def _validate_formal_payload_inner(payload, expected_governance,
                     # vol_na bucket (stability.py's VOL_NA_BUCKET), and the
                     # axis's own conservation_ok literally True — a
                     # vocabulary-agnostic count check, never a hardcoded
-                    # tercile-name list (DR-M6-B is still open).
+                    # tercile-name list (vocabulary-agnostic even though
+                    # DR-2 is now ruled).
                     if vol.get("conservation_ok") is not True:
                         problems.append(
                             "stability_views_conservation_not_true:"
@@ -3016,8 +3046,8 @@ def _derive_day_meta_from_dataset(dataset_obj):
 def _recompute_cell_stats(pairs: list[tuple[str, float]]) -> dict[str, object]:
     """The n/sum_usd/mean_usd/best_day/worst_day/n_positive/n_negative/
     n_zero subset of stability.py's `_cell()` shape — deliberately EXCLUDES
-    `worst_day_pnl_percentiles`: P1/P5 depend on the disclosed-but-
-    UNAPPROVED numpy linear-interpolation estimator (mission item 5), and
+    `worst_day_pnl_percentiles`: P1/P5 depend on the DR-8 RULED linear
+    estimator (mission item 5), and
     recomputing those here (with the same estimator) would silently bake
     approval of that convention into a "recompute-not-trust" check rather
     than testing it — this reconciliation stays to the estimator-free

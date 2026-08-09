@@ -51,11 +51,12 @@ declares no convergence verdict.
 """
 from __future__ import annotations
 
-from collections.abc import Sequence
+import math
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 
-from itsf.contracts import RESEARCH_BOOTSTRAP_SEEDS
+from itsf.contracts import RESEARCH_BOOTSTRAP_SEEDS, BootstrapMethod
 from itsf.mc.bootstrap import stationary_bootstrap_indices
 
 # --- frozen constants (# frozen: S0 §9) -------------------------------------
@@ -327,3 +328,459 @@ def bootstrap_mean_ci(series: Sequence[float], block_len: float,
                          f"got {type(n_boot).__name__}")
     return _bootstrap_mean_ci_unchecked(series, block_len, n_boot=n_boot,
                                         ci_level=ci_level, master_seeds=seeds)
+
+
+# ===========================================================================
+# DR-4 (Aaron 2026-08-10) — this module is the production CONSUMER of the
+# ruled `contracts.BootstrapMethod`.
+#
+# Every function below takes the method dataclass as an EXPLICIT parameter and
+# dispatches on its fields. The ruled STRINGS that appear here are DISPATCH
+# KEYS — the exact rule ids this module implements — and nothing selects them
+# on its own: an un-ruled value is a ValueError with a precise code (fail
+# closed), never a silent default.
+#
+# WHAT IS BEING WIRED, AND WHAT IS NOT. The sampler is untouched: the
+# Politis-Romano stationary bootstrap core (`stationary_bootstrap_indices`,
+# expected block length 5 trading days, circular wrap) stays exactly as it is.
+# What DR-4 fixes is the POPULATION the sampler resamples, the STATISTIC taken
+# on each resample, the per-seed resample BUDGET, the QUOTED seed and the CRN
+# SCOPE.
+# ===========================================================================
+
+#: DISPATCH KEYS — the exact ruled `BootstrapMethod` field values implemented.
+BOOTSTRAP_POPULATION_RULE = "full_eligible_trading_day_sequence"
+BOOTSTRAP_NA_DAY_RULE = "n1_drop_from_sequence_disclose_count"
+BOOTSTRAP_STATISTIC = "per_trading_day_mean_usd"
+BOOTSTRAP_QUOTED_SEED_RULE_PREFIX = "fixed_seed_"
+BOOTSTRAP_CRN_SCOPE = "shared_within_theta_engine_scenario"
+
+#: Day states of the ruled population (DR-4.1/4.2).
+#:  * `oracle_traded`         — the oracle traded this day AT THIS THETA;
+#:                              it contributes its daily USD P&L;
+#:  * `eligible_not_selected` — a structurally eligible trading day the oracle
+#:                              did NOT select; it contributes EXACTLY 0.0 and
+#:                              is IN the sequence (this is the whole point of
+#:                              "full eligible trading-day sequence": a day the
+#:                              strategy sat out is a real 0, not a missing
+#:                              observation);
+#:  * `na`                    — direction undeterminable / Y_cont NA. DROPPED
+#:                              from the sequence, and the dropped COUNT is
+#:                              returned and must be disclosed (rule n1).
+#: Whole-day FROZEN exclusions (half day / no-trade / >10% missing) are not
+#: day states at all: they never enter `day_states` in the first place.
+DAY_STATE_ORACLE_TRADED = "oracle_traded"
+DAY_STATE_ELIGIBLE_NOT_SELECTED = "eligible_not_selected"
+DAY_STATE_NA = "na"
+DAY_STATES = (DAY_STATE_ORACLE_TRADED, DAY_STATE_ELIGIBLE_NOT_SELECTED,
+              DAY_STATE_NA)
+
+#: Marker key of a sequence built by `build_bootstrap_day_sequence`. The ruled
+#: entry point accepts NOTHING else — a bare list of oracle-day P&L (the
+#: pre-ruling population) is refused rather than silently resampled.
+DAY_SEQUENCE_KIND = "s0_bootstrap_day_sequence_v1"
+
+
+def _require_bootstrap_method(method) -> BootstrapMethod:
+    if not isinstance(method, BootstrapMethod):
+        raise ValueError(
+            f"bootstrap_method_not_a_BootstrapMethod:{type(method).__name__}")
+    return method
+
+
+def _require_population_rules(method: BootstrapMethod) -> None:
+    """Population + NA + statistic rule ids, all three or nothing."""
+    if method.population != BOOTSTRAP_POPULATION_RULE:
+        raise ValueError(f"bootstrap_population_not_ruled:{method.population}")
+    if method.na_day_rule != BOOTSTRAP_NA_DAY_RULE:
+        raise ValueError(
+            f"bootstrap_na_day_rule_not_ruled:{method.na_day_rule}")
+    if method.statistic != BOOTSTRAP_STATISTIC:
+        raise ValueError(f"bootstrap_statistic_not_ruled:{method.statistic}")
+
+
+def ruled_quoted_seed(method: BootstrapMethod) -> int:
+    """The seed whose interval is QUOTED, read off `quoted_seed_rule`.
+
+    The rule id CARRIES the seed (`fixed_seed_<n>`); the number is parsed, not
+    restated, and must be one of `contracts.RESEARCH_BOOTSTRAP_SEEDS`. All
+    seeds' intervals are still computed and returned — "quoted" selects which
+    one the report leads with, by a convention that predates any data.
+    """
+    _require_bootstrap_method(method)
+    rule = method.quoted_seed_rule
+    if not isinstance(rule, str) or not rule.startswith(
+            BOOTSTRAP_QUOTED_SEED_RULE_PREFIX):
+        raise ValueError(f"bootstrap_quoted_seed_rule_not_ruled:{rule}")
+    try:
+        seed = int(rule[len(BOOTSTRAP_QUOTED_SEED_RULE_PREFIX):])
+    except ValueError:
+        raise ValueError(
+            f"bootstrap_quoted_seed_rule_not_ruled:{rule}") from None
+    if seed not in RESEARCH_BOOTSTRAP_SEEDS:
+        raise ValueError(f"bootstrap_quoted_seed_not_a_research_seed:{seed}")
+    return seed
+
+
+def theta_stream_key(theta: float) -> int:
+    """Integer SeedSequence component for a theta (engineering, exact).
+
+    Millis of the continuation threshold: 0.5 -> 500, 0.3 -> 300. Integer so
+    the entropy is exact and platform-independent (a float would put binary
+    rounding inside the seed) and NON-NEGATIVE, which `np.random.SeedSequence`
+    requires. Shared with `itsf.s0.gridmix` so the two consumers can never
+    encode the same theta two different ways.
+    """
+    value = float(theta)
+    if not math.isfinite(value):
+        raise ValueError(f"theta_not_finite:{theta!r}")
+    millis = round(value * 1000.0)
+    if abs(value * 1000.0 - millis) > 1e-6:
+        raise ValueError(f"theta_not_representable_in_millis:{theta!r}")
+    if millis < 0:
+        raise ValueError(f"theta_negative_cannot_seed:{theta!r}")
+    return int(millis)
+
+
+def _normalized_day_row(row, index: int) -> tuple[str, str, object]:
+    """One day-state row -> (trade_date, state, value). Fail closed."""
+    if isinstance(row, Mapping):
+        try:
+            date = row["trade_date"]
+            state = row["state"]
+        except KeyError as exc:
+            raise ValueError(
+                f"day_state_row_missing_key:{index}:{exc.args[0]}") from None
+        value = row.get("daily_pnl_usd")
+    elif isinstance(row, Sequence) and not isinstance(row, (str, bytes)):
+        items = tuple(row)
+        if len(items) == 2:
+            date, state = items
+            value = None
+        elif len(items) == 3:
+            date, state, value = items
+        else:
+            raise ValueError(f"day_state_row_wrong_arity:{index}:{len(items)}")
+    else:
+        raise ValueError(
+            f"day_state_row_unsupported:{index}:{type(row).__name__}")
+    if not isinstance(date, str) or not date:
+        raise ValueError(f"day_state_trade_date_not_a_str:{index}")
+    if state not in DAY_STATES:
+        raise ValueError(f"bootstrap_day_state_not_ruled:{state}")
+    return date, state, value
+
+
+def build_bootstrap_day_sequence(day_states, method: BootstrapMethod) -> dict:
+    """The ruled DR-4 bootstrap POPULATION: one ordered daily-USD sequence.
+
+    `day_states` is the FULL structurally-eligible trading-day list for ONE
+    (theta, engine, cost scenario), in DATE ORDER — each row a
+    ``(trade_date, state)`` / ``(trade_date, state, daily_pnl_usd)`` tuple or a
+    Mapping with those keys. `state` is one of `DAY_STATES`:
+
+      * `oracle_traded`         -> the day's daily USD P&L enters the sequence;
+      * `eligible_not_selected` -> 0.0 enters the sequence (a sat-out day is a
+                                   real zero, never a hole). A non-zero P&L on
+                                   such a row is a caller bug and is REFUSED;
+      * `na`                    -> the day is DROPPED and counted (rule n1).
+
+    Order is load-bearing (the stationary bootstrap resamples local
+    dependence), so the dates must be STRICTLY ASCENDING; unsorted or
+    duplicated input is refused rather than silently sorted.
+
+    The dropped-NA count travels ON the returned object and the ruled entry
+    point only accepts that object, so an NA count cannot be lost between the
+    two calls — "disclose the count" is enforced by construction, not by
+    convention.
+    """
+    _require_bootstrap_method(method)
+    _require_population_rules(method)
+
+    dates: list[str] = []
+    series: list[float] = []
+    na_dates: list[str] = []
+    n_traded = 0
+    n_not_selected = 0
+    seen: set[str] = set()
+    previous: str | None = None
+
+    for index, row in enumerate(day_states):
+        date, state, value = _normalized_day_row(row, index)
+        if date in seen:
+            raise ValueError(f"day_state_duplicate_trade_date:{date}")
+        if previous is not None and date <= previous:
+            raise ValueError(
+                f"day_state_sequence_not_in_ascending_date_order:{date}")
+        seen.add(date)
+        previous = date
+
+        if state == DAY_STATE_NA:
+            na_dates.append(date)
+            continue
+        if state == DAY_STATE_ELIGIBLE_NOT_SELECTED:
+            if value is not None and float(value) != 0.0:
+                raise ValueError(
+                    f"eligible_not_selected_day_carries_pnl:{date}")
+            pnl = 0.0
+            n_not_selected += 1
+        else:
+            if value is None:
+                raise ValueError(f"oracle_traded_day_missing_pnl:{date}")
+            pnl = float(value)
+            if not math.isfinite(pnl):
+                raise ValueError(f"oracle_traded_day_pnl_non_finite:{date}")
+            n_traded += 1
+        dates.append(date)
+        series.append(pnl)
+
+    return {
+        "kind": DAY_SEQUENCE_KIND,
+        "dates": tuple(dates),
+        "series": tuple(series),
+        "n_days_in_sequence": len(series),
+        "n_oracle_traded_days": n_traded,
+        "n_eligible_not_selected_days": n_not_selected,
+        "n_na_days_dropped": len(na_dates),
+        "na_dates": tuple(na_dates),
+        "population": method.population,
+        "na_day_rule": method.na_day_rule,
+        "statistic": method.statistic,
+    }
+
+
+def _require_day_sequence(day_sequence) -> dict:
+    if not isinstance(day_sequence, Mapping):
+        raise ValueError(
+            "bootstrap_population_not_from_ruled_sequence_builder:"
+            f"{type(day_sequence).__name__}")
+    if day_sequence.get("kind") != DAY_SEQUENCE_KIND:
+        raise ValueError(
+            "bootstrap_population_not_from_ruled_sequence_builder:"
+            f"{day_sequence.get('kind')!r}")
+    return dict(day_sequence)
+
+
+def _require_crn_scope(method: BootstrapMethod) -> None:
+    if method.crn_scope != BOOTSTRAP_CRN_SCOPE:
+        raise ValueError(f"bootstrap_crn_scope_not_ruled:{method.crn_scope}")
+
+
+def crn_stream_entropy(theta: float, master_seed: int, block_len: float,
+                       method: BootstrapMethod) -> list[int]:
+    """SeedSequence entropy of the CRN resample-index stream (DR-4.7).
+
+    KEYED BY (theta, master_seed) AND NOTHING ABOUT THE COMPARISON. Engine and
+    cost scenario are not parameters of this function and cannot be — that is
+    how ``shared_within_theta_engine_scenario`` is guaranteed BY CONSTRUCTION
+    rather than by discipline: E1/Base and E2/Severe at one theta and one seed
+    receive IDENTICAL resampled day-index sequences, so their intervals differ
+    only through the day VALUES, never through the draws.
+
+    `block_stream_key` is the ONE further component, and it is not a scope
+    widening: frozen S0 §9 quotes a Primary block-5 AND a Sensitivity block-21
+    interval from the same days, the block length parameterises the sampler
+    itself, and the pre-existing M6_DESIGN §4 convention keeps those two from
+    sharing a stream. It is disclosed in the method string.
+    """
+    _require_bootstrap_method(method)
+    _require_crn_scope(method)
+    seed = int(master_seed)
+    if seed not in RESEARCH_BOOTSTRAP_SEEDS:
+        raise ValueError(
+            f"bootstrap_master_seed_not_a_research_seed:{seed} "
+            f"(IR DR-02: {RESEARCH_BOOTSTRAP_SEEDS})")
+    return [seed, STATS_STREAM_TAG, theta_stream_key(theta),
+            block_stream_key(block_len)]
+
+
+def crn_resample_indices(n_days: int, *, theta: float, master_seed: int,
+                         block_len: float, n_boot: int,
+                         method: BootstrapMethod) -> np.ndarray:
+    """The `(n_boot, n_days)` CRN resample-INDEX stream for one (theta, seed).
+
+    Materialises the streams; `resample_means_crn` consumes the identical
+    sequence lazily (both drive one Generator through the same loop), so this
+    is the observable form of what the interval computation actually used.
+    Callers with the frozen n_boot of 10,000 and ~1,000 days should prefer the
+    lazy path — this one is for verification and disclosure.
+    """
+    entropy = crn_stream_entropy(theta, master_seed, block_len, method)
+    block = _validated_block_len(block_len)
+    count = _validated_n_boot(n_boot)
+    if int(n_days) < 1:
+        raise ValueError(f"n_days must be >= 1, got {n_days!r}")
+    rng = np.random.default_rng(entropy)
+    out = np.empty((count, int(n_days)), dtype=np.int64)
+    for b in range(count):
+        out[b] = stationary_bootstrap_indices(int(n_days), block, rng=rng)
+    return out
+
+
+def resample_means_crn(series: Sequence[float], *, theta: float,
+                       master_seed: int, block_len: float, n_boot: int,
+                       method: BootstrapMethod) -> np.ndarray:
+    """The n_boot resampled per-trading-day MEANS for ONE (theta, seed).
+
+    Statistic = the MEAN over the resampled SEQUENCE (ruled
+    `per_trading_day_mean_usd`): the sequence already carries a 0.0 for every
+    eligible day the oracle sat out, so this is a per-TRADING-day mean, not a
+    per-ORACLE-day mean. Feeding a traded-days-only series here would compute
+    the un-ruled statistic — which is why the public entry point refuses
+    anything but a `build_bootstrap_day_sequence` object.
+
+    Draw b is a pure function of (theta, seed, block, b): one Generator drives
+    all n_boot resamples in order, so doubling n_boot reproduces the first
+    n_boot resamples byte-identically and only appends new ones.
+    """
+    _require_population_rules(_require_bootstrap_method(method))
+    entropy = crn_stream_entropy(theta, master_seed, block_len, method)
+    values = _validated_series(series)
+    block = _validated_block_len(block_len)
+    count = _validated_n_boot(n_boot)
+    rng = np.random.default_rng(entropy)
+    n = int(values.shape[0])
+    means = np.empty(count, dtype=float)
+    for b in range(count):
+        idx = stationary_bootstrap_indices(n, block, rng=rng)
+        means[b] = float(values[idx].mean())
+    return means
+
+
+def _ruled_method_string(method: BootstrapMethod, block_len: float,
+                         n_boot: int, ci_level: float, seeds: tuple[int, ...],
+                         quoted_seed: int, sequence: Mapping) -> str:
+    """Full DR-4 disclosure carried WITH the numbers (never reconstructed)."""
+    return (
+        "stationary bootstrap (Politis-Romano, geometric blocks, circular "
+        f"wrap), expected block length {block_len:g} trading days (frozen S0 "
+        f"§9: Primary {PRIMARY_BLOCK_DAYS:g}, Sensitivity "
+        f"{SENSITIVITY_BLOCK_DAYS:g}); POPULATION = {method.population} — the "
+        "full structurally-eligible trading-day sequence in date order, an "
+        "oracle-traded day contributing its daily USD P&L and an "
+        "eligible-but-not-selected day contributing exactly 0.0 "
+        f"({sequence['n_oracle_traded_days']} traded, "
+        f"{sequence['n_eligible_not_selected_days']} sat out, "
+        f"{sequence['n_days_in_sequence']} in the sequence); NA days "
+        "(direction undeterminable / Y_cont NA) DROPPED per "
+        f"{method.na_day_rule} with the count disclosed: n_na_days_dropped = "
+        f"{sequence['n_na_days_dropped']}; whole-day frozen exclusions are "
+        f"not in the sequence at all; STATISTIC = {method.statistic} (mean "
+        f"over the resampled sequence); {n_boot} resamples PER SEED "
+        "(n_boot_per_seed=True) for each of the master seeds "
+        f"{list(seeds)} (frozen S0 §9 seeds 7/13/31, "
+        "contracts.RESEARCH_BOOTSTRAP_SEEDS; the run-infra provenance seed is "
+        f"never a research input), {n_boot * len(seeds)} draws in total; "
+        f"percentile method {ci_level:.0%} CI on the resampled means with "
+        f"numpy percentile method='{method.percentile_interpolation}'; quoted "
+        f"interval = master seed {quoted_seed} per {method.quoted_seed_rule} "
+        "(fixed convention predating any data; best-of-three is prohibited); "
+        f"CRN scope {method.crn_scope} — the resample-index streams are keyed "
+        "by (theta, master_seed) and by NOTHING about the comparison, so one "
+        "theta's engine x scenario cells reuse identical resampled day-index "
+        "sequences (block length also enters the stream so the frozen §9 "
+        "Primary and Sensitivity intervals do not share one; disclosed "
+        "engineering convention, M6_DESIGN §4); convergence block reports the "
+        "max absolute endpoint spread across seeds (MC_METHOD_SPEC §5 rule "
+        "(b) counterpart) and applies no tolerance of its own")
+
+
+def bootstrap_mean_ci_ruled(day_sequence: Mapping, *, theta: float,
+                            method: BootstrapMethod, block_len: float,
+                            n_boot: int = N_BOOT, ci_level: float = CI_LEVEL,
+                            master_seeds: Sequence[int]
+                            = RESEARCH_BOOTSTRAP_SEEDS) -> dict:
+    """The ruled DR-4 percentile CI for the per-TRADING-DAY mean USD P&L.
+
+    `day_sequence` MUST be a `build_bootstrap_day_sequence` object — a bare
+    series is refused, because the difference between the ruled population and
+    the pre-ruling one (oracle-traded days only) is invisible in a plain list
+    of floats and would silently change the statistic.
+
+    Every DR-4 sub-decision is read off `method` and validated before a single
+    draw: population / NA rule / statistic (via the sequence builder),
+    `n_boot_per_seed` (must be True — the budget is PER seed, so three seeds
+    cost 3 x n_boot draws), `quoted_seed_rule`, `percentile_interpolation` and
+    `crn_scope`. Any un-ruled value raises with a precise code.
+
+    Returns `_bootstrap_mean_ci_unchecked`'s shape plus the DR-4 disclosure
+    fields (`n_na_days_dropped`, the population counts, `theta`,
+    `n_boot_total`, `crn_stream_entropy_by_seed`).
+    """
+    _require_bootstrap_method(method)
+    _require_population_rules(method)
+    _require_crn_scope(method)
+    sequence = _require_day_sequence(day_sequence)
+
+    if method.n_boot_applies_per_seed is not True:
+        raise ValueError(
+            f"bootstrap_n_boot_per_seed_not_ruled:{method.n_boot_per_seed}")
+    if method.percentile_interpolation != PERCENTILE_METHOD:
+        raise ValueError("bootstrap_percentile_interpolation_not_ruled:"
+                         f"{method.percentile_interpolation}")
+    quoted_seed = ruled_quoted_seed(method)
+
+    seeds = tuple(int(s) for s in master_seeds)
+    if seeds != RESEARCH_BOOTSTRAP_SEEDS:
+        raise ValueError(
+            "master_seeds must be exactly contracts.RESEARCH_BOOTSTRAP_SEEDS "
+            f"{RESEARCH_BOOTSTRAP_SEEDS} — IR DR-02: the only seeds any "
+            f"research-path RNG may derive from; got {seeds}")
+    if quoted_seed not in seeds:
+        raise ValueError(f"bootstrap_quoted_seed_not_run:{quoted_seed}")
+    if isinstance(n_boot, bool) or not isinstance(n_boot, int):
+        raise ValueError("n_boot must be an int (frozen S0 sec.9: 10,000); "
+                         f"got {type(n_boot).__name__}")
+
+    values = _validated_series(sequence["series"])
+    block = _validated_block_len(block_len)
+    count = _validated_n_boot(n_boot)
+    level = _validated_ci_level(ci_level)
+
+    sample_mean = float(values.mean())
+    per_seed: dict[int, dict[str, float | int]] = {}
+    entropy_by_seed: dict[int, list[int]] = {}
+    for master_seed in seeds:
+        entropy_by_seed[master_seed] = crn_stream_entropy(
+            theta, master_seed, block, method)
+        means = resample_means_crn(values, theta=theta,
+                                   master_seed=master_seed, block_len=block,
+                                   n_boot=count, method=method)
+        ci_lo, ci_hi = percentile_ci(means, level)
+        per_seed[master_seed] = {
+            "mean": sample_mean,
+            "ci_lo": ci_lo,
+            "ci_hi": ci_hi,
+            "n_boot": count,
+            "block_len": int(block) if block == int(block) else block,
+        }
+
+    los = [d["ci_lo"] for d in per_seed.values()]
+    his = [d["ci_hi"] for d in per_seed.values()]
+    return {
+        "per_seed": per_seed,
+        "convergence": {
+            "max_abs_ci_lo_diff": float(max(los) - min(los)),
+            "max_abs_ci_hi_diff": float(max(his) - min(his)),
+        },
+        "quoted_seed": quoted_seed,
+        "quoted": per_seed[quoted_seed],
+        "quoted_seed_rule": method.quoted_seed_rule,
+        "n_boot_per_seed": True,
+        "n_boot_total": count * len(seeds),
+        "theta": float(theta),
+        "theta_stream_key": theta_stream_key(theta),
+        "crn_scope": method.crn_scope,
+        "crn_stream_entropy_by_seed": entropy_by_seed,
+        "population": sequence["population"],
+        "statistic": sequence["statistic"],
+        "na_day_rule": sequence["na_day_rule"],
+        "n_days_in_sequence": sequence["n_days_in_sequence"],
+        "n_oracle_traded_days": sequence["n_oracle_traded_days"],
+        "n_eligible_not_selected_days":
+            sequence["n_eligible_not_selected_days"],
+        "n_na_days_dropped": sequence["n_na_days_dropped"],
+        "na_dates": list(sequence["na_dates"]),
+        "method": _ruled_method_string(method, block, count, level, seeds,
+                                       quoted_seed, sequence),
+    }

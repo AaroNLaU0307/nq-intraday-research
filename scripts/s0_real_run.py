@@ -38,13 +38,22 @@ TRIAL_ID = "S0-T001"
 # contracts.RESEARCH_BOOTSTRAP_SEEDS (7/13/31, frozen S0 §9/App A).
 ENGINEERING_SEED = 20260731    # packet §5 (re-rendered per DR-02)
 REGISTRY = REPO / "ops" / "TRIAL_REGISTRY.md"
-RUNS_ROOT = REPO / "runs"
-ATTEMPTS_ROOT = REPO / "attempts"
+# L-5 ruling (Aaron 2026-08-10): governed output roots move OUT of the
+# OneDrive-synced repo tree to the ruled local roots in contracts. The
+# constants below keep their historical ROLES (build_gates()'s runs_root
+# param; direct parents of the per-run dirs) — only their VALUES move.
+# Monkeypatchable exactly like before.
+from itsf.contracts import (RULED_ARCHIVE_ROOT as _RULED_ARCHIVE_ROOT,
+                            RULED_RUNS_ROOT as _RULED_RUNS_ROOT)
+GOVERNED_RUNS_ROOT = Path(_RULED_RUNS_ROOT)     # == RunConfig.runs_root default
+GOVERNED_ARCHIVE_ROOT = Path(_RULED_ARCHIVE_ROOT)
+RUNS_ROOT = GOVERNED_RUNS_ROOT / "runs"
+ATTEMPTS_ROOT = GOVERNED_RUNS_ROOT / "attempts"
 
 # Baseline collected-test count at the SA-6 audit commit. The pytest gate
 # requires the suite to still COLLECT at least this many tests, so a muted
 # or filtered run cannot satisfy the gate with a handful of tests (F-09).
-MIN_COLLECTED_TESTS = 2220                  # M6.1.8: floor = current suite
+MIN_COLLECTED_TESTS = 2495                  # S0 closeout: floor = current suite
 
 # External read-only tooling (packet §9 gate 4). Invoked as a subprocess;
 # the tool itself only reads repository files.
@@ -549,6 +558,12 @@ def build_gates(*, repo: Path = REPO, registry: Path = REGISTRY,
             ("config.engineering_seed", ENGINEERING_SEED, 20260731),
             ("contracts.RESEARCH_BOOTSTRAP_SEEDS",
              _c.RESEARCH_BOOTSTRAP_SEEDS, (7, 13, 31)),
+            # L-5 ruling (Aaron 2026-08-10): the governed output roots are
+            # in-process pinned facts like every other frozen constant.
+            ("contracts.RULED_RUNS_ROOT", _c.RULED_RUNS_ROOT,
+             r"C:\Users\Aaron\quant-data\itsf-runs"),
+            ("contracts.RULED_ARCHIVE_ROOT", _c.RULED_ARCHIVE_ROOT,
+             r"C:\Users\Aaron\quant-data\itsf-runs-archive"),
         )
         bad = [name for name, got, want in expected if got != want]
         return (not bad, f"frozen-constant drift in-process: {bad}"
@@ -896,7 +911,8 @@ def _partition_admission(candidates, all_probs):
 
 
 def render_s0_report(result, *, expected_governance=None,
-                     governance_context=None) -> dict[str, str]:
+                     governance_context=None,
+                     methods=None) -> dict[str, str]:
     """Stage-E sealed release: the FORMAL S0 report, whole-document only
     (packet §7 — nothing here reaches a log line).
 
@@ -996,14 +1012,20 @@ def render_s0_report(result, *, expected_governance=None,
         # it is never sealed while carrying a False flag — and the refusal
         # is itself recorded in a sealed admission record, so the withheld
         # state is disclosed rather than silent.
-        candidates = {"SEED_MANIFEST.json": ho.build_seed_manifest()}
+        candidates = {"SEED_MANIFEST.json":
+                      ho.build_seed_manifest(methods=methods)}
         # M6.1.3 fix-round (blind-audit D44/F9): ONE admission call over
         # the WHOLE candidate set — formal_seal_admission's cross-artifact
         # checks (grid per-cell seeds vs the seed manifest) only see
         # artifacts supplied in the SAME call, so the earlier per-file
         # loop made that check unreachable in production.
         admitted, withheld = _partition_admission(
-            candidates, ho.formal_seal_admission(candidates))
+            candidates,
+            ho.formal_seal_admission(
+                candidates,
+                source=ho.source_context_for_methods(methods))
+            if methods is not None
+            else ho.formal_seal_admission(candidates))
         for fname, artifact in admitted.items():
             files[fname] = ho.dumps_canonical(artifact)
         # M6.1.4 (main-2): EVIDENCE RECONCILIATION over the ACTUAL bytes
@@ -1011,8 +1033,8 @@ def render_s0_report(result, *, expected_governance=None,
         # formal payload is reconciled against the captured atoms. HARD
         # problems refuse the seal; PARTIAL markers are DISCLOSED in the
         # sealed admission record (honest coverage, never a silent claim).
-        ev_hard, ev_partial = ev.split_problems(
-            ev.reconcile_with_evidence(evd, formal, files))
+        ev_flat = ev.reconcile_with_evidence(evd, formal, files)
+        ev_hard, ev_partial = ev.split_problems(ev_flat)
         if ev_hard:
             raise ValueError("evidence reconciliation failed: "
                              + "; ".join(ev_hard))
@@ -1027,9 +1049,12 @@ def render_s0_report(result, *, expected_governance=None,
                 "hard_problems": list(ev_hard),
                 "partial_coverage": list(ev_partial)},
             "note": ("artifacts whose formal_sealable flag is not True are "
-                     "WITHHELD from the sealed set pending the DR-M6 "
-                     "rulings; DAY_STRATA / GRID_SAMPLES are not built by "
-                     "this renderer yet (schema skeletons in "
+                     "WITHHELD from the sealed set (condition-driven; the "
+                     "DR-M6 rulings landed 2026-08-10 — remaining blockers "
+                     "are per-artifact: TEST_ONLY methods, an absent "
+                     "methods context, or the MC-side replay wiring); "
+                     "DAY_STRATA / GRID_SAMPLES are not built by this "
+                     "renderer yet (schema skeletons in "
                      "src/itsf/s0/handoff.py)"),
         })
         files["S0_REPORT.md"] = "\n".join([
@@ -1038,9 +1063,12 @@ def render_s0_report(result, *, expected_governance=None,
             "- MC handoff records: MC_HANDOFF_<engine>_<scenario>.jsonl",
             "- handoff admission: HANDOFF_ADMISSION.json (which handoff "
             "artifacts were admitted / withheld and why)",
-            "- DAY_STRATA/GRID_SAMPLES/SEED_MANIFEST: NOT part of the "
-            "sealed set while formal_sealable is False (DR-M6 rulings "
-            "pending); schema skeletons in src/itsf/s0/handoff.py"])
+            "- DAY_STRATA/GRID_SAMPLES/SEED_MANIFEST: admitted to the "
+            "sealed set ONLY while their formal_sealable flag is True "
+            "(condition-driven; the DR-M6 rulings landed 2026-08-10 — "
+            "remaining per-artifact blockers are TEST_ONLY methods or the "
+            "MC-side replay wiring); schema skeletons in "
+            "src/itsf/s0/handoff.py"])
         formal = dict(formal)
         # M6.1.2 (audit N18): EVERY file this renderer writes carries an
         # integrity entry — an extra planted file, or a sealed file with
@@ -1073,6 +1101,28 @@ def render_s0_report(result, *, expected_governance=None,
         if post:
             raise ValueError("sealed-file verification failed: "
                              + "; ".join(post))
+        # F-2 key-claims PRE-WRITE screen (Aaron 2026-08-10): the closed
+        # six-claim battery against independent sources — locked assertions
+        # bytes, the caller's validated method rulings, the evidence verdict
+        # taken above. Runs AFTER manifest injection so KC4 sees the sealed
+        # name set. Gated on `methods` exactly like the admission context and
+        # the governance screen: the PRODUCTION chain always supplies it
+        # (pinned by the chain tests); a direct legacy call without methods
+        # renders unscreened, same as it renders un-admitted.
+        if methods is not None:
+            from itsf.s0 import output_proof as _op_kc
+            kc = _op_kc.verify_key_claims(
+                formal,
+                _op_kc.ResearchClaimsContext(
+                    assertions_bytes=Path(
+                        KEY_CLAIMS_ASSERTIONS_PATH).read_bytes(),
+                    ruled_methods=methods,
+                    evidence_problems=list(ev_flat),
+                    disk_report=None),
+                phase="pre_write")
+            if not kc.sealable_pre_write:
+                raise ValueError("key-claims pre-write screen failed: "
+                                 + "; ".join(kc.problems))
         # M6.1.6 (S2 slice) — INDEPENDENT governance proof, run LAST, on the
         # FINAL S0_REPORT.json bytes. Placement is the whole point: the
         # M6.1.4 evidence pass ran before three of the eleven sealed files
@@ -1112,9 +1162,14 @@ def render_s0_report(result, *, expected_governance=None,
 
 def _resolved_methods():
     """M6.1 E1 — the ONLY method-ruling state source (contracts dataclass).
-    Every field is None until Aaron's ruling lands here with its IR ref."""
-    from itsf.contracts import ResolvedS0Methods
-    return ResolvedS0Methods()
+
+    S0 closeout (Aaron 2026-08-10, IR-27): ALL EIGHT DR rulings landed —
+    this now returns the fully-resolved ruled instance from the single
+    ruled source in contracts. The fail-closed machinery downstream
+    (pending_fields / structural_problems / Stage-B refusal) is unchanged
+    and still guards against any future un-ruling or drive-by edit."""
+    from itsf.contracts import aaron_ruled_methods
+    return aaron_ruled_methods()
 
 
 # Derived, never hand-written (E1): the live pending list.
@@ -1138,14 +1193,92 @@ from collections.abc import Mapping as _Mapping          # noqa: E402
 _CONFIG_CACHE: dict = {}
 
 
+#: sha256 pin of the ONLY approved cost-side input (S0 authorization packet
+#: line "spread_cost_table.csv SHA-256 ... 唯一允许的成本侧输入"). The
+#: injectable source refuses a table whose bytes drift from this pin.
+SPREAD_COST_TABLE_PATH = REPO / "spread_cost_table.csv"
+SPREAD_COST_TABLE_SHA256 = (
+    "b6d6984ff7c364f9a57514d7583685956f6b080ec02027ee8401f38f6d9509bf")
+
+#: F-2 key-claims independent source: the locked compare-only assertions
+#: file. Module-level so the synthetic e2e can point it at a synthetic
+#: assertions file matching its synthetic market; production leaves it at
+#: the locked artifact (same discipline as RUNS_ROOT).
+KEY_CLAIMS_ASSERTIONS_PATH = REPO / "S0_INPUT_PREFLIGHT.json"
+
+
+class _BindableDayLabelResolver:
+    """A STABLE injectable callable (G11 identity rule: the source must hand
+    out the same object on every call — never a fresh lambda).
+
+    Unbound until Stage B binds it to the per-day label mapping built from
+    the loaded universe (pre-exposure); calling it unbound raises. Post-
+    exposure code never calls it at all — `RealChain.prepare` materializes
+    an immutable value snapshot (context.materialize_day_value_snapshot)
+    and the compute path consumes ONLY the snapshot (F-1 boundary)."""
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+        self._mapping = None
+
+    def bind(self, mapping) -> None:
+        self._mapping = dict(mapping)
+
+    def __call__(self, trade_date):
+        if self._mapping is None:
+            raise RuntimeError(
+                f"injectable {self._name} is unbound — it binds in Stage B "
+                "from the loaded universe (pre-exposure) and may never be "
+                "called before binding or after exposure (F-1: the compute "
+                "path consumes the prepared value snapshot instead)")
+        return self._mapping[trade_date]
+
+
+# Module singletons — STABLE object identity across gateway calls (G11).
+_REGIME_RESOLVER = _BindableDayLabelResolver("regime_of")
+_VOL_AXIS_RESOLVER = _BindableDayLabelResolver("vol_axis_of")
+
+
+def _read_locked_spread_table():
+    """Locked cost-side table bytes -> parsed rows, sha256-pinned first.
+    Cost-calibration output only (prereg §1: the alpha side may read this
+    table and nothing rawer); NOT research price data."""
+    raw = SPREAD_COST_TABLE_PATH.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != SPREAD_COST_TABLE_SHA256:
+        raise RunGateError(
+            "spread_cost_table.csv drifted from the authorization-packet "
+            f"pin: {digest} != {SPREAD_COST_TABLE_SHA256}")
+    import io
+    import pandas as _pd
+    return _pd.read_csv(io.BytesIO(raw))
+
+
 def _approved_injectables():
-    """M6.1.3 fix-round (blind-audit F3): the production source of the
-    DERIVED StudyConfig inputs — spread_scalars per the ruled DR-1
-    reduction, the ruled regime/vol mappings — read from locked artifacts
-    once those rulings land. None until then (fail closed): no cached
-    config can claim its injectables came from an approved source that
-    does not exist yet."""
-    return None
+    """M6.1.3 fix-round (blind-audit F3) -> S0 closeout (Aaron 2026-08-10):
+    the production source of the DERIVED StudyConfig inputs.
+
+    spread_scalars: RE-DERIVED on EVERY call from the sha256-pinned locked
+    spread_cost_table.csv per the RULED DR-1 reduction
+    (costs.derive_spread_scalars, rule B-i). No cache: the gateway is
+    built on distrusting caches (conformance F2.2 — a poisoned-but-
+    schema-valid cached triple would trivially equal its own fingerprint),
+    and the derivation is milliseconds. The triple is value-stable across
+    calls because the pinned bytes are.
+    regime_of / vol_axis_of: the module-singleton bindable resolvers
+    (STABLE identity per G11); both resolve from the ONE shared DR-2
+    mapping (mapping_scope=shared_s2_and_appendixA) once Stage B binds it.
+    Any failure here surfaces as a Stage-B refusal (fail closed), never a
+    silent None-derived default."""
+    from itsf.s0 import costs as _costs
+    methods = _resolved_methods()
+    table = _read_locked_spread_table()
+    scalars = _costs.derive_spread_scalars(table, methods.spread_cost)
+    return {
+        "spread_scalars": tuple(float(v) for v in scalars),
+        "regime_of": _REGIME_RESOLVER,
+        "vol_axis_of": _VOL_AXIS_RESOLVER,
+    }
 
 
 # =========================================================================
@@ -1484,6 +1617,9 @@ _METHOD_SUB_RULES: dict = {
         ("ddof", _atom_int),
         ("roll_crossing_rule", _atom_str),
         ("tercile_reference", _atom_str),
+        # DR-2 ruling 2026-08-10: mapping_scope is fingerprint-carried like
+        # every other ruled string (explicit, never reflection).
+        ("mapping_scope", _atom_str),
         ("na_rule", _atom_str))),
     "FpAllocationMethod": (_FAM, (
         ("basis", _atom_str),
@@ -1614,8 +1750,8 @@ def _config_canonical_defect(cfg) -> str:
     object identity. That is an ENGINEERING CACHE-COHERENCE RULE -- it answers
     "is this the very object the approved injectable source hands out in this
     process?" and NOTHING about what regime_of / vol_axis_of compute. It does
-    not define, approve, rank or narrow their research output; DR-1 and DR-2
-    stay open.
+    not define, approve, rank or narrow their research output (DR-1/DR-2 are
+    ruled upstream in contracts; this rule is about identity, not content).
     """
     for name, is_canonical in _CONFIG_CANONICAL_RULES:
         if not is_canonical(getattr(cfg, name)):
@@ -2036,7 +2172,8 @@ def _strkeys(obj):
 
 def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
                             governance_meta, n_boot=FROZEN_N_BOOT,
-                            universe=None, frozen_hash_observations=None):
+                            universe=None, frozen_hash_observations=None,
+                            day_value_snapshot=None):
     """Assemble the FULL S0 payload per S0_REPORT_CONTENT_CONTRACT §A.
 
     spread_scalars (DR-M6-A) and regime_of (DR-M6-B) are INJECTED so the
@@ -2047,29 +2184,42 @@ def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
     {7,13,31}); this function is deterministic.
     """
     from itsf.s0 import costs as _costs
+    from itsf.s0.dataset import event_stratum_of as _event_stratum_of
     from itsf.s0.gridmix import build_grid
-    from itsf.s0.stats import bootstrap_mean_ci
-    from itsf.s0.study import build_study
+    from itsf.s0.stats import (bootstrap_mean_ci_ruled,
+                               build_bootstrap_day_sequence)
+    from itsf.s0.study import FROZEN_THETAS, build_study, theta_key
 
-    scenarios = _costs.build_scenarios(*config.spread_scalars)
-    study = build_study(ds, make_day_inputs(ds, bars_by_date), scenarios)
+    # DR-1 (Aaron 2026-08-10): scenarios come from the RULED method object —
+    # adverse ticks sourced from the ruling, Stress never re-multiplied.
+    scenarios = _costs.build_scenarios_from_method(
+        config.spread_scalars, config.methods.spread_cost)
+    # DR-8: the E2 worst-day estimator is the RULED value on the config.
+    study = build_study(ds, make_day_inputs(ds, bars_by_date), scenarios,
+                        worst_day_estimator=config.methods
+                        .worst_day_estimator,
+                        estimator_test_only=config.methods.test_only)
 
-    # M6.1.1: NO invented vocabulary. A None flag (F10 multi-event NA,
-    # IR-12/18) may only enter the strata under the RULED event mapping;
-    # while DR-M6-F pends no config exists, and an unrecognized rule
-    # blocks explicitly rather than defaulting.
-    def _event_stratum(flag):
-        if flag is not None:
-            return flag
-        rule = config.methods.event_na_mapping
-        if rule == "five_stratum":         # IR-12/18 vocabulary, TEST_ONLY
-            return "NA_multi_event"
-        raise ValueError(
-            f"event-NA stratum mapping {rule!r} not implemented — "
-            "DR-M6-F ruling required (fail closed)")
-
-    event_of = {r.trade_date: _event_stratum(r.features.is_event_day)
+    # DR-6 (Aaron 2026-08-10): the event stratum routes through the single
+    # ruled consumer — IR-12/18 vocabulary, F10 None -> NA_multi_event,
+    # unknown mapping raises, TEST_ONLY value test-gated in dataset.py.
+    event_of = {r.trade_date: _event_stratum_of(
+                    r.features.is_event_day, config.methods.event_na_mapping,
+                    config.methods.test_only)
                 for r in ds.records}
+
+    # F-1 boundary: strata/vol labels come from the PREPARED value snapshot
+    # when one is supplied (the production compute path always supplies it);
+    # the direct-call fallback below is a PRE-exposure test convenience and
+    # is pinned as such by the chain tests.
+    if day_value_snapshot is not None:
+        _regime_label = day_value_snapshot.regime
+        _vol_label = day_value_snapshot.vol_axis
+    else:
+        _regime_label = lambda d: str(config.regime_of(d))    # noqa: E731
+        _vol_label = lambda d: str(config.vol_axis_of(d))     # noqa: E731
+
+    _theta_of = {theta_key(t): float(t) for t in FROZEN_THETAS}
     bootstrap_ci: dict[str, object] = {}
     feasibility_grid: dict[str, object] = {}
     for tkey, tblock in study["per_theta"].items():
@@ -2078,15 +2228,40 @@ def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
             for scn in study["scenarios_used"]:
                 d_tp = tblock["d_tp"][eng][scn]
                 d_fp = tblock["d_fp"][eng][scn]
-                series = [d_tp[d] for d in sorted(d_tp)]
+                # DR-4 (Aaron 2026-08-10): the bootstrap population is the
+                # FULL eligible trading-day sequence — oracle-traded days
+                # carry their USD P&L, eligible-but-unselected days carry
+                # an explicit 0.0, NA days (undeterminable direction /
+                # Y_cont NA) are dropped n1-style with a disclosed count.
+                day_states = []
+                for r in sorted(ds.records, key=lambda x: x.trade_date):
+                    if r.trade_date in d_tp:
+                        day_states.append((r.trade_date, "oracle_traded",
+                                           float(d_tp[r.trade_date])))
+                    elif (r.labels.y_cont is None
+                          or int(r.labels.d_open or 0) == 0):
+                        day_states.append((r.trade_date, "na"))
+                    else:
+                        day_states.append(
+                            (r.trade_date, "eligible_not_selected"))
+                seq = build_bootstrap_day_sequence(
+                    day_states, config.methods.bootstrap_method)
                 for blk in FROZEN_BLOCKS:
                     bootstrap_ci[f"{tkey}|{eng}|{scn}|block{blk}"] = \
-                        bootstrap_mean_ci(series, block_len=blk,
-                                          n_boot=n_boot)
-                strata = {d: (d[:4], str(config.regime_of(d)), event_of[d])
+                        bootstrap_mean_ci_ruled(
+                            seq, theta=_theta_of[tkey],
+                            method=config.methods.bootstrap_method,
+                            block_len=blk, n_boot=n_boot)
+                strata = {d: (d[:4], _regime_label(d), event_of[d])
                           for d in {**d_tp, **d_fp}}
+                # DR-3 + DR-5 (Aaron 2026-08-10): the grid consumes the
+                # ruled FP-allocation and K-repeat policies; theta enters
+                # the repeat RNG stream.
                 feasibility_grid[f"{tkey}|{eng}|{scn}"] = build_grid(
-                    d_tp, d_fp, strata, p)
+                    d_tp, d_fp, strata, p,
+                    fp_allocation=config.methods.fp_allocation,
+                    grid_policy=config.methods.grid_policy,
+                    theta=_theta_of[tkey])
 
     records = study["records"]
     manifest = {
@@ -2128,8 +2303,9 @@ def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
         "e2_worst_days": {
             t: {scn: {**study["per_theta"][t]["executable"]["E2"][scn]
                       ["worst_day_report"],
-                      # DR-M6-H: the P1/P5 estimator is UNAPPROVED until
-                      # Aaron rules — sealing fail-closes on unresolved.
+                      # DR-8 RULED (linear, 2026-08-10): the status is
+                      # derived from the single ruled source; sealing still
+                      # fail-closes if it ever reads unresolved.
                       "estimator_status":
                           ("resolved"
                            if config.methods.worst_day_estimator is not None
@@ -2144,7 +2320,9 @@ def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
                       for t in study["per_theta"]},
         "stability_views": {t: build_stability_views(
             study["per_theta"][t], day_meta,
-            vol_axis={d: str(config.vol_axis_of(d)) for d in day_meta})
+            vol_axis={d: _vol_label(d) for d in day_meta},
+            # DR-7 (Aaron 2026-08-10): BOTH populations reported.
+            stability_population=config.methods.stability_population)
             for t in study["per_theta"]},
         "bootstrap_ci": _strkeys(bootstrap_ci),
         "feasibility_grid": {"cells": _strkeys(feasibility_grid),
@@ -2285,17 +2463,19 @@ class _PreparedExecutionInput:
     `type(x) is _PreparedExecutionInput` and consumed by attribute read, and
     is never compared, unpacked or serialized.
 
-    HONEST SCOPE — what this object does and does NOT freeze. `config` is a
-    `StudyConfig`, whose `spread_scalars` are already an immutable tuple of
-    plain floats and whose `methods` are frozen dataclasses. It is NOT the
-    fully materialised execution plan: `config.regime_of` / `.vol_axis_of`
-    remain CALLABLES (behaviour is not snapshot-able — `__closure__` cells,
-    `__code__` and `__globals__` are all rebindable), and
-    `methods.spread_cost.adverse_slippage_ticks` remains a MappingProxyType,
-    i.e. a live view over a backing dict its author may still hold.
-    Materialising the callables needs DR-2's ruled vocabulary (the `vol_na`
-    fourth-stratum case is unruled) and freezing tick VALUES needs a ruling
-    this milestone must not make. Both stay open; F-1 remains PARTIAL.
+    HONEST SCOPE — what this object freezes (S0 closeout, Aaron 2026-08-10).
+    `config` is a `StudyConfig` (immutable scalars tuple, frozen method
+    dataclasses). `day_values` is the F-1 MATERIALISED per-day value
+    snapshot (`context.DayValueSnapshot`): the regime/vol-axis labels were
+    computed ONCE at prepare time (pre-exposure) under the ruled DR-2
+    vocabulary, and Stage C consumes only these VALUES — the config
+    callables are never invoked after prepare (AST-pinned). Remaining
+    honest limit: `methods.spread_cost.adverse_slippage_ticks` is a
+    MappingProxyType whose backing dict contracts.py builds; for the RULED
+    instance that backing dict is module-private
+    (`AARON_RULED_ADVERSE_TICKS_PRIMARY`), so no run-time author holds a
+    mutable reference, but a hand-built bypass config could still carry a
+    live view — the gateway's canonical-form checks are the guard there.
 
     M6.1.7 — it also carries the PRE-EXPOSURE AUTHORIZATION SNAPSHOT.
 
@@ -2315,12 +2495,16 @@ class _PreparedExecutionInput:
     moving source cannot see that source move.
     """
 
-    __slots__ = ("config", "reason", "snapshot")
+    __slots__ = ("config", "reason", "snapshot", "day_values")
 
-    def __init__(self, *, config, reason, snapshot):
+    def __init__(self, *, config, reason, snapshot, day_values=None):
         object.__setattr__(self, "config", config)
         object.__setattr__(self, "reason", reason)
         object.__setattr__(self, "snapshot", snapshot)
+        # F-1 (S0 closeout, Aaron 2026-08-10): the materialised per-day
+        # regime / vol-axis VALUE snapshot (context.DayValueSnapshot).
+        # Stage C consumes THIS, never the config callables.
+        object.__setattr__(self, "day_values", day_values)
 
     def __setattr__(self, name, value):          # no post-prepare mutation
         raise AttributeError("_PreparedExecutionInput is immutable")
@@ -2429,7 +2613,10 @@ class RealChain:
         return render_s0_report(
             result,
             expected_governance=_expected_governance(prepared.snapshot),
-            governance_context=self._governance_context(prepared))
+            governance_context=self._governance_context(prepared),
+            # the VALIDATED config's rulings — drives the handoff admission
+            # context AND the F-2 key-claims pre-write screen.
+            methods=prepared.config.methods)
 
     def post_write_verify(self, rdir, written, prepared):
         """M6.1.7 — THE RELEASE VERDICT, taken from the bytes on disk.
@@ -2464,6 +2651,51 @@ class RealChain:
         if not proof.ok:
             return (False, "post-write governance proof failed: "
                     + "; ".join(proof.problems))
+        # F-2 key-claims POST-WRITE release (Aaron 2026-08-10): re-verify
+        # the payload-bound claims against the BYTES ON DISK plus the disk
+        # verdict itself. KC3 is pre-write-only by design; its verdict
+        # carries to disk by BYTE IDENTITY, and that custody argument is
+        # made TRUE here (conformance F2.3): S0_REPORT.json is
+        # self-excluded from the sealed-set manifest, so its disk bytes
+        # are compared DIRECTLY against the renderer's in-memory `written`
+        # record before anything else is concluded from them.
+        try:
+            disk_report_bytes = (Path(rdir) / "S0_REPORT.json").read_bytes()
+        except Exception as exc:                          # noqa: BLE001
+            return (False, "post-write key-claims: cannot read disk "
+                    f"report: {type(exc).__name__}")
+        written_map = dict(written) if written else {}
+        mem = written_map.get("S0_REPORT.json")
+        if mem is None:
+            return (False, "post-write key-claims: renderer record carries "
+                           "no S0_REPORT.json bytes to bind against")
+        if hashlib.sha256(mem).hexdigest() != hashlib.sha256(
+                disk_report_bytes).hexdigest():
+            return (False, "post-write key-claims: S0_REPORT.json disk "
+                           "bytes differ from the renderer's written bytes "
+                           "— byte-identity custody broken")
+        try:
+            disk_formal = json.loads(disk_report_bytes.decode("utf-8"))
+        except Exception as exc:                          # noqa: BLE001
+            return (False, "post-write key-claims: cannot parse disk "
+                    f"report: {type(exc).__name__}")
+        kc = _op.verify_key_claims(
+            disk_formal,
+            _op.ResearchClaimsContext(
+                assertions_bytes=Path(
+                    KEY_CLAIMS_ASSERTIONS_PATH).read_bytes(),
+                # the VALIDATED config's methods — never a fresh source
+                # resolution after exposure (M6.1.6 discipline).
+                ruled_methods=prepared.config.methods,
+                evidence_problems=[
+                    "PARTIAL:kc3:pre_write_verdict_carried_by_sealed_"
+                    "byte_identity"],
+                disk_report={"ok": True,
+                             "detail": "sealed-set byte proof passed"}),
+            phase="post_write")
+        if not kc.releasable_post_write:
+            return (False, "post-write key-claims release failed: "
+                    + "; ".join(kc.problems))
         return (True, "disk governance + sealed-set proof passed "
                 f"({proof.comparisons_performed} governance, "
                 f"{proof.disk_checks_performed} disk checks, "
@@ -2524,18 +2756,18 @@ class RealChain:
         consumed (`runner.py` prepare seam, mirroring the pre-exposure
         registry recheck precedent).
 
-        SCOPE, STATED HONESTLY. This closes the LIFECYCLE hole only — the
-        one where `ready()` resolved a config, discarded it, and `compute()`
-        re-resolved AFTER exposure had been consumed, so that a config
-        refusal burned the trial. It does NOT deliver the fully materialised
-        execution plan the F-1 architecture calls for: `regime_of` and
-        `vol_axis_of` are still carried as CALLABLES, because materialising
-        them over a date domain requires DR-2's ruled vocabulary (the
-        `vol_na` fourth-stratum question is explicitly unruled). F-1 as a
-        whole therefore remains PARTIAL; see the review packet.
+        SCOPE (S0 closeout, Aaron 2026-08-10). Beyond closing the LIFECYCLE
+        hole (ready() resolving and discarding a config that compute()
+        re-resolved post-exposure), prepare now also delivers the F-1
+        materialised plan: it binds the stable injectable resolvers to the
+        ONE ruled DR-2 mapping built from the loaded universe and
+        materialises the per-day value snapshot (`day_values`) that Stage C
+        consumes INSTEAD of the config callables. DR-2's `vol_na` fourth
+        stratum is ruled, so every eligible day gets a definite label.
 
-        With `_approved_injectables()` returning None, this fails closed on
-        every production path today — which is the intended posture.
+        `_approved_injectables()` is now the RULED production source
+        (sha256-pinned spread table -> B-i scalars; singleton resolvers);
+        a failure inside it still surfaces as a Stage-B refusal.
 
         M6.1.7 — `snapshot` is the Stage-A authorization snapshot held by
         `make_snapshot_control`'s closure. It is passed IN rather than
@@ -2568,9 +2800,29 @@ class RealChain:
         cfg, why = resolved_study_config()
         if cfg is None:
             raise RuntimeError(f"stage-C config unavailable: {why}")
+        # F-1 (Aaron 2026-08-10): BIND the stable injectable resolvers to
+        # the ONE ruled DR-2 mapping built from the loaded universe (still
+        # pre-exposure), then MATERIALIZE the per-day value snapshot. Post-
+        # exposure code consumes only the snapshot; the callables are never
+        # invoked after this point (AST-pinned in compute).
+        ds, uni = self._ensure()
+        from itsf.s0.context import materialize_day_value_snapshot as _mat
+        # BINDING is only needed when the config carries the PRODUCTION
+        # resolver singletons (the real injectable source). A hermetic
+        # config whose callables are already data-free synthetics is
+        # materialised directly — no universe consultation, no binding.
+        if (cfg.regime_of is _REGIME_RESOLVER
+                or cfg.vol_axis_of is _VOL_AXIS_RESOLVER):
+            from itsf.s0.dataset import (
+                build_vol20_regime_mapping_from_universe as _vmap)
+            mapping = _vmap(uni, cfg.methods.volatility_regime)
+            _REGIME_RESOLVER.bind(mapping.label_of)
+            _VOL_AXIS_RESOLVER.bind(mapping.label_of)  # shared mapping scope
+        day_values = _mat(tuple(sorted(r.trade_date for r in ds.records)),
+                          cfg.regime_of, cfg.vol_axis_of)
         return _PreparedExecutionInput(
             config=cfg, reason=why,
-            snapshot=_MProxy(snap))
+            snapshot=_MProxy(snap), day_values=day_values)
 
     def compute(self, prepared):
         # M6.1.6: Stage C consumes the PREPARED object and MUST NOT reach
@@ -2607,7 +2859,8 @@ class RealChain:
                   for p in sorted(_g.FROZEN_HASHES)}
         return build_full_study_result(ds, self._bars, config=cfg,
                                        governance_meta=gov, universe=uni,
-                                       frozen_hash_observations=fh_obs)
+                                       frozen_hash_observations=fh_obs,
+                                       day_value_snapshot=prepared.day_values)
 
 
 # =========================================================================
@@ -2716,7 +2969,11 @@ def main() -> int:
         engineering_seed=ENGINEERING_SEED,
         attempts_dir=str(ATTEMPTS_ROOT / f"{TRIAL_ID}-A{stamp}"),
         runs_dir=str(RUNS_ROOT / f"{TRIAL_ID}_{stamp}"),
-        assertions_path=str(REPO / "S0_INPUT_PREFLIGHT.json"))
+        assertions_path=str(REPO / "S0_INPUT_PREFLIGHT.json"),
+        # L-5 ruling: governed roots travel on the config and are validated
+        # by the runner's output_roots gate (runinfra.validate_output_roots).
+        runs_root=str(GOVERNED_RUNS_ROOT),
+        archive_root=str(GOVERNED_ARCHIVE_ROOT))
 
     def registry_append(event: str, note: str) -> None:
         append_registry_event_line(REGISTRY, TRIAL_ID, event, note,

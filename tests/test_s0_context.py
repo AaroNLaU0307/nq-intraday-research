@@ -22,6 +22,7 @@ from __future__ import annotations
 import inspect
 import re
 from dataclasses import asdict
+from types import MappingProxyType
 from datetime import date as _date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -1092,3 +1093,143 @@ def test_ir26_preflight_equivalence_matrix_per_day():
         assert uni.prev_rth_close_cause[day] == cause, day
     assert uni.prev_close_from_vendor_degraded == {d[13]}
     assert d[3] in uni.prev_close_from_early_close
+
+
+# ---------------------------------------------------------------------------
+# F-1 — the PRE-EXPOSURE per-day VALUE snapshot (M6.1.8 packet §5)
+# ---------------------------------------------------------------------------
+#
+# The defect these tests pin closed: the prepared execution object used to
+# carry `regime_of` / `vol_axis_of` as CALLABLES, so the values the sealed
+# report describes were not fixed at prepare time — only the code that would
+# later produce them was. Every test below is BEHAVIOURAL: it proves what the
+# compute path can and cannot observe, never merely that a field exists.
+
+def _raising(_date):
+    raise AssertionError("a config callable was invoked AFTER prepare — the "
+                         "compute path must read the snapshot only")
+
+
+def test_snapshot_materializes_one_call_per_day_per_callable():
+    calls = {"regime": [], "vol": []}
+
+    def regime_of(d):
+        calls["regime"].append(d)
+        return "R-" + d[-2:]
+
+    def vol_axis_of(d):
+        calls["vol"].append(d)
+        return "T" + str((int(d[-2:]) % 3) + 1)
+
+    dates = ["2015-01-01", "2015-01-02", "2015-01-03"]
+    snap = ctx_mod.materialize_day_value_snapshot(dates, regime_of, vol_axis_of)
+    assert calls["regime"] == dates and calls["vol"] == dates
+    assert snap.dates == tuple(dates)
+    assert snap.regime("2015-01-02") == "R-02"
+    assert snap.vol_axis("2015-01-03") == "T1"   # 3 % 3 == 0 -> T1
+    assert snap.disclosure["calls_per_callable"] == 3
+    assert snap.disclosure["callables_invoked_after_exposure"] == 0
+
+
+def test_after_prepare_a_raising_callable_cannot_affect_the_snapshot():
+    """BEHAVIOURAL proof of "no config callable is invoked after exposure":
+    monkeypatch both callables to detonate and every snapshot read still
+    works, because the values were copied out at prepare time."""
+    dates = ["2015-01-01", "2015-01-02"]
+    live = {"regime": lambda d: "R1", "vol": lambda d: "T1"}
+    snap = ctx_mod.materialize_day_value_snapshot(
+        dates, lambda d: live["regime"](d), lambda d: live["vol"](d))
+    live["regime"] = _raising                      # post-prepare monkeypatch
+    live["vol"] = _raising
+    for d in dates:
+        assert snap.regime(d) == "R1"
+        assert snap.vol_axis(d) == "T1"
+    assert dict(snap.regime_of) == {d: "R1" for d in dates}
+
+
+def test_mutating_the_original_source_structures_cannot_move_the_snapshot():
+    source = {"2015-01-01": "T1", "2015-01-02": "T2"}
+    snap = ctx_mod.materialize_day_value_snapshot(
+        sorted(source), lambda d: "R", lambda d: source[d])
+    source["2015-01-01"] = "T3"                    # the CLOSED-OVER dict moves
+    source.pop("2015-01-02")
+    assert snap.vol_axis("2015-01-01") == "T1"
+    assert snap.vol_axis("2015-01-02") == "T2"
+
+
+def test_the_snapshot_has_no_mutation_surface():
+    snap = ctx_mod.materialize_day_value_snapshot(
+        ["2015-01-01"], lambda d: "R", lambda d: "T1")
+    assert type(snap.regime_of) is MappingProxyType
+    assert type(snap.vol_axis_of) is MappingProxyType
+    assert type(snap.disclosure) is MappingProxyType
+    for view in (snap.regime_of, snap.vol_axis_of, snap.disclosure):
+        with pytest.raises(TypeError):
+            view["2015-01-01"] = "X"
+        with pytest.raises((TypeError, AttributeError)):
+            view.pop("2015-01-01")
+    # the frozen dataclass itself refuses attribute assignment too
+    with pytest.raises(Exception):
+        snap.regime_of = {}
+
+
+def test_no_external_reference_to_the_backing_dict_escapes():
+    """The two mappings are proxies over dicts BUILT LOCALLY inside
+    materialize_day_value_snapshot. Unlike a mappingproxy handed a
+    caller-owned dict, there is no live view: the only route back to the
+    backing object would be an attribute exposing it, and none exists."""
+    source = {"2015-01-01": "T1"}
+    snap = ctx_mod.materialize_day_value_snapshot(
+        ["2015-01-01"], lambda d: "R", lambda d: source[d])
+    assert snap.vol_axis_of is not source
+    assert not any(isinstance(getattr(snap, name), dict)
+                   for name in ("regime_of", "vol_axis_of", "disclosure"))
+    assert "backing dict" not in str(vars(snap).keys())
+    # copy.copy of the proxy yields a NEW dict; mutating it is inert
+    plain = dict(snap.vol_axis_of)
+    plain["2015-01-01"] = "MUTATED"
+    assert snap.vol_axis("2015-01-01") == "T1"
+
+
+def test_missing_day_lookup_fails_closed_with_keyerror():
+    snap = ctx_mod.materialize_day_value_snapshot(
+        ["2015-01-01"], lambda d: "R", lambda d: "T1")
+    with pytest.raises(KeyError):
+        snap.regime("2015-01-02")
+    with pytest.raises(KeyError):
+        snap.vol_axis("2015-01-02")
+    assert snap.covers(["2015-01-01"]) is True
+    assert snap.covers(["2015-01-01", "2015-01-02"]) is False
+    assert "KeyError" in ctx_mod.SNAPSHOT_MISSING_DAY_NOTE
+
+
+def test_prepare_time_refusals_are_pre_exposure_and_explicit():
+    dates = ["2015-01-01"]
+    with pytest.raises(ValueError, match="must both be callables"):
+        ctx_mod.materialize_day_value_snapshot(dates, "not-a-callable",
+                                               lambda d: "T1")
+    with pytest.raises(ValueError, match="returned None"):
+        ctx_mod.materialize_day_value_snapshot(dates, lambda d: "R",
+                                               lambda d: None)
+    with pytest.raises(ValueError, match="raised RuntimeError"):
+        ctx_mod.materialize_day_value_snapshot(
+            dates, lambda d: "R", _boom)
+    with pytest.raises(ValueError, match="duplicate date"):
+        ctx_mod.materialize_day_value_snapshot(
+            ["2015-01-01", "2015-01-01"], lambda d: "R", lambda d: "T1")
+
+
+def _boom(_date):
+    raise RuntimeError("vol axis unavailable")
+
+
+def test_snapshot_values_are_strings_so_a_label_cannot_be_a_live_object():
+    """A callable returning a mutable object would re-open the very hole the
+    snapshot closes, so every value is stringified at materialisation."""
+    box = ["T1"]
+    snap = ctx_mod.materialize_day_value_snapshot(
+        ["2015-01-01"], lambda d: 7, lambda d: box[0])
+    box[0] = "T9"
+    assert snap.regime("2015-01-01") == "7"
+    assert snap.vol_axis("2015-01-01") == "T1"
+    assert all(isinstance(v, str) for v in snap.vol_axis_of.values())

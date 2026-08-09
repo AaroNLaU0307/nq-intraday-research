@@ -79,7 +79,8 @@ from __future__ import annotations
 
 import bisect
 from dataclasses import dataclass
-from typing import Iterator, Mapping, Sequence
+from types import MappingProxyType
+from typing import Callable, Iterator, Mapping, Sequence
 
 import numpy as np
 import pandas as pd
@@ -1164,3 +1165,127 @@ def iter_day_contexts(bars_by_date: Mapping[str, pd.DataFrame],
     """
     for d in universe.funnel.structurally_eligible:
         yield build_day_context(d, bars_by_date, universe)
+
+
+# ===========================================================================
+# F-1 — PRE-EXPOSURE per-day VALUE SNAPSHOT
+# ===========================================================================
+#
+# THE DEFECT THIS CLOSES (M6.1.8 packet §5). The prepared execution object
+# used to carry `regime_of` / `vol_axis_of` as CALLABLES. A callable is not a
+# snapshot: `__closure__` cells, `__code__` and `__globals__` are all
+# rebindable AFTER the exposure boundary, so the values the sealed report
+# describes were not fixed at prepare time — only the code that would later
+# produce them was. F-1 was PARTIAL for exactly that reason.
+#
+# WHAT MADE THE FIX POSSIBLE. Materialising the values needs the per-day
+# answer to be WELL DEFINED for every day, including days the mapping cannot
+# score. DR-2's `vol_na` fourth-stratum rule and DR-1's ruled ticks supply
+# that: every day now has a defined label, so calling each config callable
+# EXACTLY ONCE per day at prepare time is a total function over the day set.
+#
+# WHAT THIS OBJECT GUARANTEES, PRECISELY.
+#   * every config callable is invoked exactly once per day, DURING prepare
+#     (pre-exposure), and NEVER after — the compute path reads values only;
+#   * the two mappings are `MappingProxyType`s over dicts BUILT LOCALLY in
+#     `materialize_day_value_snapshot` and never handed to anyone else, so
+#     unlike `methods.spread_cost.adverse_slippage_ticks` (a mappingproxy over
+#     a dict its author may still hold) there is NO external reference through
+#     which the snapshot could change after prepare;
+#   * mutating whatever structures the ORIGINAL callables closed over cannot
+#     move a snapshot value, because the value was copied out at call time;
+#   * a lookup for a day outside the snapshot raises `KeyError` — fail closed
+#     onto the day's approved-NA path, never a silent default label.
+
+SNAPSHOT_MISSING_DAY_NOTE = (
+    "a day absent from the snapshot raises KeyError; the caller must route "
+    "it to its approved NA path and must never substitute a default label")
+
+
+@dataclass(frozen=True, eq=False)
+class DayValueSnapshot:
+    """Materialised per-day regime / vol-axis VALUES (never callables).
+
+    `__slots__` is deliberately NOT used (frozen dataclass already refuses
+    attribute assignment); the two mappings are read-only views, so the whole
+    object has no mutation surface at all.
+    """
+    dates: tuple[str, ...]
+    regime_of: Mapping[str, str]
+    vol_axis_of: Mapping[str, str]
+    disclosure: Mapping[str, object]
+
+    def regime(self, date: str) -> str:
+        """Snapshot regime label. KeyError on an unknown day (fail closed)."""
+        return self.regime_of[date]
+
+    def vol_axis(self, date: str) -> str:
+        """Snapshot vol-axis label. KeyError on an unknown day (fail closed)."""
+        return self.vol_axis_of[date]
+
+    def covers(self, dates: Sequence[str]) -> bool:
+        return set(dates) <= set(self.dates)
+
+
+def materialize_day_value_snapshot(dates: Sequence[str],
+                                   regime_of: Callable[[str], object],
+                                   vol_axis_of: Callable[[str], object],
+                                   ) -> DayValueSnapshot:
+    """Call each config callable EXACTLY ONCE per day and freeze the results.
+
+    Pure with respect to this module (it invokes only the two callables the
+    caller supplies). Raises `ValueError` if a callable raises or returns a
+    value that is not a usable label — a prepare-time refusal is
+    pre-exposure by construction and burns nothing.
+
+    The two backing dicts are local to this function; the returned object
+    holds `MappingProxyType` views over them and NO reference to the dicts
+    escapes, so the snapshot cannot be mutated through any live view.
+    """
+    if not callable(regime_of) or not callable(vol_axis_of):
+        raise ValueError(
+            "materialize_day_value_snapshot: regime_of and vol_axis_of must "
+            "both be callables (fail closed)")
+    ordered = tuple(sorted(set(dates)))
+    if len(ordered) != len(list(dates)):
+        raise ValueError(
+            "materialize_day_value_snapshot: duplicate date(s) in the day "
+            "set — fail closed")
+
+    regime: dict[str, str] = {}
+    vol: dict[str, str] = {}
+    for name, fn, target in (("regime_of", regime_of, regime),
+                             ("vol_axis_of", vol_axis_of, vol)):
+        for d in ordered:
+            try:
+                value = fn(d)
+            except Exception as exc:                       # noqa: BLE001
+                raise ValueError(
+                    f"materialize_day_value_snapshot: {name}({d!r}) raised "
+                    f"{type(exc).__name__}: {exc} — refusing to prepare an "
+                    "execution whose per-day values are not materialisable"
+                ) from exc
+            if value is None:
+                raise ValueError(
+                    f"materialize_day_value_snapshot: {name}({d!r}) returned "
+                    "None — every day must carry a defined label (DR-2's "
+                    "vol_na fourth stratum is a LABEL, not a None)")
+            target[d] = str(value)
+
+    disclosure = {
+        "materialized_at": "pre_exposure_prepare",
+        "n_days": len(ordered),
+        "calls_per_callable": len(ordered),
+        "callables_invoked_after_exposure": 0,
+        "backing_container": (
+            "MappingProxyType over a dict built LOCALLY inside "
+            "materialize_day_value_snapshot; no external reference to the "
+            "backing dict exists, so this is a genuine snapshot and not a "
+            "live view"),
+        "missing_day_policy": SNAPSHOT_MISSING_DAY_NOTE,
+    }
+    return DayValueSnapshot(
+        dates=ordered,
+        regime_of=MappingProxyType(regime),
+        vol_axis_of=MappingProxyType(vol),
+        disclosure=MappingProxyType(disclosure))

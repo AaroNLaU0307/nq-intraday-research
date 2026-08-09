@@ -35,10 +35,14 @@ ERA_PROXY = "counterfactual_micro_execution"
 EPOCH = "2018-2021"
 MICRO_ERA_BOUNDARY = s0_context.MICRO_ERA_BOUNDARY
 
-# The per-day volatility axis has NO ruled vocabulary anywhere in the tree
-# (DR-M6-B-v2 open), so the only admissible `vol_status` token today is an
-# UNRESOLVED marker — an arbitrary "resolved" would be exactly the premature
-# resolution the marker discipline exists to prevent.
+# Everything above the POST-RULING section at the bottom of this file
+# exercises the LEGACY path — `methods=None`, i.e. a source context that was
+# handed no ruling at all. On that path the only admissible `vol_status` token
+# is an UNRESOLVED marker, because an arbitrary "resolved" would be exactly
+# the premature resolution the marker discipline exists to prevent. (Aaron's
+# 2026-08-10 rulings do NOT change this path — that is the point of pinning
+# it: a legacy caller's bytes must not move. The ruled path is covered by
+# `test_ruled_*` at the end of the file.)
 VOL_STATUS_MARKER = handoff._unresolved("DR-M6-B-v2")
 
 # TEST_ONLY rulings. These live on the SOURCE CONTEXT, never inside an
@@ -431,12 +435,12 @@ def test_build_grid_samples_reports_infeasible_cells():
 # ---------------------------------------------------------------------------
 
 def test_build_grid_samples_replay_status_is_partial_today():
-    """The multi-stratum replay is NOT implemented (day_strata carries no
-    real stratum key while DR-M6-B/DR-M6-F pend): `replay_status` must be
+    """The multi-stratum replay is NOT implemented: `replay_status` must be
     PARTIAL, machine-visible, and never "CLOSED" — and that PARTIAL status
     must, on its own, keep the artifact out of `formal_seal_admission`'s
-    admitted set even in a hypothetical future where k_policy/crn_scope
-    resolve but the replay itself stays single-stratum."""
+    admitted set even now that k_policy/crn_scope ARE ruled but the replay
+    itself is still not reconstructible from these bytes (see
+    `test_ruled_grid_samples_replay_status_still_partial_names_mc_wiring`)."""
     d_tp, d_fp, strata = _fabricated_grid_populations()
     grid_output = gridmix.build_grid(d_tp, d_fp, strata, base_rate_p=0.4,
                                      q_grid=[0.50], r_grid=[0.50])
@@ -977,9 +981,11 @@ def test_formal_seal_admission_missing_flag_entirely_is_a_problem():
 
 
 def test_formal_seal_admission_todays_real_builders_all_refused():
-    """The three real M6.1 handoff builders are ALL formal_sealable=False
-    today (DR-M6-E / DR-M6-F / crn_scope all open) — exactly three problems,
-    each naming its own blocking UNRESOLVED marker(s)."""
+    """Called with NO `methods` and admitted against a context that was
+    handed no ruling, the three real M6.1 handoff builders are ALL
+    formal_sealable=False — exactly three problems, each naming its own
+    blocking UNRESOLVED marker(s). This is the LEGACY path, pinned so the
+    2026-08-10 rulings cannot silently move a legacy caller's bytes."""
     day_rows = {"2019-06-03": _day_row()}
     day_strata = handoff.build_day_strata(day_rows, thetas=[0.5])
     d_tp, d_fp, strata = _fabricated_grid_populations()
@@ -1044,10 +1050,11 @@ def test_formal_seal_admission_sorted_and_deterministic():
 # ---------------------------------------------------------------------------
 # formal_seal_admission — TEST_ONLY positive (sealable) fixtures
 #
-# day_strata's event_stratum (DR-M6-F) and vol_status (DR-M6-B-v2),
-# grid_samples'/seed_manifest's replay.k_policy / crn_scope (DR-M6-E /
-# crn_scope) and grid_samples' replay_status (multi-stratum replay) are ALL
-# hardwired UNRESOLVED/PARTIAL by their real builders. Per M6.1.4 item 7,
+# On the LEGACY path (no `methods`), day_strata's event_stratum and
+# vol_status, grid_samples'/seed_manifest's replay.k_policy / crn_scope and
+# grid_samples' replay_status are ALL emitted as UNRESOLVED/PARTIAL by their
+# real builders — that is what "this call was handed no ruling" looks like in
+# the bytes, and these fixtures exercise it. Per M6.1.4 item 7,
 # no string an ARTIFACT carries can resolve them — the ruling must come from
 # the SOURCE CONTEXT. So: build the REAL artifact via the real builder (full
 # schema fidelity, real per-cell seed sets from the real gridmix/build_grid
@@ -2488,6 +2495,7 @@ def test_med1_every_source_context_slot_is_validated():
         "crn_scope": ("", 5, "UNRESOLVED"),
         "replay_closure_ruled": ("yes", 1, 0, None),
         "require_complete_grid_matrix": ("yes", 1, None),
+        "rulings_are_test_only": ("yes", 1, 0, None),
     }
     # every declared field is covered by this table
     import dataclasses
@@ -2728,3 +2736,451 @@ def test_builders_and_admission_run_the_same_checker(monkeypatch):
     handoff.formal_seal_admission({"d": _sealable_day_strata_artifact()},
                                   source=_ruled_source())
     assert len(calls) >= 2
+
+
+# ===========================================================================
+# POST-RULING (Aaron 2026-08-10) — threading the RULED methods through
+#
+# Aaron ruled all eight method decisions on 2026-08-10. Four of the axes this
+# module used to mark UNRESOLVED now have a ruling, so a marker on them would
+# be a FALSE disclosure. Everything below proves four things and nothing more:
+#
+#   (a) `methods=None` still produces the pre-ruling bytes, BIT for BIT;
+#   (b) with a fully-resolved method set each ruled axis emits the RULED
+#       value — and every expected value here is read from
+#       `contracts.aaron_ruled_methods()` or from the module that OWNS the
+#       vocabulary (`dataset`), never restated as a literal in this file, so
+#       a test that agreed with a drifted implementation would have to drift
+#       the ruled source itself;
+#   (c) `formal_sealable` re-evaluates HONESTLY — True when the only former
+#       blockers were now-ruled axes, still False when a real problem remains;
+#   (d) a TEST_ONLY method set travels every path a real one does and still
+#       never yields a sealable artifact.
+# ===========================================================================
+
+
+def _ruled_methods():
+    """THE ruled source. Never a hand-built method set: a fixture that
+    restated a ruled value could pass while the implementation disagreed with
+    Aaron."""
+    return contracts.aaron_ruled_methods()
+
+
+def _ruled_day_rows() -> dict[str, dict[str, object]]:
+    """Day rows carrying REAL ruled labels: a concrete F10 event flag, the
+    IR-12/18 multi-event NA (None), and vol labels drawn from the ruled
+    `dataset.VOL_ALL_LABELS` (including the ruled `vol_na` fourth stratum).
+
+    The vol labels come from the CALLER, exactly as in production — this
+    module never computes vol20; the ruling only decides which labels are
+    admissible.
+    """
+    from itsf.s0 import dataset as s0_dataset
+    t1, _t2, _t3, vol_na = s0_dataset.VOL_ALL_LABELS
+    return {
+        "2019-06-03": _day_row("2019-06-03", event_flag_final="CPI",
+                               vol_status=t1),
+        "2019-06-04": _day_row("2019-06-04", event_flag_final=None,
+                               vol_status=vol_na),
+    }
+
+
+# --- (a) the legacy path is bit-identical ----------------------------------
+
+#: sha256 of `dumps_canonical(build_seed_manifest())` on the LEGACY path,
+#: recorded from the module as it stood BEFORE the ruled-methods seam existed
+#: (computed against the pre-change file, not against the file under test). A
+#: byte pin, not a shape assertion: threading `methods=` must not move one
+#: byte for a caller that passes none.
+_LEGACY_SEED_MANIFEST_SHA256 = (
+    "616df7fe3f00596c75fc84e8485f5a399dd86642ff292cdfe4837d6f3f7fabcc")
+
+
+def test_ruled_legacy_default_seed_manifest_is_byte_identical():
+    import hashlib
+    body = handoff.dumps_canonical(handoff.build_seed_manifest())
+    assert hashlib.sha256(body.encode("utf-8")).hexdigest() == (
+        _LEGACY_SEED_MANIFEST_SHA256)
+    manifest = handoff.build_seed_manifest()
+    assert manifest["k_policy"] == "UNRESOLVED_DR-M6-E"
+    assert manifest["crn_scope"] == "UNRESOLVED"
+    assert manifest["formal_sealable"] is False
+
+
+def test_ruled_legacy_default_day_strata_and_grid_sentinels_unchanged():
+    """The other two builders' sentinel outputs, pinned on the legacy path."""
+    strata = handoff.build_day_strata(_ruled_day_rows_legacy(), thetas=[0.5])
+    for row in strata["days"].values():
+        assert row["event_stratum"] == "UNRESOLVED_DR-M6-F"
+    assert strata["formal_sealable"] is False
+
+    d_tp, d_fp, strata_map = _fabricated_grid_populations()
+    grid_output = gridmix.build_grid(d_tp, d_fp, strata_map, base_rate_p=0.4,
+                                     q_grid=[0.50], r_grid=[0.50])
+    samples = handoff.build_grid_samples(grid_output, run_meta=_run_meta())
+    assert samples["replay"]["k_policy"] == "UNRESOLVED_DR-M6-E"
+    assert samples["replay"]["crn_scope"] == "UNRESOLVED"
+    assert samples["replay_status"] == (
+        handoff.REPLAY_STATUS_PARTIAL_SINGLE_STRATUM)
+    assert samples["formal_sealable"] is False
+
+
+def _ruled_day_rows_legacy() -> dict[str, dict[str, object]]:
+    """The same two days, but with the marker `vol_status` the LEGACY path
+    requires — the ruled labels are refused there, which is itself pinned by
+    `test_ruled_legacy_vol_status_marker_is_still_the_only_admissible_token`.
+    """
+    return {
+        "2019-06-03": _day_row("2019-06-03", event_flag_final="CPI"),
+        "2019-06-04": _day_row("2019-06-04", event_flag_final=None),
+    }
+
+
+def test_ruled_legacy_vol_status_marker_is_still_the_only_admissible_token():
+    """A REAL ruled vol label on the LEGACY path is still refused: the ruling
+    exists, but it was not handed to THIS call, and an artifact never
+    authorises its own vocabulary."""
+    from itsf.s0 import dataset as s0_dataset
+    rows = {"2019-06-03": _day_row(
+        vol_status=s0_dataset.VOL_TERCILE_LABELS[0])}
+    with pytest.raises(ValueError, match="vol_status"):
+        handoff.build_day_strata(rows, thetas=[0.5])
+
+
+# --- (b) the ruled path emits the RULED values -----------------------------
+
+def test_ruled_seed_manifest_emits_the_ruled_k_policy_and_crn_scope():
+    methods = _ruled_methods()
+    manifest = handoff.build_seed_manifest(methods=methods)
+    # crn_scope is the ruled value itself, read from contracts
+    assert manifest["crn_scope"] == methods.bootstrap_method.crn_scope
+    # k_policy carries every DR-5 sub-decision, each read from grid_policy
+    policy = manifest["k_policy"]
+    for name in ("k_per_seed", "k_start_index", "stream_includes_theta",
+                 "max_doublings", "convergence_rule"):
+        assert f"{name}={getattr(methods.grid_policy, name)!r}" in policy
+    assert not handoff._is_unresolved(policy)
+    assert not handoff._is_unresolved(manifest["crn_scope"])
+
+
+def test_ruled_grid_samples_replay_emits_the_ruled_values():
+    methods = _ruled_methods()
+    d_tp, d_fp, strata_map = _fabricated_grid_populations()
+    grid_output = gridmix.build_grid(d_tp, d_fp, strata_map, base_rate_p=0.4,
+                                     q_grid=[0.50], r_grid=[0.50])
+    samples = handoff.build_grid_samples(grid_output, run_meta=_run_meta(),
+                                         methods=methods)
+    assert samples["replay"]["crn_scope"] == methods.bootstrap_method.crn_scope
+    assert str(methods.grid_policy.k_per_seed) in samples["replay"]["k_policy"]
+    # the seed manifest and the grid samples agree on both axes — one source
+    assert samples["replay"]["k_policy"] == handoff.build_seed_manifest(
+        methods=methods)["k_policy"]
+
+
+def test_ruled_day_strata_derives_event_stratum_from_the_days_own_flag():
+    """DR-6: the stratum is DERIVED through `dataset.event_stratum_of` — the
+    expected values are recomputed HERE from that same owner, so this test
+    cannot agree with a handoff-local copy of the mapping."""
+    from itsf.s0 import dataset as s0_dataset
+    methods = _ruled_methods()
+    rows = _ruled_day_rows()
+    strata = handoff.build_day_strata(rows, thetas=[0.5], methods=methods)
+    for date, row in strata["days"].items():
+        expected = s0_dataset.event_stratum_of(
+            rows[date]["event_flag_final"], methods.event_na_mapping)
+        assert row["event_stratum"] == expected
+        assert row["event_stratum"] in s0_dataset.EVENT_STRATA
+    # the NA day maps to the five-stratum NA member, never to a dropped day
+    assert strata["days"]["2019-06-04"]["event_stratum"] == (
+        s0_dataset.EVENT_STRATUM_NA_MULTI)
+
+
+def test_ruled_day_strata_vol_labels_are_the_callers_over_the_ruled_vocab():
+    """DR-2: the LABEL is the caller's (this module computes no vol20); the
+    ruling supplies the VOCABULARY, and it is dataset's, not a local copy."""
+    from itsf.s0 import dataset as s0_dataset
+    methods = _ruled_methods()
+    rows = _ruled_day_rows()
+    strata = handoff.build_day_strata(rows, thetas=[0.5], methods=methods)
+    for date, row in strata["days"].items():
+        assert row["vol_status"] == rows[date]["vol_status"]
+        assert row["vol_status"] in s0_dataset.VOL_ALL_LABELS
+    assert handoff.ruled_vol_status_vocabulary(methods) == frozenset(
+        s0_dataset.VOL_ALL_LABELS)
+    assert handoff.ruled_event_stratum_vocabulary(methods) == frozenset(
+        s0_dataset.EVENT_STRATA)
+
+
+def test_ruled_path_leaves_no_unresolved_marker_anywhere():
+    """The whole point: after the rulings, a marker on a ruled axis is a
+    FALSE disclosure. None survives on the ruled path."""
+    methods = _ruled_methods()
+    strata = handoff.build_day_strata(_ruled_day_rows(), thetas=[0.5],
+                                      methods=methods)
+    manifest = handoff.build_seed_manifest(methods=methods)
+    d_tp, d_fp, strata_map = _fabricated_grid_populations()
+    grid_output = gridmix.build_grid(d_tp, d_fp, strata_map, base_rate_p=0.4,
+                                     q_grid=[0.50], r_grid=[0.50])
+    samples = handoff.build_grid_samples(grid_output, run_meta=_run_meta(),
+                                         methods=methods)
+    for artifact in (strata, manifest, samples):
+        assert handoff._find_unresolved_markers(artifact) == {}
+
+
+def test_ruled_vol_marker_and_caller_supplied_stratum_both_refused():
+    """Fail closed in BOTH directions once the axis is ruled: a leftover
+    UNRESOLVED marker is out of vocabulary, and a caller-supplied
+    `event_stratum` is refused on the ruled path exactly as on the legacy one
+    (the value is DERIVED or it is a marker — never asserted)."""
+    methods = _ruled_methods()
+    marked = {"2019-06-03": _day_row(vol_status=VOL_STATUS_MARKER)}
+    with pytest.raises(ValueError, match="vol_status"):
+        handoff.build_day_strata(marked, thetas=[0.5], methods=methods)
+
+    rows = _ruled_day_rows()
+    rows["2019-06-03"]["event_stratum"] = "CPI"
+    with pytest.raises(ValueError, match="event_stratum"):
+        handoff.build_day_strata(rows, thetas=[0.5], methods=methods)
+
+
+def test_ruled_artifact_is_still_refused_by_a_context_that_was_told_nothing():
+    """The ruling must be HANDED to the verifier too. A perfectly ruled
+    artifact submitted against the legacy (no-ruling) context is refused —
+    admission recomputes from the SOURCE, never from the bytes."""
+    methods = _ruled_methods()
+    manifest = handoff.build_seed_manifest(methods=methods)
+    assert manifest["formal_sealable"] is True
+    refused = handoff.formal_seal_admission({"SEED_MANIFEST.json": manifest})
+    assert len(refused) == 1
+    assert "NO ruling" in refused[0]
+    # ...and admitted once the same ruling reaches the context
+    assert handoff.formal_seal_admission(
+        {"SEED_MANIFEST.json": manifest},
+        source=handoff.source_context_for_methods(methods)) == []
+
+
+# --- (c) formal_sealable re-evaluates honestly -----------------------------
+
+def test_ruled_formal_sealable_flips_true_when_only_ruled_axes_blocked():
+    """SEED_MANIFEST and DAY_STRATA had NO blocker other than the axes that
+    are now ruled, so both become sealable — by CONDITION, not by force
+    (`formal_sealable = not problems` is unchanged), and admission agrees."""
+    methods = _ruled_methods()
+    source = handoff.source_context_for_methods(methods, thetas=(0.5,))
+
+    manifest = handoff.build_seed_manifest(methods=methods)
+    assert manifest["formal_sealable"] is True
+    assert handoff.check_seed_manifest_semantics(manifest, source) == []
+
+    strata = handoff.build_day_strata(_ruled_day_rows(), thetas=[0.5],
+                                      methods=methods)
+    assert strata["formal_sealable"] is True
+    assert handoff.check_day_strata_semantics(strata, source) == []
+
+    assert handoff.formal_seal_admission(
+        {"seed_manifest": manifest, "day_strata": strata},
+        source=source) == []
+
+
+def test_ruled_formal_sealable_stays_false_when_a_genuine_problem_remains():
+    """Three genuinely-remaining problems, each of a different KIND, all
+    still refusing on the ruled path: an EMPTY artifact, a day that violates
+    a recomputed invariant, and grid_samples' MC-side replay gap."""
+    methods = _ruled_methods()
+
+    empty = handoff.build_day_strata({}, thetas=[0.5], methods=methods)
+    assert empty["formal_sealable"] is False
+
+    # a day whose year contradicts its own date is still a defect, ruled or
+    # not — and the builder still RAISES on it rather than sealing it
+    with pytest.raises(ValueError, match="year"):
+        handoff.build_day_strata(
+            {"2019-06-03": _day_row("2019-06-03", year="2018",
+                                    event_flag_final="CPI",
+                                    vol_status="T1")},
+            thetas=[0.5], methods=methods)
+
+    d_tp, d_fp, strata_map = _fabricated_grid_populations()
+    grid_output = gridmix.build_grid(d_tp, d_fp, strata_map, base_rate_p=0.4,
+                                     q_grid=[0.50], r_grid=[0.50])
+    samples = handoff.build_grid_samples(grid_output, run_meta=_run_meta(),
+                                         methods=methods)
+    assert samples["formal_sealable"] is False
+
+
+def test_ruled_grid_samples_replay_status_still_partial_names_mc_wiring():
+    """replay_status does NOT upgrade, and the reason string no longer cites
+    a ruled DR: what remains open is MC WIRING — this artifact carries only
+    gridmix's headline repeat row per (seed, cell) (the frozen cell schema
+    has no `repeats` block and SCHEMA_VERSION is frozen), and the §5
+    convergence verdict is produced at the MC wiring, not in S0."""
+    methods = _ruled_methods()
+    # the FULL frozen 63-point lattice, so no LATTICE problem masks what is
+    # actually left: the replay gap must be the ONLY remaining refusal
+    samples = handoff.build_grid_samples(_full_lattice_grid_output(),
+                                         run_meta=_run_meta(),
+                                         methods=methods)
+    assert samples["replay_status"] == (
+        handoff.REPLAY_STATUS_PARTIAL_SINGLE_STRATUM)
+    assert samples["replay_status"] != handoff.REPLAY_STATUS_CLOSED
+
+    problems = handoff.check_grid_samples_semantics(
+        samples, handoff.source_context_for_methods(methods))
+    assert len(problems) == 1                      # ONLY the replay gap left
+    reason = problems[0]
+    assert "replay_status" in reason
+    assert "MC" in reason and "mc_converged" in reason
+    # the k_policy / crn_scope refusals are GONE — those axes are ruled now
+    assert "k_policy" not in reason and "UNRESOLVED" not in reason
+    # the frozen cell schema really does carry no repeat set to replay from
+    assert "repeats" not in handoff._GRID_CELL_FIELDS
+    assert handoff.SCHEMA_VERSION == "m6.1-draft-1"
+
+
+def test_ruled_source_context_does_not_declare_replay_closure():
+    """Closure is not a method ruling: `source_context_for_methods` leaves
+    `replay_closure_ruled` False, so only an explicit MC-side caller could
+    ever claim it."""
+    source = handoff.source_context_for_methods(_ruled_methods())
+    assert source.replay_closure_ruled is False
+    assert source.rulings_are_test_only is False
+    assert source.require_complete_grid_matrix is False
+
+
+# --- (d) TEST_ONLY methods never yield a sealable artifact -----------------
+
+def _test_only_methods():
+    """The RULED values, marked TEST_ONLY. Shaped exactly like the real thing
+    — which is the point: only the `test_only` flag distinguishes them."""
+    import dataclasses
+    return dataclasses.replace(_ruled_methods(), test_only=True)
+
+
+def test_ruled_test_only_methods_never_produce_a_sealable_artifact():
+    methods = _test_only_methods()
+    manifest = handoff.build_seed_manifest(methods=methods)
+    strata = handoff.build_day_strata(_ruled_day_rows(), thetas=[0.5],
+                                      methods=methods)
+    assert manifest["formal_sealable"] is False
+    assert strata["formal_sealable"] is False
+    # the refusal names TEST_ONLY, so the reason is disclosed, not generic
+    source = handoff.source_context_for_methods(methods, thetas=(0.5,))
+    assert source.rulings_are_test_only is True
+    for problems in (handoff.check_seed_manifest_semantics(manifest, source),
+                     handoff.check_day_strata_semantics(strata, source)):
+        assert any("TEST_ONLY" in p for p in problems)
+    # and admission refuses them on the PRODUCTION path too — the flag they
+    # carry is not True, so no context can admit them
+    assert len(handoff.formal_seal_admission(
+        {"seed_manifest": manifest, "day_strata": strata},
+        source=handoff.source_context_for_methods(_ruled_methods(),
+                                                  thetas=(0.5,)))) == 2
+
+
+def test_ruled_test_only_event_mapping_follows_datasets_own_gate():
+    """The pre-ruling synthetic mapping is accepted ONLY under test_only —
+    the gate is `dataset.event_stratum_of`'s, not a second copy here."""
+    import dataclasses
+    from itsf.s0 import dataset as s0_dataset
+    synthetic = dataclasses.replace(
+        _ruled_methods(),
+        event_na_mapping=s0_dataset.EVENT_NA_MAPPING_TEST_ONLY,
+        test_only=True)
+    assert handoff.ruled_event_stratum_vocabulary(synthetic) == frozenset(
+        s0_dataset.EVENT_STRATA)
+    production = dataclasses.replace(synthetic, test_only=False)
+    with pytest.raises(handoff.RulingError, match="event_na_mapping"):
+        handoff.ruled_event_stratum_vocabulary(production)
+
+
+# --- the adapter's own fail-closed rules -----------------------------------
+
+def test_ruled_methods_seam_refuses_partial_invalid_and_unpinned_sets():
+    import dataclasses
+    assert issubclass(handoff.RulingError, ValueError)
+
+    # nothing ruled at all
+    with pytest.raises(handoff.RulingError, match="PARTIALLY resolved"):
+        handoff.source_context_for_methods(contracts.ResolvedS0Methods())
+    # one ruling withdrawn
+    with pytest.raises(handoff.RulingError, match="PARTIALLY resolved"):
+        handoff.source_context_for_methods(
+            dataclasses.replace(_ruled_methods(), grid_policy=None))
+    # a structurally impossible value
+    with pytest.raises(handoff.RulingError, match="STRUCTURALLY invalid"):
+        handoff.source_context_for_methods(dataclasses.replace(
+            _ruled_methods(),
+            grid_policy=dataclasses.replace(_ruled_methods().grid_policy,
+                                            k_per_seed=0)))
+
+    # a SUBCLASS is refused exactly as a SourceContext subclass is
+    class _Duck(contracts.ResolvedS0Methods):
+        pass
+
+    ruled = _ruled_methods()
+    same_fields = {f.name: getattr(ruled, f.name)
+                   for f in dataclasses.fields(ruled)}
+    with pytest.raises(handoff.RulingError, match="EXACTLY"):
+        handoff.source_context_for_methods(_Duck(**same_fields))
+    with pytest.raises(handoff.RulingError, match="EXACTLY"):
+        handoff.build_seed_manifest(methods={"k_policy": "x"})
+
+
+def test_ruled_values_are_pinned_to_the_modules_that_implement_them():
+    """A methods object that disagrees with the module which EXECUTES the
+    ruling is refused: disclosing its version would misdescribe what ran."""
+    import dataclasses
+    from itsf.s0 import stats as s0_stats
+
+    wrong_crn = dataclasses.replace(
+        _ruled_methods(),
+        bootstrap_method=dataclasses.replace(
+            _ruled_methods().bootstrap_method, crn_scope="per_seed_only"))
+    with pytest.raises(handoff.RulingError, match="stats"):
+        handoff.ruled_crn_scope(wrong_crn)
+    assert handoff.ruled_crn_scope(_ruled_methods()) == (
+        s0_stats.BOOTSTRAP_CRN_SCOPE)
+
+    wrong_rule = dataclasses.replace(
+        _ruled_methods(),
+        grid_policy=dataclasses.replace(_ruled_methods().grid_policy,
+                                        convergence_rule="s0_decides"))
+    with pytest.raises(handoff.RulingError, match="gridmix"):
+        handoff.ruled_k_policy(wrong_rule)
+
+    wrong_vol = dataclasses.replace(
+        _ruled_methods(),
+        volatility_regime=dataclasses.replace(
+            _ruled_methods().volatility_regime, na_rule="drop_the_day"))
+    with pytest.raises(handoff.RulingError, match="na_rule"):
+        handoff.ruled_vol_status_vocabulary(wrong_vol)
+
+
+def test_ruled_derived_slots_may_not_be_overridden_or_double_anchored():
+    """The five derived slots ARE the ruling; overriding one would make
+    `methods` look like the authority for a value it does not carry. And two
+    anchors with no rule for choosing between them fail closed."""
+    methods = _ruled_methods()
+    for slot in ("event_stratum_vocabulary", "vol_status_vocabulary",
+                 "k_policy", "crn_scope", "rulings_are_test_only"):
+        value = False if slot == "rulings_are_test_only" else "X"
+        with pytest.raises(handoff.RulingError, match="may not be overridden"):
+            handoff.source_context_for_methods(methods, **{slot: value})
+    # a NON-derived slot passes through
+    assert handoff.source_context_for_methods(
+        methods, thetas=(0.5,)).thetas == (0.5,)
+    with pytest.raises(handoff.RulingError, match="never both"):
+        handoff.rebuild_seed_manifest(handoff.SourceContext(), methods=methods)
+
+
+def test_ruled_rebuild_seed_manifest_is_the_single_expected_content():
+    """`build_seed_manifest(methods=...)` is still exactly
+    `rebuild_seed_manifest` plus the derived verdict — one rebuild, one
+    deep-equality comparison, on the ruled path too."""
+    methods = _ruled_methods()
+    built = dict(handoff.build_seed_manifest(methods=methods))
+    verdict = built.pop("formal_sealable")
+    assert verdict is True
+    assert built == handoff.rebuild_seed_manifest(methods=methods)
+    assert built == handoff.rebuild_seed_manifest(
+        handoff.source_context_for_methods(methods))

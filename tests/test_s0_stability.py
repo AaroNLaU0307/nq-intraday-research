@@ -10,6 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from itsf.contracts import aaron_ruled_methods
 from itsf.s0 import stability
 
 
@@ -202,12 +203,37 @@ def test_vol_resolved_conservation_ok_with_full_axis():
     assert vol["conservation_ok"] is True
 
 
-def test_vol_label_collision_with_vol_na_is_rejected():
-    pnl = {"2015-01-01": 1.0}
-    meta = _meta({"2015-01-01": ("2015", ERA, 1)})
-    vol_axis = {"2015-01-01": stability.VOL_NA_BUCKET}
-    with pytest.raises(stability.StabilityInputError):
-        stability.build_stability_views(_block(pnl), meta, vol_axis)
+def test_explicit_ruled_vol_na_label_is_accepted_and_merges_with_absent_days():
+    """DR-2 (2026-08-10) makes `vol_na` a RULED first-class fourth stratum.
+
+    The pre-ruling collision guard (which REFUSED an explicit `vol_na`
+    because the label was reserved for "date absent from vol_axis") is gone
+    on purpose: the ruled fourth stratum and the §2 NA bucket are the SAME
+    set, so an explicit label and an absent date land in the same bucket.
+    """
+    dates = ["2015-01-01", "2015-01-02", "2015-01-03"]
+    pnl = {d: 1.0 for d in dates}
+    meta = _meta({d: ("2015", ERA, 1) for d in dates})
+    vol_axis = {dates[0]: stability.VOL_NA_BUCKET, dates[1]: "T1"}
+    view = _one_engine_scenario(pnl, meta, vol_axis=vol_axis)
+    vol = view["vol_terciles"]
+    assert vol[stability.VOL_NA_BUCKET]["n"] == 2      # explicit + absent
+    assert vol["T1"]["n"] == 1
+    assert vol["conservation_ok"] is True
+
+
+def test_vol_terciles_key_set_is_not_widened_by_the_dr2_change():
+    """report.py counts `set(vol) - {"vol_na","conservation_ok"}` and demands
+    exactly 3. Any bookkeeping key added inside this axis would break the
+    sealed-payload validator, so the absent-date disclosure lives on the
+    population block instead."""
+    dates = [f"2015-01-{i:02d}" for i in range(1, 7)]
+    pnl = {d: float(i) for i, d in enumerate(dates)}
+    meta = _meta({d: ("2015", ERA, 1) for d in dates})
+    vol_axis = {d: ("T1", "T2", "T3")[i % 3] for i, d in enumerate(dates)}
+    vol = _one_engine_scenario(pnl, meta, vol_axis=vol_axis)["vol_terciles"]
+    assert set(vol) == {"T1", "T2", "T3", stability.VOL_NA_BUCKET,
+                        "conservation_ok"}
 
 
 # ---------------------------------------------------------------------------
@@ -296,6 +322,155 @@ def test_malformed_per_theta_block_fails_closed():
         stability.build_stability_views({"executable": {}}, meta)
     with pytest.raises(stability.StabilityInputError):
         stability.build_stability_views({"d_tp": {}}, meta)
+
+
+# ---------------------------------------------------------------------------
+# DR-7 — BOTH populations (Aaron 2026-08-10)
+# ---------------------------------------------------------------------------
+
+RULED_POP = aaron_ruled_methods().stability_population
+
+
+def _dr7_fixture():
+    """4 structurally eligible days; 2 of them are the D_TP (oracle) days.
+
+    conditional  : {d1: +10, d3: -4}          -> n = 2, sum = +6
+    full_eligible: {d1:+10, d2:0, d3:-4, d4:0} -> n = 4, sum = +6
+    d2 is a no-direction day (d_open == 0): legal ONLY in the full-eligible
+    population, and it must get its own bucket rather than a side.
+    """
+    d1, d2, d3, d4 = ("2015-03-02", "2015-03-03", "2016-03-04", "2016-03-05")
+    pnl = {d1: 10.0, d3: -4.0}
+    meta = _meta({d1: ("2015", ERA, 1), d2: ("2015", ERA, 0),
+                  d3: ("2016", ERA, -1), d4: ("2016", ERA, 1)})
+    vol_axis = {d1: "T1", d2: "T2", d3: "T3", d4: stability.VOL_NA_BUCKET}
+    return pnl, meta, vol_axis, (d1, d2, d3, d4)
+
+
+def test_ruled_population_string_is_read_from_the_single_ruled_source():
+    assert stability.RULED_STABILITY_POPULATION == RULED_POP
+
+
+def test_unruled_population_string_raises():
+    pnl, meta, vol_axis, _d = _dr7_fixture()
+    for bad in ("conditional_only", "both", "", "FULL_ELIGIBLE"):
+        with pytest.raises(ValueError) as exc:
+            stability.build_stability_views(_block(pnl), meta, vol_axis,
+                                            stability_population=bad)
+        assert f"stability_population_not_ruled:{bad}" in str(exc.value)
+
+
+def test_none_population_keeps_the_pre_ruling_shape_byte_for_byte():
+    pnl, meta, vol_axis, _d = _dr7_fixture()
+    legacy = _one_engine_scenario(pnl, meta, vol_axis=vol_axis)
+    assert "populations" not in legacy
+    ruled = stability.build_stability_views(
+        _block(pnl), meta, vol_axis,
+        stability_population=RULED_POP)["E1"]["Base"]
+    # the five legacy axes are IDENTICAL under the ruled call — the ruling
+    # ADDS a population block, it never silently redefines the old one.
+    for axis in ("epochs", "by_year", "leave_one_year_out", "by_direction",
+                 "vol_terciles"):
+        assert ruled[axis] == legacy[axis], axis
+
+
+def test_both_populations_present_with_correct_per_population_values():
+    pnl, meta, vol_axis, days = _dr7_fixture()
+    d1, d2, d3, d4 = days
+    cell = stability.build_stability_views(
+        _block(pnl), meta, vol_axis,
+        stability_population=RULED_POP)["E1"]["Base"]
+    pops = cell["populations"]
+    assert pops["rule"] == RULED_POP
+    assert set(pops) == {"rule", "conditional", "full_eligible"}
+
+    cond, full = pops["conditional"], pops["full_eligible"]
+    assert cond["population"] == "conditional" and cond["n_days"] == 2
+    assert full["population"] == "full_eligible" and full["n_days"] == 4
+    assert full["n_zero_filled_non_oracle_days"] == 2
+
+    # P&L-type view: the two non-oracle days contribute 0, so the SUM is the
+    # same while the COUNT is not — the exact DR-7 semantics.
+    assert cond["epochs"]["2014-2017"]["sum_usd"] == pytest.approx(6.0)
+    assert full["epochs"]["2014-2017"]["sum_usd"] == pytest.approx(6.0)
+    assert cond["epochs"]["2014-2017"]["n"] == 2
+    assert full["epochs"]["2014-2017"]["n"] == 4
+    assert full["epochs"]["2014-2017"]["n_zero"] == 2
+
+    # count-type view: every structurally eligible year appears
+    assert set(cond["by_year"]) == {"2015", "2016", "conservation_ok"}
+    assert full["by_year"]["2015"]["n"] == 2 and full["by_year"]["2016"]["n"] == 2
+
+    # direction: the no-direction day gets its OWN bucket, only in the
+    # full-eligible population (多空分开 stays literally two-sided).
+    assert set(cond["by_direction"]) == {"+1", "-1", "conservation_ok"}
+    assert set(full["by_direction"]) == {"+1", "-1",
+                                         stability.DIRECTION_NONE_KEY,
+                                         "conservation_ok"}
+    assert full["by_direction"][stability.DIRECTION_NONE_KEY]["n"] == 1
+    assert full["by_direction"]["+1"]["n"] == 2       # d1 (+10) and d4 (0)
+
+    # vol axis, both populations, conservation on each
+    assert full["vol_terciles"]["T2"]["n"] == 1       # d2, a non-oracle day
+    assert cond["vol_terciles"]["T2"]["n"] == 0
+    for block in (cond, full):
+        for axis in ("epochs", "by_year", "leave_one_year_out",
+                     "by_direction", "vol_terciles"):
+            assert block[axis]["conservation_ok"] is True, axis
+    del d1, d2, d3, d4
+
+
+def test_loyo_is_a_pure_reaggregation_in_both_populations():
+    pnl, meta, vol_axis, _d = _dr7_fixture()
+    pops = stability.build_stability_views(
+        _block(pnl), meta, vol_axis,
+        stability_population=RULED_POP)["E1"]["Base"]["populations"]
+    for key in ("conditional", "full_eligible"):
+        block = pops[key]
+        n = block["n_days"]
+        for year, cell in block["by_year"].items():
+            if year == "conservation_ok":
+                continue
+            assert block["leave_one_year_out"][year]["n"] == n - cell["n"]
+
+
+def test_single_population_output_for_a_ruled_both_is_refused():
+    """The mutation test: drop one population from a ruled cell and the
+    DR-7 checker must go red. A renderer that accepted it would show one
+    population while claiming the ruled two."""
+    pnl, meta, vol_axis, _d = _dr7_fixture()
+    cell = stability.build_stability_views(
+        _block(pnl), meta, vol_axis,
+        stability_population=RULED_POP)["E1"]["Base"]
+    assert stability.check_populations(cell, RULED_POP) == []
+
+    dropped = {k: (dict(v) if k == "populations" else v)
+               for k, v in cell.items()}
+    dropped["populations"].pop("full_eligible")
+    assert "stability_population_missing:full_eligible" in \
+        stability.check_populations(dropped, RULED_POP)
+
+    no_pops = {k: v for k, v in cell.items() if k != "populations"}
+    assert "stability_populations_missing" in \
+        stability.check_populations(no_pops, RULED_POP)
+
+    mislabelled = {k: (dict(v) if k == "populations" else v)
+                   for k, v in cell.items()}
+    mislabelled["populations"] = dict(mislabelled["populations"])
+    mislabelled["populations"]["conditional"] = dict(
+        mislabelled["populations"]["conditional"], population="full_eligible")
+    assert "stability_population_mislabelled:conditional" in \
+        stability.check_populations(mislabelled, RULED_POP)
+
+
+def test_no_direction_day_still_fails_closed_in_the_conditional_population():
+    """d_open == 0 is legal ONLY in the full-eligible population. An Oracle
+    (D_TP) day with no direction is still a defect."""
+    pnl = {"2015-01-01": 1.0}
+    meta = _meta({"2015-01-01": ("2015", ERA, 0)})
+    with pytest.raises(stability.StabilityInputError):
+        stability.build_stability_views(_block(pnl), meta,
+                                        stability_population=RULED_POP)
 
 
 def test_engine_scenario_iteration_matches_executable_keys():

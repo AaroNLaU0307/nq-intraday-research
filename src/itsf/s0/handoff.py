@@ -2,20 +2,45 @@
 
 Scope of THIS module: package the day-level classification, the Appendix-A
 grid samples, and the frozen seed/stream provenance into a byte-stable JSON
-shape MC can consume and REPLAY, WITHOUT deciding any of the open method
-questions those shapes still carry (DR-M6-E / DR-M6-F / …). Where a field's
-vocabulary is genuinely undecided, this module emits a disclosed, greppable
-UNRESOLVED marker rather than silently picking one — the same discipline
-`stability.py` uses for the vol_terciles axis and `gridmix.py` uses for
-`volatility_regime`.
+shape MC can consume and REPLAY, WITHOUT deciding any method question itself.
+This module DECIDES nothing. It either READS a ruling that already exists in
+the single ruled source (`contracts.aaron_ruled_methods()`, threaded in by the
+caller as `methods=`), or it emits a disclosed, greppable UNRESOLVED marker —
+the same discipline `dataset.py` uses for the ruled DR-2/DR-6 vocabularies and
+`gridmix.py` uses for the ruled DR-3/DR-5 dispatch keys.
+
+POST-RULING STATE (Aaron ruled all eight method decisions on 2026-08-10)
+------------------------------------------------------------------------
+Each of the three builders takes a keyword-only `methods=None`:
+
+  * `methods=None` — the LEGACY default — reproduces the pre-ruling output
+    BIT FOR BIT: every axis that carried an UNRESOLVED marker still carries
+    exactly that marker, and the `DEFAULT_SOURCE_CONTEXT` injection seam is
+    untouched. No existing caller changes meaning.
+  * a FULLY-RESOLVED `ResolvedS0Methods` makes every axis whose ruling now
+    exists emit the RULED value, read STRUCTURALLY off `methods` (no ruled
+    literal is ever restated in this file), and the matching problem entry
+    disappears, so `formal_sealable = not problems` re-evaluates honestly.
+    Nothing is forced: the conditions decide, and the axes that are genuinely
+    still open keep blocking.
+
+Threading the rulings is the ENTRY POINT's job: no function here reaches for
+`contracts.aaron_ruled_methods()` on its own, because a module that silently
+adopted the rulings would hide WHICH context sealed an artifact from the call
+site that must disclose it. `source_context_for_methods` is the one adapter.
 
 PRODUCTION-REACHABILITY STATUS: PARTIAL (do not read this module as a
 production pipeline)
 ---------------------------------------------------------------------------
 `build_seed_manifest` is the ONLY builder here with a production caller
 (`scripts/s0_real_run.render_s0_report` puts `SEED_MANIFEST.json` into the
-admission candidate set). `build_day_strata` and `build_grid_samples` have NO
-production caller at this HEAD — B0 source-lineage matrix rows **L144 and
+admission candidate set). POST-INTEGRATION POSTURE (S0 closeout,
+2026-08-10): that caller now passes BOTH `methods=` (the validated config's
+rulings) AND `source=source_context_for_methods(methods)` — so with a
+fully-resolved non-test_only ruling set the produced SEED_MANIFEST carries
+ruled k_policy/crn_scope values, is sealable, and is ADMITTED; with
+TEST_ONLY methods it stays withheld (both outcomes are chain-tested). `build_day_strata` / `build_grid_samples`
+have NO production caller at this HEAD — B0 source-lineage rows **L144 and
 L145 are `NOT PRODUCED`**. Everything the day_strata / grid_samples semantic
 checkers below achieve is therefore a guard against *fabricated* artifacts
 and a contract for a future producer; it is NOT evidence that any real
@@ -44,10 +69,12 @@ parts:
    `contracts.RESEARCH_BOOTSTRAP_SEEDS`, `stability.EPOCHS`,
    `context.MICRO_ERA_BOUNDARY`, `context.F10_CATEGORIES`,
    `gridmix.Q_GRID_MILLIS`/`R_GRID_MILLIS`/`GRID_STREAM_TAG`,
-   `stats.STATS_STREAM_TAG`), plus optional dataset facts, plus — for each
-   axis that is NOT YET RULED — an explicit ruling slot that is `None` by
-   default. Expected content is REBUILT from that context and compared; the
-   artifact's own self-report is never the basis of its own verification.
+   `stats.STATS_STREAM_TAG`), plus optional dataset facts, plus one explicit
+   RULING SLOT per method axis, `None` by default — `None` meaning "this
+   context was handed no ruling there", which since 2026-08-10 is a statement
+   about the CALL, not about the decision. Expected content is REBUILT from
+   that context and compared; the artifact's own self-report is never the
+   basis of its own verification.
 3. **Bundle-level ATOMIC admission.** A GRID_SAMPLES artifact depends on
    exactly ONE valid DAY_STRATA and exactly ONE valid SEED_MANIFEST supplied
    in the SAME call. Absent / duplicated / invalid dependency ⇒ the dependent
@@ -71,8 +98,11 @@ both defaulting to the production sources:
    renderer-level test must use to prove the gate is DECIDED by admission
    rather than by a hardcoded exclusion.
 
-Neither seam lets an artifact authorise itself: the ruling is visible in the
-source context a reviewer reads, not buried in the bytes being sealed.
+A PRODUCTION caller uses neither: it passes the ruled method set
+(`source=source_context_for_methods(methods)`), which fills exactly the ruled
+slots and nothing else. None of the three seams lets an artifact authorise
+itself — the ruling is visible in the source context a reviewer reads, never
+buried in the bytes being sealed.
 
 The context is TYPE-PINNED (`type(ctx) is SourceContext` — a duck type and a
 subclass are both refused) and its FIELD VALUES are RE-VALIDATED on every
@@ -98,8 +128,8 @@ For an axis with no ruling (`SourceContext` slot is `None`):
 There is no value that both passes vocabulary and permits sealing while the
 axis is unruled. That is the point.
 
-What is FROZEN and what is OPEN (DR-M6-*)
-------------------------------------------
+What is FROZEN, what is RULED, and what is STILL OPEN
+-----------------------------------------------------
 FROZEN:
   * contracts.RESEARCH_BOOTSTRAP_SEEDS {7, 13, 31} is the only source of
     research randomness (IR DR-02) — `build_seed_manifest` asserts this by
@@ -114,27 +144,48 @@ FROZEN:
   * the theta key format comes from `study.theta_key` (matrix CR-11: the
     former local `_theta_key` duplicate is deleted).
 
-OPEN (disclosed as UNRESOLVED, never silently resolved):
-  * DR-M6-F — the mapping of `event_flag_final` (including its NA state) into
-    an Appendix-A stratum; `event_stratum` is ALWAYS the marker
-    "UNRESOLVED_DR-M6-F" (regardless of whether the day's own event flag is
-    concrete or NA — the entire event -> stratum MAPPING SCHEME is undecided,
-    not just its NA branch), and `build_day_strata` REFUSES a day_row that
-    already carries an `"event_stratum"` key of its own: silently accepting a
-    caller-supplied vocabulary would be exactly the premature resolution this
-    marker exists to prevent.
-  * DR-M6-B-v2 — the 20-day realized-volatility axis; `vol_status` has NO
-    ruled vocabulary anywhere in the tree (`stability.py` only ever reports
-    the AXIS-level `{"status": "unresolved", "reason": …}`), so a per-day
-    `vol_status` may only be an UNRESOLVED marker today.
-  * DR-M6-E — the replay `k_policy` (how many MC resamples/paths a grid
-    sample feeds), marked "UNRESOLVED_DR-M6-E".
-  * `crn_scope` (which layers share common random numbers across the S0/MC
-    boundary) — marked with the bare `UNRESOLVED` sentinel.
-  * DR-2 / DR-3 / DR-5 / DR-6 together block multi-stratum grid replay, so
-    `PARTIAL_single_stratum_only` is the only TRUTHFUL `replay_status` today
-    and a `CLOSED_multi_stratum` claim is refused as a lie (not merely as
-    "not yet sealable").
+RULED 2026-08-10 (emitted ONLY when `methods` is supplied; the marker below
+is what `methods=None` still emits, and it is then a TRUE disclosure of what
+that particular call was given, not a claim that the DR is open):
+  * DR-6 (was "DR-M6-F") — `event_flag_final` -> Appendix-A event stratum.
+    With `methods`, `build_day_strata` DERIVES each day's `event_stratum`
+    from the day's OWN `event_flag_final` through `dataset.event_stratum_of`
+    — the owner of that gate — over the five-stratum `dataset.EVENT_STRATA`
+    vocabulary. `build_day_strata` still REFUSES a day_row carrying its own
+    `"event_stratum"` key on BOTH paths: the value is DERIVED from the ruled
+    mapping or it is a marker, never a caller-supplied vocabulary.
+  * DR-2 (was "DR-M6-B-v2") — the 20-day realized-volatility axis. The
+    per-day LABELS still come from the caller's day rows exactly as before
+    (this module never computes vol20); what the ruling supplies is the
+    VOCABULARY — `dataset.VOL_ALL_LABELS`, the three terciles plus the ruled
+    `vol_na` fourth stratum — so a real label becomes admissible and an
+    UNRESOLVED marker stops being admissible on that axis.
+  * DR-5 (was "DR-M6-E") — the replay `k_policy`, encoded by `ruled_k_policy`
+    from `methods.grid_policy`'s own fields (K per seed, k start index, theta
+    in the stream, max doublings, convergence rule).
+  * DR-4.7 — `crn_scope`, read from `methods.bootstrap_method.crn_scope` and
+    pinned against the scope `stats.py` actually implements. This is the
+    S0-side scope only; the MC cross-platform CRN was already frozen in
+    MC_METHOD_SPEC §5 and is not this module's axis.
+
+STILL OPEN — and the blocker is MC WIRING, not a pending ruling:
+  * MULTI-STRATUM REPLAY CLOSURE. `replay_status` stays
+    `PARTIAL_single_stratum_only` on BOTH paths and `REPLAY_STATUS_CLOSED`
+    stays deliberately unreachable here. What is missing is no longer a
+    vocabulary — with `methods`, DAY_STRATA carries the full
+    (year, vol_status, event_stratum) Appendix-A key — it is the REPLAY
+    ITSELF: `build_grid_samples` carries ONE repeat per (seed, cell), namely
+    gridmix's headline `k = k_start_index` row, and the frozen cell schema
+    has no `repeats` block, while DR-5 rules K repeats per seed with theta in
+    the stream; and the MC_METHOD_SPEC §5 four-rule convergence battery and
+    its doubling loop run AT THE MC WIRING and supply `mc_converged`, which
+    no S0-side artifact can assert. A replayer cannot rebuild the ruled
+    repeat set from these bytes, so CLOSED would be a lie.
+  * TEST_ONLY rulings. `methods.test_only=True` travels onto the source
+    context as `rulings_are_test_only` and keeps EVERY artifact resolved from
+    it not-sealable — the same fail-closed discipline
+    `dataset.event_stratum_of` and `study.py`'s quantile-estimator gate
+    already apply to a TEST_ONLY value on a production path.
 
 Ownership note: `src/itsf/s0/report.py` and `tests/test_s0_report.py` are
 owned by a PARALLEL agent in this same round; this module deliberately does
@@ -195,15 +246,26 @@ FROZEN_SEEDS = contracts.RESEARCH_BOOTSTRAP_SEEDS
 # REPLAY STATUS honesty (M6.1.1 S2 item 5 — Codex finding (e): "multi-stratum
 # replay must stay PARTIAL, never claimed CLOSED")
 # ===========================================================================
-# `build_grid_samples` today reconstructs a replay from day_strata's TP/FP
-# classification alone — a SINGLE stratum, because day_strata does not (yet)
-# carry gridmix's real `(year, volatility_regime, event_flag)` stratum key
-# (DR-M6-B / DR-M6-F both open). That gap must be MACHINE-VISIBLE, not just a
-# docstring sentence a reader might not reach: `build_grid_samples` output
-# always carries `"replay_status"`, and `REPLAY_STATUS_CLOSED` below is a
-# target this module is not yet able to emit (deliberately unreachable
-# today) — never write "CLOSED" as a status literally produced anywhere in
-# this file while that remains true.
+# `build_grid_samples` reconstructs a replay from day_strata's TP/FP
+# classification and the per-cell selected dates. POST-RULING (2026-08-10) the
+# STRATUM VOCABULARY is no longer what blocks closure — with `methods`,
+# day_strata carries the real `(year, vol_status, event_stratum)` Appendix-A
+# key on the ruled DR-2/DR-6 vocabularies. What blocks closure now is the
+# REPLAY ITSELF, and it is MC-side:
+#   * DR-5 rules K repeats per seed per cell with theta in the stream, but a
+#     GRID_SAMPLES cell carries only gridmix's HEADLINE repeat row
+#     (k = k_start_index) per seed — the frozen cell schema has no `repeats`
+#     block, and SCHEMA_VERSION is frozen, so the repeat set is simply not in
+#     these bytes; and
+#   * the MC_METHOD_SPEC §5 four-rule convergence battery and its doubling
+#     loop are OWNED AT THE MC WIRING (gridmix runs doublings=0 and declares
+#     no verdict), so no S0-side artifact can assert `mc_converged`.
+# That gap must be MACHINE-VISIBLE, not just a docstring sentence a reader
+# might not reach: `build_grid_samples` output always carries
+# `"replay_status"`, and `REPLAY_STATUS_CLOSED` below is a target this module
+# is not yet able to emit (deliberately unreachable, on BOTH the legacy and
+# the ruled path) — never write "CLOSED" as a status literally produced
+# anywhere in this file while that remains true.
 REPLAY_STATUS_PARTIAL_SINGLE_STRATUM = "PARTIAL_single_stratum_only"
 REPLAY_STATUS_CLOSED = "CLOSED_multi_stratum"
 
@@ -233,8 +295,15 @@ ENGINEERING_SEED_NOTE = (
 # ===========================================================================
 
 class _UnresolvedSentinel(str):
-    """Singleton sentinel for a field whose value is blocked on an open
-    method decision (DR-M6-*).
+    """Singleton sentinel for a field this call has no ruling for.
+
+    WHAT IT MEANS SHIFTED ON 2026-08-10, and the shift matters: before the
+    rulings it meant "the method decision is open"; now it means "no ruling
+    was handed to THIS call" (`methods=None` / an unruled `SourceContext`
+    slot). Both are true statements about the call that emitted it — what it
+    never means is "a value exists and was withheld". A marker on an axis
+    whose ruling WAS handed in is a false disclosure, and the checkers refuse
+    it (see `_unruled_axis_check`).
 
     Subclasses `str` with the literal value "UNRESOLVED" so it survives plain
     JSON serialization and any `== "UNRESOLVED"` check downstream unchanged,
@@ -257,9 +326,13 @@ UNRESOLVED = _UnresolvedSentinel()
 
 
 def _unresolved(decision_id: str) -> str:
-    """A disclosed, greppable stand-in for a value blocked on open decision
-    record `decision_id` (e.g. "DR-M6-F" -> "UNRESOLVED_DR-M6-F"). Never
-    silently resolved by picking a vocabulary."""
+    """A disclosed, greppable stand-in for a value this call carries no
+    ruling for, tagged with the decision record that governs the axis (e.g.
+    "DR-M6-F" -> "UNRESOLVED_DR-M6-F"). Never silently resolved by picking a
+    vocabulary — the ruling is READ from `methods`, or the marker stands. The
+    tags keep their historical DR-M6-* spelling because they are already in
+    sealed bytes; the module docstring maps each one to the DR that rules it.
+    """
     return f"UNRESOLVED_{decision_id}"
 
 
@@ -725,7 +798,8 @@ def _validate_source_context(ctx: "SourceContext") -> dict:
     out["crn_scope"] = _validated_ruling("crn_scope", ctx.crn_scope)
 
     # --- strict booleans -------------------------------------------------
-    for field in ("replay_closure_ruled", "require_complete_grid_matrix"):
+    for field in ("replay_closure_ruled", "require_complete_grid_matrix",
+                  "rulings_are_test_only"):
         value = getattr(ctx, field)
         if not _is_strict_bool(value):
             raise SourceContextError(
@@ -751,16 +825,20 @@ class SourceContext:
     B. DATASET FACTS — optional (`None` = "not available to this admission
        call"). Where a fact IS supplied it becomes a hard expectation; where
        it is absent the checker says so rather than pretending.
-    C. RULING SLOTS for axes that are NOT YET RULED — `None` by default. A
-       `None` slot means: the ONLY admissible value on that axis is one of
-       this module's UNRESOLVED markers, AND that marker blocks sealing.
-       Supplying a ruling here is the ONLY way an artifact may carry a
-       concrete value on such an axis; a value the artifact simply asserts is
-       never self-authorising.
+    C. RULING SLOTS — `None` by default. A `None` slot means: THIS context
+       carries no ruling on that axis, so the ONLY admissible value there is
+       one of this module's UNRESOLVED markers, AND that marker blocks
+       sealing. Supplying a ruling here is the ONLY way an artifact may carry
+       a concrete value on such an axis; a value the artifact simply asserts
+       is never self-authorising. Since 2026-08-10 the rulings EXIST — but
+       they still have to be HANDED to this module (`source_context_for_
+       methods`), because "which context sealed this artifact" must stay
+       visible at the call site rather than being adopted behind its back.
 
-    `SourceContext()` with no arguments is the PRODUCTION context at this
-    HEAD: every frozen constant bound, no dataset facts, and every DR-M6 axis
-    unruled.
+    `SourceContext()` with no arguments is the LEGACY / unruled context:
+    every frozen constant bound, no dataset facts, no ruling on any axis.
+    It is what a caller that passes no `methods` and no `source` gets, and it
+    is bit-identical to the pre-ruling production default.
     """
 
     # --- A. frozen constants -------------------------------------------
@@ -789,20 +867,34 @@ class SourceContext:
     #   day_universe: the exact date set DAY_STRATA must carry.
     day_universe: frozenset[str] | None = None
 
-    # --- C. ruling slots (None = UNRULED; UNRESOLVED marker only) ------
-    #   DR-M6-F  — event -> Appendix-A stratum mapping
+    # --- C. ruling slots (None = not ruled ON THIS CONTEXT; marker only) --
+    #   DR-6 (was DR-M6-F) — event -> Appendix-A stratum mapping. RULED;
+    #   `source_context_for_methods` fills this from dataset.EVENT_STRATA.
     event_stratum_vocabulary: frozenset[str] | None = None
-    #   DR-M6-B-v2 — 20-day realized-volatility axis / per-day vol status
+    #   DR-2 (was DR-M6-B-v2) — per-day vol status. RULED; filled from
+    #   dataset.VOL_ALL_LABELS (terciles + the ruled vol_na fourth stratum).
     vol_status_vocabulary: frozenset[str] | None = None
-    #   DR-M6-E  — grid K-repeat / convergence policy
+    #   DR-5 (was DR-M6-E) — grid K-repeat policy. RULED; filled by
+    #   `ruled_k_policy` from methods.grid_policy's own fields.
     k_policy: str | None = None
-    #   DR-4.7   — S0-internal engine x scenario CRN scope
+    #   DR-4.7 — S0-side engine x scenario CRN scope. RULED; filled from
+    #   methods.bootstrap_method.crn_scope.
     crn_scope: str | None = None
-    #   DR-2 / DR-3 / DR-5 / DR-6 — multi-stratum replay closure. While this
-    #   is False, PARTIAL_single_stratum_only is the only TRUTHFUL status and
-    #   a CLOSED claim is refused as a LIE (and PARTIAL is refused for
-    #   SEALING, because it is not closed — fail-closed both ways).
+    #   MULTI-STRATUM REPLAY CLOSURE — NOT a DR slot and NOT set by
+    #   `source_context_for_methods`: the remaining blocker is MC wiring (the
+    #   DR-5 repeat set is absent from the frozen cell schema and the §5
+    #   convergence verdict is MC-side), so closure is a claim only an MC-side
+    #   caller could ever make. While this is False,
+    #   PARTIAL_single_stratum_only is the only TRUTHFUL status and a CLOSED
+    #   claim is refused as a LIE (and PARTIAL is refused for SEALING, because
+    #   it is not closed — fail-closed both ways).
     replay_closure_ruled: bool = False
+    #   TEST_ONLY provenance of the rulings above (mirrors
+    #   `ResolvedS0Methods.test_only`). True keeps every artifact validated
+    #   against this context NOT sealable, however well-formed it is — the
+    #   same fail-closed rule `dataset.event_stratum_of` and `study.py`'s
+    #   estimator gate apply to a TEST_ONLY value on a production path.
+    rulings_are_test_only: bool = False
 
     # --- bundle expectations -------------------------------------------
     #   Off by default: no production caller builds GRID_SAMPLES at all
@@ -870,6 +962,215 @@ def _resolve_source(source: "SourceContext | None") -> SourceContext:
 
 
 # ===========================================================================
+# RULED METHODS -> handoff axes (Aaron's 2026-08-10 rulings)
+# ===========================================================================
+# The ONE adapter between `contracts.ResolvedS0Methods` (the single ruled
+# source) and this module's `SourceContext` ruling slots. Three disciplines
+# hold here and each one is load-bearing:
+#
+# 1. NO RULED LITERAL IS RESTATED. Every value below is either read straight
+#    off the `methods` object or read from the owning module's own constant
+#    (`dataset.EVENT_STRATA`, `dataset.VOL_ALL_LABELS`,
+#    `stats.BOOTSTRAP_CRN_SCOPE`, `gridmix.GRID_CONVERGENCE_RULE`), which are
+#    themselves that module's disclosed reads of the ruled source. A ruled
+#    string typed into this file would be a second source of truth.
+# 2. CROSS-MODULE PINNING, not blind pass-through. Where another module
+#    already implements a ruled value as a DISPATCH KEY, the value carried by
+#    `methods` is checked to BE that key. A `methods` object that says one
+#    thing while the module that executes it implements another is a defect,
+#    and disclosing the methods' version would misdescribe what actually ran.
+# 3. FAIL CLOSED. Anything unrecognised raises `RulingError` — never a silent
+#    fallback to the UNRESOLVED marker, which would turn a real defect into
+#    a disclosure that looks routine.
+
+
+class RulingError(ValueError):
+    """A `methods` object cannot be read as a ruling this module may emit.
+
+    Distinct from `SourceContextError` (the independent ANCHOR is untrusted)
+    and from an artifact problem (this artifact is not sealable): it says the
+    RULING INPUT is unusable, so no ruled value may be emitted at all.
+    """
+
+
+def _validated_methods(methods: object) -> "contracts.ResolvedS0Methods":
+    """`methods`, type-pinned and proven FULLY RESOLVED and STRUCTURALLY
+    VALID, or `RulingError`.
+
+    The pending/structural rules are NOT restated here: they are
+    `ResolvedS0Methods.pending_fields()` and `.structural_problems()`, the
+    same two gates `derive_study_config` uses. The type pin is
+    `type(...) is ResolvedS0Methods` for the same reason `_resolve_source`
+    pins its context: one overridden property on a subclass or duck would
+    silently re-anchor every ruled value this module emits.
+    """
+    if type(methods) is not contracts.ResolvedS0Methods:
+        raise RulingError(
+            "methods must be EXACTLY a contracts.ResolvedS0Methods (the "
+            "single ruled source; `contracts.aaron_ruled_methods()` returns "
+            f"one), got {type(methods).__name__} — a duck type or a SUBCLASS "
+            "is refused: one property override would re-anchor every ruled "
+            "value emitted from it")
+    pending = methods.pending_fields()
+    if pending:
+        raise RulingError(
+            f"methods is only PARTIALLY resolved — pending: {list(pending)}. "
+            "A partially-resolved method set may not resolve any handoff "
+            "axis: leave `methods=None` and keep the UNRESOLVED markers, "
+            "which is the truthful disclosure for that state")
+    problems = methods.structural_problems()
+    if problems:
+        raise RulingError(
+            "methods is STRUCTURALLY invalid and may not resolve any handoff "
+            f"axis: {sorted(problems)}")
+    return methods
+
+
+def ruled_event_stratum_vocabulary(methods: object) -> frozenset:
+    """The DR-6 event-stratum vocabulary this `methods` licenses.
+
+    The admissibility gate for the mapping string is NOT re-implemented here:
+    `dataset.event_stratum_of` OWNS it (the ruled mapping, or the TEST_ONLY
+    synthetic mapping only under `test_only`) and raises for anything else.
+    Calling it with the NA flag runs exactly that gate — a probe, not a second
+    copy of the rule — and the vocabulary itself is `dataset.EVENT_STRATA`.
+    """
+    m = _validated_methods(methods)
+    try:
+        s0_dataset.event_stratum_of(None, m.event_na_mapping, m.test_only)
+    except ValueError as exc:
+        raise RulingError(
+            f"methods.event_na_mapping {m.event_na_mapping!r} is not a "
+            "mapping dataset.event_stratum_of accepts for this caller "
+            f"(test_only={m.test_only!r}): {_safe_reason(exc)}") from exc
+    return frozenset(s0_dataset.EVENT_STRATA)
+
+
+def ruled_vol_status_vocabulary(methods: object) -> frozenset:
+    """The DR-2 per-day vol-status vocabulary this `methods` licenses.
+
+    This module never COMPUTES vol20 — the per-day labels keep coming from
+    the caller's day rows. What the ruling supplies is which labels are
+    admissible: `dataset.VOL_ALL_LABELS` (the three terciles plus the ruled
+    `vol_na` fourth stratum). Both ruled sub-decisions that create that
+    vocabulary are pinned against `dataset`'s own reads of the ruled source.
+    """
+    m = _validated_methods(methods)
+    vol = m.volatility_regime
+    if vol.na_rule != s0_dataset.RULED_VOL_NA_RULE:
+        raise RulingError(
+            f"methods.volatility_regime.na_rule {vol.na_rule!r} is not the "
+            f"rule dataset.py implements ({s0_dataset.RULED_VOL_NA_RULE!r}) "
+            "— the fourth-stratum vocabulary this function would hand out is "
+            "produced by THAT rule, so emitting it for another one would "
+            "misdescribe what produced the labels")
+    if vol.mapping_scope != s0_dataset.RULED_VOL_MAPPING_SCOPE:
+        raise RulingError(
+            f"methods.volatility_regime.mapping_scope {vol.mapping_scope!r} "
+            "is not the scope dataset.py implements "
+            f"({s0_dataset.RULED_VOL_MAPPING_SCOPE!r}) — the handoff's "
+            "per-day vol_status is the Appendix-A half of a SHARED mapping; "
+            "an unshared scope would make this field a different axis")
+    return frozenset(s0_dataset.VOL_ALL_LABELS)
+
+
+#: The `k_policy` encoding: every DR-5 sub-decision that a replayer needs, in
+#: one byte-stable token, each value read off `methods.grid_policy` itself.
+#: The field ORDER here is part of the token and must not be reshuffled (it
+#: is compared for exact equality on both sides of the seal).
+_K_POLICY_FIELDS = ("k_per_seed", "k_start_index", "stream_includes_theta",
+                    "max_doublings", "convergence_rule")
+
+
+def ruled_k_policy(methods: object) -> str:
+    """The DR-5 replay `k_policy` token, built from `methods.grid_policy`.
+
+    Structural, not prose: `"k_per_seed=200;k_start_index=0;..."`, so the
+    checker can compare it for exact equality and a reader can see every
+    sub-decision. The values are `grid_policy`'s own; only the FORMAT belongs
+    to this module.
+    """
+    m = _validated_methods(methods)
+    g = m.grid_policy
+    if g.convergence_rule != s0_gridmix.GRID_CONVERGENCE_RULE:
+        raise RulingError(
+            f"methods.grid_policy.convergence_rule {g.convergence_rule!r} is "
+            "not the dispatch key gridmix.py implements "
+            f"({s0_gridmix.GRID_CONVERGENCE_RULE!r}) — the k_policy this "
+            "handoff discloses must name the convergence rule that actually "
+            "ran, not a different one")
+    return ";".join(f"{name}={getattr(g, name)!r}"
+                    for name in _K_POLICY_FIELDS)
+
+
+def ruled_crn_scope(methods: object) -> str:
+    """The DR-4.7 S0-side CRN scope, from `methods.bootstrap_method`.
+
+    Pinned against `stats.BOOTSTRAP_CRN_SCOPE`, the scope the bootstrap layer
+    actually implements (`stats._require_crn_scope` refuses any other), so
+    the seal cannot disclose a scope no stream was ever keyed by. The MC
+    cross-platform CRN is a separate, already-frozen decision
+    (MC_METHOD_SPEC §5) and is not this axis.
+    """
+    m = _validated_methods(methods)
+    scope = m.bootstrap_method.crn_scope
+    if scope != s0_stats.BOOTSTRAP_CRN_SCOPE:
+        raise RulingError(
+            f"methods.bootstrap_method.crn_scope {scope!r} is not the scope "
+            f"stats.py implements ({s0_stats.BOOTSTRAP_CRN_SCOPE!r}) — "
+            "stats._require_crn_scope refuses any other value, so this "
+            "handoff would be disclosing a scope no resample stream was "
+            "keyed by")
+    return scope
+
+
+#: The slots `source_context_for_methods` DERIVES. A caller may not override
+#: one: laundering a different vocabulary through the methods seam would make
+#: `methods` look like the authority for a value it did not carry.
+_METHODS_DERIVED_SLOTS = ("event_stratum_vocabulary", "vol_status_vocabulary",
+                          "k_policy", "crn_scope", "rulings_are_test_only")
+
+
+def source_context_for_methods(methods: object, **overrides) -> SourceContext:
+    """The `SourceContext` a FULLY-RULED `methods` licenses.
+
+    Fills exactly the axes whose ruling now exists, and NOTHING ELSE:
+
+    * `event_stratum_vocabulary` / `vol_status_vocabulary` / `k_policy` /
+      `crn_scope` — the four ruled axes;
+    * `rulings_are_test_only` — carried straight from `methods.test_only`, so
+      a TEST_ONLY method set can be threaded through every code path a real
+      one can, and still never produces a sealable artifact.
+
+    `replay_closure_ruled` is deliberately NOT set: multi-stratum replay
+    closure is not a method ruling. The remaining blocker is MC wiring (the
+    DR-5 repeat set is not in the frozen cell schema and the §5 convergence
+    verdict is MC-side), so only an MC-side caller could ever make that claim
+    — and it must do so explicitly.
+
+    Other slots (`thetas`, `day_universe`, `require_complete_grid_matrix`, …)
+    may be passed through `**overrides`; the five derived slots may not.
+    """
+    m = _validated_methods(methods)
+    clash = sorted(set(overrides) & set(_METHODS_DERIVED_SLOTS))
+    if clash:
+        raise RulingError(
+            f"{clash} may not be overridden on a methods-derived source "
+            "context — those slots ARE the ruling, and overriding one would "
+            "make `methods` look like the authority for a value it does not "
+            "carry. Build a SourceContext directly if that is what you mean")
+    kwargs: dict = {
+        "event_stratum_vocabulary": ruled_event_stratum_vocabulary(m),
+        "vol_status_vocabulary": ruled_vol_status_vocabulary(m),
+        "k_policy": ruled_k_policy(m),
+        "crn_scope": ruled_crn_scope(m),
+        "rulings_are_test_only": bool(m.test_only),
+    }
+    kwargs.update(overrides)
+    return SourceContext(**kwargs)
+
+
+# ===========================================================================
 # problem records
 # ===========================================================================
 
@@ -886,12 +1187,16 @@ class _Problem(NamedTuple):
 
 
 # codes a BUILDER tolerates in its own output: these describe an artifact
-# that is correct BUT not sealable, which is exactly what every real builder
-# emits today.
+# that is correct BUT not sealable. That is what every builder emits when it
+# was handed no `methods` (all four axes marked), and what `build_grid_
+# samples` still emits WITH `methods` (PENDING: the MC-side replay). A
+# builder that emits none of them produces a sealable artifact — no code path
+# forces the verdict either way.
 _BUILDER_TOLERATED_CODES = frozenset({
     "EMPTY",              # a zero-day / zero-cell artifact is never sealable
     "UNRESOLVED_MARKER",  # a disclosed DR-M6-* marker
-    "PENDING",            # replay_status PARTIAL while DR-2/3/5/6 pend
+    "PENDING",            # replay_status PARTIAL while MC wiring is open
+    "TEST_ONLY",          # correctly built from TEST_ONLY synthetic rulings
 })
 # codes that are ADMISSION-level bundle contracts, not construction
 # invariants: `gridmix.build_grid` legitimately accepts q_grid/r_grid axis
@@ -1020,18 +1325,21 @@ def _schema_version_check(label: str, artifact: Mapping) -> list[_Problem]:
 def _unruled_axis_check(label: str, value: object,
                         vocabulary: "frozenset[str] | None",
                         decision_id: str) -> list[_Problem]:
-    """The fail-closed-both-ways rule for an axis with no ruling.
+    """The fail-closed-both-ways rule for an axis THIS SOURCE CONTEXT does
+    not rule.
 
-    * `vocabulary is None` (UNRULED, the production state today): the ONLY
-      admissible value is one of this module's UNRESOLVED markers. Anything
-      else — including an arbitrary "approved-looking" non-empty string —
-      is refused, because it matches no ruled vocabulary and no artifact may
-      authorise its own value. (The marker itself still blocks sealing; that
-      problem is raised separately by `_marker_problems`, so this function
-      stays silent on a correctly-marked field.)
-    * a vocabulary IS supplied (a ruling exists on the source context): the
-      value must be a strict `str` inside it, and an UNRESOLVED marker is
-      now itself out of vocabulary.
+    * `vocabulary is None` (no ruling ON THIS CONTEXT — what a caller that
+      passes no `methods` gets): the ONLY admissible value is one of this
+      module's UNRESOLVED markers. Anything else — including an arbitrary
+      "approved-looking" non-empty string — is refused, because it matches no
+      ruled vocabulary and no artifact may authorise its own value. (The
+      marker itself still blocks sealing; that problem is raised separately
+      by `_marker_problems`, so this function stays silent on a
+      correctly-marked field.)
+    * a vocabulary IS supplied (the ruling was handed to this context, e.g.
+      via `source_context_for_methods`): the value must be a strict `str`
+      inside it, and an UNRESOLVED marker is now itself out of vocabulary —
+      a marker on a ruled axis is a FALSE disclosure, not a safe default.
     """
     if vocabulary is not None and not isinstance(vocabulary, frozenset):
         # Defence in depth for blind-audit A10. `SourceContext.__post_init__`
@@ -1050,10 +1358,13 @@ def _unruled_axis_check(label: str, value: object,
             return []
         return [_p("UNRULED",
                    f"{label} {value!r} claims a concrete value on an axis "
-                   f"that has NO ruling ({decision_id} is open) — the only "
-                   "admissible token here is an UNRESOLVED marker; an "
-                   "arbitrary non-empty string may never impersonate an "
-                   "approved vocabulary")]
+                   f"this SOURCE CONTEXT carries NO ruling for (the "
+                   f"{decision_id} slot is None) — the only admissible token "
+                   "here is an UNRESOLVED marker; an arbitrary non-empty "
+                   "string may never impersonate an approved vocabulary. If "
+                   "the ruling exists, HAND IT to the context "
+                   "(`source_context_for_methods`); an artifact never "
+                   "authorises its own vocabulary")]
     if not _is_strict_str(value) or value not in vocabulary:
         return [_p("VOCAB",
                    f"{label} {value!r} is not one of the RULED "
@@ -1113,6 +1424,29 @@ def _marker_problems(type_name: str, artifact: object) -> list[_Problem]:
     return problems
 
 
+def _test_only_problems(type_name: str,
+                        source: SourceContext) -> list[_Problem]:
+    """The TEST_ONLY refusal: an artifact resolved from SYNTHETIC rulings is
+    correctly BUILT and correctly NOT SEALABLE.
+
+    This is the existing `ResolvedS0Methods.test_only` discipline, applied at
+    the one place it matters here — `dataset.event_stratum_of` refuses the
+    TEST_ONLY mapping on a production path and `study.py` refuses a TEST_ONLY
+    quantile estimator the same way; a handoff artifact whose vocabulary came
+    from a `test_only=True` method set must likewise never enter a real run's
+    sealed set. It is a problem, not a forced flag: `formal_sealable` is still
+    `not problems`, and it is this condition that decides.
+    """
+    if not source.rulings_are_test_only:
+        return []
+    return [_p("TEST_ONLY",
+               f"{type_name}: this source context's rulings are TEST_ONLY "
+               "synthetic values (methods.test_only is True) — an artifact "
+               "resolved from them is correctly built but must never reach a "
+               "real run's sealed set (same fail-closed rule as "
+               "dataset.event_stratum_of and study.py's estimator gate)")]
+
+
 # ===========================================================================
 # E6a — DAY_STRATA semantics
 # ===========================================================================
@@ -1136,6 +1470,7 @@ def _day_strata_problems(artifact: object,
     and from `study.FROZEN_THETAS` via `study.theta_key` — and compared.
     """
     problems: list[_Problem] = []
+    problems += _test_only_problems("day_strata", source)
     problems += _schema_check("day_strata", artifact, _DAY_STRATA_TOP_FIELDS)
     if not isinstance(artifact, Mapping):
         return problems
@@ -1407,8 +1742,33 @@ _REQUIRED_DAY_ROW_KEYS = ("micro_execution_era", "stability_epoch", "year",
                           "tp_fp_class")
 
 
+def _day_event_stratum(date: str, row: Mapping[str, object],
+                       ruled: object) -> str:
+    """One day's `event_stratum`: the ruled DR-6 derivation, or the marker.
+
+    `ruled is None` (no `methods` handed to this build) -> the marker, which
+    is a TRUE statement about THIS call. Otherwise the value is derived from
+    the day's own `event_flag_final` by `dataset.event_stratum_of`, the owner
+    of the mapping — this module holds no copy of it and no fallback: a flag
+    that module refuses is a `ValueError` here, never a quiet marker (a
+    silent downgrade would hide a real defect behind a routine-looking
+    disclosure).
+    """
+    if ruled is None:
+        return _unresolved("DR-M6-F")
+    flag = row["event_flag_final"]
+    try:
+        return s0_dataset.event_stratum_of(flag, ruled.event_na_mapping,
+                                           ruled.test_only)
+    except ValueError as exc:
+        raise ValueError(
+            f"{date}: event_flag_final {flag!r} has no DR-6 event stratum "
+            f"under the ruled mapping: {_safe_reason(exc)}") from exc
+
+
 def build_day_strata(day_rows: Mapping[str, Mapping[str, object]],
-                     thetas: Sequence[float]) -> dict[str, object]:
+                     thetas: Sequence[float], *,
+                     methods: object = None) -> dict[str, object]:
     """Wrap the per-day classification into the frozen handoff shape.
 
     Parameters
@@ -1416,12 +1776,31 @@ def build_day_strata(day_rows: Mapping[str, Mapping[str, object]],
     day_rows
         date -> {"micro_execution_era", "stability_epoch", "year", "d_open",
         "event_flag_final", "vol_status", "tp_fp_class"}. See module
-        docstring for the DR-M6-F event_stratum discipline and the
+        docstring for the event_stratum discipline and the
         micro_execution_era / stability_epoch distinctness rule.
     thetas
         the frozen theta values this handoff round reports (subset of the
         frozen {0.5, 0.3} pair) — used only to validate each day's
         `tp_fp_class` covers exactly this set of theta keys.
+    methods
+        keyword-only; a FULLY-RESOLVED `contracts.ResolvedS0Methods`, or
+        `None`.
+
+        * `None` (LEGACY) — bit-identical to the pre-ruling behaviour: every
+          day's `event_stratum` is the "UNRESOLVED_DR-M6-F" marker and the
+          caller's `vol_status` may only BE a marker, so the artifact is
+          never sealable.
+        * supplied — `event_stratum` is DERIVED per day from that day's own
+          `event_flag_final` through `dataset.event_stratum_of` (DR-6), and
+          the caller's per-day `vol_status` labels are checked against the
+          ruled `dataset.VOL_ALL_LABELS` vocabulary (DR-2). The vol labels
+          themselves still come from `day_rows` — this module does not
+          compute vol20 — and a leftover UNRESOLVED marker in that slot is
+          now REFUSED as a false disclosure, not tolerated.
+
+        A `test_only=True` method set is accepted (so every path a real one
+        takes is testable) but travels onto the source context, which keeps
+        the artifact NOT sealable.
 
     Returns
     -------
@@ -1429,11 +1808,13 @@ def build_day_strata(day_rows: Mapping[str, Mapping[str, object]],
      "days": {date: row}} with `days` built in canonical (sorted) date order.
 
     The assembled artifact is then handed to `check_day_strata_semantics`
-    with a source context built from `thetas` — the SAME checker admission
-    runs — and any problem that is not a disclosed non-sealability
-    (`EMPTY` / `UNRESOLVED_MARKER`) becomes a `ValueError`. There is exactly
-    one implementation of the invariants.
+    with a source context built from `thetas` (and from `methods`, when
+    supplied) — the SAME checker admission runs — and any problem that is not
+    a disclosed non-sealability (`EMPTY` / `UNRESOLVED_MARKER` / `TEST_ONLY`)
+    becomes a `ValueError`. There is exactly one implementation of the
+    invariants.
     """
+    ruled = None if methods is None else _validated_methods(methods)
     theta_keys = tuple(s0_study.theta_key(t) for t in thetas)
     if not theta_keys:
         raise ValueError("thetas must not be empty")
@@ -1453,10 +1834,12 @@ def build_day_strata(day_rows: Mapping[str, Mapping[str, object]],
                              f"{type(row).__name__}")
         if "event_stratum" in row:
             raise ValueError(
-                f"{date}: day_rows must not carry 'event_stratum' — the "
-                "event -> Appendix-A stratum mapping is DR-M6-F (open); this "
-                "module computes it as UNRESOLVED and refuses a "
-                "caller-supplied vocabulary (no silent resolution)")
+                f"{date}: day_rows must not carry 'event_stratum' — this "
+                "module DERIVES it (from the day's own event_flag_final "
+                "through the ruled DR-6 mapping when `methods` is supplied, "
+                "and as an UNRESOLVED marker otherwise) and refuses a "
+                "caller-supplied vocabulary on BOTH paths: an artifact whose "
+                "stratum came from its own producer is self-authorising")
         missing = [k for k in _REQUIRED_DAY_ROW_KEYS if k not in row]
         if missing:
             raise ValueError(f"{date}: day_rows entry missing {missing}")
@@ -1476,9 +1859,13 @@ def build_day_strata(day_rows: Mapping[str, Mapping[str, object]],
             "d_open": row["d_open"],
             "event_flag_final": row["event_flag_final"],
             "event_na": row["event_flag_final"] is None,
-            # DR-M6-F: the event -> Appendix-A stratum MAPPING is open, not
-            # just its NA branch, so every day gets the same marker.
-            "event_stratum": _unresolved("DR-M6-F"),
+            # DR-6: DERIVED from this day's own event_flag_final by the module
+            # that owns the ruled mapping. With no `methods` the mapping was
+            # never handed to this call, and the marker is the truthful
+            # disclosure of that — for EVERY day, NA branch or not.
+            "event_stratum": _day_event_stratum(date, row, ruled),
+            # DR-2: the LABEL is the caller's (this module never computes
+            # vol20); `methods` only decides which labels are admissible.
             "vol_status": row["vol_status"],
             "tp_fp_class": {k: tp_fp_class[k] for k in theta_keys
                             if k in tp_fp_class},
@@ -1497,19 +1884,24 @@ def build_day_strata(day_rows: Mapping[str, Mapping[str, object]],
         "days": days,
     }
     # The builder's OWN source context: the frozen constants plus exactly the
-    # thetas it was asked for. Every DR-M6 axis stays unruled, which is what
-    # keeps `event_stratum` / `vol_status` UNRESOLVED-only here.
-    src = SourceContext(thetas=tuple(thetas))
+    # thetas it was asked for, and — only when `methods` was supplied — the
+    # rulings that method set carries. With no `methods` every axis stays
+    # unruled, which is what keeps `event_stratum` / `vol_status`
+    # UNRESOLVED-only on the legacy path.
+    src = (SourceContext(thetas=tuple(thetas)) if ruled is None
+           else source_context_for_methods(ruled, thetas=tuple(thetas)))
     problems = _guarded(_day_strata_problems, "day_strata", artifact, src)
     defects = [pr for pr in problems
                if pr.code not in _BUILDER_TOLERATED_CODES]
     if defects:
         raise ValueError("; ".join(pr.text for pr in defects))
-    # formal_sealable: False whenever ANY problem remains — today that is
-    # always true (event_stratum + vol_status markers, and LOW-3's rule that
-    # an EMPTY artifact is never sealable). A disclosed refusal flag for
-    # whatever "formal path" later seals these artifacts for MC, never a
-    # silent pass.
+    # formal_sealable: False whenever ANY problem remains. On the LEGACY path
+    # that is always true (the event_stratum + vol_status markers, and LOW-3's
+    # rule that an EMPTY artifact is never sealable). On the RULED path the
+    # markers are gone, so this re-evaluates HONESTLY — a non-empty,
+    # fully-recomputable day_strata built from a non-test_only method set does
+    # become sealable, and nothing here forces either verdict: the conditions
+    # decide, and they are the same conditions admission re-runs.
     artifact["formal_sealable"] = not problems
     return artifact
 
@@ -1550,6 +1942,7 @@ def _grid_samples_problems(artifact: object,
     D26-D34). Cross-artifact checks against DAY_STRATA / SEED_MANIFEST live
     in `_grid_cross_problems` and are added by the bundle admission gate."""
     problems: list[_Problem] = []
+    problems += _test_only_problems("grid_samples", source)
     problems += _schema_check("grid_samples", artifact,
                               _GRID_SAMPLES_TOP_FIELDS)
     if not isinstance(artifact, Mapping):
@@ -1573,18 +1966,30 @@ def _grid_samples_problems(artifact: object,
             problems.append(_p(
                 "PENDING",
                 f"grid_samples.replay_status {replay_status!r} is the only "
-                "TRUTHFUL status while DR-2/DR-3/DR-5/DR-6 pend, and a "
-                "PARTIAL replay is not sealable — fail-closed both ways, "
-                "regardless of the artifact's own formal_sealable flag"))
+                "TRUTHFUL status while the MC-SIDE REPLAY WIRING is open, "
+                "and a PARTIAL replay is not sealable — fail-closed both "
+                "ways, regardless of the artifact's own formal_sealable "
+                "flag. What is missing is NOT a pending ruling (DR-2/DR-3/"
+                "DR-5/DR-6 are ruled, and with `methods` DAY_STRATA carries "
+                "the full (year, vol_status, event_stratum) key): it is that "
+                "this artifact carries only gridmix's HEADLINE repeat row "
+                "(k = k_start_index) per (seed, cell) and no repeats block, "
+                "while DR-5 rules K repeats per seed, and the MC_METHOD_SPEC "
+                "§5 convergence battery and its doubling loop run at the MC "
+                "wiring and supply `mc_converged`, which no S0-side artifact "
+                "can assert"))
         else:
             problems.append(_p(
                 "UNRULED",
                 f"grid_samples.replay_status {replay_status!r} is refused: "
-                "multi-stratum replay closure has NO ruling (DR-2/DR-3/DR-5/"
-                f"DR-6 open), so {REPLAY_STATUS_PARTIAL_SINGLE_STRATUM!r} is "
-                f"the only truthful value — a {REPLAY_STATUS_CLOSED!r} (or "
-                "any other) claim is a LIE about the replay, not merely a "
-                "premature seal"))
+                "this SOURCE CONTEXT does not declare multi-stratum replay "
+                "closure (`replay_closure_ruled` is False — the blocker is "
+                "MC wiring: the DR-5 repeat set is absent from the frozen "
+                "cell schema and the §5 convergence verdict is MC-side), so "
+                f"{REPLAY_STATUS_PARTIAL_SINGLE_STRATUM!r} is the only "
+                f"truthful value — a {REPLAY_STATUS_CLOSED!r} (or any other) "
+                "claim is a LIE about the replay, not merely a premature "
+                "seal"))
 
     # --- run_meta axis lock --------------------------------------------
     run_meta = artifact.get("run_meta")
@@ -1970,7 +2375,8 @@ def _exact_millis(value: object, name: str) -> int:
 
 
 def build_grid_samples(grid_output: Mapping[str, object],
-                       run_meta: Mapping[str, object]) -> dict[str, object]:
+                       run_meta: Mapping[str, object], *,
+                       methods: object = None) -> dict[str, object]:
     """Wrap one `gridmix.build_grid(...)` output into the MC handoff shape.
 
     Parameters
@@ -1983,6 +2389,14 @@ def build_grid_samples(grid_output: Mapping[str, object],
         Required keys, validated and normalised (unknown keys rejected):
         `"theta"` (int or float, stored as float), `"engine"` (str),
         `"scenario"` (str).
+    methods
+        keyword-only; a FULLY-RESOLVED `contracts.ResolvedS0Methods`, or
+        `None`. `None` (LEGACY) emits `replay.k_policy` as
+        "UNRESOLVED_DR-M6-E" and `replay.crn_scope` as the bare UNRESOLVED
+        sentinel, bit-identical to the pre-ruling output. Supplied, they
+        become the RULED values — `ruled_k_policy(methods)` (DR-5, built from
+        `methods.grid_policy`'s own fields) and
+        `methods.bootstrap_method.crn_scope` (DR-4.7).
 
     Returns
     -------
@@ -1992,12 +2406,23 @@ def build_grid_samples(grid_output: Mapping[str, object],
      "run_meta", "replay": {"stream_formula", "grid_stream_tag", "k_policy",
                            "crn_scope"}}
 
-    `replay_status` is ALWAYS `REPLAY_STATUS_PARTIAL_SINGLE_STRATUM` today
-    (M6.1.1 S2 item 5): this function replays from day_strata's per-theta
-    TP/FP classification alone, which is a single-stratum view (day_strata
-    carries no real `(year, volatility_regime, event_flag)` key while
-    DR-M6-B/DR-M6-F pend) — a fact this module discloses as DATA, not only as
-    a docstring sentence.
+    `replay_status` is ALWAYS `REPLAY_STATUS_PARTIAL_SINGLE_STRATUM`, on the
+    ruled path too (M6.1.1 S2 item 5), and that is a HONEST refusal to
+    upgrade rather than a stale marker. The pre-ruling reason has genuinely
+    gone away — with `methods`, DAY_STRATA carries the real
+    `(year, vol_status, event_stratum)` Appendix-A key — but two MC-side gaps
+    remain, and either one alone makes CLOSED a lie:
+
+    * this artifact carries only gridmix's HEADLINE repeat row
+      (`k = k_start_index`) per (seed, cell); the frozen cell schema has no
+      `repeats` block, so the DR-5 K-repeat set cannot be rebuilt from these
+      bytes; and
+    * the MC_METHOD_SPEC §5 four-rule convergence battery and its doubling
+      loop run at the MC WIRING and supply `mc_converged` — gridmix runs
+      `doublings=0` and declares no verdict, so no S0-side artifact can
+      assert convergence.
+
+    The gap is disclosed as DATA, not only as a docstring sentence.
 
     SELF-CHECK SCOPE (deliberate, disclosed): the assembled artifact is run
     through `_grid_samples_problems`, but the `LATTICE` / `CROSS` /
@@ -2009,6 +2434,7 @@ def build_grid_samples(grid_output: Mapping[str, object],
     invariants. Everything a builder actually controls (schema, types,
     vocabularies, per-cell recomputation) does raise here.
     """
+    ruled = None if methods is None else _validated_methods(methods)
     validated_run_meta = _validated_run_meta(run_meta)
     grid = grid_output["grid"]
     cells: dict[str, object] = {}
@@ -2045,8 +2471,13 @@ def build_grid_samples(grid_output: Mapping[str, object],
     replay = {
         "stream_formula": REPLAY_STREAM_FORMULA,
         "grid_stream_tag": s0_gridmix.GRID_STREAM_TAG,
-        "k_policy": _unresolved("DR-M6-E"),
-        "crn_scope": str(UNRESOLVED),
+        # DR-5 / DR-4.7: the RULED values when a method set was handed to this
+        # call, the marker otherwise — the marker being a true statement about
+        # THIS call, not a claim that the decision is open.
+        "k_policy": (_unresolved("DR-M6-E") if ruled is None
+                     else ruled_k_policy(ruled)),
+        "crn_scope": (str(UNRESOLVED) if ruled is None
+                      else ruled_crn_scope(ruled)),
     }
     artifact = {
         "schema_version": SCHEMA_VERSION,
@@ -2056,12 +2487,18 @@ def build_grid_samples(grid_output: Mapping[str, object],
         "run_meta": validated_run_meta,
         "replay": replay,
     }
-    src = SourceContext(thetas=FROZEN_THETAS)
+    src = (SourceContext(thetas=FROZEN_THETAS) if ruled is None
+           else source_context_for_methods(ruled, thetas=FROZEN_THETAS))
     problems = _guarded(_grid_samples_problems, "grid_samples", artifact, src)
     defects = [pr for pr in problems
                if pr.code not in _GRID_BUILDER_TOLERATED_CODES]
     if defects:
         raise ValueError("; ".join(pr.text for pr in defects))
+    # Still False on the ruled path — not because a ruling is missing, but
+    # because `replay_status` is truthfully PARTIAL while the MC-side replay
+    # wiring is open (see the docstring above). The two DR axes this artifact
+    # DOES carry (k_policy, crn_scope) stop contributing problems, so the
+    # remaining refusal names the real blocker instead of a ruled DR.
     artifact["formal_sealable"] = not problems
     return artifact
 
@@ -2077,12 +2514,20 @@ _SEED_MANIFEST_TOP_FIELDS = frozenset(
 _STREAM_TAGS_FIELDS = frozenset({"stats_stream_tag", "grid_stream_tag"})
 
 
-def rebuild_seed_manifest(source: "SourceContext | None" = None,
-                          ) -> dict[str, object]:
+def rebuild_seed_manifest(source: "SourceContext | None" = None, *,
+                          methods: object = None) -> dict[str, object]:
     """The ENTIRE expected SEED_MANIFEST, rebuilt from the source context —
     every field, not just the seeds and stream tags: the schema version
     token, the quoted-seed convention PROSE, the engineering-seed note, the
-    stream tags and the two open-decision slots.
+    stream tags and the two decision slots (`k_policy` / `crn_scope`), which
+    carry the RULED value when the context rules them and the UNRESOLVED
+    marker when it does not.
+
+    `methods` is a convenience seam for a caller holding the ruled method set
+    rather than a context: it is turned into one by
+    `source_context_for_methods`. Passing BOTH is refused — two anchors with
+    no rule for choosing between them is exactly the ambiguity every other
+    dependency gate in this module fails closed on.
 
     `build_seed_manifest` emits exactly this plus the derived
     `formal_sealable` verdict, and `check_seed_manifest_semantics` requires
@@ -2090,6 +2535,15 @@ def rebuild_seed_manifest(source: "SourceContext | None" = None,
     been rewritten (e.g. to claim "quoted = best-of three seeds") a REFUSAL
     rather than an unread string.
     """
+    if methods is not None:
+        if source is not None:
+            raise RulingError(
+                "rebuild_seed_manifest takes `source` OR `methods`, never "
+                "both — there is no rule for choosing which one anchors the "
+                "rebuild, so it fails closed. Pass `methods` and let "
+                "`source_context_for_methods` derive the context, or build "
+                "the context yourself and pass `source`")
+        source = source_context_for_methods(methods)
     src = _resolve_source(source)
     return {
         "schema_version": SCHEMA_VERSION,
@@ -2114,6 +2568,7 @@ def _seed_manifest_problems(artifact: object,
     `build_seed_manifest` itself reads — and EVERY OTHER FIELD is compared
     against the rebuilt manifest too."""
     problems: list[_Problem] = []
+    problems += _test_only_problems("seed_manifest", source)
     problems += _schema_check("seed_manifest", artifact,
                               _SEED_MANIFEST_TOP_FIELDS)
     if not isinstance(artifact, Mapping):
@@ -2211,9 +2666,21 @@ def check_seed_manifest_semantics(artifact: object,
                                        "seed_manifest", artifact, src)]
 
 
-def build_seed_manifest() -> dict[str, object]:
+def build_seed_manifest(*, methods: object = None) -> dict[str, object]:
     """The frozen seed/stream provenance MC needs to replay S0's randomness,
-    read from the modules that own each constant (never a second copy)."""
+    read from the modules that own each constant (never a second copy).
+
+    `methods` is keyword-only and defaults to `None`, which reproduces the
+    pre-ruling artifact BIT FOR BIT — including the `DEFAULT_SOURCE_CONTEXT`
+    read at CALL time, the injection seam a renderer-level test monkeypatches.
+    With a fully-resolved, non-test_only method set the two decision slots
+    carry their RULED values (DR-5 `k_policy`, DR-4.7 `crn_scope`), no
+    UNRESOLVED marker is left anywhere in the artifact, and — SEED_MANIFEST
+    having no other open axis and no bundle dependency — `formal_sealable`
+    honestly evaluates to True. This is the only one of the three artifact
+    types with a production caller today
+    (`scripts/s0_real_run.render_s0_report`).
+    """
     # IR DR-02 single-source guard: stats.py / gridmix.py must be
     # re-exporting the SAME object as contracts.RESEARCH_BOOTSTRAP_SEEDS, not
     # a local copy that could silently drift. A production governance gate
@@ -2231,10 +2698,15 @@ def build_seed_manifest() -> dict[str, object]:
             "object as contracts.RESEARCH_BOOTSTRAP_SEEDS — IR DR-02 "
             "single-source mutation guard tripped")
 
-    artifact = dict(rebuild_seed_manifest(DEFAULT_SOURCE_CONTEXT))
+    # LEGACY path: `DEFAULT_SOURCE_CONTEXT` is read from the module namespace
+    # HERE, at call time, so `monkeypatch.setattr(handoff,
+    # "DEFAULT_SOURCE_CONTEXT", ...)` still reaches this builder unchanged.
+    src = (DEFAULT_SOURCE_CONTEXT if methods is None
+           else source_context_for_methods(methods))
+    artifact = dict(rebuild_seed_manifest(src))
     artifact["formal_sealable"] = False
     problems = _guarded(_seed_manifest_problems, "seed_manifest", artifact,
-                        DEFAULT_SOURCE_CONTEXT)
+                        src)
     defects = [pr for pr in problems
                if pr.code not in _BUILDER_TOLERATED_CODES]
     if defects:                              # pragma: no cover - unreachable
@@ -2556,9 +3028,13 @@ def formal_seal_admission(artifacts: Mapping[str, Mapping], *,
         `build_day_strata` / `build_grid_samples` / `build_seed_manifest`).
     source
         keyword-only; the INDEPENDENT source facts expected content is
-        rebuilt from. Defaults to `DEFAULT_SOURCE_CONTEXT` — the production
-        context at this HEAD: every frozen constant bound, no dataset facts,
-        every DR-M6 axis unruled.
+        rebuilt from. Defaults to `DEFAULT_SOURCE_CONTEXT` — the LEGACY
+        context: every frozen constant bound, no dataset facts, no ruling on
+        any axis, so only UNRESOLVED markers are admissible there and nothing
+        carrying one is sealable. A caller holding the ruled method set
+        passes `source=source_context_for_methods(methods)`; the ruling is
+        then visible in the context a reviewer reads, never in the bytes
+        being sealed.
 
     BUNDLE SEMANTICS (M6.1.4 item 2 — admission is ATOMIC over the bundle)
     ---------------------------------------------------------------------
