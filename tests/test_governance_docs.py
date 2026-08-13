@@ -183,6 +183,44 @@ def test_reveal_attestation_exists_and_is_value_free():
 
 
 # ---------------------------------------------------------------------------
+# Reveal-review correction addendum (2026-08-14): the addendum is the
+# CURRENT verdict semantics; the original memo/attestation stay as history.
+# ---------------------------------------------------------------------------
+ADDENDUM = REPO / "ops" / "S0_T001_RESULT_DECISION_ADDENDUM.md"
+
+
+def test_addendum_carries_the_corrected_current_verdict():
+    text = _read(ADDENDUM)
+    assert "STATISTICAL_SIGNAL=NOT_TESTED" in text
+    assert "ORACLE_FEASIBILITY_CEILING=PASS" in text
+    assert "OVERALL_S0_VERDICT=INCONCLUSIVE_PENDING_MC" in text
+    assert "RECOMMENDATION=HOLD_FOR_SPECIFIC_MISSING_EVIDENCE" in text
+    assert ("MISSING_EVIDENCE="
+            "DR5_MC_FP_ECONOMICS_AND_DEPLOYABLE_REGION") in text
+
+
+def test_addendum_records_the_exact_endpoint_spread_and_withdrawals():
+    text = _read(ADDENDUM)
+    assert "MAX_BOOTSTRAP_ENDPOINT_SPREAD=0.20477498240675374" in text
+    assert "RELATIVE_PERCENTAGE=NOT_COMPARABLE" in text
+    assert "MATERIALITY_CONCLUSION=NOT_ESTABLISHED" in text
+    assert "16 个" in text and "zero-direction" in text
+    # the addendum corrects; it never claims the old blanket positivity
+    assert "所有 subcells 均为正" not in text.replace(
+        "不得写\"所有 subcells 均为正\"", "")
+
+
+def test_ledger_addendum_row_is_zero_quantity_and_cumulative_unchanged():
+    table = _table_block()
+    rows = [r for r in table if "DECISION_ADDENDUM" in r]
+    assert len(rows) == 1, table
+    cells = [c.strip() for c in rows[0].split("|")]
+    assert cells[4] == "0", cells
+    lines = [ln for ln in _ledger_lines() if ln.strip()]
+    assert lines[-1].strip().startswith("累计 exposure：1575")
+
+
+# ---------------------------------------------------------------------------
 # Output-roots attestation round (2026-08-14): the persisted evidence docs
 # ---------------------------------------------------------------------------
 PACKET = REPO / "CODEX_REVIEW_PACKET_S0_CLOSEOUT_FINAL.md"
