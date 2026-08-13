@@ -180,10 +180,25 @@ class PreparedMCInput:
     calendar: TemplateCalendar
 
 
+def _unfreeze(node):
+    """Inverse of _deep_freeze for canonical JSON serialisation."""
+    if isinstance(node, Mapping):
+        return {k: _unfreeze(v) for k, v in node.items()}
+    if isinstance(node, tuple):
+        return [_unfreeze(v) for v in node]
+    return node
+
+
 def prepared_digest(prepared: "PreparedMCInput") -> str:
     """Deterministic identity digest of a prepared input — bound into
     every RunEvidence and the seal candidate, and re-checked pre/post
-    seal (R2 PHASE F)."""
+    seal.
+
+    R2.1 PHASE E: binds FULL CONTENT, not lengths — every calendar
+    day_id + cal_offset + the complete first_month_offsets, the complete
+    day sequences and traded sets per channel, and the canonicalised
+    authorization snapshot. Two calendars of equal length but different
+    dates/offsets produce different digests."""
     ident = {
         "trial_id": prepared.trial_id,
         "authorized_commit": prepared.authorized_commit,
@@ -191,9 +206,17 @@ def prepared_digest(prepared: "PreparedMCInput") -> str:
         "seeds": list(prepared.seeds),
         "k_per_seed": prepared.k_per_seed,
         "method_digest": prepared.method_digest,
-        "channels": {ch: len(seq)
-                     for ch, seq in sorted(prepared.day_sequences.items())},
-        "n_slots": len(prepared.calendar.days),
+        "day_sequences": {ch: list(seq)
+                          for ch, seq in
+                          sorted(prepared.day_sequences.items())},
+        "traded_day_sets": {ch: sorted(days)
+                            for ch, days in
+                            sorted(prepared.traded_day_sets.items())},
+        "calendar_days": [[d.day_id, d.cal_offset]
+                          for d in prepared.calendar.days],
+        "first_month_offsets": list(prepared.calendar.first_month_offsets),
+        "authorization_snapshot": _unfreeze(
+            prepared.authorization_snapshot),
     }
     return hashlib.sha256(
         json.dumps(ident, sort_keys=True).encode("utf-8")).hexdigest()
@@ -239,6 +262,89 @@ def build_template_calendar(start: str = TEMPLATE_START,
 # The ten-check fail-closed battery (source matrix SS2)
 # ---------------------------------------------------------------------------
 
+@dataclass(frozen=True, slots=True)
+class CustodyAuthority:
+    """Typed EXTERNAL custody authority (R2.1 PHASE F): the per-file
+    digest table plus its own provenance — which artifact it came from
+    and that artifact's digest. Production authorities come from
+    `load_custody_authority_from_attestation`; test conveniences are
+    explicitly `test_only` and the PRODUCTION prepare entry refuses
+    them."""
+    trial_id: str
+    authorized_commit: str
+    source_artifact_id: str
+    source_artifact_sha256: str
+    file_sha256: Mapping
+    test_only: bool
+
+    @staticmethod
+    def for_tests(bundle: Mapping, *, trial_id: str | None = None,
+                  authorized_commit: str | None = None
+                  ) -> "CustodyAuthority":
+        """TEST_ONLY convenience — digests computed from the given bytes;
+        trial/commit default to the bundle's OWN registry snapshot (the
+        binding check is unconditional, so a coherent test authority must
+        agree with the bundle it certifies). Never accepted by the
+        production prepare entry."""
+        if trial_id is None or authorized_commit is None:
+            try:
+                snap = json.loads(
+                    bundle["REGISTRY_AFTER_RUN_STARTED.json"]
+                ).get("snapshot_before", {})
+            except Exception:                    # noqa: BLE001
+                snap = {}
+            trial_id = trial_id or str(snap.get("trial_id", "S0-T001"))
+            authorized_commit = (authorized_commit
+                                 or str(snap.get("authorized_commit",
+                                                 "0" * 40)))
+        return CustodyAuthority(
+            trial_id=trial_id, authorized_commit=authorized_commit,
+            source_artifact_id="TEST_ONLY_SYNTHETIC",
+            source_artifact_sha256="0" * 64,
+            file_sha256=MappingProxyType(
+                {n: hashlib.sha256(b).hexdigest()
+                 for n, b in bundle.items()}),
+            test_only=True)
+
+
+# The production custody source: the S0-T001 blind post-run attestation
+# (written and committed BEFORE any reveal; its hash table is the
+# independent record of the sealed bundle's bytes).
+ATTESTATION_PATH = "ops/S0_T001_POST_RUN_ATTESTATION.md"
+
+
+def load_custody_authority_from_attestation(
+        path: str = ATTESTATION_PATH) -> CustodyAuthority:
+    """Parse the blind post-run attestation's file table into a typed
+    production authority (test_only=False). Fail-closed: the table must
+    yield EXACTLY the bundle exact-set with well-formed digests, and the
+    trial/commit lines must be present."""
+    p = _REPO_ROOT / path
+    raw = p.read_bytes()
+    text = raw.decode("utf-8")
+    trial = re.search(r"TRIAL_ID=(\S+)", text)
+    commit = re.search(r"AUTHORIZED_COMMIT=([0-9a-f]{40})", text)
+    if not trial or not commit:
+        raise MCInputError("custody_authority_malformed",
+                           "attestation lacks trial/commit lines")
+    digests: dict[str, str] = {}
+    for m in re.finditer(r"^\|\s*(\S+)\s*\|\s*\d+\s*\|\s*([0-9a-f]{64})"
+                         r"\s*\|\s*$", text, re.MULTILINE):
+        digests[m.group(1)] = m.group(2)
+    if set(digests) != BUNDLE_EXACT_SET:
+        raise MCInputError(
+            "custody_authority_keyset_violation",
+            f"attestation table names {sorted(set(digests))[:4]}... "
+            f"({len(digests)} files) != bundle exact-set")
+    return CustodyAuthority(
+        trial_id=trial.group(1),
+        authorized_commit=commit.group(1),
+        source_artifact_id=path,
+        source_artifact_sha256=hashlib.sha256(raw).hexdigest(),
+        file_sha256=MappingProxyType(digests),
+        test_only=False)
+
+
 def _parse_record(row: dict, name: str, i: int) -> FrozenTradePath:
     if not isinstance(row, dict) or set(row) != set(_RECORD_FIELDS):
         raise MCInputError("record_schema_violation",
@@ -253,19 +359,52 @@ def _parse_record(row: dict, name: str, i: int) -> FrozenTradePath:
 
 def prepare_mc_input(bundle: Mapping[str, bytes], *,
                      authorization_snapshot: Mapping,
-                     expected_file_sha256: Mapping,
-                     calendar: TemplateCalendar | None = None,
+                     custody_authority: CustodyAuthority,
                      ) -> PreparedMCInput:
-    """Build the immutable prepared input from bundle BYTES, refusing on
-    the first violated check. `bundle` maps file name -> raw bytes (the
-    caller reads the sealed directory ONCE; tests pass synthetic bytes).
+    """PRODUCTION prepare entry: typed external custody authority ONLY
+    (R2.1 PHASE F — a test_only authority refuses) and the FROZEN-window
+    template calendar (no injection seam here). Tests use
+    `prepare_mc_input_for_tests`."""
+    if not isinstance(custody_authority, CustodyAuthority):
+        raise MCInputError("custody_authority_missing")
+    if custody_authority.test_only:
+        raise MCInputError("custody_authority_test_only_in_production")
+    return _prepare_mc_input_impl(bundle,
+                                  authorization_snapshot=
+                                  authorization_snapshot,
+                                  custody_authority=custody_authority,
+                                  calendar=None)
 
-    `expected_file_sha256` is MANDATORY (R2 PHASE C): the EXTERNAL custody
-    authority — per-file digests recorded OUTSIDE the bundle under review
-    (e.g. the S0 blind post-run attestation table / archive inventory).
-    Its key set must equal the full bundle exact-set INCLUDING
-    manifest.jsonl; a payload-plus-internal-manifest rewrite therefore
-    cannot self-certify."""
+
+def prepare_mc_input_for_tests(bundle: Mapping[str, bytes], *,
+                               authorization_snapshot: Mapping,
+                               custody_authority: CustodyAuthority,
+                               test_only_calendar:
+                               "TemplateCalendar | None" = None,
+                               ) -> PreparedMCInput:
+    """TEST_ONLY seam (R2.1 PHASE E.5/F): accepts test_only authorities
+    and an injected non-frozen-window calendar. NEVER a production path —
+    the production entry above refuses both."""
+    if not isinstance(custody_authority, CustodyAuthority):
+        raise MCInputError("custody_authority_missing")
+    return _prepare_mc_input_impl(bundle,
+                                  authorization_snapshot=
+                                  authorization_snapshot,
+                                  custody_authority=custody_authority,
+                                  calendar=test_only_calendar)
+
+
+def _prepare_mc_input_impl(bundle: Mapping[str, bytes], *,
+                           authorization_snapshot: Mapping,
+                           custody_authority: CustodyAuthority,
+                           calendar: "TemplateCalendar | None",
+                           ) -> PreparedMCInput:
+    """Shared battery. `authority` is the EXTERNAL custody record — per-
+    file digests recorded OUTSIDE the bundle under review (production:
+    the blind post-run attestation). Key set must equal the full bundle
+    exact-set INCLUDING manifest.jsonl; a payload-plus-internal-manifest
+    rewrite therefore cannot self-certify."""
+    expected_file_sha256 = custody_authority.file_sha256
     # (10, hoisted as a precondition) authorization snapshot — injected
     # once at build time; everything downstream binds against it, so its
     # absence refuses BEFORE any binding comparison can misattribute.
@@ -333,6 +472,17 @@ def prepare_mc_input(bundle: Mapping[str, bytes], *,
         if not want or want != got:
             raise MCInputError("trial_commit_binding_violation",
                                f"{key}: snapshot={want!r} bundle={got!r}")
+    # R2.1 PHASE F: the custody authority's OWN trial/commit must agree
+    # with the bundle's registry custody snapshot — an authority lifted
+    # from some other trial's attestation cannot certify this bundle.
+    # UNCONDITIONAL: test authorities get no exemption.
+    if (custody_authority.trial_id != snap.get("trial_id")
+            or custody_authority.authorized_commit
+            != snap.get("authorized_commit")):
+        raise MCInputError("custody_authority_binding_violation",
+                           f"authority {custody_authority.trial_id}/"
+                           f"{custody_authority.authorized_commit[:12]} vs "
+                           f"bundle snapshot")
 
     report = json.loads(bundle["S0_REPORT.json"])
     gov = report.get("governance", {})
@@ -452,10 +602,16 @@ def prepare_mc_input(bundle: Mapping[str, bytes], *,
     method_digest = hashlib.sha256(
         "|".join(method_parts).encode("utf-8")).hexdigest()
 
-    # calendar structural validation (review M5) — production window
-    # sanity lives in build_template_calendar; EVERY calendar (injected or
-    # built) must be structurally sound.
-    cal = calendar if calendar is not None else build_template_calendar()
+    # calendar (R2.1 PHASE E): the injected TEST_ONLY calendar is COPIED
+    # and tuple-ized — no caller list survives into the prepared object;
+    # the production path builds the frozen window.
+    if calendar is not None:
+        cal = TemplateCalendar(
+            days=tuple(calendar.days),
+            first_month_offsets=tuple(int(i) for i in
+                                      calendar.first_month_offsets))
+    else:
+        cal = build_template_calendar()
     _validate_calendar(cal)
 
     # (10) authorization snapshot — presence enforced at the top of the
@@ -528,44 +684,50 @@ def _lifecycle_stats(prepared: PreparedMCInput, platform: str,
         "skips_n0": int(res.skips_n0),
         "exhausted": bool(res.terminated_by_exhaustion),
         "n_offered": len(paths_by_day),
+        "n_ambiguous": sum(1 for p in paths_by_day.values()
+                           if p.ambiguous_stop_vs_floor),
     }
+
+
+# R2.1 PHASE G: the R2 necessary-conditions boolean ("any payout AND not
+# all skipped") is RETRACTED as a verdict gate — mechanical METRICS stay,
+# the reduction rule is Aaron's to freeze. Until then no feasibility
+# boolean may enter a VerdictInput, which keeps the Checkpoint-0 verdict
+# unreachable (see epistemic_go_gate_input).
+FEASIBILITY_GATE_STATUS = "DECISION_REQUIRED"
 
 
 @dataclass(frozen=True)
 class FeasibilityEvidence:
-    """MECHANICALLY computed from lifecycle outputs (R2 PHASE E.5) — never
-    a caller-declared boolean. `feasible` is the plain mechanical reading
-    of the three items S0 SS10.4 row 2 names ("整数仓位、频率、payout
-    路径可行性经 MC 确认"): integer sizing left SOME trades standing,
-    trading opportunities existed at all, and at least one simulated path
-    actually realized a payout. These are NECESSARY-condition readings of
-    the frozen text, not invented thresholds; Codex may tighten them."""
+    """MECHANICALLY computed feasibility METRICS (never a caller-declared
+    boolean; R2 PHASE E.5, re-scoped R2.1 PHASE G). Carries no `feasible`
+    property: the metric->boolean reduction rule is not frozen anywhere,
+    so it is DECISION_REQUIRED for Aaron — the R2 necessary-conditions
+    reading is retracted as a gate and preserved only as reported
+    metrics."""
     n_paths: int
     payout_realized_share: float
     total_skips_n0: int
     total_offered: int
     exhausted_share: float
-
-    @property
-    def feasible(self) -> bool:
-        if self.n_paths == 0 or self.total_offered == 0:
-            return False
-        integer_sizing_ok = self.total_skips_n0 < self.total_offered
-        payout_path_ok = self.payout_realized_share > 0.0
-        return integer_sizing_ok and payout_path_ok
+    ambiguous_share: float            # share of consumed paths flagged
+    gate_status: str = FEASIBILITY_GATE_STATUS
 
     @staticmethod
     def from_stats(stats: Sequence[Mapping]) -> "FeasibilityEvidence":
         n = len(stats)
+        offered = sum(int(s["n_offered"]) for s in stats)
+        ambiguous = sum(int(s.get("n_ambiguous", 0)) for s in stats)
         return FeasibilityEvidence(
             n_paths=n,
             payout_realized_share=(sum(1 for s in stats
                                        if s["payout_realized"]) / n
                                    if n else 0.0),
             total_skips_n0=sum(int(s["skips_n0"]) for s in stats),
-            total_offered=sum(int(s["n_offered"]) for s in stats),
+            total_offered=offered,
             exhausted_share=(sum(1 for s in stats if s["exhausted"]) / n
-                             if n else 0.0))
+                             if n else 0.0),
+            ambiguous_share=(ambiguous / offered if offered else 0.0))
 
 
 @dataclass(frozen=True)
@@ -586,22 +748,37 @@ class EpistemicResult:
     max_within_world_se: float
     between_world_sd: float
     B: int
+    M: int                            # start-phase count ACTUALLY used
     master_seed: int
     prepared_digest: str
     feasibility: FeasibilityEvidence
 
     @staticmethod
     def from_world_means(platform, engine, scenario, channel, world_means,
-                         *, within_world_ses, B, master_seed,
+                         *, within_world_ses, B, M, master_seed,
                          prepared_digest_value,
                          feasibility) -> "EpistemicResult":
         arr = np.asarray(world_means, dtype=float)
+        # R2.1 PHASE D: NaN/inf/empty samples and negative/non-finite SEs
+        # are refusals — a quantile computed over garbage is not evidence.
+        if arr.size == 0 or not np.isfinite(arr).all():
+            raise MCInputError("epistemic_samples_invalid",
+                               "world means empty or non-finite")
+        ses = [float(s) for s in (within_world_ses or ())]
+        if any((not math.isfinite(s)) or s < 0.0 for s in ses):
+            raise MCInputError("epistemic_samples_invalid",
+                               "within-world SEs negative or non-finite")
         between_sd = float(arr.std(ddof=1)) if arr.size > 1 else 0.0
-        max_se = float(max(within_world_ses)) if within_world_ses else 0.0
+        max_se = max(ses) if ses else 0.0
         # frozen: MC SS5 rule (d) — within-world MCSE <= 10% of the
         # between-world SD, computed from ACTUAL samples (never declared).
-        mcse_ok = (between_sd == 0.0
-                   or max_se <= MCSE_MAX_FRACTION * between_sd)
+        # R2.1 PHASE D: zero between-world variance passes ONLY with zero
+        # within-world MCSE — a degenerate distribution cannot excuse a
+        # noisy inner estimate.
+        if between_sd == 0.0:
+            mcse_ok = (max_se == 0.0)
+        else:
+            mcse_ok = max_se <= MCSE_MAX_FRACTION * between_sd
         return EpistemicResult(
             platform=platform, engine=engine, scenario=scenario,
             channel=channel, world_means=tuple(float(x) for x in arr),
@@ -609,7 +786,7 @@ class EpistemicResult:
             median=float(np.percentile(arr, 50)),
             p95=float(np.percentile(arr, 95)),
             mcse_ok=mcse_ok, max_within_world_se=max_se,
-            between_world_sd=between_sd, B=int(B),
+            between_world_sd=between_sd, B=int(B), M=int(M),
             master_seed=int(master_seed),
             prepared_digest=prepared_digest_value,
             feasibility=feasibility)
@@ -655,7 +832,8 @@ def run_epistemic(prepared: PreparedMCInput, *, platform: str, engine: str,
                    if n > 1 else 0.0)
     return EpistemicResult.from_world_means(
         platform, engine, scenario, channel, world_means,
-        within_world_ses=ses, B=B, master_seed=master_seed,
+        within_world_ses=ses, B=B, M=len(offsets),
+        master_seed=master_seed,
         prepared_digest_value=prepared_digest(prepared),
         feasibility=FeasibilityEvidence.from_stats(all_stats))
 
@@ -734,11 +912,16 @@ def epistemic_go_gate_input(cons: EpistemicResult,
         raise MCInputError("provenance_mismatch",
                            "Conservative/Stress computed from different "
                            "prepared inputs")
-    feasible = (cons.feasibility.feasible and stress.feasibility.feasible)
-    return VerdictInput(p5_cons=cons.p5, median_cons=cons.median,
-                        median_stress=stress.median, p95_cons=cons.p95,
-                        feasible=feasible, platform=cons.platform,
-                        engine=cons.engine, channel=cons.channel)
+    # R2.1 PHASE G: NO feasibility boolean exists until Aaron freezes the
+    # metric->boolean reduction rule — the gate refuses HERE, which keeps
+    # every Checkpoint-0 verdict unreachable (CHECKPOINT0_VERDICT_
+    # REACHABLE=NO). The metrics themselves live on
+    # cons.feasibility/stress.feasibility for the decision packet.
+    raise MCInputError(
+        "feasibility_gate_decision_required",
+        "the feasibility metric->boolean rule is not frozen anywhere; "
+        "Aaron must rule (see MC_DR5_BUILD_PACKET feasibility decision "
+        "packet) before any VerdictInput can be built")
 
 
 # ---------------------------------------------------------------------------
@@ -764,8 +947,10 @@ class ConvergenceReport:
 @dataclass(frozen=True)
 class RunEvidence:
     """One COMPLETE epistemic evaluation of the frozen Primary verdict
-    grid, with provenance (R2 PHASE E): every convergence quantity is
-    computed FROM these objects, never declared by a caller."""
+    grid, with provenance (R2 PHASE E; hardened R2.1 PHASE C): the OUTER
+    metadata is never trusted — `validate_inner_binding` cross-checks
+    every claim against the INNER EpistemicResults, so changing an outer
+    number cannot impersonate a differently-scaled run."""
     run_label: str                # 'base' | 'double_B' | 'double_M' |
     #                               'double_K' | 'seed_<n>'
     axis: str                     # 'base' | 'B' | 'M' | 'K' | 'seed'
@@ -777,17 +962,63 @@ class RunEvidence:
     results: Mapping              # combo_id -> (cons: EpistemicResult,
     #                                            stress: EpistemicResult)
 
-    def verdict(self):
-        """The verdict THIS run's actual results produce (frozen table
-        over the full Primary grid; feasibility from evidence)."""
-        from itsf.mc.verdict import apply_verdict
-        grid = {cid: epistemic_go_gate_input(cons, stress)
-                for cid, (cons, stress) in self.results.items()}
-        if set(grid) != PRIMARY_VERDICT_GRID:
+    def validate_inner_binding(self) -> None:
+        """R2.1 PHASE C: every OUTER field must agree with every INNER
+        result — B (and the actual world_means length), M, master_seed,
+        prepared_digest, the primary theta channel, the combo labels and
+        the scenario roles. Refusal codes are per-field."""
+        for cid, pair in self.results.items():
+            if not (isinstance(pair, tuple) and len(pair) == 2):
+                raise MCInputError("run_evidence_inner_mismatch:combo",
+                                   f"{self.run_label}:{cid} not a "
+                                   "(cons, stress) pair")
+            cons, stress = pair
+            for r in (cons, stress):
+                if type(r) is not EpistemicResult:
+                    raise MCInputError(
+                        "run_evidence_inner_mismatch:combo",
+                        f"{self.run_label}:{cid} carries a non-epistemic "
+                        "object")
+                if r.B != self.B or len(r.world_means) != self.B:
+                    raise MCInputError(
+                        "run_evidence_inner_mismatch:B",
+                        f"{self.run_label}:{cid} outer B={self.B} inner "
+                        f"B={r.B} len={len(r.world_means)}")
+                if r.M != self.M:
+                    raise MCInputError(
+                        "run_evidence_inner_mismatch:M",
+                        f"{self.run_label}:{cid} outer M={self.M} inner "
+                        f"M={r.M}")
+                if r.master_seed != self.master_seed:
+                    raise MCInputError(
+                        "run_evidence_inner_mismatch:master_seed",
+                        f"{self.run_label}:{cid} outer "
+                        f"{self.master_seed} inner {r.master_seed}")
+                if r.prepared_digest != self.prepared_digest:
+                    raise MCInputError(
+                        "run_evidence_inner_mismatch:prepared_digest",
+                        f"{self.run_label}:{cid}")
+                if r.channel != PRIMARY_THETA_CHANNEL:
+                    raise MCInputError(
+                        "run_evidence_inner_mismatch:channel",
+                        f"{self.run_label}:{cid} carries {r.channel!r}")
+            platform, engine, _policy = cid.split("|")
+            for r in (cons, stress):
+                if r.platform != platform or r.engine != engine:
+                    raise MCInputError(
+                        "run_evidence_inner_mismatch:combo",
+                        f"{self.run_label}:{cid} inner labels "
+                        f"{r.platform}/{r.engine}")
+            if cons.scenario != "Conservative" or \
+                    stress.scenario != "Stress":
+                raise MCInputError(
+                    "run_evidence_inner_mismatch:scenario",
+                    f"{self.run_label}:{cid} roles "
+                    f"{cons.scenario}/{stress.scenario}")
+        if set(self.results) != PRIMARY_VERDICT_GRID:
             raise MCInputError(
                 "primary_grid_coverage_violation",
-                f"run {self.run_label}: got {sorted(grid)}")
-        return apply_verdict(grid)
+                f"run {self.run_label}: got {sorted(self.results)}")
 
     def quantile_map(self) -> dict:
         out = {}
@@ -821,90 +1052,119 @@ def _check_run_provenance(base: RunEvidence, other: RunEvidence,
                                f"{field}-doubling run")
 
 
+# frozen: SEED_MANIFEST quoted_seed_convention — the base/quoted seed is
+# the FIRST frozen master seed, fixed before any data was seen.
+BASE_MASTER_SEED = RESEARCH_BOOTSTRAP_SEEDS[0]        # 7
+
+
 def convergence_from_evidence(base: RunEvidence,
                               doubled_by_axis: Mapping,
                               seed_runs: Mapping) -> ConvergenceReport:
-    """Compute MC SS5 rules (a)-(d) FROM run evidence (R2 PHASE E):
+    """Compute MC SS5 rules (a)-(d) FROM run evidence (R2 PHASE E,
+    hardened R2.1 PHASE C). Validation order (so every violation surfaces
+    with its OWN code):
 
-    (a) doubled runs for EXACTLY the axes B, M and K, each provenance- and
-        scale-checked, each reproducing the base verdict category (the
-        category is COMPUTED from each run's own results);
-    (b) seed runs for EXACTLY the frozen seeds 7/13/31, categories
-        computed and compared;
-    (c) per-axis quantile drift maps with EXACT key-set equality against
-        the base map (one shared mapping cannot represent three axes);
-    (d) MCSE from the base run's ACTUAL samples (EpistemicResult carries
-        max_within_world_se / between_world_sd computed in run_epistemic).
+    1. inner/outer binding of EVERY supplied run (RunEvidence.
+       validate_inner_binding — outer metadata cannot impersonate);
+    2. doubling axes set == {B, M, K};
+    3. B-axis provenance/scale relations, seed-run set/identity, and the
+       FROZEN base scales (B=1000, K=200, base seed 7, primary theta) —
+       a small-scale or off-seed base refuses with
+       "frozen_scale_violation";
+    4. M axis: REFUSED — MC SS5 fixes M as the exhaustively enumerated
+       start-phase set; doubling has no unique frozen meaning
+       (DECISION_REQUIRED_M_AXIS; nothing is invented here);
+    5. K axis: REFUSED — grid replay is BLOCKED (missing per-day
+       DAY_STRATA), so no ACTUAL K-doubled evidence can exist; outer
+       metadata may not impersonate it.
 
-    NOTE — M axis: MC SS5 fixes M as the exhaustively enumerated start
-    phases; doubling it has no unique frozen meaning
-    (M_AXIS_DOUBLING_STATUS = DECISION_REQUIRED_M_AXIS). Production
-    cannot assemble a legal `doubled_by_axis['M']`, so this function is
-    structurally unsatisfiable until Aaron rules — that is the honest
-    fail-closed state, not a gap."""
+    Production convergence is therefore STRUCTURALLY UNSATISFIABLE until
+    Aaron rules on M and the grid authority — the honest fail-closed
+    state. Categories/drift/MCSE computation below steps 4-5 is retained
+    for the post-ruling wiring and is unreachable today."""
     if base.axis != "base":
         raise MCInputError("axis_identity_mismatch",
                            f"base run carries axis={base.axis!r}")
-    if set(doubled_by_axis) != DOUBLING_AXES:
-        raise MCInputError("doubling_axes_violation",
-                           f"need exactly {sorted(DOUBLING_AXES)}, got "
-                           f"{sorted(doubled_by_axis)}")
-    base_verdict = base.verdict().verdict
-    base_q = base.quantile_map()
-    if not base_q:
-        raise MCInputError("quantile_comparison_empty")
-    drift_by_axis = {}
-    doubled_ok = True
-    drift_ok = True
-    for axis in sorted(DOUBLING_AXES):
+    base.validate_inner_binding()
+    # (1) inner/outer binding + B-axis relations for every SUPPLIED run —
+    # a tampered outer number surfaces its own code before anything else.
+    for axis in sorted(doubled_by_axis):
         run = doubled_by_axis[axis]
-        _check_run_provenance(base, run, axis)
-        if run.verdict().verdict != base_verdict:
-            doubled_ok = False
-        run_q = run.quantile_map()
-        if set(run_q) != set(base_q):
-            raise MCInputError("quantile_keyset_violation",
-                               f"axis {axis}")
-        drift = {k: abs(float(run_q[k]) - float(base_q[k]))
-                 for k in sorted(base_q)}
-        drift_by_axis[axis] = MappingProxyType(drift)
-        for k, d in drift.items():
-            tol = max(CONV_ABS_USD, CONV_REL * abs(float(base_q[k])))
-            if d > tol:
-                drift_ok = False
+        run.validate_inner_binding()
+        if axis == "B":
+            _check_run_provenance(base, run, "B")
+    if isinstance(seed_runs, Mapping):
+        for seed, run in seed_runs.items():
+            run.validate_inner_binding()
+            if run.prepared_digest != base.prepared_digest:
+                raise MCInputError("provenance_mismatch", f"seed_{seed}")
+            if run.master_seed != seed:
+                raise MCInputError(
+                    "run_evidence_inner_mismatch:master_seed",
+                    f"seed run {seed} carries master_seed="
+                    f"{run.master_seed}")
+    # (1b) seed-SET completeness — an identity-level requirement, checked
+    # BEFORE the structural M/K refusals so a wrong seed set surfaces
+    # with its own code.
     if set(seed_runs) != set(RESEARCH_BOOTSTRAP_SEEDS):
         raise MCInputError("seed_set_violation",
                            f"need exactly {tuple(RESEARCH_BOOTSTRAP_SEEDS)},"
                            f" got {sorted(seed_runs)}")
-    seed_cats = set()
-    for seed, run in seed_runs.items():
-        if run.prepared_digest != base.prepared_digest:
-            raise MCInputError("provenance_mismatch", f"seed_{seed}")
-        if run.master_seed != seed:
-            raise MCInputError("axis_identity_mismatch",
-                               f"seed run {seed} carries master_seed="
-                               f"{run.master_seed}")
-        seed_cats.add(run.verdict().verdict)
-    mcse_ok = all(cons.mcse_ok and stress.mcse_ok
-                  for cons, stress in base.results.values())
-    return ConvergenceReport(
-        category_stable_under_doubling=doubled_ok,
-        category_same_across_seeds=(len(seed_cats) == 1),
-        quantile_drift_ok=drift_ok,
-        mcse_ok=mcse_ok,
-        drift_by_axis=MappingProxyType(drift_by_axis))
+    # (2) frozen production scales for the BASE run (R2.1 PHASE C.3)
+    if (base.B != B_WORLDS_FROZEN or base.K != K_PER_SEED_FROZEN
+            or base.master_seed != BASE_MASTER_SEED):
+        raise MCInputError(
+            "frozen_scale_violation",
+            f"base must run B={B_WORLDS_FROZEN}, K={K_PER_SEED_FROZEN}, "
+            f"master_seed={BASE_MASTER_SEED}; got B={base.B}, "
+            f"K={base.K}, seed={base.master_seed}")
+    # (3) per-axis reality rules over the SUPPLIED entries, DETERMINISTIC
+    # order M then K (the semantics-level blocker outranks the
+    # evidence-level one):
+    #     M — exhaustively enumerated, doubling semantics DECISION_REQUIRED;
+    #     K — grid replay BLOCKED, no actual K-doubled evidence can exist.
+    for axis in ("M", "K"):
+        if axis not in doubled_by_axis:
+            continue
+        if axis == "M":
+            raise MCInputError(
+                "m_axis_semantics_decision_required",
+                "M is the exhaustively enumerated start-phase set (MC "
+                "SS5, ~21); doubling it has no unique frozen meaning — "
+                "Aaron must rule (recommendation: finite-support "
+                "enumeration exempt from doubling)")
+        raise MCInputError(
+            "k_axis_evidence_blocked_grid_replay",
+            "grid replay is BLOCKED (EXACT_PER_DAY_DAY_STRATA missing "
+            "from the seal) — no actual K-doubled evidence can exist "
+            "and metadata may not impersonate it")
+    # (4) axes-set completeness — reachable only when no K/M entry was
+    # supplied at all, i.e. the caller never even attempted them.
+    if set(doubled_by_axis) != DOUBLING_AXES:
+        raise MCInputError("doubling_axes_violation",
+                           f"need exactly {sorted(DOUBLING_AXES)}, got "
+                           f"{sorted(doubled_by_axis)}")
+    raise AssertionError(
+        "unreachable: every legal axes-set carries an M entry and "
+        "refuses above until Aaron rules")
 
 
-def verdict_or_refuse(primary_inputs: Mapping,
-                      convergence: ConvergenceReport):
+def verdict_or_refuse(primary_inputs: Mapping, *, base: RunEvidence,
+                      doubled_by_axis: Mapping, seed_runs: Mapping):
     """The ONLY path to a Checkpoint-0 verdict.
+
+    R2.1 PHASE C.8: takes the convergence EVIDENCE, never a report object
+    — a hand-built all-green ConvergenceReport can no longer enter the
+    seal path, because convergence is recomputed HERE from the runs.
 
     Refuses (review H2) unless the input grid covers EXACTLY the frozen
     Primary verdict grid — both lifecycles x P2 x BOTH engines (MC SS0
     quantifier scope; S0 SS10.4 row 1 quantifies over "E1 与 E2 的所有预
     注册组合" and row 3's first arm needs the E2 combos present) — with
-    every combo id matching its VerdictInput's own labels; and refuses
-    without convergence (MC SS5 rule (e))."""
+    every combo id matching its VerdictInput's own labels and the frozen
+    primary theta channel; then recomputes convergence from evidence
+    (structurally refusing today: M semantics DECISION_REQUIRED, K
+    evidence BLOCKED, feasibility gate DECISION_REQUIRED upstream)."""
     from itsf.mc.verdict import apply_verdict
     if set(primary_inputs) != PRIMARY_VERDICT_GRID:
         raise MCInputError(
@@ -922,25 +1182,23 @@ def verdict_or_refuse(primary_inputs: Mapping,
         if v.channel != PRIMARY_THETA_CHANNEL:
             raise MCInputError("theta_channel_not_primary",
                                f"{cid} carries channel={v.channel!r}")
-    if not convergence.converged:
-        raise MCNotConverged(
-            "MC SS5 convergence rules not satisfied "
-            f"(a={convergence.category_stable_under_doubling} "
-            f"b={convergence.category_same_across_seeds} "
-            f"c={convergence.quantile_drift_ok} d={convergence.mcse_ok}) "
-            "— doubling rerun required, verdict refused")
+    convergence_from_evidence(base, doubled_by_axis, seed_runs)
     return apply_verdict(dict(primary_inputs))
 
 
 def render_verdict_inputs(prepared: PreparedMCInput,
-                          primary_inputs: Mapping,
-                          convergence: ConvergenceReport) -> dict:
+                          primary_inputs: Mapping, *, base: RunEvidence,
+                          doubled_by_axis: Mapping,
+                          seed_runs: Mapping) -> dict:
     """MC SS6 `verdict_inputs.json` seal CANDIDATE: the Primary combos'
     epistemic P5/median/P95 + feasibility flags + the mechanical verdict,
-    bound to the prepared input's identity. Refuses without convergence
-    (through verdict_or_refuse) — an unconverged candidate cannot render."""
+    bound to the prepared input's identity. R2.1: takes convergence
+    EVIDENCE (recomputed inside verdict_or_refuse) — an unconverged or
+    hand-declared candidate cannot render."""
     digest_before = prepared_digest(prepared)
-    verdict = verdict_or_refuse(primary_inputs, convergence)
+    verdict = verdict_or_refuse(primary_inputs, base=base,
+                                doubled_by_axis=doubled_by_axis,
+                                seed_runs=seed_runs)
     digest_after = prepared_digest(prepared)
     if digest_before != digest_after:
         raise MCInputError("prepared_digest_instability",
@@ -962,13 +1220,10 @@ def render_verdict_inputs(prepared: PreparedMCInput,
                   "feasible": v.feasible, "platform": v.platform,
                   "engine": v.engine, "channel": v.channel}
             for cid, v in sorted(primary_inputs.items())},
-        "convergence": {
-            "a_category_stable_under_doubling":
-                convergence.category_stable_under_doubling,
-            "b_category_same_across_seeds":
-                convergence.category_same_across_seeds,
-            "c_quantile_drift_ok": convergence.quantile_drift_ok,
-            "d_mcse_ok": convergence.mcse_ok},
+        "convergence_evidence": {
+            "base_run": base.run_label,
+            "doubled_axes": sorted(doubled_by_axis),
+            "seed_runs": sorted(seed_runs)},
         "verdict": {"category": verdict.verdict, "reason": verdict.reason},
     }
 

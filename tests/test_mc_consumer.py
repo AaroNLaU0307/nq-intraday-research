@@ -1,13 +1,10 @@
-"""DR-5 MC consumer behaviour battery (synthetic fixtures ONLY; R2).
+"""DR-5 MC consumer behaviour battery (synthetic fixtures ONLY; R2.1).
 
-Every fixture is hand-built bytes — no sealed S0 value is read anywhere.
-R2 additions: theta hard binding (S0 §7 L133), MANDATORY external custody
-authority, evidence-computed convergence/feasibility (no caller-declared
-booleans), deep immutability, fixed-world conditional aleatoric.
-
-The M-doubling fixtures below exercise the convergence MACHINERY only —
-the production semantics of "doubling an exhaustively enumerated M" is
-DECISION_REQUIRED_M_AXIS and no production caller can assemble it."""
+Bundle battery, theta hard binding, gate honesty (feasibility
+DECISION_REQUIRED), fixed-world aleatoric, real-runner refusals.
+Convergence-provenance and MCSE tests live in
+tests/test_mc_convergence_provenance.py; custody/calendar tests in
+tests/test_mc_custody_calendar.py."""
 from __future__ import annotations
 
 import dataclasses
@@ -62,7 +59,6 @@ def _bundle(*, pnl: float = 80.0) -> dict[str, bytes]:
         "oracle_daily": {
             PRIMARY: {"day_universe": {
                 "tp_days": list(TP_DAYS), "fp_days": list(FP_DAYS)}},
-            # secondary channel: superset TP (theta_0.3 selects more days)
             SECONDARY: {"day_universe": {
                 "tp_days": sorted(TP_DAYS + (FP_DAYS[0],)),
                 "fp_days": [FP_DAYS[1]]}},
@@ -93,28 +89,21 @@ def _refresh_manifest(bundle):
                    sort_keys=True) for n in names).encode("utf-8")
 
 
-def _authority(bundle) -> dict:
-    """External custody authority: per-file digests INCLUDING manifest.
-    In production this comes from the blind attestation / archive
-    inventory, never from the directory under review."""
-    return {n: hashlib.sha256(b).hexdigest() for n, b in bundle.items()}
-
-
 def _snapshot() -> dict:
     return {"trial_id": TRIAL, "authorized_commit": COMMIT,
             "event_sequence": 15, "nested": {"list": [1, 2]}}
 
 
 def _prepare(bundle=None, authority=None, calendar=None):
-    """Deep-check convenience: authority derived from the bundle AS GIVEN
-    (custody passes; the deeper battery is what is under test). Custody
-    tests pass a pre-tamper authority explicitly."""
+    """TEST_ONLY prepare: authority derived from the bundle AS GIVEN
+    unless a (pre-tamper) authority is passed explicitly."""
     b = bundle if bundle is not None else _bundle()
-    return mcc.prepare_mc_input(
+    return mcc.prepare_mc_input_for_tests(
         b, authorization_snapshot=_snapshot(),
-        expected_file_sha256=authority if authority is not None
-        else _authority(b),
-        calendar=calendar if calendar is not None else _calendar())
+        custody_authority=authority if authority is not None
+        else mcc.CustodyAuthority.for_tests(b),
+        test_only_calendar=calendar if calendar is not None
+        else _calendar())
 
 
 def _mutate_report(bundle, fn):
@@ -136,7 +125,7 @@ def test_positive_bundle_prepares():
 
 def test_missing_file_refused():
     b = _bundle()
-    auth = _authority(b)
+    auth = mcc.CustodyAuthority.for_tests(b)
     del b["MC_HANDOFF_E1_Base.jsonl"]
     with pytest.raises(mcc.MCInputError, match="bundle_exact_set"):
         _prepare(b, authority=auth)
@@ -144,75 +133,11 @@ def test_missing_file_refused():
 
 def test_extra_file_refused_including_a_planted_grid_samples():
     b = _bundle()
+    auth = mcc.CustodyAuthority.for_tests(b)
     b["GRID_SAMPLES.json"] = b"{}"
     with pytest.raises(mcc.MCInputError, match="bundle_exact_set"):
-        _prepare(b, authority=_authority(_bundle()))
-
-
-def test_type_swapped_file_refused():
-    b = _bundle()
-    auth = _authority(b)                       # pre-tamper custody
-    b["SEED_MANIFEST.json"] = b"not json at all"
-    _refresh_manifest(b)
-    with pytest.raises(mcc.MCInputError, match="bundle_hash_mismatch"):
         _prepare(b, authority=auth)
 
-
-def test_internal_manifest_mismatch_refused():
-    b = _bundle()
-    b["S0_REPORT.md"] = b"# tampered after manifest"   # manifest stale
-    with pytest.raises(mcc.MCInputError, match="bundle_hash_mismatch"):
-        _prepare(b, authority=_authority(b))
-
-
-# --- R2 PHASE C: external custody authority ---------------------------------
-
-def test_payload_plus_internal_manifest_rewrite_fails_external_custody():
-    """THE attack the external authority exists for: payload AND internal
-    manifest rewritten consistently — internal dual-pin passes, the
-    external authority refuses."""
-    b = _bundle()
-    auth = _authority(b)                       # custody BEFORE tamper
-    b["S0_REPORT.md"] = b"# attacker rewrote and re-manifested"
-    _refresh_manifest(b)                       # internal pins now agree
-    with pytest.raises(mcc.MCInputError, match="bundle_hash_mismatch"):
-        _prepare(b, authority=auth)
-
-
-def test_missing_external_digest_refused():
-    b = _bundle()
-    auth = _authority(b)
-    del auth["S0_REPORT.md"]
-    with pytest.raises(mcc.MCInputError,
-                       match="custody_authority_keyset"):
-        _prepare(b, authority=auth)
-
-
-def test_extra_external_digest_refused():
-    b = _bundle()
-    auth = _authority(b)
-    auth["EXTRA.json"] = "0" * 64
-    with pytest.raises(mcc.MCInputError,
-                       match="custody_authority_keyset"):
-        _prepare(b, authority=auth)
-
-
-def test_unpinned_manifest_in_authority_refused():
-    b = _bundle()
-    auth = _authority(b)
-    auth["manifest.jsonl"] = None              # manifest must be pinned too
-    with pytest.raises(mcc.MCInputError,
-                       match="custody_authority_malformed"):
-        _prepare(b, authority=auth)
-
-
-def test_authority_is_mandatory():
-    with pytest.raises(TypeError):
-        mcc.prepare_mc_input(_bundle(), authorization_snapshot=_snapshot(),
-                             calendar=_calendar())   # type: ignore
-
-
-# --- deeper battery (unchanged classes, R2-consistent) ----------------------
 
 def test_trial_id_mismatch_refused():
     b = _bundle()
@@ -220,7 +145,7 @@ def test_trial_id_mismatch_refused():
         "snapshot_before": {"trial_id": "S0-T999",
                             "authorized_commit": COMMIT}}).encode("utf-8")
     _refresh_manifest(b)
-    with pytest.raises(mcc.MCInputError, match="trial_commit_binding"):
+    with pytest.raises(mcc.MCInputError, match="binding"):
         _prepare(b)
 
 
@@ -334,20 +259,13 @@ def test_frozen_method_drift_refused(monkeypatch):
 def test_missing_authorization_snapshot_refused():
     b = _bundle()
     with pytest.raises(mcc.MCInputError, match="authorization_snapshot"):
-        mcc.prepare_mc_input(b, authorization_snapshot={},
-                             expected_file_sha256=_authority(b),
-                             calendar=_calendar())
+        mcc.prepare_mc_input_for_tests(
+            b, authorization_snapshot={},
+            custody_authority=mcc.CustodyAuthority.for_tests(b),
+            test_only_calendar=_calendar())
 
 
-def test_structurally_invalid_calendar_refused():
-    days = (TemplateDay(day_id="T0", cal_offset=0),
-            TemplateDay(day_id="T0", cal_offset=1))
-    bad = mcc.TemplateCalendar(days=days, first_month_offsets=(0,))
-    with pytest.raises(mcc.MCInputError, match="calendar_invalid"):
-        _prepare(calendar=bad)
-
-
-# --- R2 PHASE F: deep immutability ------------------------------------------
+# --- deep immutability (R2.1 PHASE F, consumer-side checks) -----------------
 
 def test_prepared_is_deeply_immutable():
     prepared = _prepare()
@@ -371,9 +289,10 @@ def test_prepared_is_deeply_immutable():
 def test_mutating_sources_after_prepare_has_no_effect():
     bundle = _bundle()
     snap = _snapshot()
-    prepared = mcc.prepare_mc_input(bundle, authorization_snapshot=snap,
-                                    expected_file_sha256=_authority(bundle),
-                                    calendar=_calendar())
+    prepared = mcc.prepare_mc_input_for_tests(
+        bundle, authorization_snapshot=snap,
+        custody_authority=mcc.CustodyAuthority.for_tests(bundle),
+        test_only_calendar=_calendar())
     d0 = mcc.prepared_digest(prepared)
     bundle.clear()
     snap["authorized_commit"] = "hacked"
@@ -396,16 +315,18 @@ def _epi(prepared, platform="topstep", engine="E1", scenario="Conservative",
                              master_seed=seed)
 
 
-def test_epistemic_crn_and_actual_sample_mcse():
+def test_epistemic_crn_provenance_and_metrics():
     prepared = _prepare()
     a = _epi(prepared)
     b = _epi(prepared)
     assert a.world_means == b.world_means      # CRN by construction
     assert a.p5 <= a.median <= a.p95
-    assert a.B == 2 and a.master_seed == 7
+    assert (a.B, a.M, a.master_seed) == (2, 2, 7)
     assert a.prepared_digest == mcc.prepared_digest(prepared)
-    assert isinstance(a.max_within_world_se, float)
-    assert isinstance(a.feasibility, mcc.FeasibilityEvidence)
+    fe = a.feasibility
+    assert fe.gate_status == "DECISION_REQUIRED"
+    assert not hasattr(fe, "feasible")         # the R2 boolean is GONE
+    assert 0.0 <= fe.ambiguous_share <= 1.0
 
 
 def test_non_frozen_master_seed_refused():
@@ -477,209 +398,76 @@ def test_integer_position_sizing_is_floored():
     assert isinstance(n, int) and n == 3
 
 
-# --- R2 PHASE B: theta hard binding -----------------------------------------
+# --- R2 PHASE B theta binding + R2.1 PHASE G feasibility honesty ------------
 
-def test_secondary_theta_refused_even_when_all_green():
-    """S0 §7 L133 (不得事后升格): theta_0.3 results — same machinery,
-    everything green — must be deterministically refused from the
-    Checkpoint-0 gate."""
+def test_secondary_theta_refused_before_feasibility():
+    """S0 §7 L133 (不得事后升格): theta_0.3 refuses with the THETA code —
+    the refusal is channel-specific, not the generic feasibility gate."""
     prepared = _prepare()
     cons = _epi(prepared, channel=SECONDARY)
     stress = _epi(prepared, scenario="Stress", channel=SECONDARY)
-    assert cons.p5 <= cons.p95                 # the run itself is healthy
     with pytest.raises(mcc.MCInputError, match="theta_channel_not_primary"):
         mcc.epistemic_go_gate_input(cons, stress)
 
 
-def test_primary_theta_same_input_enters_the_gate():
+def test_primary_theta_passes_theta_gate_then_hits_feasibility_gate():
+    """R2.1 PHASE G: no feasibility boolean is frozen, so even a fully
+    green PRIMARY-channel combo cannot become a VerdictInput — the gate
+    refuses with the DECISION_REQUIRED code (which also proves the theta
+    check passed)."""
     prepared = _prepare()
-    vi = mcc.epistemic_go_gate_input(
-        _epi(prepared, channel=PRIMARY),
-        _epi(prepared, scenario="Stress", channel=PRIMARY))
-    assert vi.channel == PRIMARY
+    with pytest.raises(mcc.MCInputError,
+                       match="feasibility_gate_decision_required"):
+        mcc.epistemic_go_gate_input(
+            _epi(prepared), _epi(prepared, scenario="Stress"))
 
 
-def test_verdict_gate_rechecks_channel(monkeypatch):
-    """Defense in depth: even a VerdictInput hand-built with a secondary
-    channel is refused at verdict_or_refuse."""
-    from itsf.mc.verdict import VerdictInput
-    prepared = _prepare()
-    grid = {}
-    for platform, policy in mcc.PRIMARY_COMBOS:
-        for engine in mcc.ENGINES:
-            grid[f"{platform}|{engine}|{policy}"] = VerdictInput(
-                p5_cons=1.0, median_cons=2.0, median_stress=1.0,
-                p95_cons=3.0, feasible=True, platform=platform,
-                engine=engine, channel=SECONDARY)
-    conv = _machinery_convergence(prepared)
-    with pytest.raises(mcc.MCInputError, match="theta_channel_not_primary"):
-        mcc.verdict_or_refuse(grid, conv)
-
-
-# --- R2 PHASE E: evidence-computed convergence ------------------------------
-
-def _run_evidence(prepared, *, label="base", axis="base", B=2, seed=7,
-                  calendar=None, K=None):
-    """Build RunEvidence from ACTUAL runs of the full Primary grid."""
-    target = prepared if calendar is None else dataclasses.replace(
-        prepared, calendar=calendar)
-    results = {}
-    for platform, policy in mcc.PRIMARY_COMBOS:
-        for engine in mcc.ENGINES:
-            cons = mcc.run_epistemic(target, platform=platform,
-                                     engine=engine,
-                                     scenario="Conservative",
-                                     channel=PRIMARY, B=B,
-                                     master_seed=seed)
-            stress = mcc.run_epistemic(target, platform=platform,
-                                       engine=engine, scenario="Stress",
-                                       channel=PRIMARY, B=B,
-                                       master_seed=seed)
-            results[f"{platform}|{engine}|{policy}"] = (cons, stress)
-    return mcc.RunEvidence(
-        run_label=label, axis=axis, B=B,
-        M=len(target.calendar.first_month_offsets),
-        K=K if K is not None else target.k_per_seed,
-        master_seed=seed,
-        prepared_digest=mcc.prepared_digest(target), results=results)
-
-
-def _machinery_convergence(prepared):
-    """Full convergence evidence. The M-doubled run is a MACHINERY-ONLY
-    fixture (doubled synthetic offset count); production cannot assemble
-    it — DECISION_REQUIRED_M_AXIS."""
-    base = _run_evidence(prepared)
-    doubled = {
-        "B": _run_evidence(prepared, label="double_B", axis="B", B=4),
-        "M": _run_evidence(prepared, label="double_M", axis="M",
-                           calendar=_calendar(n_days=8, n_offsets=4)),
-        "K": _run_evidence(prepared, label="double_K", axis="K",
-                           K=2 * prepared.k_per_seed),
-    }
-    seeds = {s: _run_evidence(prepared, label=f"seed_{s}", axis="seed",
-                              seed=s) for s in RESEARCH_BOOTSTRAP_SEEDS}
-    return mcc.convergence_from_evidence(base, doubled, seeds)
-
-
-def test_convergence_computed_from_evidence_end_to_end():
-    prepared = _prepare()
-    rep = _machinery_convergence(prepared)
-    assert set(rep.drift_by_axis) == {"B", "M", "K"}
-    for axis, drift in rep.drift_by_axis.items():
-        assert drift, axis                       # per-axis map, non-empty
-    assert rep.category_same_across_seeds
-    assert rep.mcse_ok in (True, False)          # computed, not declared
-
-
-def test_m_axis_missing_refuses_convergence():
-    """PRODUCTION reality: no legal M-doubled run exists
-    (DECISION_REQUIRED_M_AXIS) — convergence must refuse without it."""
-    prepared = _prepare()
-    base = _run_evidence(prepared)
-    doubled = {
-        "B": _run_evidence(prepared, label="double_B", axis="B", B=4),
-        "K": _run_evidence(prepared, label="double_K", axis="K",
-                           K=2 * prepared.k_per_seed),
-    }
-    seeds = {s: _run_evidence(prepared, label=f"seed_{s}", axis="seed",
-                              seed=s) for s in RESEARCH_BOOTSTRAP_SEEDS}
-    with pytest.raises(mcc.MCInputError, match="doubling_axes_violation"):
-        mcc.convergence_from_evidence(base, doubled, seeds)
-    assert mcc.M_AXIS_DOUBLING_STATUS == "DECISION_REQUIRED_M_AXIS"
-
-
-def test_provenance_mismatch_refused():
-    prepared = _prepare()
-    other = _prepare(_bundle(pnl=90.0))        # different bytes -> digest
-    base = _run_evidence(prepared)
-    doubled = {
-        "B": _run_evidence(other, label="double_B", axis="B", B=4),
-        "M": _run_evidence(prepared, label="double_M", axis="M",
-                           calendar=_calendar(n_days=8, n_offsets=4)),
-        "K": _run_evidence(prepared, label="double_K", axis="K",
-                           K=2 * prepared.k_per_seed),
-    }
-    seeds = {s: _run_evidence(prepared, label=f"seed_{s}", axis="seed",
-                              seed=s) for s in RESEARCH_BOOTSTRAP_SEEDS}
-    with pytest.raises(mcc.MCInputError, match="provenance_mismatch"):
-        mcc.convergence_from_evidence(base, doubled, seeds)
-
-
-def test_doubling_scale_violation_refused():
-    prepared = _prepare()
-    base = _run_evidence(prepared)
-    doubled = {
-        "B": _run_evidence(prepared, label="double_B", axis="B", B=3),
-        "M": _run_evidence(prepared, label="double_M", axis="M",
-                           calendar=_calendar(n_days=8, n_offsets=4)),
-        "K": _run_evidence(prepared, label="double_K", axis="K",
-                           K=2 * prepared.k_per_seed),
-    }
-    seeds = {s: _run_evidence(prepared, label=f"seed_{s}", axis="seed",
-                              seed=s) for s in RESEARCH_BOOTSTRAP_SEEDS}
-    with pytest.raises(mcc.MCInputError, match="doubling_scale_violation"):
-        mcc.convergence_from_evidence(base, doubled, seeds)
-
-
-def test_axis_identity_swap_refused():
-    prepared = _prepare()
-    base = _run_evidence(prepared)
-    b_run = _run_evidence(prepared, label="double_B", axis="B", B=4)
-    k_run = _run_evidence(prepared, label="double_K", axis="K",
-                          K=2 * prepared.k_per_seed)
-    m_run = _run_evidence(prepared, label="double_M", axis="M",
-                          calendar=_calendar(n_days=8, n_offsets=4))
-    seeds = {s: _run_evidence(prepared, label=f"seed_{s}", axis="seed",
-                              seed=s) for s in RESEARCH_BOOTSTRAP_SEEDS}
-    with pytest.raises(mcc.MCInputError, match="axis_identity_mismatch"):
-        mcc.convergence_from_evidence(
-            base, {"B": k_run, "K": b_run, "M": m_run}, seeds)
-
-
-def test_seed_identity_mismatch_refused():
-    prepared = _prepare()
-    base = _run_evidence(prepared)
-    doubled = {
-        "B": _run_evidence(prepared, label="double_B", axis="B", B=4),
-        "M": _run_evidence(prepared, label="double_M", axis="M",
-                           calendar=_calendar(n_days=8, n_offsets=4)),
-        "K": _run_evidence(prepared, label="double_K", axis="K",
-                           K=2 * prepared.k_per_seed),
-    }
-    seeds = {s: _run_evidence(prepared, label=f"seed_{s}", axis="seed",
-                              seed=7)          # every run actually seed 7
-             for s in RESEARCH_BOOTSTRAP_SEEDS}
-    with pytest.raises(mcc.MCInputError, match="axis_identity_mismatch"):
-        mcc.convergence_from_evidence(base, doubled, seeds)
-
-
-def test_feasibility_is_computed_not_declared():
-    """No public surface accepts a feasibility boolean any more: the gate
-    signature has no such parameter and the value rides on evidence."""
+def test_no_public_surface_accepts_a_feasibility_boolean():
     import inspect
     sig = inspect.signature(mcc.epistemic_go_gate_input)
     assert "feasible" not in sig.parameters
-    prepared = _prepare()
-    vi = mcc.epistemic_go_gate_input(
-        _epi(prepared), _epi(prepared, scenario="Stress"))
-    assert isinstance(vi.feasible, bool)       # derived from evidence
+    assert mcc.FEASIBILITY_GATE_STATUS == "DECISION_REQUIRED"
 
 
-# --- verdict gate -----------------------------------------------------------
+def test_verdict_gate_rechecks_channel_and_grid():
+    """Defense in depth at verdict_or_refuse: hand-built VerdictInputs
+    with a secondary channel refuse on theta; a subset grid refuses on
+    coverage — both BEFORE any convergence evidence is consulted."""
+    from itsf.mc.verdict import VerdictInput
 
-def test_partial_primary_grid_refused():
-    prepared = _prepare()
-    base = _run_evidence(prepared)
-    grid = {cid: mcc.epistemic_go_gate_input(c, s)
-            for cid, (c, s) in base.results.items()}
-    del grid["topstep|E2|P2"]
+    def grid(channel):
+        return {
+            f"{platform}|{engine}|{policy}": VerdictInput(
+                p5_cons=1.0, median_cons=2.0, median_stress=1.0,
+                p95_cons=3.0, feasible=True, platform=platform,
+                engine=engine, channel=channel)
+            for platform, policy in mcc.PRIMARY_COMBOS
+            for engine in mcc.ENGINES}
+
+    dummy = None      # never reached: both cases refuse before evidence
+    with pytest.raises(mcc.MCInputError, match="theta_channel_not_primary"):
+        mcc.verdict_or_refuse(grid(SECONDARY), base=dummy,
+                              doubled_by_axis={}, seed_runs={})
+    g = grid(PRIMARY)
+    del g["topstep|E2|P2"]
     with pytest.raises(mcc.MCInputError, match="primary_grid_coverage"):
-        mcc.verdict_or_refuse(grid, _machinery_convergence(prepared))
+        mcc.verdict_or_refuse(g, base=dummy, doubled_by_axis={},
+                              seed_runs={})
 
+
+# --- authorization gate -----------------------------------------------------
 
 def test_public_real_runner_refuses_deterministically():
     with pytest.raises(McConsumerAbsent, match="NOT authorized"):
         mcc.run_real_mc()
+
+
+def test_production_prepare_caller_is_gate_first():
+    """R2.1 PHASE F: the non-test production caller exists and refuses at
+    the authorization gate BEFORE any sealed byte is read."""
+    from itsf.mc import real_input
+    with pytest.raises(McConsumerAbsent, match="NOT authorized"):
+        real_input.prepare_real_mc_input()
 
 
 def test_lookalike_registry_token_cannot_open_the_gate():
@@ -689,30 +477,16 @@ def test_lookalike_registry_token_cannot_open_the_gate():
         mcc.authorize_real_mc(text)
 
 
-# --- full synthetic chain (machinery-complete; production M stays blocked) --
+# --- the honest end-to-end cascade (R2.1) -----------------------------------
 
-def test_full_synthetic_production_path():
+def test_full_chain_ends_at_the_honest_refusals():
+    """prepare ✓ -> epistemic ✓ -> aleatoric ✓ -> the gate cascade refuses
+    exactly where the frozen decisions are missing: feasibility
+    (DECISION_REQUIRED) at the combo gate, and K/M evidence at the
+    convergence path — no verdict, no seal, no silent pass."""
     prepared = _prepare()
-    base = _run_evidence(prepared)
-    grid = {cid: mcc.epistemic_go_gate_input(c, s)
-            for cid, (c, s) in base.results.items()}
-    conv = _machinery_convergence(prepared)
-    worlds = mb.build_worlds(prepared.day_sequences[PRIMARY], 1, 7,
-                             length=len(prepared.calendar.days))
-    al = mcc.run_conditional_aleatoric(
-        prepared, world=worlds[0], platform="topstep", engine="E1",
-        scenario="Conservative", channel=PRIMARY)
-    assert al.attempt_monthly_evs
-    if not conv.converged:
-        with pytest.raises(mcc.MCNotConverged):
-            mcc.render_verdict_inputs(prepared, grid, conv)
-        return
-    candidate = mcc.render_verdict_inputs(prepared, grid, conv)
-    assert candidate["schema"] == "mc_verdict_inputs.v2"
-    assert candidate["primary_theta_channel"] == PRIMARY
-    assert candidate["prepared_digest"] == mcc.prepared_digest(prepared)
-    assert set(candidate["primary"]) == set(mcc.PRIMARY_VERDICT_GRID)
-    for cell in candidate["primary"].values():
-        assert cell["channel"] == PRIMARY
-    assert candidate["verdict"]["category"] in ("STOP", "GO", "beta",
-                                                "alpha")
+    res = _epi(prepared)
+    assert res.world_means                     # epistemic ran
+    with pytest.raises(mcc.MCInputError,
+                       match="feasibility_gate_decision_required"):
+        mcc.epistemic_go_gate_input(res, _epi(prepared, scenario="Stress"))

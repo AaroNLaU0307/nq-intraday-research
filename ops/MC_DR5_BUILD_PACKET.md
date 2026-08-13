@@ -191,3 +191,97 @@ PARTIAL 依据（PHASE H PASS 条件对照）：θ 门✓、外部 custody✓、
 ＋M=穷尽枚举豁免替代——同为语义级裁决）；3. `MC_RUN_AUTHORIZED` registry
 语法批准＋实现；4. Codex 对本候选 PASS；5. 精确 MC 运行授权。
 不满足前 `run_real_mc` 保持确定性拒绝；本轮不生成任何授权语句。
+
+
+---
+
+## 11.【R2.1 现势（provenance closeout 轮）——与上文冲突处以本节为准】
+
+授权：`START_MC_DR5_CONSUMER_R2_1_PROVENANCE_CLOSEOUT`。
+Subagent 模式：两车道均已使用——S1（tests/test_mc_convergence_provenance.py，
+20 测试）完整交付；S2（tests/test_mc_custody_calendar.py，15 测试）在
+API 限额中断前完成文件写入；两车道文件租约零交集，主代理按其标注的
+集成接缝统一对齐（参数名 custody_authority 采纳 S2 命名；
+FeasibilityEvidence 新字段与 M/K 拒绝顺序按 S1 合同）——全程披露。
+
+### 11.1 Codex 三反例修复前后
+
+| 反例 | 修复前（R2） | 修复后（R2.1） |
+|---|---|---|
+| 外层 RunEvidence 元数据可伪装规模/种子 | 外层 B/M/K/seed 仅记录，不校验内层 | `validate_inner_binding`：外层逐字段对内层 EpistemicResult（含 world_means 实际长度、M=实际相位数、prepared_digest、θ 通道、combo 标签、场景角色）；旗舰反例（内层全 B=2/seed=7，仅改外层）逐项确定性拒绝 |
+| 手搭全绿 ConvergenceReport 可入 seal | verdict/render 收 report 对象 | verdict/render 只收证据三元组，收敛在内部重算；report 对象无入口 |
+| feasibility 布尔偷裁 | "any payout＋非全跳过"必要条件读法当门 | **撤回**：`FEASIBILITY_GATE_STATUS=DECISION_REQUIRED`，gate 确定性拒绝出票（CHECKPOINT0_VERDICT_REACHABLE=NO）；机械指标保留并扩充（ambiguous_share 新增） |
+
+另落地：MCSE 零方差严格化（between=0 仅 within=0 过；NaN/inf/负/空样本
+→ `epistemic_samples_invalid`）；prepared_digest 绑全内容（逐日历
+day_id/offset/首月相位/全日序列/快照规范化摘要——同长异日必异摘要）；
+注入日历复制 tuple 化＋参数改名 `test_only_calendar`（生产入口无此
+seam）；**typed CustodyAuthority**＋生产来源接线
+`load_custody_authority_from_attestation`（解析盲式 post-run attestation
+14 行哈希表；对真实文件实测通过）＋非测试生产 caller
+`mc/real_input.py::prepare_real_mc_input`（gate-first：guards→授权拒绝
+→在任何封存字节被读之前停止）；test_only authority 进生产入口
+→ `custody_authority_test_only_in_production` 拒绝；authority 与 bundle
+的 trial/commit 绑定无条件校验。
+
+### 11.2 现势状态（PHASE I 模板，事实决定）
+
+```
+MC_CONSUMER_BUILD=PARTIAL
+CONVERGENCE_EVIDENCE_READY=PARTIAL   # M 语义未裁＋K 证据 BLOCKED＋base 冻结规模无真实运行
+MC_INPUT_BUNDLE_READY=YES            # typed authority＋生产来源接线＋非测试 caller 齐备
+GRID_REPLAY_STATUS=BLOCKED
+DECISION_REQUIRED_M_AXIS=YES
+FEASIBILITY_METRICS_READY=YES        # 指标机械计算（per-metric 状态见 11.3C）
+FEASIBILITY_GATE=DECISION_REQUIRED
+CHECKPOINT0_VERDICT_REACHABLE=NO
+MC_REAL_RUN_READY=NO
+MC_EXECUTED=NO
+MC_REGISTRY_EVENTS_APPENDED=NO
+STRATEGY_BUILD_STARTED=NO
+```
+
+### 11.3 三份最小 Aaron 决策包（不替选）
+
+**A. GRID/DAY_STRATA（同 §10.3 三选一，附本轮建议）**：
+
+```
+GRID_RECOMMENDATION=B_BLIND_SUPPLEMENTAL_DAY_STRATA_SEAL
+```
+
+理由：零 trial 消耗；盲式可设计（结构性访问登记、零 outcome 查看）；
+原封存件不动；工件独立封存＋commit/seeds/日池交叉绑定。代价=审计上
+弱于运行时封存（须披露晚于揭盲生成）。A（永缺 H1 资格层）与 C（消耗
+S0-T002＋重复检验语义）备选保留。
+
+**B. M 轴语义**：
+
+```
+M_AXIS_RECOMMENDATION=FINITE_SUPPORT_EXHAUSTIVE_ENUMERATION_EXEMPT_FROM_DOUBLING
+```
+
+机器义务（批准后代码强制）：完整合法 start-phase 集合＝首月全部交易日
+相位；每一 phase 恰好一次（无缺失/重复/额外）；B/K 加倍规则原样保留；
+**批准前不得生效**（当前代码对任何 M 条目确定性拒绝）。
+
+**C. Feasibility 冻结输出与候选阈值（逐项，Aaron 择定或另定）**：
+
+| 冻结输出（MC §6） | 计算状态 | 候选阈值（仅列，不选） | 后果 |
+|---|---|---|---|
+| 月均交易数/频率 | 可由 offered/24 派生（COMPUTED-DERIVABLE） | ≥2/月 或 ≥3/月 | 过低→样本不足以支撑 payout 周期 |
+| 达标盈利日分布 vs payout 要求 | PENDING_ENGINEERING（需 per-event 管道） | payout 资格月覆盖率 ≥50%/≥80% | 决定 payout 路径现实性 |
+| n=0 跳过率 | COMPUTED（total_skips_n0/total_offered） | ≤25% 或 ≤50% | 过高→整数仓位不可行 |
+| 合约上限触碰率 | PENDING_ENGINEERING | ≤10% | 过高→scaling 档位约束失真 |
+| payout 实现概率/次数 | COMPUTED（payout_realized_share） | >0 或 ≥25% 世界实现 | GO 的"payout 路径可行"主证 |
+| ambiguous 占比 | COMPUTED（ambiguous_share） | ≤5% | 过高→双场景不确定性支配结果 |
+| E2 超预算概率 | PENDING_ENGINEERING（需记录级 realised/anchor 管道） | P(超预算)≤10% | E2 无止损尾部纪律 |
+
+规则：布尔归约=以上各项的合取式（Aaron 定每项阈值与是否入选）；未裁
+前 `VerdictInput` 不可构造（gate 确定性拒绝，已测）。
+
+### 11.4 证据等级
+
+```
+FABLE_MEASURED=三 MC 测试文件 75 项＋既有 87 项全绿；全套件见终报；attestation loader 对真实文件实测
+CODEX_NOT_YET_REPRODUCED=YES
+```
