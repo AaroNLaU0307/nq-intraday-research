@@ -1112,6 +1112,18 @@ _KC_FUNNEL_LEVELS: tuple[str, ...] = (
     "L4_final_feature_construction_dates")
 _KC_FUNNEL_SIDE = "side_diagnostic_complete_390_bar_rth_days"
 
+#: KC2 per-field binding maps (Codex fix round, 2026-08-10): locked
+#: preflight node name -> published na_table row name. Fixed vocabulary —
+#: frozen §4/§5 feature/label identities, not a tunable.
+_KC_FEATURE_MAP: tuple = (
+    ("F1", "ret_open30"), ("F2", "or_width"), ("F3", "de_open30"),
+    ("F4", "rvol_open30"), ("F5", "gap"), ("F6", "open_loc_on"),
+    ("F7", "on_range"), ("F8", "retrace_open30"),
+    ("F9", "close_pos_open30"), ("F10", "is_event_day"))
+_KC_LABEL_MAP: tuple = (
+    ("Y_cont", "y_cont"), ("Y1", "y1"), ("Y2", "y2_de_pm"),
+    ("Y3", "y3_close_pos_pm"), ("Y4", "y4_mfe"), ("Y5", "y5_mae"))
+
 #: Sealed names that MAY appear beyond the always-expected set — admitted
 #: only when their admission conditions hold (handoff.formal_sealable);
 #: their presence is validated as membership of this CLOSED set, never as a
@@ -1216,6 +1228,56 @@ def _kc1_kc2(formal, ctx, problems, verdicts) -> None:
                             + "!=" + repr(want))
             v1 = "FAIL"
 
+    # KC1 date-set strengthening (Codex fix round): same COUNTS with
+    # swapped DATES must not pass. (a) the published era partition's union
+    # must have exactly the locked L3 size (the structurally-eligible
+    # record population — frozen §3 NA policy keeps warm-up/NA days IN the
+    # sample, so eras partition L3, not L4; verified empirically on the
+    # chain fixture); (b) every locked REMOVED date must be absent from it.
+    eras = st.get("eras") if isinstance(st, Mapping) else None
+    published_days: set = set()
+    if isinstance(eras, Mapping) and eras:
+        ok_lists = True
+        for era_dates in eras.values():
+            if not isinstance(era_dates, (list, tuple)):
+                ok_lists = False
+                break
+            published_days.update(str(d) for d in era_dates)
+        l3_pop = funnel.get("L3_structurally_eligible_days")
+        if not ok_lists:
+            problems.append("key_claims.KC1.eras_not_date_lists")
+            v1 = "FAIL"
+        elif _kc_int(l3_pop) and len(published_days) != l3_pop:
+            problems.append(
+                "key_claims.KC1.era_union_size_not_locked_l3:"
+                + repr(len(published_days)) + "!=" + repr(l3_pop))
+            v1 = "FAIL"
+        excluded: set = set()
+        removed = funnel.get("removed_sets")
+        if isinstance(removed, Mapping):
+            for dates in removed.values():
+                if isinstance(dates, (list, tuple)):
+                    excluded.update(str(d) for d in dates)
+        anchors = locked.get("anchors")
+        if isinstance(anchors, Mapping):
+            for node in anchors.values():
+                md = (node.get("missing_dates")
+                      if isinstance(node, Mapping) else None)
+                if isinstance(md, (list, tuple)):
+                    # anchor-missing days stay IN the sample (NA policy);
+                    # only whole-day REMOVALS may not reappear. Anchors are
+                    # collected but bound through KC2 counts, not exclusion.
+                    pass
+        overlap = sorted(excluded & published_days)
+        if overlap:
+            problems.append(
+                "key_claims.KC1.removed_day_republished:"
+                + ",".join(overlap[:5]))
+            v1 = "FAIL"
+    else:
+        problems.append("key_claims.KC1.published_eras_missing")
+        v1 = "FAIL"
+
     l3 = funnel.get("L3_structurally_eligible_days")
     if not _kc_int(l3):
         problems.append("key_claims.KC2.locked_l3_unusable")
@@ -1256,6 +1318,53 @@ def _kc1_kc2(formal, ctx, problems, verdicts) -> None:
         if rows_seen == 0:
             problems.append("key_claims.KC2.no_na_rows_covered")
             v2 = "FAIL"
+        # KC2 per-field LOCKED-COUNT binding (Codex fix round): each mapped
+        # feature/label row's NA accounting must EQUAL the locked preflight
+        # value by name — conservation alone would accept a reshuffle.
+        def _row(table, name):
+            rows = (per_field.get(table)
+                    if isinstance(per_field, Mapping) else None)
+            row = rows.get(name) if isinstance(rows, Mapping) else None
+            return row if isinstance(row, Mapping) else None
+
+        locked_feats = locked.get("features")
+        if not isinstance(locked_feats, Mapping):
+            problems.append("key_claims.KC2.locked_features_missing")
+            v2 = "FAIL"
+        else:
+            for fk, pub_name in _KC_FEATURE_MAP:
+                node = locked_feats.get(fk)
+                row = _row("features", pub_name)
+                if not isinstance(node, Mapping) or row is None:
+                    problems.append(
+                        "key_claims.KC2.feature_uncovered:" + fk)
+                    v2 = "FAIL"
+                    continue
+                if row.get("na") != node.get("na"):
+                    problems.append(
+                        "key_claims.KC2.feature_na_not_locked:" + fk + ":"
+                        + repr(row.get("na")) + "!=" + repr(node.get("na")))
+                    v2 = "FAIL"
+        locked_labels = locked.get("labels")
+        if not isinstance(locked_labels, Mapping):
+            problems.append("key_claims.KC2.locked_labels_missing")
+            v2 = "FAIL"
+        else:
+            for yk, pub_name in _KC_LABEL_MAP:
+                node = locked_labels.get(yk)
+                row = _row("labels", pub_name)
+                if not isinstance(node, Mapping) or row is None:
+                    problems.append("key_claims.KC2.label_uncovered:" + yk)
+                    v2 = "FAIL"
+                    continue
+                if (row.get("not_na") != node.get("available_days")
+                        or row.get("na") != node.get("unavailable_days")):
+                    problems.append(
+                        "key_claims.KC2.label_counts_not_locked:" + yk + ":"
+                        + repr((row.get("not_na"), row.get("na"))) + "!="
+                        + repr((node.get("available_days"),
+                                node.get("unavailable_days"))))
+                    v2 = "FAIL"
         f10 = st.get("f10_counts") if isinstance(st, Mapping) else None
         if isinstance(f10, Mapping) and f10:
             vals = list(f10.values())

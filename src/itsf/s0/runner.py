@@ -174,6 +174,41 @@ scoped to the run-directory-lifecycle concern this module already owns:
       out of band, not laundered into a run failure it structurally
       cannot be (there is no gate left to fail into; Stage F already
       completed and the registry already carries COMPLETED).
+
+S0 CLOSEOUT (Codex final review) — two runner-side holdings closed here:
+
+  #3  THE EXACT-SET WINDOW. The last full enumeration of the run directory
+      used to be the one inside the post_write_verify seam, which runs
+      BEFORE `_record_artifacts` writes manifest.jsonl and before Stage F
+      exists. Everything after that point — the manifest write, the chain
+      replay, the eve of the COMPLETED append — was unwatched, so a file
+      that appeared in that window sealed silently. Stage F now re-proves
+      the exact set immediately after the chain verifies and immediately
+      before `append_registry_event("COMPLETED", ...)`, as an EQUALITY
+      against a set built only from the run's own writes: the
+      post-RUN_STARTED baseline (`baseline_entries`, captured at the
+      instant the hook wrote it, into a directory `mkdir(exist_ok=False)`
+      had just created empty), every renderer artifact name, and
+      `manifest.jsonl`. Surplus and missing entries alike fail into
+      `_fail_run(F_SEALED, "final_exact_set", ...)`. No name is
+      whitelisted and none is hardcoded.
+
+  #4  THE ATTEMPTS PATH CREATED ITSELF WHILE BEING REFUSED.
+      `_fail_pre_run` -> `_attempt_dir` used to mkdir
+      `config.attempts_dir` unconditionally, so a failure of the
+      `output_roots_validated` gate — the gate whose entire meaning is
+      "these output paths are unfit" — still materialised one of them,
+      inside the repo tree. `_attempts_dir_self_check` now runs first:
+      absolute, parseable, disjoint from `_package_repo_root()`. A refusal
+      returns None into the already-graceful adir-None path (no disk
+      artifacts, registry event still appended). See that method for why
+      it is a narrow self-check and not a second `validate_output_roots`
+      call.
+
+  (#5, the archive's mid-copy recoverability, is closed in
+  `runinfra.archive_sealed_run` — copy into `<dest>.partial`, verify, then
+  promote by rename — and is visible from here only as the same
+  `archive_status` / `archive_report` this module already records.)
 """
 from __future__ import annotations
 
@@ -424,10 +459,66 @@ class S0Runner:
 
     # -- helpers -------------------------------------------------------------
 
+    def _attempts_dir_self_check(self) -> Path | None:
+        """The attempts path, or None if it fails a minimal containment
+        self-check (Codex final review #4, S0 closeout).
+
+        THE DEFECT THIS CLOSES. `_fail_pre_run` calls `_attempt_dir`, which
+        used to mkdir `config.attempts_dir` unconditionally — INCLUDING when
+        the gate being reported is `output_roots_validated` itself. So the
+        one failure whose whole meaning is "these output paths are not fit
+        to be used" was also the failure that created one of them. An
+        attempts directory inside the repo tree (the exact L-5 defect class:
+        an actively-syncing OneDrive tree) got materialised while the runner
+        was in the middle of refusing it.
+
+        WHAT THIS IS AND IS NOT. It is a NARROW self-defence on the attempts
+        path only — absolute, parseable, and disjoint from the repo tree
+        (`_package_repo_root`, derived at runtime exactly as the Stage-A
+        gate derives it). It deliberately does NOT re-run
+        `runinfra.validate_output_roots`: that gate also constrains
+        `runs_root`, and `runs_root` may itself be the invalid thing being
+        reported — a failure path that can only write its evidence when the
+        thing it is reporting is valid writes no evidence at all.
+
+        A None return is not a new failure mode. `_fail_pre_run` already
+        degrades gracefully on `adir is None` (SA-6 F-10 / F-05): no disk
+        artifacts, the raw detail withheld rather than sealed, and the
+        PRE_RUN_ATTEMPT_FAILURE registry event still appended with
+        `NO_ATTEMPT_DIR`. The attempt is recorded either way; only the
+        directory is refused.
+        """
+        raw = self._d.config.attempts_dir
+        if not isinstance(raw, str) or not raw:
+            return None
+        try:
+            base = Path(raw)
+            if not base.is_absolute():
+                return None
+            # resolve() without strict=True: nothing here exists yet, and
+            # this must be pure path arithmetic (same discipline as
+            # runinfra.validate_output_roots).
+            resolved = base.resolve()
+            repo_root = _package_repo_root().resolve()
+        except (OSError, ValueError, TypeError):     # unparseable path
+            return None
+        # disjoint in BOTH directions, exactly as the L-5 root gate means
+        # it: neither may contain, nor equal, the other.
+        if resolved.is_relative_to(repo_root) or repo_root.is_relative_to(
+                resolved):
+            return None
+        return base
+
     def _attempt_dir(self) -> Path | None:
         """Attempt root, or None if it cannot be created (SA-6 F-10: a mkdir
-        failure must still produce a registry event, not a bare traceback)."""
-        base = Path(self._d.config.attempts_dir)
+        failure must still produce a registry event, not a bare traceback).
+
+        Codex #4: the containment self-check runs BEFORE any mkdir, so an
+        attempts path this runner has no business creating is never created
+        — not even by the failure path that is reporting it."""
+        base = self._attempts_dir_self_check()
+        if base is None:
+            return None
         try:
             base.mkdir(parents=True, exist_ok=True)  # attempts root is cheap
         except OSError:
@@ -875,6 +966,23 @@ class S0Runner:
                     RunStage.C_COMPUTE, rdir, "post_run_started_hook",
                     f"registry-hash record failed after RUN_STARTED: "
                     f"{type(exc).__name__}: {exc}", exc)
+        # ---- run-directory BASELINE for the final exact-set proof ----------
+        # Codex final review #3 (S0 closeout). The run directory was created
+        # empty two statements ago (`mkdir(exist_ok=False)`), so whatever is
+        # in it NOW is exactly what the runner's own post-RUN_STARTED hook
+        # just wrote — in production, `REGISTRY_AFTER_RUN_STARTED.json`.
+        # Recording it HERE, at the moment of the write, is what lets the
+        # Stage-F proof be an EQUALITY against a set derived entirely from
+        # the run's own writes: baseline + renderer artifacts + the
+        # manifest. No name is hardcoded, nothing is whitelisted, and a
+        # differently-wired hook needs no change here.
+        try:
+            baseline_entries = frozenset(p.name for p in rdir.iterdir())
+        except OSError as exc:
+            return self._fail_run(
+                RunStage.C_COMPUTE, rdir, "run_dir_baseline",
+                f"run directory could not be enumerated immediately after "
+                f"the atomic run-start: {type(exc).__name__}: {exc}", exc)
         self._safe_log(f"stage={RunStage.C_COMPUTE.value} status=start")
 
         # ---- Stage C: compute (zero information release) -------------------
@@ -1022,6 +1130,50 @@ class S0Runner:
         if self._log_errors:
             return self._fail_run(RunStage.F_SEALED, rdir, "log_guard",
                                   self._log_guard_breach(), LogLeakError())
+
+        # ---- FINAL exact-set proof (Codex final review #3, S0 closeout) ----
+        # THE WINDOW THIS CLOSES. Until now the LAST full enumeration of the
+        # run directory happened in the post_write_verify seam — before
+        # `_record_artifacts` wrote manifest.jsonl and before Stage F ran at
+        # all. Anything that landed in the run directory after that point (a
+        # OneDrive sync dropping during the manifest write, during the chain
+        # verify, or on the eve of the COMPLETED append) was never looked at
+        # by anything, and the run sealed with an undeclared file inside the
+        # evidentiary directory. This is the last possible moment at which
+        # the invariant can still be enforced: the chain has verified, and
+        # the registry has not yet been told the run COMPLETED.
+        #
+        # ZERO WHITELIST. The expected set is derived entirely from the
+        # run's own writes — the post-RUN_STARTED baseline captured at the
+        # moment the hook wrote it, every renderer artifact name in
+        # `written`, and the manifest this stage just replayed. No name is
+        # tolerated because of what it is called; `desktop.ini`,
+        # `S0_REPORT.md.tmp` and a stray subdirectory are all the same kind
+        # of surplus. Enumeration is non-recursive and by ENTRY NAME, so a
+        # planted subdirectory is a surplus entry exactly like a file
+        # (matching output_proof.py's `REFUSAL_DISK_EXTRA_FILE` discipline).
+        # Missing entries are refused too: the proof is an EQUALITY, so a
+        # declared artifact deleted after the chain verified is caught by
+        # the same statement that catches an added one.
+        expected_entries = (set(baseline_entries)
+                            | {name for name, _ in written}
+                            | {MANIFEST_NAME})
+        try:
+            final_entries = {p.name for p in rdir.iterdir()}
+        except OSError as exc:
+            return self._fail_run(
+                RunStage.F_SEALED, rdir, "final_exact_set",
+                f"run directory could not be enumerated before COMPLETED: "
+                f"{type(exc).__name__}: {exc}", exc)
+        if final_entries != expected_entries:
+            surplus = sorted(final_entries - expected_entries)
+            missing = sorted(expected_entries - final_entries)
+            return self._fail_run(
+                RunStage.F_SEALED, rdir, "final_exact_set",
+                f"run directory contents are not the exact declared set at "
+                f"seal time: surplus={surplus} missing={missing}",
+                RunGateError())
+
         d.append_registry_event("COMPLETED", "S0 report sealed")
         self._stages_done.append(RunStage.F_SEALED.value)
         self._safe_log(f"stage={RunStage.F_SEALED.value} status=end")

@@ -14,6 +14,9 @@ from itsf.s0.study import ENGINES
 L3 = 20
 L4 = 18
 
+DAYS = [f"2020-01-{d:02d}" for d in range(1, L3 + 1)]
+REMOVED = ["2019-12-30", "2019-12-31"]
+
 FUNNEL = {
     "L0_scheduled_trading_days": 25,
     "L1_observed_rth_days": 24,
@@ -21,11 +24,28 @@ FUNNEL = {
     "L3_structurally_eligible_days": L3,
     "L4_final_feature_construction_dates": L4,
     "side_diagnostic_complete_390_bar_rth_days": 21,
+    "removed_sets": {"zero_bar_days": list(REMOVED)},
 }
+
+_FEATURE_MAP = (("F1", "ret_open30"), ("F2", "or_width"),
+                ("F3", "de_open30"), ("F4", "rvol_open30"), ("F5", "gap"),
+                ("F6", "open_loc_on"), ("F7", "on_range"),
+                ("F8", "retrace_open30"), ("F9", "close_pos_open30"),
+                ("F10", "is_event_day"))
+_LABEL_MAP = (("Y_cont", "y_cont"), ("Y1", "y1"), ("Y2", "y2_de_pm"),
+              ("Y3", "y3_close_pos_pm"), ("Y4", "y4_mfe"), ("Y5", "y5_mae"))
 
 
 def assertions_bytes(funnel=None):
-    return json.dumps({"funnel": dict(funnel or FUNNEL)}).encode("utf-8")
+    locked = {
+        "funnel": dict(funnel or FUNNEL),
+        "features": {fk: {"constructible": L3 - 1, "na": 1,
+                          "reasons": {"anchor_missing": 1}}
+                     for fk, _ in _FEATURE_MAP},
+        "labels": {yk: {"available_days": L3 - 2, "unavailable_days": 2}
+                   for yk, _ in _LABEL_MAP},
+    }
+    return json.dumps(locked).encode("utf-8")
 
 
 def sealed_names():
@@ -39,16 +59,20 @@ def sealed_names():
 def formal_payload():
     per_seed = {str(s): {"n_boot": FROZEN_N_BOOT}
                 for s in RESEARCH_BOOTSTRAP_SEEDS}
+    funnel_pub = {k: v for k, v in FUNNEL.items() if k != "removed_sets"}
     return {
         "structural": {
-            "funnel_counts": dict(FUNNEL),
+            "funnel_counts": funnel_pub,
+            "eras": {"era_a": DAYS[:10], "era_b": DAYS[10:]},
             "na_table": {
                 "population": L3,
                 "per_field": {
-                    "features": {"f5": {"na": 4, "not_na": 16,
-                                        "reasons": {"roll": 4}}},
-                    "labels": {"y1": {"na": 2, "not_na": 18,
-                                      "reasons": {"warmup": 2}}},
+                    "features": {pub: {"na": 1, "not_na": L3 - 1,
+                                       "reasons": {"anchor_missing": 1}}
+                                 for _, pub in _FEATURE_MAP},
+                    "labels": {pub: {"na": 2, "not_na": L3 - 2,
+                                     "reasons": {"warmup": 2}}
+                               for _, pub in _LABEL_MAP},
                 },
             },
             "f10_counts": {"CPI": 3, "NFP": 3, "FOMC": 2, "none": 11,
@@ -144,8 +168,8 @@ def test_kc2_row_conservation_against_l3():
 
 def test_kc2_reasons_must_sum_to_na():
     f = formal_payload()
-    f["structural"]["na_table"]["per_field"]["features"]["f5"][
-        "reasons"] = {"roll": 1}
+    f["structural"]["na_table"]["per_field"]["features"]["gap"][
+        "reasons"] = {"roll": 99}
     assert run(f).verdicts["KC2_label_na_counts"] == "FAIL"
 
 
@@ -272,3 +296,58 @@ def test_never_raises_on_hostile_context():
     rep = op.verify_key_claims(formal_payload(), Hostile(),
                                phase="pre_write")
     assert rep.sealable_pre_write is False
+
+
+# --- Codex fix-round strengthening (KC1 date sets, KC2 locked counts) ------
+
+def test_kc1_era_union_must_equal_locked_l4():
+    f = formal_payload()
+    f["structural"]["eras"]["era_b"] = f["structural"]["eras"]["era_b"][:-1]
+    rep = run(f)
+    assert rep.verdicts["KC1_day_universe"] == "FAIL"
+    assert any("era_union_size" in p for p in rep.problems)
+
+
+def test_kc1_removed_day_republished_fails():
+    f = formal_payload()
+    f["structural"]["eras"]["era_a"] = (
+        f["structural"]["eras"]["era_a"][:-1] + [REMOVED[0]])
+    rep = run(f)
+    assert rep.verdicts["KC1_day_universe"] == "FAIL"
+    assert any("removed_day_republished" in p for p in rep.problems)
+
+
+def test_kc1_same_counts_swapped_dates_caught():
+    """The exact Codex counter-example: identical counts, one date swapped
+    for a removed one — KC1 must now refuse."""
+    f = formal_payload()
+    era = f["structural"]["eras"]["era_a"]
+    era[0] = REMOVED[1]
+    rep = run(f)
+    assert rep.verdicts["KC1_day_universe"] == "FAIL"
+
+
+def test_kc2_feature_na_bound_to_locked_value():
+    f = formal_payload()
+    row = f["structural"]["na_table"]["per_field"]["features"]["gap"]
+    row["na"], row["not_na"] = 2, L3 - 2         # conserves, but != locked
+    rep = run(f)
+    assert rep.verdicts["KC2_label_na_counts"] == "FAIL"
+    assert any("feature_na_not_locked:F5" in p for p in rep.problems)
+
+
+def test_kc2_label_counts_bound_to_locked_value():
+    f = formal_payload()
+    row = f["structural"]["na_table"]["per_field"]["labels"]["y4_mfe"]
+    row["na"], row["not_na"] = 3, L3 - 3         # conserves, but != locked
+    rep = run(f)
+    assert rep.verdicts["KC2_label_na_counts"] == "FAIL"
+    assert any("label_counts_not_locked:Y4" in p for p in rep.problems)
+
+
+def test_kc2_missing_mapped_field_is_uncovered_fail():
+    f = formal_payload()
+    del f["structural"]["na_table"]["per_field"]["features"]["on_range"]
+    rep = run(f)
+    assert rep.verdicts["KC2_label_na_counts"] == "FAIL"
+    assert any("feature_uncovered:F7" in p for p in rep.problems)

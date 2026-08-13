@@ -70,7 +70,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import shutil
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -1308,6 +1310,34 @@ class ArchiveReport:
 _ARCHIVE_OK = "archive_ok"
 _ARCHIVE_FAILED = "archive_failed"
 
+# Codex final-review #5 (S0 closeout). The archive is built under
+# `<dest><_ARCHIVE_PARTIAL_SUFFIX>` and only PROMOTED to `<dest>` once every
+# file has been copied AND re-verified. A `*.partial` directory is therefore
+# never an archive of record: it is either mid-construction or the debris of
+# a crashed attempt, and in both cases it may be deleted. That is what makes
+# the retry path safe — the thing a failed attempt leaves behind is not the
+# thing the next attempt refuses to overwrite.
+_ARCHIVE_PARTIAL_SUFFIX = ".partial"
+
+
+def _remove_archive_partial(partial: Path) -> str | None:
+    """Best-effort removal of an in-progress archive copy.
+
+    Returns `None` when the directory is gone (or was never there), else a
+    human-readable error LINE for the report — a removal that itself fails
+    is disclosed, never swallowed: leftover debris under `archive_root` is
+    the exact condition that blocked the retry this change exists to
+    unblock, so its presence must be visible in the report."""
+    if not partial.exists():
+        return None
+    try:
+        shutil.rmtree(partial)
+    except OSError as exc:
+        return (f"in-progress archive copy could NOT be removed "
+                f"({type(exc).__name__}: {exc}); it must be deleted by hand "
+                f"before the next archive attempt: {partial}")
+    return None
+
 
 def archive_sealed_run(runs_dir: str | Path,
                        archive_root: str | Path) -> ArchiveReport:
@@ -1346,6 +1376,22 @@ def archive_sealed_run(runs_dir: str | Path,
     Refuses (as an `archive_failed` report, not an exception) if
     ``archive_root/<run-dir-name>/`` already exists — this function
     never overwrites a prior archive copy.
+
+    RECOVERABILITY (Codex final review #5, S0 closeout). Every byte is
+    written into ``archive_root/<run-dir-name>.partial/`` and the copy is
+    PROMOTED to its final name with a single `os.replace` only after every
+    file has been copied AND re-verified. A failure at any point therefore
+    leaves NO directory at the final name: the partial is removed
+    best-effort (a removal that itself fails is reported), so the very
+    next attempt sees a clean destination and can simply retry. Before
+    this, a mid-copy failure left a half-copy AT the final name, which the
+    `dest.exists()` refusal below then treated as a completed archive —
+    the failure was permanent and the only remedy was manual deletion. A
+    stale `*.partial` left by a crashed prior attempt is removed at the
+    start for the same reason: it is never the archive of record.
+
+    The `dest.exists()` refusal is UNCHANGED and deliberately so — a
+    completed archive is never overwritten, only a partial is.
     """
     src = Path(runs_dir)
     if not src.is_dir():
@@ -1356,6 +1402,9 @@ def archive_sealed_run(runs_dir: str | Path,
         )
     dest_root = Path(archive_root)
     dest = dest_root / src.name
+    # every write below lands here; `dest` itself is only ever produced by
+    # the atomic promotion at the very end.
+    partial = dest_root / f"{src.name}{_ARCHIVE_PARTIAL_SUFFIX}"
 
     try:
         dest_root.mkdir(parents=True, exist_ok=True)
@@ -1373,13 +1422,31 @@ def archive_sealed_run(runs_dir: str | Path,
             errors=(f"archive destination already exists (refusing to "
                    f"overwrite a prior archive copy): {dest}",))
 
+    # debris from a crashed prior attempt: safe to delete (a partial is
+    # never an archive of record), and NOT safe to write into, because
+    # stale files would silently survive under a fresh copy.
+    stale = _remove_archive_partial(partial)
+    if stale is not None:
+        return ArchiveReport(
+            ok=False, status=_ARCHIVE_FAILED, run_dir_name=src.name,
+            source_dir=str(src), dest_dir=str(dest), files=(),
+            errors=(stale,))
+    try:
+        partial.mkdir(parents=True, exist_ok=False)
+    except OSError as exc:
+        return ArchiveReport(
+            ok=False, status=_ARCHIVE_FAILED, run_dir_name=src.name,
+            source_dir=str(src), dest_dir=str(dest), files=(),
+            errors=(f"in-progress archive copy could not be created: "
+                   f"{type(exc).__name__}: {exc}",))
+
     errors: list[str] = []
     files: list[ArchiveFileRecheck] = []
 
     source_files = sorted(p for p in src.rglob("*") if p.is_file())
     for source_path in source_files:
         rel = source_path.relative_to(src).as_posix()
-        dest_path = dest / source_path.relative_to(src)
+        dest_path = partial / source_path.relative_to(src)
         try:
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             dest_path.write_bytes(source_path.read_bytes())
@@ -1394,7 +1461,11 @@ def archive_sealed_run(runs_dir: str | Path,
         # THE RECHECK. Independent re-read of BOTH sides after the copy —
         # never reusing the bytes read during the copy itself — so this
         # is a genuine post-write proof, not a re-statement of the value
-        # the copy loop already believed.
+        # the copy loop already believed. The destination side is read
+        # back OUT OF THE PARTIAL, and it is compared against the SOURCE:
+        # the promotion below is a rename of bytes that have already been
+        # proven equal to the sealed run's, never a copy that is trusted
+        # because it was renamed.
         try:
             source_reread = source_path.read_bytes()
             dest_reread = dest_path.read_bytes()
@@ -1420,8 +1491,36 @@ def archive_sealed_run(runs_dir: str | Path,
             dest_bytes=len(dest_reread), source_sha256=source_sha,
             dest_sha256=dest_sha, match=match))
 
-    ok = not errors
+    if errors:
+        # NOTHING is left at the final name, so the next attempt is a
+        # plain retry rather than a manual cleanup.
+        cleanup = _remove_archive_partial(partial)
+        if cleanup is not None:
+            errors.append(cleanup)
+        return ArchiveReport(
+            ok=False, status=_ARCHIVE_FAILED, run_dir_name=src.name,
+            source_dir=str(src), dest_dir=str(dest), files=tuple(files),
+            errors=tuple(errors))
+
+    # THE PROMOTION. One rename, after every file is copied and proven.
+    # `dest` was checked non-existent above, so this creates it rather
+    # than replacing anything; if it lost that race, the OSError is
+    # captured like any other archive-side problem and the partial is
+    # cleaned up, leaving whatever is at `dest` untouched.
+    try:
+        os.replace(partial, dest)
+    except OSError as exc:
+        errors.append(f"verified archive copy could not be promoted to its "
+                      f"final name ({type(exc).__name__}: {exc}): {dest}")
+        cleanup = _remove_archive_partial(partial)
+        if cleanup is not None:
+            errors.append(cleanup)
+        return ArchiveReport(
+            ok=False, status=_ARCHIVE_FAILED, run_dir_name=src.name,
+            source_dir=str(src), dest_dir=str(dest), files=tuple(files),
+            errors=tuple(errors))
+
     return ArchiveReport(
-        ok=ok, status=_ARCHIVE_OK if ok else _ARCHIVE_FAILED,
+        ok=True, status=_ARCHIVE_OK,
         run_dir_name=src.name, source_dir=str(src), dest_dir=str(dest),
-        files=tuple(files), errors=tuple(errors))
+        files=tuple(files), errors=())

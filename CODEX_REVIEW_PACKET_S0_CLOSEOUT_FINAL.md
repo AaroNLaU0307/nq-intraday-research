@@ -51,7 +51,8 @@
 
 ## 2. F-1 / F-2 终态
 
-**F-1 = CLOSED（本轮验收边界内）**：`prepare`（pre-exposure）绑定生产 resolver 单例
+**F-1 = CLOSED（本轮验收边界内；第一候选的此宣称被 Codex 反例证伪——
+`capture_evidence` 内部活调用——已在第二候选修复，见 §11）**：`prepare`（pre-exposure）绑定生产 resolver 单例
 （G11 稳定身份）→ `context.materialize_day_value_snapshot` 物化逐日值快照 →
 `_PreparedExecutionInput.day_values` → Stage C 只消费快照（`build_full_study_result`
 的 `day_value_snapshot` 参数；config callable 曝光后零调用，行为测试证明）。
@@ -190,7 +191,7 @@ runs/ = ABSENT
 READY_APPENDED=NO
 RUN_AUTHORIZATION_REQUESTED=NO
 REAL_S0_RUN=NO
-REAL_DATA_READ=NO   # 生产/研究路径零读取；§0.3 的测试进程结构性加载事件除外（已披露＋永久防护）
+REAL_DATA_READ=YES—STRUCTURAL_TEST_INCIDENT   # Codex 措辞采纳（IR-28d）：测试进程两次结构性加载（§0.3；零 outcome 接触；事件档案 ops/INCIDENT_STRUCTURAL_TEST_LOAD_20260810.md；conftest 永久闸）。生产/研究路径零读取
 POST_FREEZE_STRATEGY_IMPLEMENTED=NO
 AWAITING_CODEX_FINAL_INTEGRATED_REVIEW=YES
 ```
@@ -204,3 +205,42 @@ AWAITING_CODEX_FINAL_INTEGRATED_REVIEW=YES
 4. DR-4 全序列口径在 evidence CR-2 与 KC5 的双重独立重建是否闭合；
 5. L-5 门与归档语义 vs 裁决句的逐字对照；
 6. READY supersession（Option A/B/C）在本包 PASS 后才由 Aaron 裁决（预登记，非本包内容）。
+
+## 11. Codex 第一轮终审（HOLD）的处置（第二候选，本节之后的内容以第二候选为准）
+
+Codex 对 `f54d05a` 裁 `CODEX_FINAL_REVIEW=HOLD / NOT READY`（六项阻断＋四项待
+Aaron 裁决）。主代理逐项 Level-1 复核：**六项阻断全部属实**（含对我方 F-1
+"CLOSED" 宣称的真实反例——`capture_evidence` 内部 `config.vol_axis_of` 调用被
+主代理与 R1 双双漏掉）。Aaron 以逐字指令"你替我研究以及做决定"委托裁决权，
+四项待裁项以 IR-28a-d 行使（授权出处入档，Aaron 可随时推翻）。处置：
+
+| Codex 阻断 | 修复 |
+|---|---|
+| #1 F-1 证据层活调用 | `capture_evidence(day_value_snapshot=)` 贯通；EV-5 消费快照；链级毒化-callable 行为钉＋源码钉 |
+| #2 KC 范围不足 | KC1 增日期集绑定（era 并集==锁定 L3＋removed 日不得复现——Codex 的同数换日反例已有专项钉）；KC2 增逐字段锁定计数绑定（F1-F10 na＋Y_cont/Y1-Y5 available/unavailable，守恒重排反例专项钉）；KC3 托管改真链——post-write 读磁盘密封 HANDOFF_ADMISSION.json（manifest 哈希绑定）内的 evidence 判定，合成标记删除 |
+| #3 exact-set 窗口 | Stage F 链验证后、COMPLETED 前最终目录枚举（零白名单；后植文件/子目录专项钉） |
+| #4 attempts 未验证创建 | `_attempt_dir` 最小自卫检查（绝对＋不在 repo 树），失败走既有 adir=None 降级 |
+| #5 归档不响亮/不可恢复 | `.partial` 复制＋原子晋升＋残留清理＋重试安全；入口终端行加印 archive_status |
+| #6 DR-5 宣称过强 | 更正为 `PARTIAL_BY_RULING`（S0 侧 consumer 已上路；加倍/收敛归 MC 接线——IR-28 状态行为准） |
+
+委托裁决：IR-28a（DR-7 零填充＋"0"方向桶转正）、IR-28b（DR-2 三子约定转正）、
+IR-28c（DR-1 ii=乘子后 {2,3,3,4}；报告链接入 PARTIAL 具名）、IR-28d（治理记账：
+本包 §9 行已按 Codex 措辞更正；事件档案入库；EXPOSURE_LEDGER 不追加的理由入档；
+口令豁免追认记录）。`2495 passed` 的 `FABLE_REPORTED / CODEX_NOT_REPRODUCED`
+定级照单接受——本轮终态数字同为 FABLE_MEASURED，供 Codex 复算。
+
+**第二候选终态数字（全部 FABLE_MEASURED，供 Codex 复算）**：
+
+- 全套件 fresh：**2519 passed / 0 failed / 0 skipped，482.17s**
+  （`-p no:cacheprovider`；S6 的 final_exact_set 新终态失败模式与全链交互零冲突）；
+  `--collect-only` = 2519 = 双钉。
+- 修复轮新增测试：+24（我方 8：KC 强化负例 6＋F-1 证据钉 2；S6：+16，每项
+  修复带 revert 实测证据——见 test_s0_runner S0-closeout 组）。
+- `SCANS=CLEAN`；`FROZEN OK`；`git diff --check` 干净；registry/exposure 逐字
+  基线；`runs/` 不存在；无 tag；无 READY/授权事件。
+- S6 诚实注记採纳入档：final exact-set 的第三分量（hook 写入名）按观察捕获而
+  非硬编码——mkdir→hook 返回窗口仍由 post_write_verify 的 exact-set 覆盖；
+  硬编码名等价于白名单，故弃。归档错误行经无守卫 stdout 打印为**有意的信道
+  选择**（H-1 定性：工件名=运行不变常量；与既有 terminal 行同信道）。
+- attempts/ 残留（§7.11）与 GRID_SAMPLES withheld（DR-5 PARTIAL_BY_RULING）
+  状态不变。

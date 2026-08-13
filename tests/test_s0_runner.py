@@ -995,7 +995,7 @@ def test_pytest_gate_floor_is_the_audit_baseline():
     """SA-10 N3: the floor tracks the CURRENT suite, closing the
     silent-collection-drop headroom."""
     mod = real_run_module()
-    assert mod.MIN_COLLECTED_TESTS == 2495
+    assert mod.MIN_COLLECTED_TESTS == 2519
 
 
 # ===========================================================================
@@ -3306,3 +3306,493 @@ def test_attempts_dir_lands_under_same_runs_root_as_runs_dir(tmp_path):
     assert out.attempts_dir.resolve().is_relative_to(runs_root.resolve())
     assert runs_dir.resolve().is_relative_to(runs_root.resolve())
     assert not Path(deps.config.runs_dir).exists()   # never reached Stage C
+
+
+# ===========================================================================
+# S0 CLOSEOUT — Codex final review #3: the L-5 exact-set WINDOW
+# ===========================================================================
+#
+# THE HOLDING. The last full enumeration of the run directory happened in
+# the post_write_verify seam, which runs BEFORE `_record_artifacts` writes
+# manifest.jsonl and before Stage F exists at all. Everything after that
+# point — the manifest write, the chain replay, the eve of the COMPLETED
+# registry append — was unwatched, so a file that appeared in that window
+# sealed silently inside the evidentiary directory.
+#
+# Every planting test below wires the SAME exact-set post_write_verify the
+# L-5 section already uses, and plants strictly AFTER it has passed. So
+# each of them is a direct measurement of the window: on the pre-fix
+# runner the seam says "zero extras", the chain verifies, and the run
+# reaches COMPLETED with the stray entry on disk.
+
+
+def _exact_set_post_write_verify(rdir, written, prepared):
+    """The M6.1.7 disk seal as the L-5 section models it — the check that
+    USED to be the last enumeration of the run directory."""
+    declared = {name for name, _ in written}
+    on_disk = {p.name for p in rdir.iterdir() if p.is_file()}
+    extra = on_disk - declared
+    if extra:
+        return False, f"disk_extra_file: {sorted(extra)}"
+    for name, data in written:
+        if (rdir / name).read_bytes() != data:
+            return False, f"byte mismatch: {name}"
+    return True, f"{len(written)} artifact(s) byte-verified, zero extras"
+
+
+def _hook_writing_registry_record(rdir: Path) -> None:
+    """The synthetic analog of the production `post_run_started_hook`,
+    which writes REGISTRY_AFTER_RUN_STARTED.json into the run directory
+    (scripts/s0_real_run.py `make_snapshot_control`). The final exact-set
+    proof must ACCEPT it — it is one of the run's own writes — without any
+    name being hardcoded or whitelisted in the runner."""
+    (rdir / "REGISTRY_AFTER_RUN_STARTED.json").write_text(
+        json.dumps({"registry_sha256_after_run_started": "0" * 64}, indent=1,
+                   sort_keys=True), encoding="utf-8", newline="\n")
+
+
+def _plant_during_chain_verify(monkeypatch, plant, *, after_verify=False):
+    """Injection point BETWEEN the manifest write and the final exact-set
+    proof: the runner calls `runinfra.verify_chain_records` there, so a
+    wrapper around it runs exactly inside the window Codex #3 names.
+    `after_verify=True` delays `plant()` until the real verification has
+    already returned its verdict — which is how a DELETION can be tested
+    without turning it into a verify_chain failure instead."""
+    real = runinfra.verify_chain_records
+
+    def wrapper(*args, **kwargs):
+        if not after_verify:
+            plant()
+        verdict = real(*args, **kwargs)
+        if after_verify:
+            plant()
+        return verdict
+
+    monkeypatch.setattr(runinfra, "verify_chain_records", wrapper)
+
+
+def test_final_exact_set_honest_run_completes_with_run_started_hook_file(
+        tmp_path):
+    """The honest path is unchanged: a full synthetic A->F run whose
+    post-RUN_STARTED hook writes a file into the run directory still
+    reaches COMPLETED. The proof's expected set is derived from the run's
+    OWN writes (baseline + artifacts + manifest), so the hook's file is
+    accounted for by observation rather than by a hardcoded name."""
+    runs_root, archive_root, runs_dir, attempts_dir = _tmp_output_roots(tmp_path)
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate("g1")],
+        b_checks=[GateCheck("b1", lambda: (True, "ok"))],
+        integrity=[lambda r: (True, "ok")],
+        runs_root=runs_root, archive_root=archive_root,
+        runs_dir=runs_dir, attempts_dir=attempts_dir)
+    deps = _dc_replace(deps, post_run_started_hook=_hook_writing_registry_record)
+    out = S0Runner(deps).run()
+
+    assert out.ok is True, out.failed_gate
+    assert out.terminal_stage == RunStage.F_SEALED
+    assert [e for e, _ in events] == ["RUN_STARTED", "COMPLETED"]
+    assert {p.name for p in runs_dir.iterdir()} == {
+        "REGISTRY_AFTER_RUN_STARTED.json", "S0_REPORT.md", "manifest.jsonl"}
+
+
+def test_file_planted_during_manifest_write_fails_final_exact_set(
+        tmp_path, monkeypatch):
+    """THE REGRESSION FOR CODEX #3, first half of the window: a file that
+    lands WHILE `_record_artifacts` is writing manifest.jsonl. The
+    post_write_verify seam has already run and passed (zero extras at that
+    moment), so nothing before this fix could see it."""
+    runs_root, archive_root, runs_dir, attempts_dir = _tmp_output_roots(tmp_path)
+    real_append = runinfra.append_manifest_record
+    planted = runs_dir / "desktop.ini"
+
+    def planting_append(path, record):
+        planted.write_bytes(b"[stray sync artifact]")
+        return real_append(path, record)
+
+    monkeypatch.setattr(runinfra, "append_manifest_record", planting_append)
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()],
+        post_write_verify=_exact_set_post_write_verify,
+        runs_root=runs_root, archive_root=archive_root,
+        runs_dir=runs_dir, attempts_dir=attempts_dir)
+    out = S0Runner(deps).run()
+
+    assert out.ok is False
+    assert out.failure_kind == "run_failure"
+    assert out.terminal_stage == RunStage.F_SEALED
+    assert out.failed_gate == "final_exact_set"
+    assert out.exposure_consumed is True
+    # the registry learns FAILED, never COMPLETED
+    assert [e for e, _ in events] == ["RUN_STARTED", "FAILED"]
+    # nothing is deleted, and the detection is recorded on disk
+    assert planted.exists()
+    assert (runs_dir / "RUN_FAILURE_REPORT.md").exists()
+    incident = runs_dir / f"INCIDENT_{out.incident_id}.md"
+    assert "desktop.ini" in incident.read_text(encoding="utf-8")
+    # a failed run never reaches the archive step
+    assert out.archive_status == ""
+
+
+def test_file_planted_between_chain_verify_and_completed_fails_final_exact_set(
+        tmp_path, monkeypatch):
+    """THE REGRESSION FOR CODEX #3, second half of the window: the plant
+    happens inside Stage F, after the manifest is written and while the
+    chain is being verified — i.e. on the eve of the COMPLETED append."""
+    runs_root, archive_root, runs_dir, attempts_dir = _tmp_output_roots(tmp_path)
+    verified: list[str] = []
+
+    def verifying_seam(rdir, written, prepared):
+        ok, detail = _exact_set_post_write_verify(rdir, written, prepared)
+        verified.append(detail)
+        return ok, detail
+
+    _plant_during_chain_verify(
+        monkeypatch,
+        lambda: (runs_dir / "S0_REPORT.md.tmp").write_bytes(b"sync temp"))
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()], post_write_verify=verifying_seam,
+        runs_root=runs_root, archive_root=archive_root,
+        runs_dir=runs_dir, attempts_dir=attempts_dir)
+    out = S0Runner(deps).run()
+
+    # the OLD last-enumeration ran, and saw a clean directory
+    assert verified and "zero extras" in verified[0]
+    # the NEW one catches what the old one structurally could not
+    assert out.ok is False
+    assert out.failed_gate == "final_exact_set"
+    assert out.terminal_stage == RunStage.F_SEALED
+    assert [e for e, _ in events] == ["RUN_STARTED", "FAILED"]
+    assert (runs_dir / "S0_REPORT.md.tmp").exists()
+
+
+def test_subdirectory_planted_in_the_window_fails_final_exact_set(
+        tmp_path, monkeypatch):
+    """Subdirectories are extras. The enumeration is by ENTRY NAME and
+    non-recursive, so a directory dropped into the run dir is surplus
+    exactly like a file — the pre-existing seam analog filters on
+    `p.is_file()` and would have missed this one entirely."""
+    runs_root, archive_root, runs_dir, attempts_dir = _tmp_output_roots(tmp_path)
+    _plant_during_chain_verify(
+        monkeypatch, lambda: (runs_dir / ".sync_conflict").mkdir())
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()],
+        post_write_verify=_exact_set_post_write_verify,
+        runs_root=runs_root, archive_root=archive_root,
+        runs_dir=runs_dir, attempts_dir=attempts_dir)
+    out = S0Runner(deps).run()
+
+    assert out.ok is False
+    assert out.failed_gate == "final_exact_set"
+    assert (runs_dir / ".sync_conflict").is_dir()      # nothing deleted
+    incident = runs_dir / f"INCIDENT_{out.incident_id}.md"
+    assert ".sync_conflict" in incident.read_text(encoding="utf-8")
+
+
+def test_declared_artifact_removed_in_the_window_fails_final_exact_set(
+        tmp_path, monkeypatch):
+    """The proof is an EQUALITY, not a subset test: an artifact that
+    DISAPPEARS after the chain verified is refused by the same statement
+    that refuses a surplus one. The deletion is timed after the real
+    verification returns, so this is a genuine final-exact-set catch and
+    not a verify_chain failure wearing its name."""
+    runs_root, archive_root, runs_dir, attempts_dir = _tmp_output_roots(tmp_path)
+    _plant_during_chain_verify(
+        monkeypatch, lambda: (runs_dir / "S0_REPORT.md").unlink(),
+        after_verify=True)
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()],
+        post_write_verify=_exact_set_post_write_verify,
+        runs_root=runs_root, archive_root=archive_root,
+        runs_dir=runs_dir, attempts_dir=attempts_dir)
+    out = S0Runner(deps).run()
+
+    assert out.ok is False
+    assert out.failed_gate == "final_exact_set"
+    assert [e for e, _ in events] == ["RUN_STARTED", "FAILED"]
+    incident = runs_dir / f"INCIDENT_{out.incident_id}.md"
+    assert "missing=['S0_REPORT.md']" in incident.read_text(encoding="utf-8")
+
+
+def test_final_exact_set_runs_after_chain_verify_and_before_completed():
+    """Placement pin (the fix is only a fix at this exact point): the
+    proof sits after the chain verdict and strictly before the COMPLETED
+    registry append."""
+    source = inspect.getsource(S0Runner.run)
+    idx_verify = source.index("verdict = runinfra.verify_chain_records(")
+    idx_exact = source.index('"final_exact_set"')
+    idx_completed = source.index('d.append_registry_event("COMPLETED"')
+    assert idx_verify < idx_exact < idx_completed
+    # ZERO WHITELIST, pinned as the exact expression: the expected set is
+    # the union of the run's own writes and nothing else. A tolerated
+    # filename would have to be added here, and this breaks if one is.
+    assert "expected_entries = (set(baseline_entries)" in source
+    assert "| {name for name, _ in written}" in source
+    assert "| {MANIFEST_NAME})" in source
+    # and the comparison is an EQUALITY, never a subset test
+    assert "if final_entries != expected_entries:" in source
+
+
+# ===========================================================================
+# S0 CLOSEOUT — Codex final review #4: the attempts directory used to be
+# created by the very gate that was refusing it
+# ===========================================================================
+
+
+def test_attempts_dir_inside_repo_tree_is_never_created_by_the_refusal(
+        tmp_path):
+    """THE REGRESSION FOR CODEX #4. `_fail_pre_run` -> `_attempt_dir` used
+    to mkdir `config.attempts_dir` unconditionally — including when the
+    failing gate IS `output_roots_validated`, so the refusal of an unfit
+    output path created one. Here BOTH governed paths are bad: runs_root
+    is inside the repo tree (the L-5 defect) and so is attempts_dir. The
+    runner must refuse at the output-roots gate and create NOTHING under
+    the repo, while still producing a well-formed pre-run attempt."""
+    bad_runs_root = REPO / "runs"
+    bad_attempts_dir = REPO / "s0_attempts_must_never_be_created"
+    assert not bad_attempts_dir.exists()             # precondition
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()],
+        runs_root=bad_runs_root,
+        runs_dir=bad_runs_root / "runs" / "S0-T001",
+        attempts_dir=bad_attempts_dir,
+        archive_root=tmp_path / "archive_root")
+    out = S0Runner(deps).run()
+
+    # refused at the output-roots gate, pre-exposure
+    assert out.ok is False
+    assert out.failure_kind == "pre_run_attempt"
+    assert out.failed_gate == "output_roots_validated"
+    assert out.terminal_stage == RunStage.A_PRECHECK
+    assert out.exposure_consumed is False
+    # THE FIX: nothing was created under the repo tree — not the runs
+    # root, and not the attempts directory the failure path itself wanted
+    assert not bad_attempts_dir.exists()
+    assert not bad_runs_root.exists()
+    # still a well-formed attempt: no disk artifacts, but the outcome is
+    # complete and the registry event is appended (SA-6 F-10 / F-05)
+    assert out.attempts_dir is None
+    assert out.incident_id.startswith("INC-")
+    assert [e for e, _ in events] == ["PRE_RUN_ATTEMPT_FAILURE"]
+    assert "NO_ATTEMPT_DIR" in events[0][1]
+    assert out.incident_id in events[0][1]           # opaque id, no raw text
+
+
+def test_attempts_dir_self_check_refuses_a_relative_path(tmp_path):
+    """The self-check's other two clauses: a non-absolute (and therefore
+    ambiguous) attempts path is refused before any mkdir, and the attempt
+    still degrades gracefully."""
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()],
+        attempts_dir=Path("relative_attempts_dir"),
+        runs_dir=tmp_path / "runs" / "S0-T001")
+    out = S0Runner(deps).run()
+
+    assert out.failure_kind == "pre_run_attempt"
+    assert out.failed_gate == "output_roots_validated"
+    assert out.attempts_dir is None
+    assert not Path("relative_attempts_dir").exists()
+    assert [e for e, _ in events] == ["PRE_RUN_ATTEMPT_FAILURE"]
+
+
+def test_attempts_dir_self_check_is_not_a_second_validate_output_roots():
+    """Scope pin. The self-check is narrow BY DESIGN: it must not call
+    `validate_output_roots`, because `runs_root` can be the very thing
+    being reported — a failure path that can only write its evidence when
+    the thing it is reporting is valid writes no evidence at all."""
+    source = inspect.getsource(S0Runner._attempts_dir_self_check)
+    assert "runinfra.validate_output_roots(" not in source
+    assert "_package_repo_root()" in source
+    # and it is consulted BEFORE any mkdir on the attempts path
+    attempt_dir_src = inspect.getsource(S0Runner._attempt_dir)
+    assert attempt_dir_src.index("self._attempts_dir_self_check()") < \
+        attempt_dir_src.index("base.mkdir(")
+
+
+def test_valid_attempts_dir_still_created_by_a_pre_run_failure(tmp_path):
+    """The self-check is a self-DEFENCE, not a new refusal: a normal
+    tmp_path attempts directory (disjoint from the repo, absolute) is
+    still created and still receives the failure report."""
+    deps, events, _ = make_deps(tmp_path, gates=[bad_gate("unrelated_gate")])
+    out = S0Runner(deps).run()
+
+    assert out.failed_gate == "unrelated_gate"
+    assert out.attempts_dir is not None
+    assert out.attempts_dir.is_dir()
+    assert (out.attempts_dir / "PRE_RUN_ATTEMPT_FAILURE.md").exists()
+
+
+# ===========================================================================
+# S0 CLOSEOUT — Codex final review #5: archive recoverability
+# ===========================================================================
+#
+# THE HOLDING. `archive_sealed_run` copied straight into the FINAL
+# destination, so a mid-copy failure left a half-copy there — which the
+# `dest.exists()` refusal then treated as a completed archive. The failure
+# was permanent: every retry refused, and the only remedy was manual
+# deletion. The fix builds under `<dest>.partial` and promotes by rename
+# only after every file is copied AND re-verified.
+
+
+def _failing_write_bytes(target_name: str, archive_root: Path,
+                         flag: list[bool]):
+    """A `Path.write_bytes` that raises OSError for `target_name` anywhere
+    under `archive_root` while `flag[0]` is True.
+
+    Keyed on the ARCHIVE ROOT rather than on the `.partial` name on
+    purpose: the injection must be meaningful against the PRE-fix
+    copy-straight-into-the-destination behaviour too, otherwise these
+    tests would only be measuring their own patch predicate. The sealed
+    run directory is never under `archive_root` (the two governed roots
+    are disjoint by construction), so the source side is untouched."""
+    real = Path.write_bytes
+    root = str(archive_root)
+
+    def patched(self, data):
+        if flag[0] and self.name == target_name and str(self).startswith(root):
+            raise OSError("synthetic mid-copy failure")
+        return real(self, data)
+
+    return patched
+
+
+def _archive_partials(archive_root: Path) -> list[Path]:
+    return ([p for p in archive_root.iterdir() if p.name.endswith(".partial")]
+            if archive_root.exists() else [])
+
+
+def _sealed_source(tmp_path: Path) -> Path:
+    src = tmp_path / "runs_root" / "runs" / "S0-T001_20260810T000000Z"
+    src.mkdir(parents=True)
+    (src / "S0_REPORT.md").write_bytes(b"sealed report body\n")
+    (src / "manifest.jsonl").write_bytes(b'{"a":1}\n')
+    return src
+
+
+def test_archive_mid_copy_failure_leaves_no_destination_and_no_partial(
+        tmp_path, monkeypatch):
+    """THE REGRESSION FOR CODEX #5. A mid-copy failure must leave the
+    final destination ABSENT (so the next attempt is a plain retry) and
+    must not leave debris behind either."""
+    src = _sealed_source(tmp_path)
+    archive_root = tmp_path / "archive_root"
+    monkeypatch.setattr(Path, "write_bytes",
+                        _failing_write_bytes("manifest.jsonl", archive_root,
+                                             [True]))
+
+    report = runinfra.archive_sealed_run(src, archive_root)
+
+    assert report.ok is False
+    assert report.status == "archive_failed"
+    assert any("copy failed" in e for e in report.errors)
+    # the destination of record was never created, and no partial remains
+    assert not (archive_root / src.name).exists()
+    assert _archive_partials(archive_root) == []
+    # the sealed run directory is untouched
+    assert (src / "manifest.jsonl").read_bytes() == b'{"a":1}\n'
+
+
+def test_archive_retry_after_a_mid_copy_failure_succeeds(tmp_path, monkeypatch):
+    """The point of the fix, stated as behaviour: the SAME call that used
+    to be blocked forever by its own debris now simply succeeds on the
+    second attempt."""
+    src = _sealed_source(tmp_path)
+    archive_root = tmp_path / "archive_root"
+    flag = [True]
+    monkeypatch.setattr(Path, "write_bytes",
+                        _failing_write_bytes("manifest.jsonl", archive_root,
+                                             flag))
+
+    first = runinfra.archive_sealed_run(src, archive_root)
+    assert first.ok is False
+
+    flag[0] = False                                   # the transient clears
+    second = runinfra.archive_sealed_run(src, archive_root)
+
+    assert second.ok is True
+    assert second.status == "archive_ok"
+    assert second.errors == ()
+    archived = archive_root / src.name
+    for rel in ("S0_REPORT.md", "manifest.jsonl"):
+        assert (archived / rel).read_bytes() == (src / rel).read_bytes()
+    assert _archive_partials(archive_root) == []
+
+
+def test_archive_success_promotes_and_leaves_no_partial(tmp_path):
+    """A successful archive lands only at the final name."""
+    src = _sealed_source(tmp_path)
+    nested = src / "sub"
+    nested.mkdir()
+    (nested / "leaf.txt").write_bytes(b"leaf bytes")
+    archive_root = tmp_path / "archive_root"
+
+    report = runinfra.archive_sealed_run(src, archive_root)
+
+    assert report.ok is True
+    assert report.dest_dir == str(archive_root / src.name)
+    assert sorted(p.name for p in archive_root.iterdir()) == [src.name]
+    assert (archive_root / src.name / "sub" / "leaf.txt").read_bytes() == \
+        b"leaf bytes"
+
+
+def test_archive_removes_a_stale_partial_from_a_crashed_prior_attempt(
+        tmp_path):
+    """A `*.partial` is never the archive of record, so debris from a
+    crashed process is removed rather than written into — stale files
+    must not survive underneath a fresh copy."""
+    src = _sealed_source(tmp_path)
+    archive_root = tmp_path / "archive_root"
+    stale = archive_root / f"{src.name}.partial"
+    stale.mkdir(parents=True)
+    (stale / "GHOST_FROM_A_CRASHED_ATTEMPT.txt").write_bytes(b"stale")
+
+    report = runinfra.archive_sealed_run(src, archive_root)
+
+    assert report.ok is True
+    archived = archive_root / src.name
+    assert not (archived / "GHOST_FROM_A_CRASHED_ATTEMPT.txt").exists()
+    assert sorted(p.name for p in archived.iterdir()) == ["S0_REPORT.md",
+                                                          "manifest.jsonl"]
+    assert _archive_partials(archive_root) == []
+
+
+def test_archive_never_overwrites_a_completed_archive(tmp_path):
+    """The `dest.exists()` refusal is UNCHANGED by the partial/promote
+    rework: a completed archive is never overwritten, and a second call
+    cannot alter its bytes."""
+    src = _sealed_source(tmp_path)
+    archive_root = tmp_path / "archive_root"
+    assert runinfra.archive_sealed_run(src, archive_root).ok is True
+    archived_bytes = (archive_root / src.name / "S0_REPORT.md").read_bytes()
+
+    (src / "S0_REPORT.md").write_bytes(b"DIFFERENT BYTES\n")
+    again = runinfra.archive_sealed_run(src, archive_root)
+
+    assert again.ok is False
+    assert any("already exists" in e for e in again.errors)
+    assert (archive_root / src.name / "S0_REPORT.md").read_bytes() == \
+        archived_bytes
+    assert _archive_partials(archive_root) == []
+
+
+def test_archive_failure_in_the_runner_still_keeps_the_run_sealed(
+        tmp_path, monkeypatch):
+    """End to end through the real runner with the REAL archive function:
+    a mid-copy failure is loud (`archive_failed` + errors) but never flips
+    the run's verdict, and leaves no half-archive to block a retry."""
+    runs_root, archive_root, runs_dir, attempts_dir = _tmp_output_roots(tmp_path)
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()],
+        runs_root=runs_root, archive_root=archive_root,
+        runs_dir=runs_dir, attempts_dir=attempts_dir)
+    monkeypatch.setattr(Path, "write_bytes",
+                        _failing_write_bytes("manifest.jsonl", archive_root,
+                                             [True]))
+    out = S0Runner(deps).run()
+
+    assert out.ok is True                             # the run STAYS sealed
+    assert out.terminal_stage == RunStage.F_SEALED
+    assert out.archive_status == "archive_failed"
+    assert out.archive_report.errors
+    assert events[-1][0] == "COMPLETED"
+    assert not (archive_root / runs_dir.name).exists()
+    assert _archive_partials(archive_root) == []

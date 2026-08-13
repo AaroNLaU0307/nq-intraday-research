@@ -774,6 +774,7 @@ def capture_evidence(ds, bars_by_date, compute_result, config, *,
                      n_boot: int = _stats.N_BOOT,
                      ci_level: float = _stats.CI_LEVEL,
                      bootstrap_seeds: Sequence[int] = RESEARCH_BOOTSTRAP_SEEDS,
+                     day_value_snapshot=None,
                      ) -> CanonicalS0Evidence:
     """Capture EV-1..EV-13 at compute time. See the module docstring for the
     exact `scripts/s0_real_run.py` call site this signature is shaped for.
@@ -925,8 +926,16 @@ def capture_evidence(ds, bars_by_date, compute_result, config, *,
     event_rule = getattr(methods, "event_na_mapping", None)
     day_strata: list = []
     for f in day_facts:
+        # F-1 (Codex final-review blocker #1, 2026-08-10): post-exposure
+        # code consumes the PREPARE-TIME immutable value snapshot when one
+        # is supplied — the production entry always supplies it (pinned by
+        # chain test); the config callable is a pre-exposure/legacy-test
+        # fallback only.
         try:
-            vol_label = str(config.vol_axis_of(f.trade_date))
+            if day_value_snapshot is not None:
+                vol_label = str(day_value_snapshot.vol_axis(f.trade_date))
+            else:
+                vol_label = str(config.vol_axis_of(f.trade_date))
         except Exception:                                # noqa: BLE001
             vol_label = UNRESOLVED_VOL
         if vol_status == STATUS_UNRESOLVED:

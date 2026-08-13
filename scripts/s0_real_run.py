@@ -53,7 +53,7 @@ ATTEMPTS_ROOT = GOVERNED_RUNS_ROOT / "attempts"
 # Baseline collected-test count at the SA-6 audit commit. The pytest gate
 # requires the suite to still COLLECT at least this many tests, so a muted
 # or filtered run cannot satisfy the gate with a handful of tests (F-09).
-MIN_COLLECTED_TESTS = 2495                  # S0 closeout: floor = current suite
+MIN_COLLECTED_TESTS = 2519                  # S0 closeout: floor = current suite
 
 # External read-only tooling (packet §9 gate 4). Invoked as a subprocess;
 # the tool itself only reads repository files.
@@ -2365,7 +2365,10 @@ def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
     from itsf.s0 import evidence as _ev
     out["evidence"] = _ev.capture_evidence(
         ds, bars_by_date, out, config, universe=universe,
-        frozen_hash_observations=frozen_hash_observations, n_boot=n_boot)
+        frozen_hash_observations=frozen_hash_observations, n_boot=n_boot,
+        # F-1 (Codex blocker #1): the evidence layer consumes the prepared
+        # immutable snapshot, never the live config callable, post-exposure.
+        day_value_snapshot=day_value_snapshot)
     return out
 
 
@@ -2679,6 +2682,31 @@ class RealChain:
         except Exception as exc:                          # noqa: BLE001
             return (False, "post-write key-claims: cannot parse disk "
                     f"report: {type(exc).__name__}")
+        # KC3 custody (Codex blocker #2c fix): the pre-write evidence
+        # verdict is NOT re-synthesized here — it is read back from the
+        # SEALED HANDOFF_ADMISSION.json on disk, whose bytes are bound by
+        # the manifest inside the (byte-verified) disk report. A missing
+        # record, a manifest digest mismatch, or a non-empty sealed hard
+        # list each refuse the release.
+        try:
+            adm_bytes = (Path(rdir) / "HANDOFF_ADMISSION.json").read_bytes()
+            declared = (disk_formal["mc_handoff_manifest"]["sealed_files"]
+                        ["HANDOFF_ADMISSION.json"]["sha256"])
+        except Exception as exc:                          # noqa: BLE001
+            return (False, "post-write key-claims: sealed admission record "
+                    f"unreadable/undeclared: {type(exc).__name__}")
+        if hashlib.sha256(adm_bytes).hexdigest() != declared:
+            return (False, "post-write key-claims: HANDOFF_ADMISSION.json "
+                           "disk bytes do not match the manifest digest — "
+                           "custody broken")
+        try:
+            adm = json.loads(adm_bytes.decode("utf-8"))
+            sealed_ev = adm["evidence_reconciliation"]
+            ev_problems = (list(sealed_ev["hard_problems"])
+                           + list(sealed_ev["partial_coverage"]))
+        except Exception as exc:                          # noqa: BLE001
+            return (False, "post-write key-claims: sealed admission record "
+                    f"malformed: {type(exc).__name__}")
         kc = _op.verify_key_claims(
             disk_formal,
             _op.ResearchClaimsContext(
@@ -2687,9 +2715,7 @@ class RealChain:
                 # the VALIDATED config's methods — never a fresh source
                 # resolution after exposure (M6.1.6 discipline).
                 ruled_methods=prepared.config.methods,
-                evidence_problems=[
-                    "PARTIAL:kc3:pre_write_verdict_carried_by_sealed_"
-                    "byte_identity"],
+                evidence_problems=ev_problems,
                 disk_report={"ok": True,
                              "detail": "sealed-set byte proof passed"}),
             phase="post_write")
@@ -3031,7 +3057,22 @@ def main() -> int:
     print(f"terminal: stage={out.terminal_stage.value} ok={out.ok} "
           f"exposure_consumed={out.exposure_consumed} "
           f"kind={out.failure_kind or 'success'} "
-          f"incident={out.incident_id or 'none'}")
+          f"incident={out.incident_id or 'none'} "
+          f"archive={out.archive_status or 'not_attempted'}")
+    # L-5 / Codex #5: an archive-side failure NEVER flips `out.ok` (the run
+    # is already sealed and the registry already carries COMPLETED), so this
+    # terminal line is the ONLY place a human is told about it. Print the
+    # reasons loudly, and keep the exit code tied to the RUN's verdict alone.
+    # Channel note (H-1 precedent, deliberate): artifact names are
+    # run-invariant constants and this is the same unguarded stdout as the
+    # `terminal:` line — not the guarded research logger.
+    if out.archive_status and out.archive_status != "archive_ok":
+        print(f"ARCHIVE FAILED ({out.archive_status}) — the sealed run "
+              f"directory is intact and remains the record of evidence; the "
+              f"archive copy is not:")
+        for line in (out.archive_report.errors if out.archive_report is not None
+                     else ("no archive report available",)):
+            print(f"  - {line}")
     return 0 if out.ok else 2
 
 

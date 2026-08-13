@@ -172,11 +172,25 @@ def _patch_kc_assertions(mod, monkeypatch, tmp_path, payload):
     locked real artifact; tests only verify the WIRING (the independence
     claim is about production, where the file is the locked preflight)."""
     import json as _json
+    from itsf.s0.output_proof import _KC_FEATURE_MAP, _KC_LABEL_MAP
     st = payload.get("structural", {})
+    per_field = st.get("na_table", {}).get("per_field", {})
+    feats = per_field.get("features", {})
+    labs = per_field.get("labels", {})
+    locked = {
+        "funnel": dict(st.get("funnel_counts", {})),
+        # Codex fix round: the strengthened KC2 binds per-field counts by
+        # NAME; the synthetic locked file mirrors the payload (wiring
+        # verification — production binds against the genuinely locked
+        # preflight instead).
+        "features": {fk: {"na": feats.get(pub, {}).get("na")}
+                     for fk, pub in _KC_FEATURE_MAP},
+        "labels": {yk: {"available_days": labs.get(pub, {}).get("not_na"),
+                        "unavailable_days": labs.get(pub, {}).get("na")}
+                   for yk, pub in _KC_LABEL_MAP},
+    }
     assertions = tmp_path / "kc_assertions.json"
-    assertions.write_text(
-        _json.dumps({"funnel": dict(st.get("funnel_counts", {}))}),
-        encoding="utf-8")
+    assertions.write_text(_json.dumps(locked), encoding="utf-8")
     monkeypatch.setattr(mod, "KEY_CLAIMS_ASSERTIONS_PATH", assertions)
 
 
@@ -2872,3 +2886,39 @@ def test_r1_ruled_non_test_only_render_admits_seed_manifest(monkeypatch,
     assert "SEED_MANIFEST.json" in files
     adm = json.loads(files["HANDOFF_ADMISSION.json"])
     assert "SEED_MANIFEST.json" in adm["admitted"]
+
+
+# --- Codex final-review blocker #1: evidence layer F-1 ---------------------
+
+def test_codex1_capture_evidence_receives_the_snapshot():
+    mod = real_run_module()
+    src = _entry_src(mod.build_full_study_result)
+    assert "day_value_snapshot=day_value_snapshot" in src
+
+
+def test_codex1_evidence_consumes_snapshot_not_live_callables():
+    """Poisoned config callables + a good prepare-time snapshot: the WHOLE
+    build (including the evidence layer's EV-5 vol labels) must come from
+    the snapshot — a single post-exposure callable invocation raises."""
+    from itsf.s0.context import materialize_day_value_snapshot
+    mod = real_run_module()
+    if "m" not in _CACHE:
+        _CACHE["m"] = _market()
+    bars, ds = _CACHE["m"]
+    dates = tuple(sorted(r.trade_date for r in ds.records))
+    snap = materialize_day_value_snapshot(dates, lambda d: "R",
+                                          _test_vol_axis)
+
+    def _poisoned(_d):
+        raise AssertionError("post-exposure callable invocation (F-1)")
+
+    cfg = C.derive_study_config(_test_methods(),
+                                spread_scalars=(0.5, 0.75, 0.75),
+                                regime_of=_poisoned, vol_axis_of=_poisoned)
+    payload = mod.build_full_study_result(
+        ds, bars, config=cfg, governance_meta=dict(_GOV), n_boot=40,
+        day_value_snapshot=snap)
+    strata = payload["evidence"].day_strata
+    assert strata, "no day strata captured"
+    for s in strata:
+        assert s.volatility_regime_label in ("T1", "T2", "T3")

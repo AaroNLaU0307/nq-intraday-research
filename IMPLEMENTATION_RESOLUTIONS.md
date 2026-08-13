@@ -167,3 +167,21 @@ tests/test_aaron_rulings.py）；本表只记映射，不复述字面。
 子约定（straddle 边界 older<t<=newer；三分位 numpy linear＋下含边界）已
 具名披露待升级；(d) DR-2 的"合格日"=observed_rth 且 official_close 有限
 （含排期早收盘日、排除零 bar 日）。
+
+### IR-28 Codex 终审后的委托裁决批次（AARON_DELEGATED_TO_FABLE 2026-08-10）
+
+**授权出处（逐字）**：Aaron 在收到 Codex `CODEX_FINAL_REVIEW=HOLD` 裁定后指示
+"你审核gpt的结论，你看看怎么样，有需改善的部分吗？你替我研究以及做决定"。
+以下各项由 Fable 行使该委托作出；Aaron 可随时推翻，推翻即按条款 11 立新版本。
+
+| 项 | 委托裁决 | 理由 |
+|---|---|---|
+| IR-28a（DR-7 补充：full-eligible 总体的非 oracle 日语义） | P&L 型视图对全部结构合格非 oracle 日（含 d_open=0/方向不可判日）**记 0**；计数型视图按真实属性计数；方向轴设 `DIRECTION_NONE_KEY="0"` 桶承载无方向日（不得错侧、不删除） | "策略整体（含频率）稳定性"的唯一自然读法=在样本中且未交易即贡献 0；与 DR-4 的 n1 剔除并存是**有意的语义差**（推断总体 vs 描述性总体——NA 日对推断统计量是"不可判"须剔，对描述性视图是"在样本中示 0"使守恒可见），两处已显式披露 |
+| IR-28b（DR-2 补充：三项子约定转正） | tercile 估计=numpy `method="linear"`；tie=下含（`<=`）；roll straddle 归属=`older < t <= newer`（剔除该 return 并补窗，r1 语义） | linear 与 DR-4.6/DR-8 全链同一插值族；下含为确定性 tie 规则；straddle 归新侧与 r1 剔除语义一致。三项均已测试钉定与披露 |
+| IR-28c（DR-1 补充：Option ii 歧义定裁） | sensitivity "+1 tick" = **乘子后** `{Base 2, Cons 3, Stress 3, Severe 4}`（`AARON_RULED_ADVERSE_TICKS_SENSITIVITY` 现值） | "+1 tick"最自然读法=每场景有效值+1；乘子前会使 Stress 有效+2，不符字面。**PARTIAL 具名**：sensitivity 通道已在 costs 层实现（显式 kwarg，不可静默选中），生产报告链接入延后至下轮/预运行清单 |
+| IR-28d（治理记账） | (i) 包内 `REAL_DATA_READ` 行更正为 `YES—STRUCTURAL_TEST_INCIDENT`（Codex 措辞采纳）；(ii) 事件独立档案 `ops/INCIDENT_STRUCTURAL_TEST_LOAD_20260810.md`；(iii) **EXPOSURE_LEDGER 不追加**——台账语义是"查看过的候选关系"（Charter 13），本事件零候选关系被查看、零 outcome 生成，追加 quantity=0 行会稀释台账语义；此判本身入档可复核；(iv) 口令豁免追认：Aaron 在阅读含该披露的 Codex 包与 Codex 对此的专项质疑后，指示继续并委托裁决——构成程序性追认，逐字记录于事件档案 | 诚实优先＋台账语义保真 |
+
+DR-5 状态更正（非裁决，事实陈述）：S0 侧 consumer（K-repeat/θ入流/前缀嵌套/
+标记）已上生产路径；**加倍循环与 §5 收敛判定按裁决原文归 MC 接线，故 DR-5
+端到端状态 = PARTIAL_BY_RULING**，`GRID_SAMPLES` 相应 withheld。任何"全部 DR
+已端到端闭合"的表述均以本行为准修正。
