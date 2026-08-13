@@ -23,6 +23,15 @@ Architecture (Aaron 2026-07-31 erratum, frozen for this task):
       append_manifest_record(path, record)
       write_failure_report(directory, rendered)
       archive_sealed_run(runs_dir, archive_root)      # L-5 ruling, S3/M6.1.9
+      build_tree_inventory(root)                      # SHARED reducer, B3
+  Pure comparison over what that reducer returns:
+      diff_tree_inventories(expected, actual, other_label=...)
+
+  build_tree_inventory + diff_tree_inventories are the ONE inventory
+  implementation in S0 (Codex round-3 B3): the archive's five/six equality
+  proofs and `runner`'s final pre-COMPLETED gate both measure trees with
+  it, by relative path, ENTRY TYPE, size and SHA-256, and both refuse
+  symlink / reparse / junction / special entries in the same statement.
 
   L-5 ruling (Aaron 2026-08-10, S3/M6.1.9): the repo lives inside an
   actively-syncing OneDrive tree, which is incompatible with the M6.1.7
@@ -1290,22 +1299,36 @@ class ArchiveFileRecheck:
 
 
 @dataclass(frozen=True)
-class ArchiveInventoryEntry:
-    """One entry of a full-tree inventory — the identity an archive copy
-    must reproduce EXACTLY (Codex round-2 #3).
+class TreeInventoryEntry:
+    """One entry of a full-tree inventory — the identity a tree must
+    reproduce EXACTLY (Codex round-2 #3; round-3 B3).
 
     `size`/`sha256` are ``None`` for directories (a directory has no
     content of its own); for files they are the byte length and the
     SHA-256 of the complete content. Equality of these values is the whole
-    discipline: a copy is an archive of record only if the mapping
-    ``{relative_path: entry}`` built from it EQUALS the mapping built from
-    the source before the copy began.
+    discipline: a tree matches an expectation only if the mapping
+    ``{relative_path: entry}`` built from it EQUALS the expected mapping —
+    same paths, same ENTRY TYPES, same sizes, same digests.
+
+    `is_dir` IS the entry-type discriminator (`entry_type` renders it as
+    the word "dir"/"file" for reports); because it is a field of a frozen
+    dataclass, a file replaced by a same-named directory is a plain
+    inequality, not a special case anyone has to remember to write.
+
+    Round-3 B3: this record is no longer archive-specific. The runner's
+    final pre-COMPLETED gate measures the run directory with the very same
+    `build_tree_inventory` reducer, so the two proofs cannot drift.
     """
 
     relative_path: str                 # POSIX-separated, relative to the tree root
     is_dir: bool
     size: int | None
     sha256: str | None
+
+    @property
+    def entry_type(self) -> str:
+        """"dir" or "file" — the human-readable spelling of `is_dir`."""
+        return "dir" if self.is_dir else "file"
 
 
 @dataclass(frozen=True)
@@ -1324,6 +1347,11 @@ class ArchiveInventorySummary:
     source_stable: bool | None            # post-copy source RE-inventory == pre-copy
     staging_matches_source: bool | None   # `<dest>.partial` tree == source
     dest_matches_source: bool | None      # promoted archive dir == source
+    # Codex round-3 B3: the LAST step of all — the source re-inventoried
+    # once more AFTER the promoted destination has been verified, closing
+    # the tail of the archive window (promotion + final verification were
+    # themselves unwatched from the source's side).
+    source_stable_after_verify: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -1408,15 +1436,25 @@ def _is_reparse_or_symlink(path: Path) -> bool:
     return bool(attrs & stat.FILE_ATTRIBUTE_REPARSE_POINT)
 
 
-def _build_inventory(
-        root: Path) -> tuple[dict[str, ArchiveInventoryEntry], list[str]]:
-    """Full recursive inventory of `root`, plus the refusal lines it
-    produced. ``(inventory, errors)``; a non-empty `errors` means the
-    inventory is INCOMPLETE and must not be used as an authority.
+def build_tree_inventory(
+        root: Path) -> tuple[dict[str, TreeInventoryEntry], list[str]]:
+    """THE SHARED INVENTORY REDUCER. Full recursive inventory of `root`,
+    plus the refusal lines it produced. ``(inventory, errors)``; a
+    non-empty `errors` means the inventory is INCOMPLETE and must not be
+    used as an authority.
+
+    PUBLIC BECAUSE IT IS SHARED (Codex round-3 B3). It was private while
+    the archive was its only caller. `runner.S0Runner.run` now measures
+    the run directory with it too — the post-RUN_STARTED baseline and the
+    final pre-COMPLETED gate — so there is exactly ONE implementation of
+    "what is in this tree, by content and by type" in S0, and a fix to the
+    refusal rules or the digest rules lands in both proofs at once. Nothing
+    about the function is archive-specific: it takes a directory and
+    returns what is in it.
 
     Codex round-2 #3. Two jobs, deliberately in one function so the source
-    tree, the staging tree and the promoted archive tree are all measured
-    by literally the same code:
+    tree, the staging tree, the promoted archive tree AND the run
+    directory are all measured by literally the same code:
 
       * REFUSAL. Any entry that is a symlink or a Windows reparse point /
         junction — directories included — is an error line, never an
@@ -1425,12 +1463,12 @@ def _build_inventory(
         descends through it; the root itself is probed the same way. Any
         entry that is neither a regular file nor a directory is refused
         for the same reason: an archive is an inventory of real bytes.
-      * MEASUREMENT. Each surviving entry becomes an `ArchiveInventoryEntry`
+      * MEASUREMENT. Each surviving entry becomes a `TreeInventoryEntry`
         keyed by its POSIX relative path — directories with `size`/`sha256`
         of None, files with their byte length and the SHA-256 of their
         complete content.
     """
-    inventory: dict[str, ArchiveInventoryEntry] = {}
+    inventory: dict[str, TreeInventoryEntry] = {}
     errors: list[str] = []
 
     def _refused(entry: Path, rel: str) -> bool:
@@ -1466,13 +1504,13 @@ def _build_inventory(
                 continue
             try:
                 if entry.is_dir():
-                    inventory[rel] = ArchiveInventoryEntry(
+                    inventory[rel] = TreeInventoryEntry(
                         relative_path=rel, is_dir=True, size=None,
                         sha256=None)
                     pending.append(entry)
                 elif entry.is_file():
                     data = entry.read_bytes()
-                    inventory[rel] = ArchiveInventoryEntry(
+                    inventory[rel] = TreeInventoryEntry(
                         relative_path=rel, is_dir=False, size=len(data),
                         sha256=hashlib.sha256(data).hexdigest())
                 else:
@@ -1485,28 +1523,38 @@ def _build_inventory(
     return inventory, errors
 
 
-def _inventory_diff(source: Mapping[str, ArchiveInventoryEntry],
-                    other: Mapping[str, ArchiveInventoryEntry],
-                    *, other_label: str) -> list[str]:
-    """Every way `other` diverges from the SOURCE inventory, as report
+def diff_tree_inventories(expected: Mapping[str, TreeInventoryEntry],
+                          actual: Mapping[str, TreeInventoryEntry],
+                          *, other_label: str,
+                          expected_label: str = "the source inventory"
+                          ) -> list[str]:
+    """Every way `actual` diverges from the EXPECTED inventory, as report
     lines. An empty list means EXACT equality — same relative paths, same
     file/directory types, same sizes, same content hashes. Missing,
     surplus and differing entries are all reported, so neither an extra
-    file nor a dropped one nor a changed byte can pass."""
+    file nor a dropped one nor a changed byte nor a file swapped for a
+    same-named directory can pass.
+
+    Public alongside `build_tree_inventory` (Codex round-3 B3): the
+    runner's final gate reports its refusal with these same lines, so an
+    archive divergence and a run-directory divergence read identically.
+    `expected_label` only names the authority in the prose — for the
+    archive it is the pre-copy source inventory, for the runner it is the
+    set derived from the run's own writes."""
     out: list[str] = []
-    for rel in sorted(set(source) - set(other)):
-        out.append(f"{rel}: in the source inventory but MISSING from "
+    for rel in sorted(set(expected) - set(actual)):
+        out.append(f"{rel}: in {expected_label} but MISSING from "
                    f"{other_label}")
-    for rel in sorted(set(other) - set(source)):
-        out.append(f"{rel}: EXTRA entry in {other_label} — absent from the "
-                   f"source inventory")
-    for rel in sorted(set(source) & set(other)):
-        s, o = source[rel], other[rel]
+    for rel in sorted(set(actual) - set(expected)):
+        out.append(f"{rel}: EXTRA entry in {other_label} — absent from "
+                   f"{expected_label}")
+    for rel in sorted(set(expected) & set(actual)):
+        s, o = expected[rel], actual[rel]
         if s != o:
             out.append(
-                f"{rel}: inventory mismatch against {other_label} (source "
-                f"is_dir={s.is_dir} size={s.size} sha256={s.sha256}; "
-                f"{other_label} is_dir={o.is_dir} size={o.size} "
+                f"{rel}: inventory mismatch against {other_label} (expected "
+                f"type={s.entry_type} size={s.size} sha256={s.sha256}; "
+                f"{other_label} type={o.entry_type} size={o.size} "
                 f"sha256={o.sha256})")
     return out
 
@@ -1565,16 +1613,17 @@ def archive_sealed_run(runs_dir: str | Path,
     The `dest.exists()` refusal is UNCHANGED and deliberately so — a
     completed archive is never overwritten, only a partial is.
 
-    EXACT-INVENTORY DISCIPLINE (Codex round-2 #3). The per-file recheck
-    above proves each COPIED file's bytes; it cannot prove that the set of
-    files is right, that the sealed source held still, or that the
-    promotion landed what was verified. Five steps close that:
+    EXACT-INVENTORY DISCIPLINE (Codex round-2 #3, extended by round-3 B3).
+    The per-file recheck above proves each COPIED file's bytes; it cannot
+    prove that the set of files is right, that the sealed source held
+    still, or that the promotion landed what was verified. Six steps close
+    that:
 
       1. REPARSE/SYMLINK REFUSAL. While inventorying, any entry that is a
          symlink or a Windows reparse point / junction — directories
          included — refuses the whole archive (`_is_reparse_or_symlink`).
          The same check runs over the staging tree, because it is the same
-         `_build_inventory` call.
+         `build_tree_inventory` call.
       2. PRE-COPY SOURCE INVENTORY: recursive `(relative_path, is_dir,
          size, sha256-for-files)`. This is the SINGLE AUTHORITY every
          later comparison is made against; the copy loop is driven from it
@@ -1590,13 +1639,21 @@ def archive_sealed_run(runs_dir: str | Path,
       5. FINAL INVENTORY AFTER PROMOTION: the promoted destination is
          re-enumerated and re-hashed (a third full content pass) against
          (2).
+      6. POST-VERIFICATION SOURCE RE-INVENTORY (round-3 B3): the source is
+         enumerated a THIRD time, after step 5 has finished. Step 3 closed
+         the copy window; the promotion and the final destination
+         verification are themselves a window, and a source mutated inside
+         it would leave `dest` holding bytes the sealed run no longer has
+         while every earlier proof still passed. The archive window is the
+         whole operation, so the "did the sealed run hold still" question
+         is asked again at its very end.
 
     CLEANUP ASYMMETRY, stated because it is deliberate: a failure at steps
     1-4 (or in the copy) removes the `.partial` best-effort, exactly as
-    before. A failure at step 5 does NOT delete anything — `dest` has
-    already been promoted, so it is no longer an in-progress copy but
-    EVIDENCE of a divergence, and it is retained with an explicit error
-    line saying so.
+    before. A failure at step 5 OR step 6 does NOT delete anything —
+    `dest` has already been promoted, so it is no longer an in-progress
+    copy but EVIDENCE of a divergence, and it is retained with an explicit
+    error line saying so.
     """
     src = Path(runs_dir)
     if not src.is_dir():
@@ -1654,20 +1711,22 @@ def archive_sealed_run(runs_dir: str | Path,
     # post-copy source re-inventory, the staging equality and the final
     # post-promotion verification are all measured against this one
     # mapping, never against each other.
-    source_inventory, inventory_errors = _build_inventory(src)
+    source_inventory, inventory_errors = build_tree_inventory(src)
     n_files = sum(1 for e in source_inventory.values() if not e.is_dir)
     n_dirs = len(source_inventory) - n_files
     total_bytes = sum(e.size or 0 for e in source_inventory.values())
 
     def _summary(*, source_stable: bool | None = None,
                  staging_matches_source: bool | None = None,
-                 dest_matches_source: bool | None = None
+                 dest_matches_source: bool | None = None,
+                 source_stable_after_verify: bool | None = None
                  ) -> ArchiveInventorySummary:
         return ArchiveInventorySummary(
             n_files=n_files, n_dirs=n_dirs, total_bytes=total_bytes,
             source_stable=source_stable,
             staging_matches_source=staging_matches_source,
-            dest_matches_source=dest_matches_source)
+            dest_matches_source=dest_matches_source,
+            source_stable_after_verify=source_stable_after_verify)
 
     def _abandon_partial(errs: list[str]) -> list[str]:
         """Discard the in-progress copy (best effort) and disclose a
@@ -1753,8 +1812,8 @@ def archive_sealed_run(runs_dir: str | Path,
     # recheck (while a LATER file was still being copied) passes every
     # per-file test and still ends up archived as bytes the sealed run no
     # longer holds.
-    source_after, source_after_errors = _build_inventory(src)
-    source_diff = _inventory_diff(
+    source_after, source_after_errors = build_tree_inventory(src)
+    source_diff = diff_tree_inventories(
         source_inventory, source_after,
         other_label="the post-copy source re-inventory")
     if source_after_errors or source_diff:
@@ -1771,8 +1830,8 @@ def archive_sealed_run(runs_dir: str | Path,
     # The per-file recheck already covers each copied file's bytes; this
     # is the SET-level proof — an extra entry, a missing entry or a
     # divergent directory shape has no per-file recheck to fail.
-    staging_inventory, staging_errors = _build_inventory(partial)
-    staging_diff = _inventory_diff(
+    staging_inventory, staging_errors = build_tree_inventory(partial)
+    staging_diff = diff_tree_inventories(
         source_inventory, staging_inventory,
         other_label="the staging (.partial) tree")
     if staging_errors or staging_diff:
@@ -1801,8 +1860,8 @@ def archive_sealed_run(runs_dir: str | Path,
     # Everything verified so far was verified at a path that no longer
     # exists; this is the only step that speaks about the directory
     # anybody will actually read.
-    final_inventory, final_errors = _build_inventory(dest)
-    final_diff = _inventory_diff(
+    final_inventory, final_errors = build_tree_inventory(dest)
+    final_diff = diff_tree_inventories(
         source_inventory, final_inventory,
         other_label="the promoted archive directory")
     if final_errors or final_diff:
@@ -1821,7 +1880,36 @@ def archive_sealed_run(runs_dir: str | Path,
                                           staging_matches_source=True,
                                           dest_matches_source=False))
 
+    # --- (6) POST-VERIFICATION SOURCE RE-INVENTORY (round-3 B3) ---------
+    # The last thing that happens in the archive window is a question
+    # about its first subject. Step 3 proved the source held still while
+    # it was being COPIED; the promotion and the whole final verification
+    # pass ran afterwards, and a source mutated in THAT stretch produces a
+    # promoted archive that passes every check above while no longer
+    # describing the sealed run. Same reducer, same authority (2).
+    source_final, source_final_errors = build_tree_inventory(src)
+    source_final_diff = diff_tree_inventories(
+        source_inventory, source_final,
+        other_label="the post-verification source re-inventory")
+    if source_final_errors or source_final_diff:
+        errors.extend(source_final_errors)
+        errors.extend(source_final_diff)
+        # SAME ASYMMETRY AS STEP 5, for the same reason: `dest` is already
+        # promoted, so it is evidence of a divergence rather than debris.
+        errors.append(
+            "the sealed run directory CHANGED during the archive window "
+            "(detected AFTER the promoted destination had been verified); "
+            f"the archive proves nothing about it and the promoted "
+            f"directory is deliberately RETAINED as evidence (not deleted, "
+            f"not repaired): {dest}")
+        return _report(False, errors, files=files,
+                       inventory=_summary(source_stable=True,
+                                          staging_matches_source=True,
+                                          dest_matches_source=True,
+                                          source_stable_after_verify=False))
+
     return _report(True, (), files=files,
                    inventory=_summary(source_stable=True,
                                       staging_matches_source=True,
-                                      dest_matches_source=True))
+                                      dest_matches_source=True,
+                                      source_stable_after_verify=True))

@@ -177,21 +177,38 @@ scoped to the run-directory-lifecycle concern this module already owns:
 
 S0 CLOSEOUT (Codex final review) — two runner-side holdings closed here:
 
-  #3  THE EXACT-SET WINDOW. The last full enumeration of the run directory
-      used to be the one inside the post_write_verify seam, which runs
-      BEFORE `_record_artifacts` writes manifest.jsonl and before Stage F
-      exists. Everything after that point — the manifest write, the chain
-      replay, the eve of the COMPLETED append — was unwatched, so a file
-      that appeared in that window sealed silently. Stage F now re-proves
-      the exact set immediately after the chain verifies and immediately
-      before `append_registry_event("COMPLETED", ...)`, as an EQUALITY
-      against a set built only from the run's own writes: the
-      post-RUN_STARTED baseline (`baseline_entries`, captured at the
-      instant the hook wrote it, into a directory `mkdir(exist_ok=False)`
-      had just created empty), every renderer artifact name, and
-      `manifest.jsonl`. Surplus and missing entries alike fail into
-      `_fail_run(F_SEALED, "final_exact_set", ...)`. No name is
-      whitelisted and none is hardcoded.
+  #3  THE EXACT-INVENTORY WINDOW. The last full enumeration of the run
+      directory used to be the one inside the post_write_verify seam, which
+      runs BEFORE `_record_artifacts` writes manifest.jsonl and before
+      Stage F exists. Everything after that point — the manifest write, the
+      chain replay, the eve of the COMPLETED append — was unwatched, so a
+      file that appeared in that window sealed silently. Stage F now
+      re-proves the run directory immediately after the chain verifies and
+      immediately before `append_registry_event("COMPLETED", ...)`, as an
+      EQUALITY against an expectation built only from the run's own writes.
+
+      ROUND-3 B3 MADE IT CONTENT+TYPE. The first version of this proof
+      compared TOP-LEVEL NAMES, which caught appearance and disappearance
+      and nothing else: same-name different-BYTES, and a file replaced by a
+      same-name DIRECTORY, both passed. The gate now builds a full
+      inventory — relative path, entry type, size, SHA-256 per file — with
+      `runinfra.build_tree_inventory`, THE SHARED REDUCER the archive uses
+      (one implementation, one set of refusal rules for symlink / reparse /
+      junction / special entries). The expectation is
+        * `baseline_inventory` — the post-RUN_STARTED hook's writes,
+          inventoried at the instant it wrote them into a directory
+          `mkdir(exist_ok=False)` had just created empty (in production
+          `REGISTRY_AFTER_RUN_STARTED.json`, its CONTENT included);
+        * every renderer artifact, derived from the actual `written`
+          (name, bytes) pairs — the same byte values the chain hashed;
+        * `manifest_entry` — manifest.jsonl read back ONCE the moment
+          `_record_artifacts` finished writing it, before the chain verify;
+          the gate re-reads it and compares against that capture.
+      Surplus, missing, retyped and rewritten entries alike fail into
+      `_fail_run(F_SEALED, "final_exact_inventory", ...)` carrying the diff
+      lines. No name is whitelisted and none is hardcoded; the count of
+      entries the proof verified is published on
+      `RunOutcome.final_inventory_entries`.
 
   #4  THE ATTEMPTS PATH CREATED ITSELF WHILE BEING REFUSED.
       `_fail_pre_run` -> `_attempt_dir` used to mkdir
@@ -221,7 +238,10 @@ S0 CLOSEOUT (Codex final review) — two runner-side holdings closed here:
   (#5, the archive's mid-copy recoverability, is closed in
   `runinfra.archive_sealed_run` — copy into `<dest>.partial`, verify, then
   promote by rename — and is visible from here only as the same
-  `archive_status` / `archive_report` this module already records.)
+  `archive_status` / `archive_report` this module already records. Round-3
+  B3 also extended that function with a SIXTH step: the source is
+  re-inventoried once more after the promoted destination has been
+  verified, so the archive window is watched from end to end.)
 """
 from __future__ import annotations
 
@@ -469,6 +489,13 @@ class RunOutcome:
     # carries the full per-file recheck manifest for adjudication.
     archive_status: str = ""
     archive_report: runinfra.ArchiveReport | None = None
+    # Codex round-3 B3: how many entries the FINAL exact-inventory proof
+    # verified (paths + types + sizes + digests) immediately before the
+    # COMPLETED registry append. `None` means the proof did not run to a
+    # verdict — every failed run, at whatever stage. An int is therefore
+    # positive evidence, on the outcome itself, that the run's last act
+    # before sealing was to re-measure its own directory by content.
+    final_inventory_entries: int | None = None
 
 
 class S0Runner:
@@ -1020,23 +1047,33 @@ class S0Runner:
                     RunStage.C_COMPUTE, rdir, "post_run_started_hook",
                     f"registry-hash record failed after RUN_STARTED: "
                     f"{type(exc).__name__}: {exc}", exc)
-        # ---- run-directory BASELINE for the final exact-set proof ----------
-        # Codex final review #3 (S0 closeout). The run directory was created
-        # empty two statements ago (`mkdir(exist_ok=False)`), so whatever is
-        # in it NOW is exactly what the runner's own post-RUN_STARTED hook
-        # just wrote — in production, `REGISTRY_AFTER_RUN_STARTED.json`.
-        # Recording it HERE, at the moment of the write, is what lets the
-        # Stage-F proof be an EQUALITY against a set derived entirely from
-        # the run's own writes: baseline + renderer artifacts + the
-        # manifest. No name is hardcoded, nothing is whitelisted, and a
-        # differently-wired hook needs no change here.
-        try:
-            baseline_entries = frozenset(p.name for p in rdir.iterdir())
-        except OSError as exc:
+        # ---- run-directory BASELINE for the final exact-inventory proof ----
+        # Codex final review #3 (S0 closeout); CONTENT+TYPE since round-3 B3.
+        # The run directory was created empty two statements ago
+        # (`mkdir(exist_ok=False)`), so whatever is in it NOW is exactly what
+        # the runner's own post-RUN_STARTED hook just wrote — in production,
+        # `REGISTRY_AFTER_RUN_STARTED.json`.
+        #
+        # WHAT CHANGED IN B3 AND WHY. This used to record NAMES
+        # (`{p.name for p in rdir.iterdir()}`), which made the Stage-F proof
+        # blind to everything except appearance and disappearance: the
+        # registry snapshot the hook had just written could be rewritten
+        # byte-for-byte differently, or replaced by a directory of the same
+        # name, and the seal would still pass. The baseline is now the FULL
+        # inventory from the shared reducer — relative path, entry type,
+        # size, and the SHA-256 of every file's content — so what Stage F
+        # re-proves is the CONTENT of the hook's artifacts, not their names.
+        #
+        # A refusal line from the reducer (a symlink/junction/special entry,
+        # or an unreadable one) makes the baseline no authority at all, so it
+        # fails here rather than being carried forward as a partial truth.
+        baseline_inventory, baseline_errors = runinfra.build_tree_inventory(rdir)
+        if baseline_errors:
             return self._fail_run(
                 RunStage.C_COMPUTE, rdir, "run_dir_baseline",
-                f"run directory could not be enumerated immediately after "
-                f"the atomic run-start: {type(exc).__name__}: {exc}", exc)
+                f"run directory could not be inventoried immediately after "
+                f"the atomic run-start: {'; '.join(baseline_errors)}",
+                RunGateError())
         self._safe_log(f"stage={RunStage.C_COMPUTE.value} status=start")
 
         # ---- Stage C: compute (zero information release) -------------------
@@ -1135,6 +1172,33 @@ class S0Runner:
         except Exception as exc:                     # noqa: BLE001
             return self._fail_run(RunStage.E_REPORT, rdir, "render_report",
                                   f"{type(exc).__name__}: {exc}", exc)
+
+        # ---- manifest EXPECTATION, captured at the moment of the write -----
+        # Codex round-3 B3. manifest.jsonl is the one run artifact whose
+        # bytes the runner never held: `_record_artifacts` appends to it
+        # record by record. So the expectation for it is taken by reading it
+        # back ONCE, HERE — the instant the last record was appended and
+        # before anything else runs. That read-back IS the expectation; the
+        # Stage-F gate re-reads the file independently and compares. Read it
+        # any later and the two reads collapse into one, and a manifest
+        # mutated in the window would be "verified" against itself.
+        #
+        # This is deliberately not the same thing as the chain verify below,
+        # which re-derives record hashes and would accept ANY well-formed
+        # chain: a manifest rewritten in the window into a different but
+        # internally consistent chain passes the chain verify and fails
+        # here.
+        try:
+            manifest_bytes = (rdir / MANIFEST_NAME).read_bytes()
+        except OSError as exc:
+            return self._fail_run(
+                RunStage.E_REPORT, rdir, "manifest_capture",
+                f"manifest could not be read back immediately after it was "
+                f"written: {type(exc).__name__}: {exc}", exc)
+        manifest_entry = runinfra.TreeInventoryEntry(
+            relative_path=MANIFEST_NAME, is_dir=False,
+            size=len(manifest_bytes), sha256=_sha256_bytes(manifest_bytes))
+
         # ---- Stage-E log-guard checkpoint (M6.1.8 S1, H-1 attribution) -----
         # `_safe_log` records a guard rejection into `_log_errors` rather
         # than raising, so a rejected line is only ever noticed at the next
@@ -1185,9 +1249,9 @@ class S0Runner:
             return self._fail_run(RunStage.F_SEALED, rdir, "log_guard",
                                   self._log_guard_breach(), LogLeakError())
 
-        # ---- FINAL exact-set proof (Codex final review #3, S0 closeout) ----
-        # THE WINDOW THIS CLOSES. Until now the LAST full enumeration of the
-        # run directory happened in the post_write_verify seam — before
+        # ---- FINAL exact-INVENTORY proof (Codex #3; CONTENT+TYPE in B3) ----
+        # THE WINDOW THIS CLOSES. Until Codex #3 the LAST full enumeration of
+        # the run directory happened in the post_write_verify seam — before
         # `_record_artifacts` wrote manifest.jsonl and before Stage F ran at
         # all. Anything that landed in the run directory after that point (a
         # OneDrive sync dropping during the manifest write, during the chain
@@ -1197,35 +1261,56 @@ class S0Runner:
         # the invariant can still be enforced: the chain has verified, and
         # the registry has not yet been told the run COMPLETED.
         #
-        # ZERO WHITELIST. The expected set is derived entirely from the
-        # run's own writes — the post-RUN_STARTED baseline captured at the
-        # moment the hook wrote it, every renderer artifact name in
-        # `written`, and the manifest this stage just replayed. No name is
-        # tolerated because of what it is called; `desktop.ini`,
-        # `S0_REPORT.md.tmp` and a stray subdirectory are all the same kind
-        # of surplus. Enumeration is non-recursive and by ENTRY NAME, so a
-        # planted subdirectory is a surplus entry exactly like a file
-        # (matching output_proof.py's `REFUSAL_DISK_EXTRA_FILE` discipline).
-        # Missing entries are refused too: the proof is an EQUALITY, so a
-        # declared artifact deleted after the chain verified is caught by
-        # the same statement that catches an added one.
-        expected_entries = (set(baseline_entries)
-                            | {name for name, _ in written}
-                            | {MANIFEST_NAME})
-        try:
-            final_entries = {p.name for p in rdir.iterdir()}
-        except OSError as exc:
+        # WHAT ROUND-3 B3 ADDS. Codex #3 compared TOP-LEVEL NAMES, which
+        # closed the "a file appeared / disappeared" half of the window and
+        # left the other half wide open: every named entry could have
+        # different CONTENT than the run wrote, or be a directory where the
+        # run wrote a file, and the name set would still match exactly. The
+        # proof is now a full CONTENT+TYPE inventory — relative path, entry
+        # type, size, SHA-256 of every file — built by the SAME shared
+        # reducer the archive uses (`runinfra.build_tree_inventory`), so the
+        # run directory is measured at seal time exactly as the archive
+        # measures it minutes later, by one implementation.
+        #
+        # ZERO WHITELIST, ZERO NAMES. The expectation is derived entirely
+        # from the run's own writes, and each part carries its own bytes:
+        #   * the post-RUN_STARTED BASELINE inventory, captured at the
+        #     instant the hook wrote it into a directory that had just been
+        #     created empty (in production `REGISTRY_AFTER_RUN_STARTED.json`,
+        #     content and all);
+        #   * every renderer artifact, derived from the ACTUAL `written`
+        #     (name, bytes) pairs — the same byte values the chain hashed,
+        #     never a re-read of the file the gate is about to check;
+        #   * the manifest, from the read-back taken the moment
+        #     `_record_artifacts` finished.
+        # Later parts override earlier ones on the same path because that is
+        # what the disk did: a renderer artifact written over a baseline
+        # entry leaves the renderer's bytes. No name is tolerated because of
+        # what it is called; `desktop.ini`, `S0_REPORT.md.tmp` and a stray
+        # subdirectory are all the same kind of surplus (matching
+        # output_proof.py's `REFUSAL_DISK_EXTRA_FILE` discipline). The
+        # reducer walks the tree, so a planted subdirectory is caught both
+        # as a surplus entry and by its contents. Missing entries are
+        # refused by the same statement: the proof is an EQUALITY.
+        expected_inventory = dict(baseline_inventory)
+        for name, data in written:
+            rel = Path(name).as_posix()
+            expected_inventory[rel] = runinfra.TreeInventoryEntry(
+                relative_path=rel, is_dir=False, size=len(data),
+                sha256=_sha256_bytes(data))
+        expected_inventory[manifest_entry.relative_path] = manifest_entry
+
+        final_inventory, final_errors = runinfra.build_tree_inventory(rdir)
+        inventory_diff = runinfra.diff_tree_inventories(
+            expected_inventory, final_inventory,
+            other_label="the run directory at seal time",
+            expected_label="the set derived from this run's own writes")
+        if final_errors or inventory_diff:
             return self._fail_run(
-                RunStage.F_SEALED, rdir, "final_exact_set",
-                f"run directory could not be enumerated before COMPLETED: "
-                f"{type(exc).__name__}: {exc}", exc)
-        if final_entries != expected_entries:
-            surplus = sorted(final_entries - expected_entries)
-            missing = sorted(expected_entries - final_entries)
-            return self._fail_run(
-                RunStage.F_SEALED, rdir, "final_exact_set",
-                f"run directory contents are not the exact declared set at "
-                f"seal time: surplus={surplus} missing={missing}",
+                RunStage.F_SEALED, rdir, "final_exact_inventory",
+                "run directory contents are not the exact declared "
+                "inventory at seal time: "
+                + "; ".join([*final_errors, *inventory_diff]),
                 RunGateError())
 
         d.append_registry_event("COMPLETED", "S0 report sealed")
@@ -1242,7 +1327,8 @@ class S0Runner:
                           exposure_consumed=True, runs_dir=rdir,
                           stages_completed=tuple(self._stages_done),
                           archive_status=archive_status,
-                          archive_report=archive_report)
+                          archive_report=archive_report,
+                          final_inventory_entries=len(final_inventory))
 
     def _archive_sealed_run(
             self, rdir: Path) -> tuple[str, runinfra.ArchiveReport]:

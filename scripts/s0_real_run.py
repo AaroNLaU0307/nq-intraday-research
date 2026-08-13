@@ -53,7 +53,7 @@ ATTEMPTS_ROOT = GOVERNED_RUNS_ROOT / "attempts"
 # Baseline collected-test count at the SA-6 audit commit. The pytest gate
 # requires the suite to still COLLECT at least this many tests, so a muted
 # or filtered run cannot satisfy the gate with a handful of tests (F-09).
-MIN_COLLECTED_TESTS = 2536                  # S0 closeout: floor = current suite
+MIN_COLLECTED_TESTS = 2562                  # S0 closeout: floor = current suite
 
 # External read-only tooling (packet §9 gate 4). Invoked as a subprocess;
 # the tool itself only reads repository files.
@@ -912,7 +912,8 @@ def _partition_admission(candidates, all_probs):
 
 def render_s0_report(result, *, expected_governance=None,
                      governance_context=None,
-                     methods=None) -> dict[str, str]:
+                     methods=None,
+                     key_claims_authority=None) -> dict[str, str]:
     """Stage-E sealed release: the FORMAL S0 report, whole-document only
     (packet §7 — nothing here reaches a log line).
 
@@ -1114,7 +1115,16 @@ def render_s0_report(result, *, expected_governance=None,
             kc = _op_kc.verify_key_claims(
                 formal,
                 _op_kc.ResearchClaimsContext(
-                    assertions_bytes=_read_key_claims_assertions(),
+                    # R4 B2: the PRODUCTION chain supplies the prepared
+                    # run-scoped authority (bytes + exact L3); the module
+                    # fallback read is a pre-exposure/legacy-direct-call
+                    # convenience only (chain-pinned).
+                    assertions_bytes=(key_claims_authority[0]
+                                      if key_claims_authority is not None
+                                      else _read_key_claims_assertions()),
+                    exact_l3_dates=(key_claims_authority[1]
+                                    if key_claims_authority is not None
+                                    else None),
                     ruled_methods=methods,
                     evidence_problems=list(ev_flat),
                     disk_report=None),
@@ -2513,9 +2523,13 @@ class _PreparedExecutionInput:
     moving source cannot see that source move.
     """
 
-    __slots__ = ("config", "reason", "snapshot", "day_values")
+    __slots__ = ("config", "reason", "snapshot", "day_values",
+                 "exact_l3_dates", "exact_l3_digest",
+                 "assertions_bytes", "assertions_digest")
 
-    def __init__(self, *, config, reason, snapshot, day_values=None):
+    def __init__(self, *, config, reason, snapshot, day_values=None,
+                 exact_l3_dates=None, exact_l3_digest=None,
+                 assertions_bytes=None, assertions_digest=None):
         object.__setattr__(self, "config", config)
         object.__setattr__(self, "reason", reason)
         object.__setattr__(self, "snapshot", snapshot)
@@ -2523,6 +2537,20 @@ class _PreparedExecutionInput:
         # regime / vol-axis VALUE snapshot (context.DayValueSnapshot).
         # Stage C consumes THIS, never the config callables.
         object.__setattr__(self, "day_values", day_values)
+        # R4 B1 — the EXACT L3 authority: the sorted structurally-eligible
+        # day tuple rebuilt at prepare time from the VERIFIED structural
+        # atoms (universe.funnel.structurally_eligible — the same funnel
+        # Stage B checked against the locked assertions), plus its digest.
+        # KC1 compares the published era union against THIS, never against
+        # anything derived from the payload under test.
+        object.__setattr__(self, "exact_l3_dates", exact_l3_dates)
+        object.__setattr__(self, "exact_l3_digest", exact_l3_digest)
+        # R4 B2 — the run-scoped ASSERTIONS snapshot: the locked preflight
+        # bytes read + sha-verified ONCE at prepare (pre-exposure); every
+        # later boundary (pre-write screen, post-write release) consumes
+        # these bytes — the path is never re-read after RUN_STARTED.
+        object.__setattr__(self, "assertions_bytes", assertions_bytes)
+        object.__setattr__(self, "assertions_digest", assertions_digest)
 
     def __setattr__(self, name, value):          # no post-prepare mutation
         raise AttributeError("_PreparedExecutionInput is immutable")
@@ -2634,7 +2662,10 @@ class RealChain:
             governance_context=self._governance_context(prepared),
             # the VALIDATED config's rulings — drives the handoff admission
             # context AND the F-2 key-claims pre-write screen.
-            methods=prepared.config.methods)
+            methods=prepared.config.methods,
+            # R4 B1/B2: run-scoped immutable authority from prepare.
+            key_claims_authority=(prepared.assertions_bytes,
+                                  prepared.exact_l3_dates))
 
     def post_write_verify(self, rdir, written, prepared):
         """M6.1.7 — THE RELEASE VERDICT, taken from the bytes on disk.
@@ -2725,7 +2756,10 @@ class RealChain:
         kc = _op.verify_key_claims(
             disk_formal,
             _op.ResearchClaimsContext(
-                assertions_bytes=_read_key_claims_assertions(),
+                # R4 B2: the SAME prepared bytes as pre-write — the
+                # assertions path is never re-read after RUN_STARTED.
+                assertions_bytes=prepared.assertions_bytes,
+                exact_l3_dates=prepared.exact_l3_dates,
                 # the VALIDATED config's methods — never a fresh source
                 # resolution after exposure (M6.1.6 discipline).
                 ruled_methods=prepared.config.methods,
@@ -2860,9 +2894,33 @@ class RealChain:
             _VOL_AXIS_RESOLVER.bind(mapping.label_of)  # shared mapping scope
         day_values = _mat(tuple(sorted(r.trade_date for r in ds.records)),
                           cfg.regime_of, cfg.vol_axis_of)
+        # R4 B1 — EXACT L3 authority, rebuilt from the verified structural
+        # atoms, pre-exposure, immutable. PRODUCTION: the funnel Stage B
+        # checked against the locked assertions. HERMETIC (synthetic
+        # universe absent): ds.records IS the structurally-eligible set —
+        # the same atom family, one representation earlier. No third path.
+        eligible = getattr(getattr(uni, "funnel", None),
+                           "structurally_eligible", None)
+        if eligible:
+            exact_l3 = tuple(sorted(str(d) for d in eligible))
+        elif ds is not None and getattr(ds, "records", None):
+            exact_l3 = tuple(sorted(str(r.trade_date) for r in ds.records))
+        else:
+            raise RuntimeError(
+                "prepare: no verified structural atoms available — the "
+                "exact-L3 authority cannot be built (fail closed, "
+                "pre-exposure)")
+        exact_l3_digest = hashlib.sha256(
+            "\n".join(exact_l3).encode("utf-8")).hexdigest()
+        # R4 B2 — run-scoped assertions snapshot: ONE sha-pinned read,
+        # pre-exposure; missing file / drifted bytes refuse here.
+        assertions_bytes = _read_key_claims_assertions()
         return _PreparedExecutionInput(
             config=cfg, reason=why,
-            snapshot=_MProxy(snap), day_values=day_values)
+            snapshot=_MProxy(snap), day_values=day_values,
+            exact_l3_dates=exact_l3, exact_l3_digest=exact_l3_digest,
+            assertions_bytes=assertions_bytes,
+            assertions_digest=hashlib.sha256(assertions_bytes).hexdigest())
 
     def compute(self, prepared):
         # M6.1.6: Stage C consumes the PREPARED object and MUST NOT reach

@@ -1083,7 +1083,14 @@ def screen_governance_draft(context: "SourceContext", *,
 # rather than rebuilding it.
 #
 # Independence sources (never the payload's own mirror of itself):
-#   KC1/KC2 -> the LOCKED preflight assertions bytes (compare-only file);
+#   KC1/KC2 -> the LOCKED preflight assertions bytes (compare-only file),
+#              PLUS (KC1 only, Codex r3 mandate B1) the EXACT L3 DAY
+#              AUTHORITY: the sorted immutable date tuple the ENTRY builds at
+#              prepare time (pre-exposure) from the VERIFIED structural funnel
+#              and hands in on `ResearchClaimsContext.exact_l3_dates`. The
+#              published era union is compared against THAT, date for date, in
+#              both directions — never against a count, and never against
+#              anything the payload or the evidence channel produced;
 #   KC3     -> evidence.reconcile_with_evidence's flat verdict, whose D_TP /
 #              D_FP / oracle series are REBUILT from parsed MC_HANDOFF bytes;
 #   KC4     -> the frozen engine x scenario matrix constants (study/report),
@@ -1146,11 +1153,21 @@ class ResearchClaimsContext:
     disk_report: {"ok": bool, "detail": <str>} adapted from the runner's
         post_write_verify seam result, or None before the bytes exist
         (pre-write phase only).
+    exact_l3_dates: the EXACT L3 day authority — the sorted, immutable
+        `tuple[str, ...]` of structurally-eligible dates the ENTRY rebuilds at
+        prepare time (pre-exposure) from the VERIFIED structural funnel
+        (`scripts/s0_real_run.py`, prepare seam). KC1 compares the published
+        era union against THIS by identity. It is REQUIRED for a KC1 PASS:
+        the default is None only so legacy/direct construction sites stay
+        constructible, and a None (or non-sequence-of-str) authority is a KC1
+        FAIL — `key_claims.KC1.exact_l3_authority_missing` — never a silent
+        downgrade to the cheap plausibility screen.
     """
     assertions_bytes: object
     ruled_methods: object
     evidence_problems: object
     disk_report: object
+    exact_l3_dates: object = None
 
 
 @dataclass(frozen=True)
@@ -1228,30 +1245,102 @@ def _kc1_kc2(formal, ctx, problems, verdicts) -> None:
                             + "!=" + repr(want))
             v1 = "FAIL"
 
-    # KC1 date-set strengthening (Codex fix round): same COUNTS with
-    # swapped DATES must not pass. (a) the published era partition's union
-    # must have exactly the locked L3 size (the structurally-eligible
-    # record population — frozen §3 NA policy keeps warm-up/NA days IN the
-    # sample, so eras partition L3, not L4; verified empirically on the
-    # chain fixture); (b) every locked REMOVED date must be absent from it.
+    # ------------------------------------------------------------------
+    # KC1 DATE-SET IDENTITY (Codex r3 mandate B1).
+    #
+    # The PRIMARY check is now an EXACT identity, not a plausibility screen:
+    # the union of the published era partition must EQUAL, date for date and
+    # in both directions, the independent exact-L3 authority the ENTRY built
+    # at prepare time (pre-exposure) from the VERIFIED structural funnel.
+    # The expected side is NEVER derived from the payload or the evidence
+    # channel — it arrives on the context and nowhere else.
+    #
+    # The authority is REQUIRED and the gate is fail-closed. Without it KC1
+    # FAILS outright, because the screens below (union size, whole-day-removal
+    # disjointness, ISO/window/weekday plausibility) are all satisfiable by a
+    # same-count swap to an in-window legal weekday — exactly the case the
+    # mandate exists to close — and a cheap pre-filter must never be allowed
+    # to read as an identity proof.
+    # ------------------------------------------------------------------
+    try:
+        _authority = ctx.exact_l3_dates
+    except BaseException:                 # a hostile context is fail-closed
+        _authority = None
+    exact_l3: set = set()
+    have_authority = (isinstance(_authority, (tuple, list))
+                      and len(_authority) > 0
+                      and all(type(d) is str for d in _authority))
+    if have_authority:
+        exact_l3 = set(_authority)
+    else:
+        problems.append("key_claims.KC1.exact_l3_authority_missing")
+        v1 = "FAIL"
+
+    # SECONDARY screens, kept because they catch LOCKED-FILE-side corruption
+    # that identity alone would not attribute: (a) the union must have exactly
+    # the locked L3 size (the structurally-eligible record population — the
+    # frozen §3 NA policy keeps warm-up/NA days IN the sample, so eras
+    # partition L3, not L4); (b) every locked WHOLE-DAY-REMOVED date must be
+    # absent from it.
     eras = st.get("eras") if isinstance(st, Mapping) else None
     published_days: set = set()
     if isinstance(eras, Mapping) and eras:
         ok_lists = True
-        for era_dates in eras.values():
+        era_membership: dict = {}          # date -> how many eras carry it
+        dup_within: list = []
+        for era_name in sorted(eras, key=repr):
+            era_dates = eras[era_name]
             if not isinstance(era_dates, (list, tuple)):
                 ok_lists = False
                 break
-            published_days.update(str(d) for d in era_dates)
+            this_era: set = set()
+            for d in era_dates:
+                text = str(d)
+                if text in this_era:
+                    dup_within.append(str(era_name) + ":" + text)
+                this_era.add(text)
+            for text in sorted(this_era):
+                era_membership[text] = era_membership.get(text, 0) + 1
+            published_days.update(this_era)
         l3_pop = funnel.get("L3_structurally_eligible_days")
         if not ok_lists:
             problems.append("key_claims.KC1.eras_not_date_lists")
             v1 = "FAIL"
-        elif _kc_int(l3_pop) and len(published_days) != l3_pop:
-            problems.append(
-                "key_claims.KC1.era_union_size_not_locked_l3:"
-                + repr(len(published_days)) + "!=" + repr(l3_pop))
-            v1 = "FAIL"
+        else:
+            # (1) EXACT identity, both directions, one code per direction.
+            if have_authority:
+                absent = sorted(exact_l3 - published_days)
+                if absent:
+                    problems.append(
+                        "key_claims.KC1.exact_l3_date_missing_from_eras:"
+                        + ",".join(absent[:5]))
+                    v1 = "FAIL"
+                fabricated = sorted(published_days - exact_l3)
+                if fabricated:
+                    problems.append(
+                        "key_claims.KC1.era_date_not_in_exact_l3:"
+                        + ",".join(fabricated[:5]))
+                    v1 = "FAIL"
+            # (2) the eras must PARTITION that set: a date carried by two
+            # eras (or listed twice inside one) is a defect even when the
+            # UNION still matches the authority exactly.
+            if dup_within:
+                problems.append(
+                    "key_claims.KC1.era_date_duplicated_within_era:"
+                    + ",".join(sorted(dup_within)[:5]))
+                v1 = "FAIL"
+            dup_across = sorted(d for d, n in era_membership.items() if n > 1)
+            if dup_across:
+                problems.append(
+                    "key_claims.KC1.era_date_duplicated_across_eras:"
+                    + ",".join(dup_across[:5]))
+                v1 = "FAIL"
+            # (3) secondary: union size against the LOCKED funnel count.
+            if _kc_int(l3_pop) and len(published_days) != l3_pop:
+                problems.append(
+                    "key_claims.KC1.era_union_size_not_locked_l3:"
+                    + repr(len(published_days)) + "!=" + repr(l3_pop))
+                v1 = "FAIL"
         # WHOLE-DAY removal groups only (Codex r2 #1 self-lock fix):
         # adr14_warmup_days are deliberately NOT here — the frozen NA policy
         # keeps them IN the L3 sample (features NA, day retained), so they
@@ -1273,15 +1362,15 @@ def _kc1_kc2(formal, ctx, problems, verdicts) -> None:
                 "key_claims.KC1.removed_day_republished:"
                 + ",".join(overlap[:5]))
             v1 = "FAIL"
-        # Arbitrary fake-day detection (Codex r2 #1 second half): a swapped-
-        # in day that is not a plausible member of the locked universe must
-        # refuse — every published day must parse as an ISO date, fall
-        # inside the locked Development window, and be a weekday. Residual
-        # (an in-window weekday HOLIDAY) is stated, not hidden: date-set
-        # IDENTITY is bound by the evidence channel (KC3 — structural.eras
-        # is reconciled against the EV-1 reducers rebuilt from parsed
-        # records), so KC1's plausibility screen and KC3's membership
-        # binding compose to close the swap.
+        # Cheap PRE-FILTER (Codex r2 #1 second half), retained but no longer
+        # load-bearing: every published day must parse as an ISO date, fall
+        # inside the locked Development window, and be a weekday. Its verdict
+        # is now SUBSUMED by the identity check above — an implausible date
+        # is by construction also not in the exact-L3 authority, so it fails
+        # identity too — and both codes are emitted, because the pair says
+        # different things about HOW the publication went wrong. What the
+        # r2 design could not do, and identity now does, is refuse a swap to
+        # an in-window LEGAL WEEKDAY that simply is not an L3 day.
         window = locked.get("development_window")
         w_lo = (window.get("start_inclusive")
                 if isinstance(window, Mapping) else None)

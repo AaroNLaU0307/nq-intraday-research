@@ -99,6 +99,10 @@ def ctx(**over):
     base = dict(assertions_bytes=assertions_bytes(),
                 ruled_methods=aaron_ruled_methods(),
                 evidence_problems=["PARTIAL:replay:pending_dr"],
+                # R4 B1: the EXACT L3 authority the ENTRY builds pre-exposure
+                # from the verified structural funnel. KC1 is fail-closed
+                # without it, so every happy path must carry it.
+                exact_l3_dates=tuple(DAYS),
                 disk_report=None)
     base.update(over)
     return op.ResearchClaimsContext(**base)
@@ -372,12 +376,14 @@ def test_kc1_warmup_day_in_eras_is_legitimate_no_self_lock():
 
 def test_kc1_arbitrary_weekend_swap_refused():
     """Codex r2 counter-example: same count, a real day swapped for an
-    unregistered WEEKEND date — must refuse."""
+    unregistered WEEKEND date — must refuse. Both codes fire: the cheap
+    plausibility pre-filter AND the exact-identity check."""
     f = formal_payload()
     f["structural"]["eras"]["era_a"][0] = "2020-01-04"     # Saturday
     rep = run(f)
     assert rep.verdicts["KC1_day_universe"] == "FAIL"
     assert any("implausible_published_day" in p for p in rep.problems)
+    assert any("era_date_not_in_exact_l3" in p for p in rep.problems)
 
 
 def test_kc1_out_of_window_swap_refused():
@@ -391,3 +397,118 @@ def test_kc1_unparseable_day_refused():
     f = formal_payload()
     f["structural"]["eras"]["era_a"][0] = "not-a-date"
     assert run(f).verdicts["KC1_day_universe"] == "FAIL"
+
+
+# --- Codex r3 mandate B1: KC1 is an EXACT L3 identity check ----------------
+
+def test_kc1_in_window_legal_weekday_swap_caught_only_by_identity():
+    """THE case plausibility could never catch: same count, a real L3 day
+    swapped for a date that is a legal weekday INSIDE the locked development
+    window (2020-02-03 is a Monday) and simply is not an L3 day. The
+    plausibility screen passes it; exact identity must refuse it, in both
+    directions."""
+    f = formal_payload()
+    f["structural"]["eras"]["era_a"][0] = "2020-02-03"
+    rep = run(f)
+    assert rep.verdicts["KC1_day_universe"] == "FAIL"
+    assert any("era_date_not_in_exact_l3:2020-02-03" in p
+               for p in rep.problems)
+    assert any("exact_l3_date_missing_from_eras:" + DAYS[0] in p
+               for p in rep.problems)
+    # proof that the pre-filter is genuinely blind to this swap
+    assert not any("implausible_published_day" in p for p in rep.problems)
+    assert not any("era_union_size" in p for p in rep.problems)
+
+
+def test_kc1_date_missing_from_eras_fails_with_missing_code():
+    f = formal_payload()
+    f["structural"]["eras"]["era_b"] = DAYS[11:]      # DAYS[10] dropped
+    rep = run(f)
+    assert rep.verdicts["KC1_day_universe"] == "FAIL"
+    assert any("exact_l3_date_missing_from_eras:" + DAYS[10] in p
+               for p in rep.problems)
+
+
+def test_kc1_extra_fabricated_date_fails_with_extra_code():
+    f = formal_payload()
+    f["structural"]["eras"]["era_b"] = DAYS[10:] + ["2020-02-03"]
+    rep = run(f)
+    assert rep.verdicts["KC1_day_universe"] == "FAIL"
+    assert any("era_date_not_in_exact_l3:2020-02-03" in p
+               for p in rep.problems)
+
+
+def test_kc1_date_in_two_eras_fails_even_though_union_matches():
+    """The union still EQUALS the authority (and has the locked size), but
+    the eras no longer PARTITION it — DAYS[10] is carried by both."""
+    f = formal_payload()
+    f["structural"]["eras"] = {"era_a": DAYS[:11], "era_b": DAYS[10:]}
+    rep = run(f)
+    assert rep.verdicts["KC1_day_universe"] == "FAIL"
+    assert any("era_date_duplicated_across_eras:" + DAYS[10] in p
+               for p in rep.problems)
+    # the identity and size screens are, by construction, satisfied here
+    assert not any("exact_l3_date_missing_from_eras" in p
+                   for p in rep.problems)
+    assert not any("era_date_not_in_exact_l3" in p for p in rep.problems)
+    assert not any("era_union_size" in p for p in rep.problems)
+
+
+def test_kc1_date_repeated_inside_one_era_fails():
+    f = formal_payload()
+    f["structural"]["eras"] = {"era_a": DAYS[:10] + [DAYS[0]],
+                               "era_b": DAYS[10:]}
+    rep = run(f)
+    assert rep.verdicts["KC1_day_universe"] == "FAIL"
+    assert any("era_date_duplicated_within_era:era_a:" + DAYS[0] in p
+               for p in rep.problems)
+
+
+def test_kc1_warmup_day_still_passes_under_exact_identity():
+    """adr14 warm-up days stay LEGITIMATE members of L3: present in the
+    eras AND in the exact-L3 authority, KC1 must PASS."""
+    funnel = dict(FUNNEL)
+    funnel["removed_sets"] = {"zero_bar_days": list(REMOVED),
+                              "adr14_warmup_days": [DAYS[0], DAYS[1]]}
+    rep = run(assertions_bytes=assertions_bytes(funnel),
+              exact_l3_dates=tuple(DAYS))
+    assert rep.verdicts["KC1_day_universe"] == "PASS"
+
+
+def test_kc1_missing_authority_is_fail_closed():
+    rep = run(exact_l3_dates=None)
+    assert rep.verdicts["KC1_day_universe"] == "FAIL"
+    assert any("key_claims.KC1.exact_l3_authority_missing" in p
+               for p in rep.problems)
+    assert rep.sealable_pre_write is False
+
+
+@pytest.mark.parametrize("bogus", [
+    None, "2020-01-01", "", 42, [1, 2, 3], (1, 2, 3), (), [],
+    tuple(DAYS[:-1]) + (None,), set(DAYS)])
+def test_kc1_unusable_authority_fails_and_never_raises(bogus):
+    """Wrong type or empty: FAIL with the authority code, never an
+    exception, and never a silent fallback to the plausibility screen."""
+    rep = run(exact_l3_dates=bogus)
+    assert rep.verdicts["KC1_day_universe"] == "FAIL"
+    assert any("key_claims.KC1.exact_l3_authority_missing" in p
+               for p in rep.problems)
+
+
+def test_kc1_authority_is_not_derived_from_the_payload():
+    """A payload whose eras are internally self-consistent (union size ==
+    published L3, all plausible weekdays) still fails when it disagrees
+    with the authority — i.e. the expected side is the context, not the
+    payload's own mirror of itself."""
+    shifted = [f"2020-03-{d:02d}" for d in
+               (2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20,
+                23, 24, 25, 26, 27)]
+    assert len(shifted) == L3
+    f = formal_payload()
+    f["structural"]["eras"] = {"era_a": shifted[:10], "era_b": shifted[10:]}
+    rep = run(f)
+    assert rep.verdicts["KC1_day_universe"] == "FAIL"
+    assert not any("era_union_size" in p for p in rep.problems)
+    assert not any("implausible_published_day" in p for p in rep.problems)
+    assert any("era_date_not_in_exact_l3" in p for p in rep.problems)
+    assert any("exact_l3_date_missing_from_eras" in p for p in rep.problems)

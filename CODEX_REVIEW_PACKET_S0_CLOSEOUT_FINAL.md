@@ -206,7 +206,7 @@ AWAITING_CODEX_FINAL_INTEGRATED_REVIEW=YES
 5. L-5 门与归档语义 vs 裁决句的逐字对照；
 6. READY supersession（Option A/B/C）在本包 PASS 后才由 Aaron 裁决（预登记，非本包内容）。
 
-## 11. Codex 第一轮终审（HOLD）的处置（第二候选，本节之后的内容以第二候选为准）
+## 11. Codex 第一轮终审（HOLD）的处置【HISTORICAL — superseded by §12 及其后的最新终态节；本节的"委托裁决"字样一律按 IR-28 现势 PENDING_AARON_RATIFICATION 读】
 
 Codex 对 `f54d05a` 裁 `CODEX_FINAL_REVIEW=HOLD / NOT READY`（六项阻断＋四项待
 Aaron 裁决）。主代理逐项 Level-1 复核：**六项阻断全部属实**（含对我方 F-1
@@ -280,3 +280,55 @@ FABLE_MEASURED 待 Codex 复算。
 - 待办不变：IR-28a-d `PENDING_AARON_RATIFICATION`（真实 S0 前必须完成）；
   DR-1 sensitivity 报告链与 DR-5 MC consumer 具名 PARTIAL；attempts/ 历史
   残留待 Aaron。
+
+## 13. R4 最终边界收口（第四候选＝最终候选；证据全部 FABLE_MEASURED / CODEX_NOT_YET_REPRODUCED）
+
+MASTER_PROMPT_S0_CLOSEOUT_R4_FINAL_BOUNDARY 三项工程闭合＋治理文字一致化：
+
+**B1 — KC1 exact L3 authority**：prepare（pre-exposure）从已验证结构原子重建
+exact L3（生产=`universe.funnel.structurally_eligible`，即 Stage-B 对锁定断言
+核验过的漏斗；hermetic=同族原子 ds.records，无第三路径），排序 tuple＋digest
+入 `_PreparedExecutionInput`。KC1 = `set(union(structural.eras)) ==
+set(exact_l3_dates)` 双向精确身份（missing/extra 各自问题码）＋跨/同 era 重复
+拒绝＋authority 缺失/错型 fail-closed（`exact_l3_authority_missing`——
+plausibility 筛不得顶替身份）。expected 侧永不取自 payload/evidence mirror；
+KC3 保留为第二道内部一致性。adr14 warm-up 合法留在 L3（专项钉）。
+**判别力实证**：仅禁用身份比较→5 测试红，含"窗口内合法工作日（2020-02-03）
+同数换日"——该案对全部前置筛不可见。59/59（test_key_claims）。
+
+**B2 — 断言真曝光前快照**：prepare 一次性读取＋sha 校验
+`S0_INPUT_PREFLIGHT.json`（钉 `9d6dd1c1…4debd6`），bytes＋digest 入 prepared；
+pre-write 筛、post-write 释放、KC1/KC2 全部消费同一 prepared 对象；
+`RUN_STARTED` 后对该路径读取次数=0（只读边界复核：仅存的两个模块级读取点
+分别为 prepare 自身与 legacy 直调回退，生产链不经过后者）；缺失/漂移/解析
+失败在 exposure 前拒绝。
+
+**B3 — COMPLETED 前内容+类型终 inventory**：共享 reducer
+`runinfra.build_tree_inventory`（relative_path/entry_type/size/sha256；
+symlink/junction/reparse/special 拒绝；旧私名删除有钉）；baseline hook 工件
+（含 REGISTRY_AFTER_RUN_STARTED.json）产生即按内容 digest 捕获；renderer
+expected=实际 written bytes；manifest 写后即捕获 expected bytes；chain 验证
+后、COMPLETED 前全目录 exact inventory equality（无白名单/无 subset/无仅名
+比较，有钉）；archive 终验后再复核 source inventory 覆盖整个归档窗口
+（`source_stable_after_verify`）。**判别力实证（revert）**：门降回名字级后，
+改写 report 内容/同名目录换型/改写 registry 快照/改写 manifest 四案全部
+COMPLETED——恰为 Codex r3 指出的洞；恢复后四案全红。213/213
+（test_s0_runner）。
+
+**PHASE C 治理文字**：IR-28 全部改"Fable proposal / PENDING_AARON_
+RATIFICATION"（生效措辞清除）；本包 §11 标 HISTORICAL/superseded；事件档案
+的 ledger 处置与口令豁免均标 pending Aaron；`REAL_DATA_READ=YES—STRUCTURAL_
+TEST_INCIDENT` 作为事实保留、不等同于裁决；DR-1 sensitivity 报告链与 DR-5
+MC consumer 维持具名 PARTIAL。
+
+**终态数字**：全套件 fresh **2562 passed / 0 failed / 0 skipped，358.44s**
+（`-p no:cacheprovider`，提交树即被测树）；`--collect-only`=2562=双钉；
+`SCANS=CLEAN`；`FROZEN OK`；`git diff --check` 干净；registry/exposure 逐字
+基线；`runs/` 不存在；无 tag/READY/授权事件。
+
+```
+REAL_RUN_READY=NO
+READY_APPENDED=NO
+STRATEGY_BUILD_STARTED=NO
+AWAITING_CODEX_FINAL_REVIEW=YES
+```

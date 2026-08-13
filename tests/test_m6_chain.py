@@ -2373,6 +2373,12 @@ def test_m616_prepare_returns_an_exact_typed_immutable_object(monkeypatch,
            "regime_of": lambda d: "R", "vol_axis_of": _test_vol_axis}
     monkeypatch.setattr(mod, "_resolved_methods", lambda: approved)
     monkeypatch.setattr(mod, "_approved_injectables", lambda: dict(inj))
+    # R4 B1: prepare now builds the exact-L3 authority from the structural
+    # atoms — the hermetic chain supplies the synthetic market's dataset.
+    if "m" not in _CACHE:
+        _CACHE["m"] = _market()
+    bars, ds = _CACHE["m"]
+    monkeypatch.setattr(mod.RealChain, "_ensure", lambda self: (ds, None))
     mod._CONFIG_CACHE.clear()
     try:
         prepared = mod.RealChain().prepare(_test_snapshot())
@@ -2380,6 +2386,10 @@ def test_m616_prepare_returns_an_exact_typed_immutable_object(monkeypatch,
         with pytest.raises(AttributeError):
             prepared.config = None
         assert not hasattr(prepared, "__dict__")     # __slots__
+        # R4: the authority slots are populated and immutable
+        assert prepared.exact_l3_dates == tuple(
+            sorted(r.trade_date for r in ds.records))
+        assert isinstance(prepared.assertions_bytes, bytes)
     finally:
         mod._CONFIG_CACHE.clear()
 
@@ -2577,16 +2587,40 @@ def mod_render_honest_report():
 # governance it verifies comes from the PRE-EXPOSURE snapshot.
 # ===========================================================================
 
-def _prepared_with(mod, snapshot=None):
+def _kc_authority_for(payload):
+    """R4 B1/B2 — the synthetic run-scoped authority: the exact L3 tuple is
+    the union of the payload's own era partition (== the synthetic
+    structurally-eligible set by construction), and the bytes mirror the
+    synthetic locked file `_patch_kc_assertions` writes."""
+    import hashlib as _hl
+    import json as _json
+    eras = payload["structural"]["eras"]
+    exact = tuple(sorted({str(d) for v in eras.values() for d in v}))
+    return exact
+
+
+def _prepared_with(mod, snapshot=None, payload=None):
     """Build the production prepared object directly.
 
     `prepare()` cannot be used here: it needs an approved config, and the
     production posture is that `_approved_injectables()` returns None. What
     is under test is the SNAPSHOT half, so the config slot is a stand-in.
+    R4: the run-scoped authority slots are populated from the (payload,
+    patched synthetic assertions) pair when a payload is supplied.
     """
+    import hashlib as _hl
+    kw = {}
+    if payload is not None:
+        exact = _kc_authority_for(payload)
+        abytes = Path(mod.KEY_CLAIMS_ASSERTIONS_PATH).read_bytes()
+        kw = dict(exact_l3_dates=exact,
+                  exact_l3_digest=_hl.sha256(
+                      "\n".join(exact).encode("utf-8")).hexdigest(),
+                  assertions_bytes=abytes,
+                  assertions_digest=_hl.sha256(abytes).hexdigest())
     return mod._PreparedExecutionInput(
         config=_test_config(), reason="TEST_ONLY",
-        snapshot=_MPX(dict(snapshot or _test_snapshot())))
+        snapshot=_MPX(dict(snapshot or _test_snapshot())), **kw)
 
 
 def _report_governance_for(mod, snap):
@@ -2618,7 +2652,7 @@ def _honest_run_dir(mod, tmp_path, snap, monkeypatch):
     payload = {k: v for k, v in src.items()}
     payload["governance"] = gov
     _patch_kc_assertions(mod, monkeypatch, tmp_path, src)
-    prepared = _prepared_with(mod, snap)
+    prepared = _prepared_with(mod, snap, payload=payload)
     files = mod.RealChain().render_report_with_governance_proof(
         payload, prepared)
     return _write_run_dir(tmp_path, files), prepared, files
@@ -2891,8 +2925,13 @@ def test_r1_ruled_non_test_only_render_admits_seed_manifest(monkeypatch,
     it withheld (pinned elsewhere)."""
     mod = real_run_module()
     _patch_kc_assertions(mod, monkeypatch, tmp_path, _payload())
-    files = mod.render_s0_report(_payload(), expected_governance=dict(_GOV),
-                                 methods=_f1_approved_methods())
+    src = _payload()
+    files = mod.render_s0_report(
+        src, expected_governance=dict(_GOV),
+        methods=_f1_approved_methods(),
+        key_claims_authority=(
+            Path(mod.KEY_CLAIMS_ASSERTIONS_PATH).read_bytes(),
+            _kc_authority_for(src)))
     assert "SEED_MANIFEST.json" in files
     adm = json.loads(files["HANDOFF_ADMISSION.json"])
     assert "SEED_MANIFEST.json" in adm["admitted"]

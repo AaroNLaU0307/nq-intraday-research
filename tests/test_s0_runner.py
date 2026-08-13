@@ -995,7 +995,7 @@ def test_pytest_gate_floor_is_the_audit_baseline():
     """SA-10 N3: the floor tracks the CURRENT suite, closing the
     silent-collection-drop headroom."""
     mod = real_run_module()
-    assert mod.MIN_COLLECTED_TESTS == 2536
+    assert mod.MIN_COLLECTED_TESTS == 2562
 
 
 # ===========================================================================
@@ -3429,7 +3429,7 @@ def test_file_planted_during_manifest_write_fails_final_exact_set(
     assert out.ok is False
     assert out.failure_kind == "run_failure"
     assert out.terminal_stage == RunStage.F_SEALED
-    assert out.failed_gate == "final_exact_set"
+    assert out.failed_gate == "final_exact_inventory"
     assert out.exposure_consumed is True
     # the registry learns FAILED, never COMPLETED
     assert [e for e, _ in events] == ["RUN_STARTED", "FAILED"]
@@ -3468,7 +3468,7 @@ def test_file_planted_between_chain_verify_and_completed_fails_final_exact_set(
     assert verified and "zero extras" in verified[0]
     # the NEW one catches what the old one structurally could not
     assert out.ok is False
-    assert out.failed_gate == "final_exact_set"
+    assert out.failed_gate == "final_exact_inventory"
     assert out.terminal_stage == RunStage.F_SEALED
     assert [e for e, _ in events] == ["RUN_STARTED", "FAILED"]
     assert (runs_dir / "S0_REPORT.md.tmp").exists()
@@ -3491,7 +3491,7 @@ def test_subdirectory_planted_in_the_window_fails_final_exact_set(
     out = S0Runner(deps).run()
 
     assert out.ok is False
-    assert out.failed_gate == "final_exact_set"
+    assert out.failed_gate == "final_exact_inventory"
     assert (runs_dir / ".sync_conflict").is_dir()      # nothing deleted
     incident = runs_dir / f"INCIDENT_{out.incident_id}.md"
     assert ".sync_conflict" in incident.read_text(encoding="utf-8")
@@ -3516,10 +3516,12 @@ def test_declared_artifact_removed_in_the_window_fails_final_exact_set(
     out = S0Runner(deps).run()
 
     assert out.ok is False
-    assert out.failed_gate == "final_exact_set"
+    assert out.failed_gate == "final_exact_inventory"
     assert [e for e, _ in events] == ["RUN_STARTED", "FAILED"]
     incident = runs_dir / f"INCIDENT_{out.incident_id}.md"
-    assert "missing=['S0_REPORT.md']" in incident.read_text(encoding="utf-8")
+    assert ("S0_REPORT.md: in the set derived from this run's own writes "
+            "but MISSING from the run directory at seal time"
+            in incident.read_text(encoding="utf-8"))
 
 
 def test_final_exact_set_runs_after_chain_verify_and_before_completed():
@@ -3528,17 +3530,346 @@ def test_final_exact_set_runs_after_chain_verify_and_before_completed():
     registry append."""
     source = inspect.getsource(S0Runner.run)
     idx_verify = source.index("verdict = runinfra.verify_chain_records(")
-    idx_exact = source.index('"final_exact_set"')
+    idx_exact = source.index('"final_exact_inventory"')
     idx_completed = source.index('d.append_registry_event("COMPLETED"')
     assert idx_verify < idx_exact < idx_completed
-    # ZERO WHITELIST, pinned as the exact expression: the expected set is
-    # the union of the run's own writes and nothing else. A tolerated
-    # filename would have to be added here, and this breaks if one is.
-    assert "expected_entries = (set(baseline_entries)" in source
-    assert "| {name for name, _ in written}" in source
-    assert "| {MANIFEST_NAME})" in source
-    # and the comparison is an EQUALITY, never a subset test
-    assert "if final_entries != expected_entries:" in source
+    # ZERO WHITELIST, pinned as the exact expressions: the expectation is
+    # the run's own writes and nothing else — the baseline inventory, the
+    # renderer artifacts derived from the WRITTEN BYTES, and the manifest
+    # read-back. A tolerated filename would have to be added here, and
+    # this breaks if one is.
+    assert "expected_inventory = dict(baseline_inventory)" in source
+    assert "for name, data in written:" in source
+    assert "sha256=_sha256_bytes(data))" in source
+    assert ("expected_inventory[manifest_entry.relative_path] = "
+            "manifest_entry") in source
+    # and the comparison is an EQUALITY over the full inventory diff,
+    # never a subset test and never a name-only set
+    assert "if final_errors or inventory_diff:" in source
+    # NO NAME-ONLY ENUMERATION SURVIVES ANYWHERE IN `run`: every look at
+    # the run directory goes through the shared reducer. Comment lines are
+    # excluded because the round-3 rationale quotes the expression it
+    # replaced.
+    code_only = [ln for ln in source.splitlines()
+                 if not ln.lstrip().startswith("#")]
+    assert [ln for ln in code_only if "iterdir" in ln] == []
+
+
+# ===========================================================================
+# S0 CLOSEOUT round 3 — Codex B3: the COMPLETED gate is a CONTENT+TYPE
+# exact inventory, built by the SHARED reducer
+# ===========================================================================
+#
+# THE HOLDING. Codex #3 (above) closed the window against files APPEARING
+# and DISAPPEARING, by comparing top-level NAMES. That left the other half
+# of the same window open, and it is the half that matters most for an
+# evidentiary directory: with the name set held constant, a file's CONTENT
+# could be rewritten, or the file could be replaced by a same-named
+# DIRECTORY, and the run still sealed. The gate is now a full inventory —
+# relative path, entry TYPE, size, SHA-256 per file — measured by
+# `runinfra.build_tree_inventory`, the same reducer the archive uses.
+#
+# Every test below plants strictly AFTER `verify_chain_records` has
+# returned its verdict, so none of them is a chain failure wearing the
+# gate's name, and each one leaves the top-level NAME SET exactly as an
+# honest run leaves it: on the name-only gate every single one of them
+# reaches COMPLETED.
+
+
+_B3_HOOK_ARTIFACT = "REGISTRY_AFTER_RUN_STARTED.json"
+_B3_HONEST_NAMES = {_B3_HOOK_ARTIFACT, "S0_REPORT.md", "manifest.jsonl"}
+_b3_seam_verdicts: list[str] = []
+
+
+def _b3_post_write_verify(rdir, written, prepared):
+    """The M6.1.7 disk seal — the check that used to be the last look at
+    the run directory — wired the way a run WITH a post-RUN_STARTED hook
+    must wire it: the hook's snapshot is one of the run's own writes, so
+    the APPLICATION's seam declares it by NAME (`_exact_set_post_write_
+    verify` above would call it an extra). That name-level tolerance is
+    precisely what the round-3 gate replaces with content — and this seam
+    still runs, and still returns "zero extras", in every test below."""
+    declared = {name for name, _ in written} | {_B3_HOOK_ARTIFACT}
+    on_disk = {p.name for p in rdir.iterdir() if p.is_file()}
+    extra = on_disk - declared
+    if extra:
+        return False, f"disk_extra_file: {sorted(extra)}"
+    for name, data in written:
+        if (rdir / name).read_bytes() != data:
+            return False, f"byte mismatch: {name}"
+    detail = f"{len(written)} artifact(s) byte-verified, zero extras"
+    _b3_seam_verdicts.append(detail)
+    return True, detail
+
+
+def _b3_wiring(tmp_path):
+    """The honest round-3 wiring: tmp_path-derived governed roots, the
+    seam above as `post_write_verify` (so the OLD last enumeration still
+    runs and still passes), and the production-shaped
+    `post_run_started_hook` that writes REGISTRY_AFTER_RUN_STARTED.json."""
+    runs_root, archive_root, runs_dir, attempts_dir = _tmp_output_roots(tmp_path)
+    _b3_seam_verdicts.clear()
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()],
+        post_write_verify=_b3_post_write_verify,
+        runs_root=runs_root, archive_root=archive_root,
+        runs_dir=runs_dir, attempts_dir=attempts_dir)
+    deps = _dc_replace(deps,
+                       post_run_started_hook=_hook_writing_registry_record)
+    return deps, events, runs_dir
+
+
+def _b3_names(runs_dir: Path) -> set[str]:
+    return {p.name for p in runs_dir.iterdir()}
+
+
+def test_b3_honest_run_completes_and_publishes_the_verified_entry_count(
+        tmp_path):
+    """The honest path still COMPLETES, and the outcome CARRIES the proof
+    that the final inventory ran: `final_inventory_entries` is the number
+    of entries it verified by path, type, size and digest — 3 here (the
+    hook's registry snapshot, the sealed report, the manifest)."""
+    deps, events, runs_dir = _b3_wiring(tmp_path)
+    out = S0Runner(deps).run()
+
+    assert out.ok is True, out.failed_gate
+    assert out.terminal_stage == RunStage.F_SEALED
+    assert [e for e, _ in events] == ["RUN_STARTED", "COMPLETED"]
+    assert _b3_names(runs_dir) == _B3_HONEST_NAMES
+    assert out.final_inventory_entries == 3
+    # and the archive step downstream agreed with it, over the same tree
+    assert out.archive_status == "archive_ok"
+    assert out.archive_report.inventory.n_files == 3
+
+
+def test_b3_same_name_file_content_changed_in_the_window_fails(
+        tmp_path, monkeypatch):
+    """SAME NAME, SAME SIZE, DIFFERENT BYTES. The report is rewritten
+    after the chain verified, to a payload of IDENTICAL LENGTH — so the
+    name set matches, the byte count matches, and only the SHA-256
+    diverges. Nothing but a content proof can see this."""
+    deps, events, runs_dir = _b3_wiring(tmp_path)
+    report = runs_dir / "S0_REPORT.md"
+    forged: list[bytes] = []
+
+    def rewrite_same_length():
+        original = report.read_bytes()
+        forged.append(b"X" * len(original))
+        assert forged[0] != original and len(forged[0]) == len(original)
+        report.write_bytes(forged[0])
+
+    _plant_during_chain_verify(monkeypatch, rewrite_same_length,
+                               after_verify=True)
+    out = S0Runner(deps).run()
+
+    # the OLD last enumeration ran, and reported a clean directory
+    assert _b3_seam_verdicts == ["1 artifact(s) byte-verified, zero extras"]
+    assert out.ok is False
+    assert out.failure_kind == "run_failure"
+    assert out.terminal_stage == RunStage.F_SEALED
+    assert out.failed_gate == "final_exact_inventory"
+    assert out.exposure_consumed is True
+    assert out.final_inventory_entries is None      # verdict never reached
+    # the registry learns FAILED, and NEVER COMPLETED
+    assert [e for e, _ in events] == ["RUN_STARTED", "FAILED"]
+    # the name-only gate would have passed: the name set is untouched
+    assert _b3_names(runs_dir) - {"RUN_FAILURE_REPORT.md",
+                                  "RUN_FAILURE_REPORT.json",
+                                  f"INCIDENT_{out.incident_id}.md"} == \
+        _B3_HONEST_NAMES
+    incident = (runs_dir / f"INCIDENT_{out.incident_id}.md").read_text(
+        encoding="utf-8")
+    assert ("S0_REPORT.md: inventory mismatch against the run directory at "
+            "seal time" in incident)
+    assert "type=file" in incident                  # type unchanged, hash not
+    # nothing was deleted or repaired
+    assert report.read_bytes() == forged[0]
+
+
+def test_b3_file_replaced_by_a_same_name_directory_fails(
+        tmp_path, monkeypatch):
+    """SAME NAME, DIFFERENT TYPE. `S0_REPORT.md` becomes a DIRECTORY after
+    the chain verified. The top-level name set is bit-for-bit what an
+    honest run produces; only the entry TYPE moved."""
+    deps, events, runs_dir = _b3_wiring(tmp_path)
+
+    def swap_for_directory():
+        (runs_dir / "S0_REPORT.md").unlink()
+        (runs_dir / "S0_REPORT.md").mkdir()
+
+    _plant_during_chain_verify(monkeypatch, swap_for_directory,
+                               after_verify=True)
+    out = S0Runner(deps).run()
+
+    assert out.ok is False
+    assert out.failed_gate == "final_exact_inventory"
+    assert [e for e, _ in events] == ["RUN_STARTED", "FAILED"]
+    assert (runs_dir / "S0_REPORT.md").is_dir()     # nothing repaired
+    incident = (runs_dir / f"INCIDENT_{out.incident_id}.md").read_text(
+        encoding="utf-8")
+    assert ("S0_REPORT.md: inventory mismatch against the run directory at "
+            "seal time" in incident)
+    assert "expected type=file" in incident
+    assert "seal time type=dir" in incident
+
+
+def test_b3_baseline_registry_snapshot_content_mutated_in_the_window_fails(
+        tmp_path, monkeypatch):
+    """THE BASELINE IS CAPTURED BY CONTENT. The post-RUN_STARTED hook's
+    artifact — in production the REGISTRY_AFTER_RUN_STARTED.json snapshot,
+    the record of what the registry looked like the moment exposure burned
+    — is rewritten in the window. It is the one file the runner itself
+    never re-derives, so before B3 the baseline knew only its NAME and this
+    rewrite sealed silently."""
+    deps, events, runs_dir = _b3_wiring(tmp_path)
+    snapshot = runs_dir / "REGISTRY_AFTER_RUN_STARTED.json"
+
+    _plant_during_chain_verify(
+        monkeypatch,
+        lambda: snapshot.write_text(
+            json.dumps({"registry_sha256_after_run_started": "f" * 64},
+                       indent=1, sort_keys=True),
+            encoding="utf-8", newline="\n"),
+        after_verify=True)
+    out = S0Runner(deps).run()
+
+    assert out.ok is False
+    assert out.failed_gate == "final_exact_inventory"
+    assert [e for e, _ in events] == ["RUN_STARTED", "FAILED"]
+    incident = (runs_dir / f"INCIDENT_{out.incident_id}.md").read_text(
+        encoding="utf-8")
+    assert ("REGISTRY_AFTER_RUN_STARTED.json: inventory mismatch against "
+            "the run directory at seal time" in incident)
+    assert snapshot.read_text(encoding="utf-8").count("f" * 64) == 1
+
+
+def test_b3_manifest_content_mutated_in_the_window_fails(
+        tmp_path, monkeypatch):
+    """THE MANIFEST IS COMPARED AGAINST ITS READ-BACK. manifest.jsonl is
+    the one artifact whose bytes the runner never held — `_record_artifacts`
+    appends it record by record — so its expectation is the read-back taken
+    the instant the last record was written. The mutation lands after
+    `verify_chain_records` has already returned its verdict, which is
+    precisely why the chain replay cannot be the thing that catches it."""
+    deps, events, runs_dir = _b3_wiring(tmp_path)
+    manifest = runs_dir / "manifest.jsonl"
+    verdicts: list[bool] = []
+    real_verify = runinfra.verify_chain_records
+
+    def verify_then_mutate(*args, **kwargs):
+        verdict = real_verify(*args, **kwargs)
+        verdicts.append(verdict.valid)
+        manifest.write_bytes(manifest.read_bytes()
+                             + b'{"record_type":"forged"}\n')
+        return verdict
+
+    monkeypatch.setattr(runinfra, "verify_chain_records", verify_then_mutate)
+    out = S0Runner(deps).run()
+
+    # the chain verify RAN and PASSED — the catch is the inventory's alone
+    assert verdicts == [True]
+    assert out.ok is False
+    assert out.failed_gate == "final_exact_inventory"
+    assert [e for e, _ in events] == ["RUN_STARTED", "FAILED"]
+    incident = (runs_dir / f"INCIDENT_{out.incident_id}.md").read_text(
+        encoding="utf-8")
+    assert ("manifest.jsonl: inventory mismatch against the run directory "
+            "at seal time" in incident)
+    assert b'"forged"' in manifest.read_bytes()      # retained as evidence
+
+
+def test_b3_manifest_expectation_is_captured_before_the_chain_verify():
+    """PLACEMENT PIN for the read-back: it happens immediately after
+    `_record_artifacts` returns and strictly BEFORE the chain verify. Taken
+    any later, the expectation and the thing it is meant to test would be
+    two reads of the same possibly-mutated file."""
+    source = inspect.getsource(S0Runner.run)
+    idx_record = source.index("self._record_artifacts(rdir,")
+    idx_capture = source.index("manifest_bytes = (rdir / MANIFEST_NAME)"
+                               ".read_bytes()")
+    idx_verify = source.index("verdict = runinfra.verify_chain_records(")
+    assert idx_record < idx_capture < idx_verify
+    # exactly ONE read-back, and the entry is built from those bytes
+    assert source.count("manifest_bytes") == 3       # read, len(), sha256()
+    assert "size=len(manifest_bytes)" in source
+    assert "sha256=_sha256_bytes(manifest_bytes)" in source
+
+
+def test_b3_one_shared_reducer_serves_the_runner_gate_and_the_archive(
+        tmp_path, monkeypatch):
+    """ONE IMPLEMENTATION, proven by calls rather than by reading. Every
+    inventory in a full honest run — the runner's baseline, the runner's
+    final gate, and all of the archive's — is recorded here as a call to
+    the SAME public `runinfra.build_tree_inventory`."""
+    deps, events, runs_dir = _b3_wiring(tmp_path)
+    archive_root = Path(deps.config.archive_root)
+    real_reducer = runinfra.build_tree_inventory
+    roots: list[Path] = []
+
+    def recording_reducer(root):
+        roots.append(Path(root))
+        return real_reducer(root)
+
+    monkeypatch.setattr(runinfra, "build_tree_inventory", recording_reducer)
+    out = S0Runner(deps).run()
+
+    assert out.ok is True, out.failed_gate
+    assert out.archive_status == "archive_ok"
+    # the runner side: baseline (post-RUN_STARTED) + final gate
+    assert roots[:2] == [runs_dir, runs_dir]
+    # the archive side, in order: source, post-copy source, staging,
+    # promoted dest, post-verification source (round-3 step 6)
+    assert roots[2:] == [runs_dir, runs_dir,
+                         archive_root / f"{runs_dir.name}.partial",
+                         archive_root / runs_dir.name, runs_dir]
+    # and it is PUBLIC — the private name is gone, not aliased
+    assert not hasattr(runinfra, "_build_inventory")
+
+
+def test_b3_archive_source_mutated_after_final_verification_is_refused(
+        tmp_path, monkeypatch):
+    """(6) THE ARCHIVE WINDOW IS THE WHOLE OPERATION. The source is mutated
+    AFTER the promoted destination has passed its final verification —
+    step 3 (post-copy) and step 5 (post-promotion) have both already
+    succeeded, so every pre-B3 proof passes and the archive would have been
+    declared ok while holding bytes the sealed run no longer has.
+
+    The mutation is injected through the reducer itself, keyed on the DEST
+    inventory: that is the last step that ran before the new one."""
+    src = _sealed_source(tmp_path)
+    archive_root = tmp_path / "archive_root"
+    dest = archive_root / src.name
+    real_reducer = runinfra.build_tree_inventory
+
+    def mutate_after_dest_inventory(root):
+        result = real_reducer(root)
+        if Path(root) == dest:
+            (src / "S0_REPORT.md").write_bytes(b"MUTATED AFTER VERIFY\n")
+        return result
+
+    monkeypatch.setattr(runinfra, "build_tree_inventory",
+                        mutate_after_dest_inventory)
+    report = runinfra.archive_sealed_run(src, archive_root)
+
+    assert report.ok is False
+    assert report.status == "archive_failed"
+    # every earlier proof passed; only the new one refused
+    assert all(f.match for f in report.files)
+    assert _archive_inventory_summary_fields(report) == (True, True, True)
+    assert report.inventory.source_stable_after_verify is False
+    assert any("post-verification source re-inventory" in e
+               for e in report.errors)
+    assert any("CHANGED during the archive window" in e
+               for e in report.errors)
+    # THE EVIDENCE RULE, unchanged: the promotion already happened, so the
+    # destination is retained (never deleted, never repaired) and no
+    # partial is left behind
+    assert any("RETAINED as evidence" in e for e in report.errors)
+    assert dest.is_dir()
+    assert (dest / "S0_REPORT.md").read_bytes() == b"sealed report body\n"
+    assert _archive_partials(archive_root) == []
+    # and the sealed source is untouched by the archive itself
+    assert (src / "S0_REPORT.md").read_bytes() == b"MUTATED AFTER VERIFY\n"
 
 
 # ===========================================================================
@@ -3988,7 +4319,7 @@ def test_archive_refuses_a_symlink_entry_via_a_monkeypatched_probe(
     on this box raises `OSError [WinError 1314] A required privilege is
     not held by the client`, so the real entry cannot be built here. What
     IS exercised is the real code path — `Path.is_symlink()` returning
-    True inside `_build_inventory` — with only the OS probe replaced. The
+    True inside `build_tree_inventory` — with only the OS probe replaced. The
     junction test above covers the other branch for real."""
     src = _sealed_source(tmp_path)
     real_is_symlink = Path.is_symlink
@@ -4012,7 +4343,7 @@ def test_archive_refuses_a_junction_planted_in_the_staging_tree(
         tmp_path, monkeypatch):
     """(1) SAME CHECK ON STAGING ENTRIES. A junction that appears inside
     the `.partial` tree during the copy is refused there too — the staging
-    inventory is built by the same `_build_inventory` call as the source
+    inventory is built by the same `build_tree_inventory` call as the source
     one, so the refusal is structurally the same refusal."""
     src = _sealed_source(tmp_path)
     archive_root = tmp_path / "archive_root"
@@ -4184,6 +4515,9 @@ def test_archive_honest_run_all_three_inventories_agree(tmp_path):
     assert report.status == "archive_ok"
     assert report.errors == ()
     assert _archive_inventory_summary_fields(report) == (True, True, True)
+    # round-3 B3 step (6): the source was still equal to its pre-copy
+    # inventory even AFTER the promoted destination had been verified
+    assert report.inventory.source_stable_after_verify is True
     assert report.inventory.n_files == 3            # report, manifest, leaf
     assert report.inventory.n_dirs == 2             # sub, empty_dir
     assert report.inventory.total_bytes == sum(
@@ -4193,8 +4527,8 @@ def test_archive_honest_run_all_three_inventories_agree(tmp_path):
     assert (dest / "empty_dir").is_dir()            # empty dir reproduced
     assert (dest / "sub" / "leaf.txt").read_bytes() == b"leaf bytes"
     # and the inventory the report summarises really is the tree on disk
-    src_inv, src_errs = runinfra._build_inventory(src)
-    dest_inv, dest_errs = runinfra._build_inventory(dest)
+    src_inv, src_errs = runinfra.build_tree_inventory(src)
+    dest_inv, dest_errs = runinfra.build_tree_inventory(dest)
     assert (src_errs, dest_errs) == ([], [])
     assert src_inv == dest_inv
 
