@@ -2388,39 +2388,71 @@ def _validate_formal_payload_inner(payload, expected_governance,
     elif disclosures["pending_method_decisions"]:
         problems.append("pending_method_decisions_unresolved")
 
-    # IR-28c — Option-ii sensitivity block: validated when present. The
-    # ticks must EQUAL the ruled sensitivity constant (structural read,
-    # never a restated literal) and every per-scenario delta must be the
-    # exact arithmetic -tick_value * n_stop. Role/scope strings pin that
-    # sensitivity can never masquerade as Primary.
+    # IR-28c (R5.1 fail-closed) — the Option-ii sensitivity block is a
+    # MANDATORY formal disclosure with an EXACT structure. Missing block,
+    # missing/unknown keys, wrong types, non-finite numbers, a scenario set
+    # differing from the frozen four, or any value off the ruled/arithmetic
+    # truth each refuse the seal. Sensitivity can never masquerade as
+    # Primary (role/scope pinned). Cell arithmetic is additionally
+    # recomputed from the PARSED SEALED RECORD BYTES by the evidence
+    # reconciler (the only truly independent record source at seal time).
+    from itsf.contracts import (
+        AARON_RULED_ADVERSE_TICKS_SENSITIVITY as _SENS_TICKS,
+        MNQ_TICK_VALUE_USD as _TICK_USD)
+    _SENS_KEYS = frozenset({
+        "channel", "role", "scope", "e2_delta",
+        "effective_adverse_ticks", "per_stop_side_delta_usd_per_contract",
+        "e1_per_scenario"})
+    _SENS_CELL_KEYS = frozenset({
+        "n_stop_triggered_days", "total_pnl_delta_usd_per_contract"})
     sens = disclosures.get("sensitivity_adverse_plus1")
-    if sens is not None:
-        from itsf.contracts import (
-            AARON_RULED_ADVERSE_TICKS_SENSITIVITY as _SENS_TICKS,
-            MNQ_TICK_VALUE_USD as _TICK_USD)
-        if not isinstance(sens, dict):
-            problems.append("sensitivity_adverse_plus1_not_a_dict")
+    if not isinstance(sens, dict):
+        problems.append("sensitivity_adverse_plus1_missing")
+    else:
+        _check_no_unknown_keys(sens, _SENS_KEYS,
+                               "disclosures.sensitivity_adverse_plus1",
+                               problems, code="sensitivity_unknown_key")
+        for key in sorted(_SENS_KEYS):
+            if key not in sens:
+                problems.append(f"sensitivity_key_missing:{key}")
+        if sens.get("channel") != "sensitivity_plus1":
+            problems.append("sensitivity_channel_not_pinned")
+        if sens.get("role") != "sensitivity_only_never_primary":
+            problems.append("sensitivity_role_not_pinned")
+        if sens.get("scope") != "E1_stop_fills_only":
+            problems.append("sensitivity_scope_not_pinned")
+        if sens.get("e2_delta") != "zero_by_construction_no_stop_orders":
+            problems.append("sensitivity_e2_delta_not_pinned")
+        if sens.get("effective_adverse_ticks") != dict(_SENS_TICKS):
+            problems.append(
+                "sensitivity_effective_ticks_not_the_ruled_vector")
+        if sens.get("per_stop_side_delta_usd_per_contract") != -_TICK_USD:
+            problems.append("sensitivity_per_stop_delta_wrong")
+        cells = sens.get("e1_per_scenario")
+        if not isinstance(cells, dict):
+            problems.append("sensitivity_e1_cells_missing")
+        elif set(cells) != set(_SCENARIOS):
+            problems.append(
+                "sensitivity_scenario_set_not_the_frozen_four")
         else:
-            if sens.get("role") != "sensitivity_only_never_primary":
-                problems.append("sensitivity_role_not_pinned")
-            if sens.get("effective_adverse_ticks") != dict(_SENS_TICKS):
-                problems.append(
-                    "sensitivity_effective_ticks_not_the_ruled_vector")
-            if sens.get("per_stop_side_delta_usd_per_contract") != -_TICK_USD:
-                problems.append("sensitivity_per_stop_delta_wrong")
-            cells = sens.get("e1_per_scenario")
-            if not isinstance(cells, dict) or not cells:
-                problems.append("sensitivity_e1_cells_missing")
-            else:
-                for scn, cell in cells.items():
-                    n = (cell.get("n_stop_triggered_days")
-                         if isinstance(cell, dict) else None)
-                    d = (cell.get("total_pnl_delta_usd_per_contract")
-                         if isinstance(cell, dict) else None)
-                    if (not isinstance(n, int) or n < 0
-                            or d != -_TICK_USD * n):
-                        problems.append(
-                            f"sensitivity_delta_arithmetic:{scn}")
+            import math as _sens_math
+            for scn in _SCENARIOS:
+                cell = cells[scn]
+                if not isinstance(cell, dict):
+                    problems.append(f"sensitivity_cell_not_a_dict:{scn}")
+                    continue
+                _check_no_unknown_keys(
+                    cell, _SENS_CELL_KEYS,
+                    f"sensitivity.e1_per_scenario.{scn}", problems,
+                    code="sensitivity_cell_unknown_key")
+                n = cell.get("n_stop_triggered_days")
+                d = cell.get("total_pnl_delta_usd_per_contract")
+                if (isinstance(n, bool) or not isinstance(n, int) or n < 0
+                        or isinstance(d, bool)
+                        or not isinstance(d, (int, float))
+                        or not _sens_math.isfinite(float(d))
+                        or float(d) != -_TICK_USD * n):
+                    problems.append(f"sensitivity_delta_arithmetic:{scn}")
 
     # A11 — na_conservation restatement (mission item 8 / contract §A11 "NA
     # 守恒复述"): a `na_conservation` sub-block MUST exist and carry the

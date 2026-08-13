@@ -165,6 +165,7 @@ import numpy as np
 from itsf.contracts import (
     MNQ_POINT_VALUE_USD,
     MNQ_TICK_POINTS as _MNQ_TICK_POINTS,
+    MNQ_TICK_VALUE_USD as _MNQ_TICK_VALUE_USD,
     RESEARCH_BOOTSTRAP_SEEDS,
 )
 from itsf.s0 import context as _ctx
@@ -1787,6 +1788,13 @@ CHECK_REGISTRY: Mapping[str, CheckSpec] = MappingProxyType({
     "bytes.parse": CheckSpec(None, "sealed_files", _KIND_HARD),
     "bytes.record_ranges": CheckSpec(None, "sealed_rows", _KIND_HARD),
     "bytes.manifest_counts": CheckSpec(None, "sealed_files", _KIND_HARD),
+    # IR-28c (R5.1): the published sensitivity cells are RE-DERIVED from the
+    # parsed sealed bytes — the only record source that is independent of
+    # the producer aggregate the renderer consumed. One compared unit per
+    # E1 cost scenario; a missing block compares 0 of 4 and the HARD gate
+    # fires by construction.
+    "IR-28c.sensitivity_recompute": CheckSpec(
+        None, "axis_scenarios", _KIND_HARD),
     "CR-9.stream_tags": CheckSpec(
         None, "one", _KIND_PARTIAL,
         "disclosures.method_conventions.stream_tags", _R_STREAM_TAGS),
@@ -3898,6 +3906,9 @@ def _reconcile_checks(evidence, formal, sealed_files, problems, outcomes,
     _run_check("bytes.manifest_counts",
                lambda: _reconcile_manifest_counts(formal, parsed, problems),
                outcomes, problems, pops)
+    _run_check("IR-28c.sensitivity_recompute",
+               lambda: _reconcile_sensitivity(formal, parsed, problems),
+               outcomes, problems, pops)
     _run_check("EV-12.estimator_identity",
                lambda: _reconcile_estimator_identity(evidence, formal,
                                                      theta_keys, scenarios,
@@ -4145,6 +4156,54 @@ def _reconcile_manifest_counts(formal, parsed, problems) -> int:
             problems.append(
                 f"evidence_manifest_count_mismatch:{eng}|{scn}:"
                 f"{reported}!={len(rows)}")
+    return compared
+
+
+def _reconcile_sensitivity(formal, parsed, problems) -> int:
+    """IR-28c (R5.1) — recompute every published sensitivity cell from the
+    PARSED SEALED BYTES, never from the producer aggregate.
+
+    The renderer's validator pins the block's structure and its internal
+    arithmetic; what it cannot see is whether `n_stop_triggered_days` still
+    matches the records that actually reached disk. This check counts
+    `stop_triggered is True` rows per E1 scenario from `parsed` (the bytes)
+    and hard-compares both the count and the exact linear delta
+    (-MNQ_TICK_VALUE_USD x n) against the published cell. Anything short of
+    exact agreement is a HARD problem; a cell that cannot be compared at
+    all leaves `compared < 4` and the registry gate fires."""
+    sens = _get(formal, "disclosures", "sensitivity_adverse_plus1")
+    if not isinstance(sens, Mapping):
+        problems.append("evidence_sensitivity_block_missing")
+        return 0
+    cells = _get(sens, "e1_per_scenario")
+    if not isinstance(cells, Mapping):
+        problems.append("evidence_sensitivity_cells_missing")
+        return 0
+    compared = 0
+    for scn in _SCENARIO_AXIS:
+        rows = parsed.get(("E1", scn))
+        if not isinstance(rows, Mapping):
+            problems.append(f"evidence_sensitivity_no_sealed_rows:{scn}")
+            continue
+        cell = _get(cells, scn)
+        if not isinstance(cell, Mapping):
+            problems.append(f"evidence_sensitivity_cell_missing:{scn}")
+            continue
+        n_bytes = sum(1 for r in rows.values()
+                      if r.get("stop_triggered") is True)
+        want_delta = -_MNQ_TICK_VALUE_USD * n_bytes
+        compared += 1
+        n_pub = cell.get("n_stop_triggered_days")
+        if isinstance(n_pub, bool) or not isinstance(n_pub, int) \
+                or n_pub != n_bytes:
+            problems.append(
+                f"evidence_sensitivity_n_stop_mismatch:{scn}:"
+                f"{n_pub!r}!={n_bytes}")
+        d_pub = cell.get("total_pnl_delta_usd_per_contract")
+        if not _num(d_pub) or float(d_pub) != want_delta:
+            problems.append(
+                f"evidence_sensitivity_delta_mismatch:{scn}:"
+                f"{d_pub!r}!={want_delta}")
     return compared
 
 

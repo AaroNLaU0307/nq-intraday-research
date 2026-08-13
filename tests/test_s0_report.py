@@ -321,11 +321,34 @@ def _valid_payload() -> dict:
             "under MNQ multiplier + friction — not a tradeable MNQ "
             "history (frozen S0 §6)."),
     }
+    # IR-28c (R5.1): the sensitivity block is now MANDATORY with an exact
+    # structure, so the valid baseline builds it the same way the producer
+    # does — counted from this fixture's own records, exact linear delta.
+    from itsf.contracts import (AARON_RULED_ADVERSE_TICKS_SENSITIVITY,
+                                MNQ_TICK_VALUE_USD)
+    sens_cells = {}
+    for scn in SCENARIOS:
+        n_stop = sum(1 for r in study["records"]["E1"][scn]
+                     if r.stop_triggered)
+        sens_cells[scn] = {
+            "n_stop_triggered_days": n_stop,
+            "total_pnl_delta_usd_per_contract": -MNQ_TICK_VALUE_USD * n_stop,
+        }
     disclosures = {
         "untradeable": {"note": "n/a for this fixture"},
         "pending_method_decisions": [],
         "method_conventions": {
             "quoted_seed_convention": "first frozen seed (7)"},
+        "sensitivity_adverse_plus1": {
+            "channel": "sensitivity_plus1",
+            "role": "sensitivity_only_never_primary",
+            "effective_adverse_ticks":
+                dict(AARON_RULED_ADVERSE_TICKS_SENSITIVITY),
+            "per_stop_side_delta_usd_per_contract": -MNQ_TICK_VALUE_USD,
+            "scope": "E1_stop_fills_only",
+            "e2_delta": "zero_by_construction_no_stop_orders",
+            "e1_per_scenario": sens_cells,
+        },
         # A11 na_conservation restatement (mission item 8). NO current
         # producer populates this key — see report.py's docstring and this
         # file's module docstring for the hand-off note; this fixture-only
@@ -2905,3 +2928,169 @@ def test_cr7_derivation_helper_returns_none_only_when_underivable():
     assert report._derive_trade_date_universe(
         {"oracle_daily": {"theta_0.5": {"day_universe": {}}}}) is None
     assert report._derive_trade_date_universe(None) is None
+
+
+# ---------------------------------------------------------------------------
+# IR-28c (R5.1 B1) — the sensitivity block is MANDATORY with an EXACT
+# structure. Every tamper below must REFUSE the seal; the last test proves
+# the previous candidate (594bca5, validate-if-present) ADMITTED the
+# representative tampers this round closes.
+# ---------------------------------------------------------------------------
+
+def _sens_of(payload):
+    return payload["disclosures"]["sensitivity_adverse_plus1"]
+
+
+def test_sensitivity_positive_production_shape_seals():
+    payload = _valid_payload()
+    assert _validate(payload) == []
+    assert set(_sens_of(payload)["e1_per_scenario"]) == set(SCENARIOS)
+
+
+def test_sensitivity_whole_block_deletion_is_refused():
+    payload = _valid_payload()
+    del payload["disclosures"]["sensitivity_adverse_plus1"]
+    assert "sensitivity_adverse_plus1_missing" in _validate(payload)
+
+
+@pytest.mark.parametrize("scn", list(SCENARIOS))
+def test_sensitivity_deleting_each_scenario_cell_is_refused(scn):
+    payload = _valid_payload()
+    del _sens_of(payload)["e1_per_scenario"][scn]
+    assert ("sensitivity_scenario_set_not_the_frozen_four"
+            in _validate(payload))
+
+
+def _tamper_ticks(s):
+    s["effective_adverse_ticks"] = {**s["effective_adverse_ticks"],
+                                    "Base": 1}
+
+
+def _tamper_n_stop(s):
+    cell = s["e1_per_scenario"]["Base"]
+    cell["n_stop_triggered_days"] += 1          # delta left stale
+
+
+def _tamper_delta(s):
+    cell = s["e1_per_scenario"]["Base"]
+    cell["total_pnl_delta_usd_per_contract"] -= 0.25
+
+
+def _tamper_role(s):
+    s["role"] = "primary"
+
+
+def _tamper_scope(s):
+    s["scope"] = "ALL_FILLS"
+
+
+def _tamper_channel(s):
+    s["channel"] = "primary_channel"
+
+
+def _tamper_e2(s):
+    s["e2_delta"] = "small"
+
+
+def _tamper_per_stop(s):
+    s["per_stop_side_delta_usd_per_contract"] = -1.0
+
+
+def _tamper_unknown_scenario(s):
+    s["e1_per_scenario"]["Weird"] = {"n_stop_triggered_days": 0,
+                                     "total_pnl_delta_usd_per_contract": 0.0}
+
+
+def _tamper_unknown_block_key(s):
+    s["note"] = "extra"
+
+
+def _tamper_unknown_cell_key(s):
+    s["e1_per_scenario"]["Base"]["note"] = "extra"
+
+
+def _tamper_missing_scope_key(s):
+    del s["scope"]
+
+
+_SENS_TAMPERS = [
+    ("ticks", _tamper_ticks, "sensitivity_effective_ticks_not_the_ruled_vector"),
+    ("n_stop", _tamper_n_stop, "sensitivity_delta_arithmetic:Base"),
+    ("delta", _tamper_delta, "sensitivity_delta_arithmetic:Base"),
+    ("role", _tamper_role, "sensitivity_role_not_pinned"),
+    ("scope", _tamper_scope, "sensitivity_scope_not_pinned"),
+    ("channel", _tamper_channel, "sensitivity_channel_not_pinned"),
+    ("e2_delta", _tamper_e2, "sensitivity_e2_delta_not_pinned"),
+    ("per_stop", _tamper_per_stop, "sensitivity_per_stop_delta_wrong"),
+    ("unknown_scenario", _tamper_unknown_scenario,
+     "sensitivity_scenario_set_not_the_frozen_four"),
+    ("unknown_block_key", _tamper_unknown_block_key,
+     "sensitivity_unknown_key"),
+    ("unknown_cell_key", _tamper_unknown_cell_key,
+     "sensitivity_cell_unknown_key"),
+    ("missing_scope_key", _tamper_missing_scope_key,
+     "sensitivity_key_missing:scope"),
+]
+
+
+@pytest.mark.parametrize("_name,mutate,code",
+                         _SENS_TAMPERS, ids=[t[0] for t in _SENS_TAMPERS])
+def test_sensitivity_each_tamper_is_refused(_name, mutate, code):
+    payload = _valid_payload()
+    mutate(_sens_of(payload))
+    problems = _validate(payload)
+    assert any(p == code or p.startswith(code + ":") for p in problems), (
+        code, problems)
+
+
+def _load_candidate_594bca5_report(tmp_path):
+    """Load the PREVIOUS candidate's report module out of the git object
+    store. Any failure here (git absent, object missing, import error) is a
+    test FAILURE — never a skip."""
+    import subprocess
+    src = subprocess.run(
+        ["git", "show", "594bca5:src/itsf/s0/report.py"],
+        capture_output=True, text=True, encoding="utf-8",
+        cwd=str(REPO_ROOT), check=True).stdout
+    # Prove we really hold the OLD validator: it predates the mandatory-
+    # presence code and never pinned channel/scope/e2_delta.
+    assert "sensitivity_adverse_plus1_missing" not in src
+    assert "sensitivity_scope_not_pinned" not in src
+    path = tmp_path / "report_594bca5.py"
+    path.write_text(src, encoding="utf-8")
+    spec = importlib.util.spec_from_file_location(
+        "itsf_old_report_594bca5", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_r5_1_old_candidate_admitted_the_representative_tampers(tmp_path):
+    """THE B1 PROOF: three representative tampers sail through the 594bca5
+    validator (validate-if-present, no scope pin, per-existing-cell loop)
+    and are refused by the current one."""
+    old = _load_candidate_594bca5_report(tmp_path)
+
+    def old_validate(payload):
+        return [p for p in old.validate_formal_payload(
+                    payload, expected_governance=payload["governance"])
+                if p.startswith("sensitivity")]
+
+    # (1) whole-block deletion — old saw nothing to validate.
+    p1 = _valid_payload()
+    del p1["disclosures"]["sensitivity_adverse_plus1"]
+    assert old_validate(p1) == []
+    assert "sensitivity_adverse_plus1_missing" in _validate(p1)
+
+    # (2) scope tamper — old never pinned scope/channel/e2_delta.
+    p2 = _valid_payload()
+    _sens_of(p2)["scope"] = "ALL_FILLS"
+    assert old_validate(p2) == []
+    assert "sensitivity_scope_not_pinned" in _validate(p2)
+
+    # (3) dropping one scenario cell — old looped over whatever existed.
+    p3 = _valid_payload()
+    del _sens_of(p3)["e1_per_scenario"]["Stress"]
+    assert old_validate(p3) == []
+    assert ("sensitivity_scenario_set_not_the_frozen_four"
+            in _validate(p3))

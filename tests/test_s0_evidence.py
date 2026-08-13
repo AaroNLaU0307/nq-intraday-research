@@ -234,6 +234,32 @@ def _real_pieces() -> dict:
     return _CACHE
 
 
+def _sensitivity_block(study) -> dict:
+    """IR-28c — production-shaped sensitivity block from the fixture's own
+    E1 records (mirrors scripts/s0_real_run._sensitivity_adverse_plus1_block
+    exactly; the chain test binds the two shapes together)."""
+    from itsf.contracts import (AARON_RULED_ADVERSE_TICKS_SENSITIVITY,
+                                MNQ_TICK_VALUE_USD)
+    per_scenario = {}
+    for scn in SCENARIOS:
+        n_stop = sum(1 for rec in study["records"]["E1"][scn]
+                     if rec.stop_triggered)
+        per_scenario[scn] = {
+            "n_stop_triggered_days": n_stop,
+            "total_pnl_delta_usd_per_contract": -MNQ_TICK_VALUE_USD * n_stop,
+        }
+    return {
+        "channel": "sensitivity_plus1",
+        "role": "sensitivity_only_never_primary",
+        "effective_adverse_ticks":
+            dict(AARON_RULED_ADVERSE_TICKS_SENSITIVITY),
+        "per_stop_side_delta_usd_per_contract": -MNQ_TICK_VALUE_USD,
+        "scope": "E1_stop_fills_only",
+        "e2_delta": "zero_by_construction_no_stop_orders",
+        "e1_per_scenario": per_scenario,
+    }
+
+
 def _formal_payload() -> dict:
     """A FRESH formal payload each call (deep-copied), assembled exactly as
     build_full_study_result assembles it."""
@@ -286,6 +312,10 @@ def _formal_payload() -> dict:
         "disclosures": {
             "na_conservation": {"per_table_total_na": per_table,
                                 "conservation_ok": True},
+            # IR-28c (R5.1): mandatory block, assembled exactly as
+            # _sensitivity_adverse_plus1_block assembles it — counted from
+            # THIS fixture's own E1 records, exact linear delta.
+            "sensitivity_adverse_plus1": _sensitivity_block(study),
             "untradeable": study["untradeable_disclosure"],
             "pending_method_decisions": [],
             "methods_test_only": True,
@@ -2997,3 +3027,65 @@ def test_the_five_boolean_flip_is_refused_by_the_real_renderer():
         adr_ok=not f.adr_ok, dir_ok=not f.dir_ok))
     with pytest.raises(ValueError, match="evidence reconciliation failed"):
         _render(flipped)
+
+
+# ---------------------------------------------------------------------------
+# IR-28c (R5.1 B1) — the published sensitivity cells are RE-DERIVED from the
+# parsed sealed bytes. The first test is the one the RENDERER cannot catch:
+# a self-consistent cell tamper (n and delta moved together) passes every
+# structural check and only the bytes recompute refuses it.
+# ---------------------------------------------------------------------------
+
+def test_sensitivity_consistent_cell_tamper_is_caught_by_bytes_recompute():
+    evidence, formal, files = _fixture()
+    cell = formal["disclosures"]["sensitivity_adverse_plus1"]         ["e1_per_scenario"]["Base"]
+    cell["n_stop_triggered_days"] += 1
+    cell["total_pnl_delta_usd_per_contract"] = (
+        -C.MNQ_TICK_VALUE_USD * cell["n_stop_triggered_days"])
+    # the renderer-side validator is BLIND to this tamper by construction
+    assert not [p for p in rep.validate_formal_payload(
+                    formal, expected_governance=formal["governance"])
+                if p.startswith("sensitivity")]
+    hard = _hard(evidence, formal, files)
+    assert any(p.startswith("evidence_sensitivity_n_stop_mismatch:Base:")
+               for p in hard), hard
+    assert any(p.startswith("evidence_sensitivity_delta_mismatch:Base:")
+               for p in hard), hard
+
+
+def test_sensitivity_sealed_byte_stop_flag_flip_is_caught():
+    evidence, formal, files = _fixture()
+    name = "MC_HANDOFF_E1_Base.jsonl"
+    rows = [json.loads(line) for line in files[name].splitlines()]
+    rows[0]["stop_triggered"] = not rows[0]["stop_triggered"]
+    _rewrite(files, "E1", "Base", rows)
+    hard = _hard(evidence, formal, files)
+    assert any(p.startswith("evidence_sensitivity_n_stop_mismatch:Base:")
+               for p in hard), hard
+
+
+def test_sensitivity_block_missing_is_a_hard_evidence_problem():
+    evidence, formal, files = _fixture()
+    del formal["disclosures"]["sensitivity_adverse_plus1"]
+    hard = _hard(evidence, formal, files)
+    assert "evidence_sensitivity_block_missing" in hard
+    assert any(
+        p.startswith("evidence_check_incomplete:IR-28c.sensitivity_recompute")
+        for p in hard), hard
+
+
+def test_sensitivity_missing_single_cell_fails_the_hard_completeness_gate():
+    evidence, formal, files = _fixture()
+    del formal["disclosures"]["sensitivity_adverse_plus1"]         ["e1_per_scenario"]["Severe"]
+    hard = _hard(evidence, formal, files)
+    assert any(p.startswith("evidence_sensitivity_cell_missing:Severe")
+               for p in hard), hard
+    assert any(
+        p.startswith("evidence_check_incomplete:IR-28c.sensitivity_recompute")
+        for p in hard), hard
+
+
+def test_sensitivity_recompute_is_clean_on_the_untampered_fixture():
+    evidence, formal, files = _fixture()
+    assert not [p for p in _hard(evidence, formal, files)
+                if "sensitivity" in p]

@@ -3548,3 +3548,86 @@ def verify_handoff_conservation(
         problems.extend(_check_seed_axis_lock(grid_samples, seed_manifest))
 
     return sorted(set(problems))
+
+
+# ===========================================================================
+# DR-5 staged boundary (R5.1 B2) — the machine-readable PARTIAL_BY_RULING
+# contract. ONE source: the producer, the seal-time validator and the
+# consumer gate all read the constants below, so the sealed block can never
+# drift from the shape the validator pins or the gate names.
+# ===========================================================================
+DR5_STAGED_BOUNDARY_KEYS = frozenset({
+    "base_s0_sealable", "dr5_status",
+    "mc_dependent_withheld_until_mc_wiring", "consumer_rule"})
+DR5_STATUS_PARTIAL = "PARTIAL_BY_RULING"
+DR5_MC_WITHHELD = ("GRID_SAMPLES.json", "doubling_convergence_verdicts",
+                   "grid_replay")
+DR5_CONSUMER_RULE = ("MC/Council consumers MUST fail closed on this flag; "
+                     "PARTIAL_BY_RULING is never a complete result")
+
+
+def build_dr5_staged_boundary() -> dict:
+    """The ONLY producer of the sealed `dr5_staged_boundary` block (explicit
+    Fable delegation, 2026-08-10; hardened R5.1): base S0 seals under
+    PARTIAL_BY_RULING while every MC-dependent consumer stays fail-closed
+    until doubling/convergence, replay and GRID_SAMPLES land at the MC
+    wiring."""
+    return {
+        "base_s0_sealable": True,
+        "dr5_status": DR5_STATUS_PARTIAL,
+        "mc_dependent_withheld_until_mc_wiring": list(DR5_MC_WITHHELD),
+        "consumer_rule": DR5_CONSUMER_RULE,
+    }
+
+
+def validate_dr5_staged_boundary(block: object) -> list[str]:
+    """Seal-time (and post-write re-parse) validation of the DR-5 boundary
+    block: EXACT key set, EXACT pinned values. A missing block, a missing or
+    unknown key, or ANY value off the frozen contract is a problem — the
+    caller refuses the seal on a non-empty return."""
+    if not isinstance(block, Mapping):
+        return ["dr5_boundary_missing"]
+    problems: list[str] = []
+    for key in sorted(set(block) - DR5_STAGED_BOUNDARY_KEYS, key=repr):
+        problems.append(f"dr5_boundary_unknown_key:{key!r}")
+    for key in sorted(DR5_STAGED_BOUNDARY_KEYS):
+        if key not in block:
+            problems.append(f"dr5_boundary_key_missing:{key}")
+    if "base_s0_sealable" in block and             block.get("base_s0_sealable") is not True:
+        problems.append("dr5_boundary_base_sealable_not_literal_true")
+    if "dr5_status" in block and             block.get("dr5_status") != DR5_STATUS_PARTIAL:
+        problems.append("dr5_boundary_status_not_partial_by_ruling")
+    if "mc_dependent_withheld_until_mc_wiring" in block:
+        got = block.get("mc_dependent_withheld_until_mc_wiring")
+        if (not isinstance(got, (list, tuple))
+                or tuple(got) != DR5_MC_WITHHELD):
+            problems.append("dr5_boundary_withheld_list_not_the_frozen_three")
+    if "consumer_rule" in block and             block.get("consumer_rule") != DR5_CONSUMER_RULE:
+        problems.append("dr5_boundary_consumer_rule_not_pinned")
+    return problems
+
+
+class McConsumerAbsent(RuntimeError):
+    """Raised by `mc_ready_gate` — the DR-5 MC consumer does not exist."""
+
+
+def mc_ready_gate(admission: object = None) -> "NoReturn":
+    """The DEFAULT-REFUSE consumer contract for the DR-5 staged boundary
+    (R5.1 B2). Every future MC-dependent consumer MUST route through this
+    gate before touching GRID_SAMPLES / doubling verdicts / replay.
+
+    Today it refuses UNCONDITIONALLY: DR5_MC_CONSUMER=ABSENT is the honest
+    state, and no admission content can open the gate — the MC wiring must
+    replace this refusal DELIBERATELY (a reviewed code change), never by
+    feeding a differently-shaped block to a permissive check. The sealed
+    dr5_status is quoted in the refusal so a caller's log stays honest."""
+    status: object = None
+    if isinstance(admission, Mapping):
+        block = admission.get("dr5_staged_boundary")
+        if isinstance(block, Mapping):
+            status = block.get("dr5_status")
+    raise McConsumerAbsent(
+        "DR-5 MC consumer is ABSENT by ruling: the base S0 seal carries "
+        f"dr5_status={status!r} and doubling/convergence, grid replay and "
+        "GRID_SAMPLES land only at the MC wiring, which must replace this "
+        "gate deliberately. PARTIAL_BY_RULING is never a complete result.")

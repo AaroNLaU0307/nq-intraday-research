@@ -6,11 +6,15 @@
   commit（Codex 逐轮 HOLD 的窄修复链）：
 
 ```
-COMMITS_AFTER_BASELINE=4   # f54d05a → 0e352e9 → 3e3cc1f → 0bd3b21（R5 候选为第 5 个）
-FILES_CHANGED=35           # bcdf8f36..0bd3b21
-INSERTIONS=20754
-DELETIONS=8923
+COMMITS_AFTER_BASELINE=5   # f54d05a → 0e352e9 → 3e3cc1f → 0bd3b21 → 594bca5（R5.1 候选为第 6 个）
+FILES_CHANGED=37           # bcdf8f36..594bca5（git diff --shortstat 机械复算）
+INSERTIONS=21201
+DELETIONS=8924
 ```
+
+（以上四值为 `git rev-list --count bcdf8f36..594bca5` 与
+`git diff --shortstat bcdf8f36..594bca5` 的机械输出，覆盖至上一候选；
+R5.1 候选自身的 diff 见终端汇报的 `git show --stat`。）
 
 - **diff 范围**：`git diff bcdf8f36..<候选>`＝全部变更（五工程车道＋主代理
   集成＋三轮 Codex 修复＋测试＋本文件）。
@@ -376,7 +380,8 @@ authority/alternatives/decision/reason/effects/remaining_boundary）。
    mkdir 把测试的故意无效根一并创建，短暂在 `<repo>/runs` 留下一个**空目录**
    （取证：零文件零子项；已 rmdir；随后把 `<repo>/runs` 加入套件级 autouse
    守卫监视清单防复发）。registry/研究事件零涉及。
-3. 包头部 commit 链事实更正（COMMITS_AFTER_BASELINE=4 等）见 §0 区块。
+3. 包头部 commit 链事实更正（R5 时点为 COMMITS_AFTER_BASELINE=4；R5.1 现势
+   =5，机械复算见 §0 区块与 §15）。
 
 **终态数字（FABLE_MEASURED / CODEX_NOT_FULLY_RERUN）**：全套件 fresh
 **2565 passed / 0 failed / 0 skipped，358.20s**（提交树即被测树）；
@@ -390,4 +395,86 @@ READY_APPENDED=NO
 REAL_S0_EXECUTED=NO
 POST_S0_STRATEGY_BUILD_STARTED=NO
 AWAITING_CODEX_FINAL_ACCEPTANCE=YES
+```
+
+## 15. R5.1 终局窄收口（B1–B4 四项具名修复；第六候选＝限定终审对象）
+
+授权：`START_S0_R5_1_FINAL_NARROW_CLOSEOUT`（Aaron 转发 Codex r5 verdict 并
+指示审核后执行）。范围严格限定 B1–B4 及其直接回归；无任何范围外重构。
+
+**B1 — sensitivity 正式封印 fail-closed（原为 validate-if-present）**：
+
+- `report.validate_formal_payload`：块**强制存在**＋精确键集（块级 7 键/
+  cell 级 2 键，未知键拒绝）＋channel/role/scope/e2_delta 逐字钉＋裁定向量
+  相等＋−$0.50/stop 钉＋场景集=冻结四场景＋逐 cell 类型/有限性/精确算术。
+- **独立重算（新增注册 HARD 检查 `IR-28c.sensitivity_recompute`）**：
+  `evidence._reconcile_sensitivity` 从**已解析的封存字节**（parsed sealed
+  rows，非 producer 聚合）逐 E1 场景重数 `stop_triggered is True` 行数并硬
+  比对公示 n 与 −$0.50×n delta；population=4（axis_scenarios），缺块/缺
+  cell 比对不足即 `evidence_check_incomplete` HARD。渲染器对"自洽篡改"
+  （n 与 delta 一起动）结构上不可见——该篡改现由字节重算拒绝（有测试）。
+- **行为测试电池**：validator 侧 19 项（正例封存/整块删除/逐场景删除×4/
+  ticks、n_stop、delta、role、scope、channel、e2_delta、per_stop、未知场景、
+  块级未知键、cell 级未知键、缺键 12 类篡改）；evidence 侧 5 项（自洽篡改、
+  封存字节 stop 位翻转、缺块、缺单 cell、未篡改基线干净）。
+- **旧候选放行证明（测试内、失败≠skip）**：
+  `test_r5_1_old_candidate_admitted_the_representative_tampers` 从 git 对象库
+  加载 `594bca5:src/itsf/s0/report.py` 为独立模块，证明三个代表性篡改
+  （整块删除/scope 篡改/删单场景 cell）在旧候选零 sensitivity 异议放行、
+  新候选逐一拒绝。加载失败即测试失败，从不 skip。
+
+**B2 — DR-5 staged boundary 封存校验＋default-refuse 消费者门**：
+
+- 单一来源：`handoff.build_dr5_staged_boundary`（producer）＋
+  `handoff.validate_dr5_staged_boundary`（精确键集＋逐值钉：status=
+  PARTIAL_BY_RULING、base_s0_sealable 字面 True、冻结三项 withheld 列表
+  逐序、consumer_rule 逐字）＋`handoff.mc_ready_gate`（三者共读同组常量）。
+- 封存时：admission record 序列化**前**校验，非空问题即
+  `dr5 staged boundary invalid at seal` 拒封（chain 测试证明 status 篡改/
+  缺键/未知键三类拒封）。post-write：`post_write_verify` 从磁盘字节重新解析
+  admission 并用同一 validator 复校（producer-drift 防线；stateful-fake
+  测试证明该磁盘分支独立拒绝）。
+- `mc_ready_gate` **无条件拒绝**（`McConsumerAbsent`）：任何 admission 内容
+  （含伪造 COMPLETE）都开不了门——MC consumer 只能以 MC 接线时的**显式代码
+  变更**出现，不存在任何 fake consumer/GRID_SAMPLES。测试 3 项。
+- **措辞更正（Codex r5 采纳）**：sensitivity 是 formal **disclosure 通道**
+  （validator＋字节重算护栏），DR-5 是 machine-readable **boundary**——
+  两者都**不是**"已存在的生产 consumer"。现势诚实状态：
+  `DR5_BASE_S0_STAGED_DISCLOSURE=VALIDATED`、`DR5_MC_CONSUMER=ABSENT`、
+  `DR5_STATUS=PARTIAL_BY_RULING`。
+
+**B3 — 治理文档结构修复＋结构测试**：
+
+- `IMPLEMENTATION_RESOLUTIONS.md`：line-284 旧提案段改题
+  `### IR-28（HISTORICAL_SUPERSEDED — …现势唯一定义见上方 R5 终稿…）`；
+  现势唯一 IR-28 定义=line-171 R5 终稿（DECIDED_BY_EXPLICIT_FABLE_DELEGATION）。
+- `EXPOSURE_LEDGER.md`：incident quantity=0 行移入表格内（紧接占位行）、
+  占位行改述"零研究 outcome 暴露"、`累计 exposure：0` 移至文末。**语义与
+  累计值零变化**（纯结构修复）。**新现势 sha256 =
+  `1d10a1db57d42efcac3ca0c4f915901059ac7edb430de28633dc90148e6b52e4`**
+  （取代 §14 的 `e5fcfa14…`；此后一切不变量以新值核对）。
+- 新增 `tests/test_governance_docs.py` 8 项结构钉：IR-28 现势定义唯一且先于
+  历史段/其余头必须带 HISTORICAL_SUPERSEDED；台账表格单一连续块/incident 行
+  在表内且数量列=0/累计 0 为文末最终句。
+
+**B4 — 包头 commit 链事实机械复算**：见 §0 区块
+（COMMITS_AFTER_BASELINE=5、FILES_CHANGED=37、INSERTIONS=21201、
+DELETIONS=8924，均为 `git rev-list --count` / `git diff --shortstat
+bcdf8f36..594bca5` 机械输出；R5.1 候选为第 6 个 commit）。
+
+**终态数字（FABLE_MEASURED / CODEX_NOT_YET_REPRODUCED）**：全套件 fresh
+**2615 passed / 0 failed / 0 skipped，368.07s**（提交树即被测树）；
+collect==双钉==**2615**（`scripts/s0_real_run.py::MIN_COLLECTED_TESTS` 与
+`tests/test_s0_runner.py` 同步重钉，旧值 2565）；SCANS=CLEAN；FROZEN 7 文件
+逐一 OK；`git diff --check` 干净；registry
+`de63b3d690c5c4be1def67aff9e0302138e9910df5b9a89acb1db57697b0b440`（基线
+逐字）；exposure `1d10a1db…`（B3 结构修复后现势，语义不变）；`runs/`
+ABSENT；无新 tag/READY/授权；两真实根 ABSENT 未创建未探测。
+
+```
+REAL_RUN_READY=NO
+REAL_RUN_AUTHORIZED=NO
+DR5_MC_CONSUMER=ABSENT
+POST_S0_STRATEGY_BUILD_STARTED=NO
+AWAITING_CODEX_LIMITED_FINAL_REVIEW=YES
 ```

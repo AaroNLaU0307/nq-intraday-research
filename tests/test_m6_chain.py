@@ -3025,3 +3025,89 @@ def test_r5_dr5_staged_boundary_in_sealed_admission(monkeypatch, tmp_path):
     assert b["base_s0_sealable"] is True
     assert "GRID_SAMPLES.json" in b["mc_dependent_withheld_until_mc_wiring"]
     assert "fail closed" in b["consumer_rule"]
+
+
+def test_r5_1_dr5_boundary_single_source_identity(monkeypatch, tmp_path):
+    """The sealed block IS handoff.build_dr5_staged_boundary()'s output —
+    byte-for-byte after the JSON round-trip — so the producer, the seal
+    validator and the consumer gate can never disagree about the shape."""
+    from itsf.s0 import handoff as ho
+    mod = real_run_module()
+    _patch_kc_assertions(mod, monkeypatch, tmp_path, _payload())
+    src = _payload()
+    files = mod.render_s0_report(
+        src, expected_governance=dict(_GOV),
+        methods=_f1_approved_methods(),
+        key_claims_authority=(
+            Path(mod.KEY_CLAIMS_ASSERTIONS_PATH).read_bytes(),
+            _kc_authority_for(src)))
+    adm = json.loads(files["HANDOFF_ADMISSION.json"])
+    assert adm["dr5_staged_boundary"] == ho.build_dr5_staged_boundary()
+    assert ho.validate_dr5_staged_boundary(
+        adm["dr5_staged_boundary"]) == []
+
+
+def test_r5_1_dr5_boundary_tamper_refuses_the_seal(monkeypatch, tmp_path):
+    """A producer emitting ANY off-contract boundary block (wrong status,
+    missing key, unknown key) must fail the seal at Stage E — the admission
+    record is validated BEFORE it is serialized."""
+    from itsf.s0 import handoff as ho
+    mod = real_run_module()
+    _patch_kc_assertions(mod, monkeypatch, tmp_path, _payload())
+
+    _real_build = ho.build_dr5_staged_boundary
+
+    def _render_with(block_mutator):
+        def bad_block():
+            block = dict(_real_build())
+            block_mutator(block)
+            return block
+        monkeypatch.setattr(ho, "build_dr5_staged_boundary", bad_block)
+        try:
+            src = _payload()
+            with pytest.raises(ValueError,
+                               match="dr5 staged boundary invalid at seal"):
+                mod.render_s0_report(
+                    src, expected_governance=dict(_GOV),
+                    methods=_f1_approved_methods(),
+                    key_claims_authority=(
+                        Path(mod.KEY_CLAIMS_ASSERTIONS_PATH).read_bytes(),
+                        _kc_authority_for(src)))
+        finally:
+            monkeypatch.setattr(ho, "build_dr5_staged_boundary",
+                                _real_build)
+
+    _render_with(lambda b: b.__setitem__("dr5_status", "COMPLETE"))
+    _render_with(lambda b: b.pop("consumer_rule"))
+    _render_with(lambda b: b.__setitem__("mc_consumer", "ready"))
+
+
+def test_r5_1_post_write_reparses_and_validates_the_dr5_boundary(
+        tmp_path, monkeypatch):
+    """Producer-drift defense for the DISK branch: the seal-time validator
+    is stubbed blind for exactly ONE call, so a tampered boundary block
+    reaches the sealed bytes with every custody digest intact — and the
+    post-write re-parse still refuses with the dr5-specific verdict."""
+    from itsf.s0 import handoff as ho
+    mod = real_run_module()
+    snap = _test_snapshot()
+    real_validate = ho.validate_dr5_staged_boundary
+    real_build = ho.build_dr5_staged_boundary
+    monkeypatch.setattr(
+        ho, "build_dr5_staged_boundary",
+        lambda: {**real_build(), "dr5_status": "COMPLETE"})
+    calls = {"n": 0}
+
+    def validate_blind_once(block):
+        calls["n"] += 1
+        return [] if calls["n"] == 1 else real_validate(block)
+
+    monkeypatch.setattr(ho, "validate_dr5_staged_boundary",
+                        validate_blind_once)
+    rdir, prepared, files = _honest_run_dir(mod, tmp_path, snap, monkeypatch)
+    written = tuple((n, c.encode("utf-8")) for n, c in files.items())
+    ok, detail = mod.RealChain().post_write_verify(rdir, written, prepared)
+    assert ok is False
+    assert "post-write dr5 staged boundary invalid on disk" in detail
+    assert "dr5_boundary_status_not_partial_by_ruling" in detail
+    assert calls["n"] >= 2          # the disk branch really re-validated

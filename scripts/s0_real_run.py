@@ -53,7 +53,7 @@ ATTEMPTS_ROOT = GOVERNED_RUNS_ROOT / "attempts"
 # Baseline collected-test count at the SA-6 audit commit. The pytest gate
 # requires the suite to still COLLECT at least this many tests, so a muted
 # or filtered run cannot satisfy the gate with a handful of tests (F-09).
-MIN_COLLECTED_TESTS = 2565                  # S0 closeout: floor = current suite
+MIN_COLLECTED_TESTS = 2615                  # S0 closeout: floor = current suite
 
 # External read-only tooling (packet §9 gate 4). Invoked as a subprocess;
 # the tool itself only reads repository files.
@@ -1039,25 +1039,16 @@ def render_s0_report(result, *, expected_governance=None,
         if ev_hard:
             raise ValueError("evidence reconciliation failed: "
                              + "; ".join(ev_hard))
-        files["HANDOFF_ADMISSION.json"] = ho.dumps_canonical({
+        # DR-5 staged boundary (explicit Fable delegation, 2026-08-10;
+        # R5.1 B2): the block comes from handoff.build_dr5_staged_boundary
+        # — the SINGLE source the seal-time validator and the default-refuse
+        # consumer gate share — and is VALIDATED before the admission record
+        # is serialized. A non-empty problem list refuses the seal.
+        admission_record = {
             "schema_version": ho.SCHEMA_VERSION,
             "admitted": sorted(admitted),
             "withheld": dict(sorted(withheld.items())),
-            # DR-5 staged boundary (explicit Fable delegation, 2026-08-10):
-            # base S0 seals under PARTIAL_BY_RULING; every MC-dependent
-            # consumer stays fail-closed until doubling/convergence, replay
-            # and GRID_SAMPLES land at the MC wiring. Machine-readable so a
-            # downstream consumer cannot read PARTIAL as complete.
-            "dr5_staged_boundary": {
-                "base_s0_sealable": True,
-                "dr5_status": "PARTIAL_BY_RULING",
-                "mc_dependent_withheld_until_mc_wiring":
-                    ["GRID_SAMPLES.json", "doubling_convergence_verdicts",
-                     "grid_replay"],
-                "consumer_rule":
-                    "MC/Council consumers MUST fail closed on this flag; "
-                    "PARTIAL_BY_RULING is never a complete result",
-            },
+            "dr5_staged_boundary": ho.build_dr5_staged_boundary(),
             "evidence_reconciliation": {
                 # computed from the actual reconcile result — reaching this
                 # line proves it was empty (a non-empty list raised above),
@@ -1072,7 +1063,13 @@ def render_s0_report(result, *, expected_governance=None,
                      "DAY_STRATA / GRID_SAMPLES are not built by this "
                      "renderer yet (schema skeletons in "
                      "src/itsf/s0/handoff.py)"),
-        })
+        }
+        dr5_problems = ho.validate_dr5_staged_boundary(
+            admission_record["dr5_staged_boundary"])
+        if dr5_problems:
+            raise ValueError("dr5 staged boundary invalid at seal: "
+                             + "; ".join(dr5_problems))
+        files["HANDOFF_ADMISSION.json"] = ho.dumps_canonical(admission_record)
         files["S0_REPORT.md"] = "\n".join([
             "# S0 FORMAL REPORT (sealed at Stage E)", "",
             "- formal payload: S0_REPORT.json (single sealed release)",
@@ -2807,6 +2804,15 @@ class RealChain:
         except Exception as exc:                          # noqa: BLE001
             return (False, "post-write key-claims: sealed admission record "
                     f"malformed: {type(exc).__name__}")
+        # R5.1 B2: the DR-5 staged boundary is RE-VALIDATED from the disk
+        # bytes (same validator as the seal), so a boundary block that was
+        # deleted or tampered between seal and verify refuses the release.
+        from itsf.s0 import handoff as _ho
+        dr5_problems = _ho.validate_dr5_staged_boundary(
+            adm.get("dr5_staged_boundary"))
+        if dr5_problems:
+            return (False, "post-write dr5 staged boundary invalid on "
+                    "disk: " + "; ".join(dr5_problems))
         kc = _op.verify_key_claims(
             disk_formal,
             _op.ResearchClaimsContext(

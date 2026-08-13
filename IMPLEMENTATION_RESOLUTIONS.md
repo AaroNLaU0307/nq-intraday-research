@@ -281,7 +281,7 @@ tests/test_aaron_rulings.py）；本表只记映射，不复述字面。
 具名披露待升级；(d) DR-2 的"合格日"=observed_rth 且 official_close 有限
 （含排期早收盘日、排除零 bar 日）。
 
-### IR-28 最终裁定批次（status=DECIDED_BY_EXPLICIT_FABLE_DELEGATION，2026-08-10 R5）
+### IR-28（HISTORICAL_SUPERSEDED — R2/R3 时期的提案版本，仅存档；现势唯一定义见上方 R5 终稿；本段任何"PENDING/不追加/延后"表述均已被 R5 六项裁定取代）
 
 **状态更正（Codex r2 #4，采纳）**：泛化委托（"你替我研究以及做决定"）未逐项撤销 Charter 中 Aaron 专属的 NA/标签/成本/exposure 决策边界，故本批各项由 AARON_DELEGATED_TO_FABLE 降格为 **PENDING_AARON_RATIFICATION**——实现按下述值运行以使工程可测，但在 Aaron 逐项批准（或修改）前不得视为定案；真实 S0 运行前必须完成批准。
 

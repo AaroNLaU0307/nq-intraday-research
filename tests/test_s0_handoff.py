@@ -3184,3 +3184,95 @@ def test_ruled_rebuild_seed_manifest_is_the_single_expected_content():
     assert built == handoff.rebuild_seed_manifest(methods=methods)
     assert built == handoff.rebuild_seed_manifest(
         handoff.source_context_for_methods(methods))
+
+
+# ===========================================================================
+# DR-5 staged boundary contract (R5.1 B2) — producer/validator identity,
+# exact-structure refusals, and the DEFAULT-REFUSE mc_ready_gate.
+# ===========================================================================
+
+def test_dr5_boundary_producer_output_validates_clean():
+    assert handoff.validate_dr5_staged_boundary(
+        handoff.build_dr5_staged_boundary()) == []
+
+
+def test_dr5_boundary_missing_block_is_one_problem():
+    assert handoff.validate_dr5_staged_boundary(None) ==         ["dr5_boundary_missing"]
+    assert handoff.validate_dr5_staged_boundary("PARTIAL_BY_RULING") ==         ["dr5_boundary_missing"]
+
+
+@pytest.mark.parametrize("key", sorted(handoff.DR5_STAGED_BOUNDARY_KEYS))
+def test_dr5_boundary_each_missing_key_is_refused(key):
+    block = handoff.build_dr5_staged_boundary()
+    del block[key]
+    assert (f"dr5_boundary_key_missing:{key}"
+            in handoff.validate_dr5_staged_boundary(block))
+
+
+def _dr5_tamper_status(b):
+    b["dr5_status"] = "COMPLETE"
+
+
+def _dr5_tamper_flag(b):
+    b["base_s0_sealable"] = "yes"
+
+
+def _dr5_tamper_withheld_drop(b):
+    b["mc_dependent_withheld_until_mc_wiring"] =         b["mc_dependent_withheld_until_mc_wiring"][:-1]
+
+
+def _dr5_tamper_withheld_reorder(b):
+    b["mc_dependent_withheld_until_mc_wiring"] = list(reversed(
+        b["mc_dependent_withheld_until_mc_wiring"]))
+
+
+def _dr5_tamper_rule(b):
+    b["consumer_rule"] = "consumers may proceed"
+
+
+def _dr5_tamper_unknown_key(b):
+    b["mc_consumer"] = "ready"
+
+
+_DR5_TAMPERS = [
+    ("status", _dr5_tamper_status,
+     "dr5_boundary_status_not_partial_by_ruling"),
+    ("flag", _dr5_tamper_flag,
+     "dr5_boundary_base_sealable_not_literal_true"),
+    ("withheld_drop", _dr5_tamper_withheld_drop,
+     "dr5_boundary_withheld_list_not_the_frozen_three"),
+    ("withheld_reorder", _dr5_tamper_withheld_reorder,
+     "dr5_boundary_withheld_list_not_the_frozen_three"),
+    ("rule", _dr5_tamper_rule,
+     "dr5_boundary_consumer_rule_not_pinned"),
+    ("unknown_key", _dr5_tamper_unknown_key,
+     "dr5_boundary_unknown_key:'mc_consumer'"),
+]
+
+
+@pytest.mark.parametrize("_name,mutate,code",
+                         _DR5_TAMPERS, ids=[t[0] for t in _DR5_TAMPERS])
+def test_dr5_boundary_each_tamper_is_refused(_name, mutate, code):
+    block = handoff.build_dr5_staged_boundary()
+    mutate(block)
+    assert code in handoff.validate_dr5_staged_boundary(block)
+
+
+def test_mc_ready_gate_refuses_with_no_admission():
+    with pytest.raises(handoff.McConsumerAbsent, match="ABSENT by ruling"):
+        handoff.mc_ready_gate()
+
+
+def test_mc_ready_gate_refuses_the_production_admission():
+    adm = {"dr5_staged_boundary": handoff.build_dr5_staged_boundary()}
+    with pytest.raises(handoff.McConsumerAbsent,
+                       match="PARTIAL_BY_RULING"):
+        handoff.mc_ready_gate(adm)
+
+
+def test_mc_ready_gate_refuses_even_a_forged_complete_status():
+    """No admission CONTENT can open the gate — a consumer arrives only as
+    a deliberate code change at the MC wiring, never as a payload shape."""
+    forged = {"dr5_staged_boundary": {"dr5_status": "COMPLETE"}}
+    with pytest.raises(handoff.McConsumerAbsent, match="COMPLETE"):
+        handoff.mc_ready_gate(forged)
