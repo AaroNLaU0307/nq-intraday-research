@@ -814,7 +814,12 @@ _ERA_AXIS_ALLOWED_KEYS: frozenset[str] = frozenset({
 # A11 disclosures — s0_real_run.py build_full_study_result (5 keys).
 _DISCLOSURES_ALLOWED_KEYS: frozenset[str] = frozenset({
     "na_conservation", "untradeable", "pending_method_decisions",
-    "methods_test_only", "method_conventions"})
+    "methods_test_only", "method_conventions",
+    # IR-28c (explicit Fable delegation 2026-08-10): the Option-ii
+    # sensitivity channel is a FORMAL disclosure — validated below when
+    # present; the production producer emits it unconditionally and the
+    # chain test pins its presence on the sealed path.
+    "sensitivity_adverse_plus1"})
 # s0_real_run.py `_na_conservation_block`'s real return (9 keys — the
 # CONTRACT's minimal shape is only 2 of these; the rest is disclosed
 # evidence this boundary ALLOWS but does not itself require).
@@ -2382,6 +2387,40 @@ def _validate_formal_payload_inner(payload, expected_governance,
         problems.append("pending_method_decisions_missing")
     elif disclosures["pending_method_decisions"]:
         problems.append("pending_method_decisions_unresolved")
+
+    # IR-28c — Option-ii sensitivity block: validated when present. The
+    # ticks must EQUAL the ruled sensitivity constant (structural read,
+    # never a restated literal) and every per-scenario delta must be the
+    # exact arithmetic -tick_value * n_stop. Role/scope strings pin that
+    # sensitivity can never masquerade as Primary.
+    sens = disclosures.get("sensitivity_adverse_plus1")
+    if sens is not None:
+        from itsf.contracts import (
+            AARON_RULED_ADVERSE_TICKS_SENSITIVITY as _SENS_TICKS,
+            MNQ_TICK_VALUE_USD as _TICK_USD)
+        if not isinstance(sens, dict):
+            problems.append("sensitivity_adverse_plus1_not_a_dict")
+        else:
+            if sens.get("role") != "sensitivity_only_never_primary":
+                problems.append("sensitivity_role_not_pinned")
+            if sens.get("effective_adverse_ticks") != dict(_SENS_TICKS):
+                problems.append(
+                    "sensitivity_effective_ticks_not_the_ruled_vector")
+            if sens.get("per_stop_side_delta_usd_per_contract") != -_TICK_USD:
+                problems.append("sensitivity_per_stop_delta_wrong")
+            cells = sens.get("e1_per_scenario")
+            if not isinstance(cells, dict) or not cells:
+                problems.append("sensitivity_e1_cells_missing")
+            else:
+                for scn, cell in cells.items():
+                    n = (cell.get("n_stop_triggered_days")
+                         if isinstance(cell, dict) else None)
+                    d = (cell.get("total_pnl_delta_usd_per_contract")
+                         if isinstance(cell, dict) else None)
+                    if (not isinstance(n, int) or n < 0
+                            or d != -_TICK_USD * n):
+                        problems.append(
+                            f"sensitivity_delta_arithmetic:{scn}")
 
     # A11 — na_conservation restatement (mission item 8 / contract §A11 "NA
     # 守恒复述"): a `na_conservation` sub-block MUST exist and carry the

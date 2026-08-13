@@ -53,7 +53,7 @@ ATTEMPTS_ROOT = GOVERNED_RUNS_ROOT / "attempts"
 # Baseline collected-test count at the SA-6 audit commit. The pytest gate
 # requires the suite to still COLLECT at least this many tests, so a muted
 # or filtered run cannot satisfy the gate with a handful of tests (F-09).
-MIN_COLLECTED_TESTS = 2562                  # S0 closeout: floor = current suite
+MIN_COLLECTED_TESTS = 2565                  # S0 closeout: floor = current suite
 
 # External read-only tooling (packet §9 gate 4). Invoked as a subprocess;
 # the tool itself only reads repository files.
@@ -1043,6 +1043,21 @@ def render_s0_report(result, *, expected_governance=None,
             "schema_version": ho.SCHEMA_VERSION,
             "admitted": sorted(admitted),
             "withheld": dict(sorted(withheld.items())),
+            # DR-5 staged boundary (explicit Fable delegation, 2026-08-10):
+            # base S0 seals under PARTIAL_BY_RULING; every MC-dependent
+            # consumer stays fail-closed until doubling/convergence, replay
+            # and GRID_SAMPLES land at the MC wiring. Machine-readable so a
+            # downstream consumer cannot read PARTIAL as complete.
+            "dr5_staged_boundary": {
+                "base_s0_sealable": True,
+                "dr5_status": "PARTIAL_BY_RULING",
+                "mc_dependent_withheld_until_mc_wiring":
+                    ["GRID_SAMPLES.json", "doubling_convergence_verdicts",
+                     "grid_replay"],
+                "consumer_rule":
+                    "MC/Council consumers MUST fail closed on this flag; "
+                    "PARTIAL_BY_RULING is never a complete result",
+            },
             "evidence_reconciliation": {
                 # computed from the actual reconcile result — reaching this
                 # line proves it was empty (a non-empty list raised above),
@@ -2195,6 +2210,37 @@ def _strkeys(obj):
     return obj
 
 
+def _sensitivity_adverse_plus1_block(study) -> dict:
+    """IR-28c — the formal Option-ii (+1 tick) sensitivity block.
+
+    Effective per-scenario adverse ticks come STRUCTURALLY from the ruled
+    constant (never restated); the P&L impact is exact arithmetic on the
+    Primary records: each E1 stop-triggered day pays one extra tick on the
+    stop side = MNQ_TICK_VALUE_USD per contract. E2 places no stop orders,
+    so its sensitivity delta is zero BY CONSTRUCTION (stated, not padded).
+    """
+    from itsf.contracts import (AARON_RULED_ADVERSE_TICKS_SENSITIVITY,
+                                MNQ_TICK_VALUE_USD)
+    per_scenario = {}
+    for scn, recs in study["records"]["E1"].items():
+        n_stop = sum(1 for r in recs if r.stop_triggered)
+        per_scenario[scn] = {
+            "n_stop_triggered_days": n_stop,
+            "total_pnl_delta_usd_per_contract":
+                -MNQ_TICK_VALUE_USD * n_stop,
+        }
+    return {
+        "channel": "sensitivity_plus1",
+        "role": "sensitivity_only_never_primary",
+        "effective_adverse_ticks":
+            dict(AARON_RULED_ADVERSE_TICKS_SENSITIVITY),
+        "per_stop_side_delta_usd_per_contract": -MNQ_TICK_VALUE_USD,
+        "scope": "E1_stop_fills_only",
+        "e2_delta": "zero_by_construction_no_stop_orders",
+        "e1_per_scenario": per_scenario,
+    }
+
+
 def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
                             governance_meta, n_boot=FROZEN_N_BOOT,
                             universe=None, frozen_hash_observations=None,
@@ -2365,6 +2411,14 @@ def build_full_study_result(ds, bars_by_date, *, config: StudyConfig,
             # sealed report so a reader can re-add them without the
             # internal envelope.
             "na_conservation": _na_conservation_block(structural),
+            # IR-28c (explicit Fable delegation, 2026-08-10): the IR-7
+            # Option-ii sensitivity channel enters the FORMAL report.
+            # Adverse slip acts on E1 stop fills only, so the +1-tick
+            # impact is LINEAR and exact: -$0.50 per stop-triggered day
+            # per contract. Derived from the PRIMARY records by pure
+            # arithmetic — never a substitute for the Primary columns.
+            "sensitivity_adverse_plus1":
+                _sensitivity_adverse_plus1_block(study),
             "untradeable": study["untradeable_disclosure"],
             # single truth source: DERIVED from ResolvedS0Methods (empty by
             # construction — derive_study_config refuses pending methods)

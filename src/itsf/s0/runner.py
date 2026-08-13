@@ -271,6 +271,7 @@ HALF_TRANSITION_NAME = "HALF_TRANSITION.md"
 # the refusal would go back to writing into paths it had just declared
 # unfit.
 OUTPUT_ROOTS_GATE_NAME = "output_roots_validated"
+OUTPUT_ROOTS_OPS_GATE_NAME = "output_roots_operational"
 
 # M6.1.8 S1 (H-1). The Stage-E artifact LOG LINE identifies each artifact by
 # its ordinal in the fixed write order instead of by name. See
@@ -328,6 +329,21 @@ def _package_repo_root() -> Path:
     fixed position inside the package layout.
     """
     return Path(__file__).resolve().parents[3]
+
+
+def _output_roots_ops_gate_check(config: RunConfig) -> tuple[bool, str]:
+    """R5 operational readiness (see runinfra.validate_output_roots_
+    operational): exists/dir/non-reparse/writable/capacity. Refusal text is
+    the gate error's own message."""
+    try:
+        runinfra.validate_output_roots_operational(config)
+    except RunGateError as exc:
+        return (False, str(exc))
+    except Exception as exc:                         # noqa: BLE001
+        return (False, f"operational readiness probe raised: "
+                       f"{type(exc).__name__}")
+    return (True, "output roots operationally ready (exist, real dirs, "
+                  "writable, capacity floor met)")
 
 
 def _output_roots_gate_check(config: RunConfig) -> tuple[bool, str]:
@@ -909,6 +925,13 @@ class S0Runner:
         stage_a_gates = (
             GateCheck(OUTPUT_ROOTS_GATE_NAME,
                      lambda: _output_roots_gate_check(d.config)),
+            # R5 (explicit Fable delegation 2026-08-10): OPERATIONAL
+            # readiness of the roots — existence/dir/non-reparse/writable/
+            # capacity — runs SECOND, structurally validated paths only.
+            # Never creates a missing root; a failure here is pre-exposure
+            # and, like the structural gate, zero-I/O on output paths.
+            GateCheck(OUTPUT_ROOTS_OPS_GATE_NAME,
+                     lambda: _output_roots_ops_gate_check(d.config)),
             *d.gates)
         for gate in stage_a_gates:
             # Codex round-2 #2: a failure OF the output-roots gate must
@@ -917,7 +940,8 @@ class S0Runner:
             # Stage-A gate keeps the existing behaviour, and safely so:
             # the root gate runs first, so reaching any later gate means
             # `attempts_dir` has already been root-gate-validated.
-            allow_disk = gate.name != OUTPUT_ROOTS_GATE_NAME
+            allow_disk = gate.name not in (OUTPUT_ROOTS_GATE_NAME,
+                                           OUTPUT_ROOTS_OPS_GATE_NAME)
             try:
                 ok, detail = gate.check()
             except Exception as exc:                 # noqa: BLE001

@@ -180,6 +180,63 @@ def _absolute_path_field(cfg_value: object, field_name: str) -> Path:
     return p
 
 
+#: Minimum free capacity the OPERATIONAL readiness gate demands on the
+#: runs-root volume. Rationale: a full S0 run directory is MB-scale even
+#: with the K=200 grid evidence (~60MB measured synthetically); 1 GiB
+#: leaves two orders of magnitude of headroom and refuses a nearly-full
+#: volume before exposure rather than mid-seal.
+OUTPUT_ROOTS_MIN_FREE_BYTES = 1 << 30
+
+
+def validate_output_roots_operational(cfg: RunConfig) -> None:
+    """R5 (explicit Fable delegation, 2026-08-10) — the PRE-EXPOSURE
+    operational readiness gate for the governed output roots.
+
+    Machine-checkable subset only: each root EXISTS, is a real directory
+    (not a symlink/junction/reparse point), is WRITABLE (create+delete a
+    probe file), and the runs-root volume has at least
+    OUTPUT_ROOTS_MIN_FREE_BYTES free. The manual items (cloud-sync
+    absence, volume/path isolation policy, backup posture) live in
+    ops/OUTPUT_ROOTS_READINESS_CHECKLIST.md and are Aaron's to attest —
+    this gate never creates a missing root (REAL_RUN_READY stays NO until
+    the roots exist by explicit operator action).
+
+    Raises RunGateError (fail closed) on the first violated condition.
+    """
+    import shutil as _sh
+    import uuid as _uuid
+    for label, raw in (("runs_root", cfg.runs_root),
+                       ("archive_root", cfg.archive_root)):
+        root = Path(raw)
+        if not root.exists():
+            raise RunGateError(
+                f"output root {label} does not exist ({root}) — the gate "
+                "never creates it; operator action + checklist required")
+        if not root.is_dir():
+            raise RunGateError(f"output root {label} is not a directory")
+        if _is_reparse_or_symlink(root):
+            raise RunGateError(
+                f"output root {label} is a symlink/junction/reparse point")
+        probe = root / f".readiness_probe_{_uuid.uuid4().hex[:12]}"
+        try:
+            probe.write_bytes(b"probe")
+            probe.unlink()
+        except OSError as exc:
+            raise RunGateError(
+                f"output root {label} is not writable: "
+                f"{type(exc).__name__}") from exc
+    try:
+        free = _sh.disk_usage(str(cfg.runs_root)).free
+    except OSError as exc:
+        raise RunGateError(
+            f"cannot measure free capacity on runs_root: "
+            f"{type(exc).__name__}") from exc
+    if free < OUTPUT_ROOTS_MIN_FREE_BYTES:
+        raise RunGateError(
+            f"runs_root volume free capacity {free} below the "
+            f"{OUTPUT_ROOTS_MIN_FREE_BYTES} readiness floor")
+
+
 def validate_output_roots(cfg: RunConfig, repo_root: Path) -> None:
     """Fail-closed (L-5 ruling) gate over the FOUR governed output paths
     on `cfg`: `runs_root`, `archive_root`, `runs_dir`, `attempts_dir`.

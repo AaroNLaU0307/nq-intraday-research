@@ -2971,3 +2971,57 @@ def test_codex1_evidence_consumes_snapshot_not_live_callables():
     assert strata, "no day strata captured"
     for s in strata:
         assert s.volatility_regime_label in ("T1", "T2", "T3")
+
+
+# --- R5 (explicit Fable delegation): IR-28c sensitivity + DR-5 boundary ----
+
+def test_r5_sensitivity_block_present_and_exact_on_production_payload():
+    src = _payload()
+    sens = src["disclosures"]["sensitivity_adverse_plus1"]
+    assert sens["role"] == "sensitivity_only_never_primary"
+    assert sens["effective_adverse_ticks"] == dict(
+        C.AARON_RULED_ADVERSE_TICKS_SENSITIVITY)
+    for scn, cell in sens["e1_per_scenario"].items():
+        n = cell["n_stop_triggered_days"]
+        recs = src["records"]["E1"][scn]
+        assert n == sum(1 for r in recs if r.stop_triggered)
+        assert cell["total_pnl_delta_usd_per_contract"] == -0.5 * n
+
+
+def test_r5_sensitivity_validator_refuses_tampering():
+    from itsf.s0 import report as rep
+    formal = _formal(_payload())
+    import copy as _copy
+    bad = _copy.deepcopy(formal)
+    bad["disclosures"]["sensitivity_adverse_plus1"][
+        "effective_adverse_ticks"]["Stress"] = 9.0
+    problems = rep.validate_formal_payload(bad)
+    assert any("sensitivity_effective_ticks" in p for p in problems)
+    bad2 = _copy.deepcopy(formal)
+    cell = next(iter(bad2["disclosures"]["sensitivity_adverse_plus1"]
+                     ["e1_per_scenario"].values()))
+    cell["total_pnl_delta_usd_per_contract"] += 1.0
+    problems2 = rep.validate_formal_payload(bad2)
+    assert any("sensitivity_delta_arithmetic" in p for p in problems2)
+    bad3 = _copy.deepcopy(formal)
+    bad3["disclosures"]["sensitivity_adverse_plus1"]["role"] = "primary"
+    assert any("sensitivity_role_not_pinned" in p
+               for p in rep.validate_formal_payload(bad3))
+
+
+def test_r5_dr5_staged_boundary_in_sealed_admission(monkeypatch, tmp_path):
+    mod = real_run_module()
+    _patch_kc_assertions(mod, monkeypatch, tmp_path, _payload())
+    src = _payload()
+    files = mod.render_s0_report(
+        src, expected_governance=dict(_GOV),
+        methods=_f1_approved_methods(),
+        key_claims_authority=(
+            Path(mod.KEY_CLAIMS_ASSERTIONS_PATH).read_bytes(),
+            _kc_authority_for(src)))
+    adm = json.loads(files["HANDOFF_ADMISSION.json"])
+    b = adm["dr5_staged_boundary"]
+    assert b["dr5_status"] == "PARTIAL_BY_RULING"
+    assert b["base_s0_sealable"] is True
+    assert "GRID_SAMPLES.json" in b["mc_dependent_withheld_until_mc_wiring"]
+    assert "fail closed" in b["consumer_rule"]

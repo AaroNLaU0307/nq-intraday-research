@@ -25,7 +25,10 @@ def _suite_guard_real_ruled_roots():
     top-level entries under the REAL L-5 ruled roots. Tolerant of
     pre-existing real content; intolerant of any change across a test."""
     from itsf.contracts import RULED_ARCHIVE_ROOT, RULED_RUNS_ROOT
-    roots = (Path(RULED_RUNS_ROOT), Path(RULED_ARCHIVE_ROOT))
+    # R5 incident guard: <repo>/runs joined the watch list after a fixture
+    # mkdir briefly created it (empty; removed; disclosed in the packet).
+    roots = (Path(RULED_RUNS_ROOT), Path(RULED_ARCHIVE_ROOT),
+             REPO / "runs")
 
     def snap():
         return {r: (frozenset(p.name for p in r.iterdir())

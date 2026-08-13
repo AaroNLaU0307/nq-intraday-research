@@ -2,9 +2,18 @@
 
 - **baseline commit**：`bcdf8f368393dba3affcda2b4b729bc525a98886`（M6.1.8）
 - **本审查对象**：**包含本文件的那个 commit**（M6.1.8 纪律：文档不写自己的 SHA；
-  实际新 HEAD 见终端汇报）。baseline 之后、候选之前**无中间 commit**。
-- **diff 范围**：`git diff bcdf8f36..<候选>`＝全部变更；~29 文件，≈+15.6k/−8.9k 行
-  （含五个工程车道＋主代理集成＋测试更新＋本文件）。
+  实际新 HEAD 见终端汇报）。**现势（R5 更正）**：baseline 之后已有多个候选
+  commit（Codex 逐轮 HOLD 的窄修复链）：
+
+```
+COMMITS_AFTER_BASELINE=4   # f54d05a → 0e352e9 → 3e3cc1f → 0bd3b21（R5 候选为第 5 个）
+FILES_CHANGED=35           # bcdf8f36..0bd3b21
+INSERTIONS=20754
+DELETIONS=8923
+```
+
+- **diff 范围**：`git diff bcdf8f36..<候选>`＝全部变更（五工程车道＋主代理
+  集成＋三轮 Codex 修复＋测试＋本文件）。
 - **授权状态**：`REAL_S0_NOT_AUTHORIZED` 不变。不追加 READY、不申请授权、不建 tag、
   不追加任何 registry 事件。`runs/` 不存在，S0-T001 未消耗。
 
@@ -331,4 +340,54 @@ REAL_RUN_READY=NO
 READY_APPENDED=NO
 STRATEGY_BUILD_STARTED=NO
 AWAITING_CODEX_FINAL_REVIEW=YES
+```
+
+## 14. R5 终局（具名 Fable 委托六项裁定＋最小接线；第五候选＝终审对象）
+
+授权：Aaron"这些东西我会让fable决定"→ R5 MASTER_PROMPT 六项具名委托（不扩展、
+非无限）。六项裁定全文见 IMPLEMENTATION_RESOLUTIONS.md IR-28 终稿（含
+authority/alternatives/decision/reason/effects/remaining_boundary）。
+
+**五栏分类（现势）**：
+
+- **CLOSED**：R4 三边界（exact-L3 身份/run-scoped 断言/内容+类型终 inventory，
+  本轮回归全绿）；IR-28a/b（已实现已测）；IR-28c sensitivity 正式报告接线
+  （disclosures.sensitivity_adverse_plus1：裁定向量逐值钉＋E1 每场景
+  n_stop×−$0.50 纯算术 delta，校验器拒篡改，role=never_primary）；DR-5 机器
+  可读分阶段边界（HANDOFF_ADMISSION.dr5_staged_boundary，消费者 fail-closed
+  规则内嵌）；输出根运维门（Stage-A 第二门：存在/真实目录/非 reparse/可写
+  探针/1 GiB 容量地板；失败零 I/O；从不创建缺失根）。
+- **PARTIAL_BY_RULING**：DR-5 的 MC 侧（doubling/convergence consumer、
+  replay、GRID_SAMPLES）——按裁决归 MC 接线，本轮未发明结果。
+- **OPERATIONS_REQUIRED**：真实双根创建＋ops/OUTPUT_ROOTS_READINESS_
+  CHECKLIST.md 人工项（云同步核对/卷隔离/备份姿态）Aaron 签署；两真实根
+  本轮验证仍 ABSENT、未创建未探测。
+- **DECIDED_BY_EXPLICIT_FABLE_DELEGATION**：IR-28a-d＋DR-5 分阶段＋运维门
+  设计（六项，authority 逐字入档）。
+- **NOT_AUTHORIZED**：真实 S0 运行；READY/RUN_AUTHORIZED 追加；post-S0
+  策略 build（需外部口令）；PHASE-C 历史口令豁免不延伸为任何运行授权。
+
+**本轮治理事实变更（全部有据）**：
+1. `EXPOSURE_LEDGER.md` 依 IR-28d 追加一条 quantity=0/outcome_seen=NO/
+   formal_trial=NO 的 incident 交叉引用行（append-only；累计研究暴露仍 0）。
+   **新现势 sha256 = `e5fcfa14ca45e546981e1ef9e65d6c952635c3c7fd5269f5fc345a42fadf2966`**
+   （旧基线 `39481343…` 由该裁定行取代——此后一切不变量以新值核对）。
+2. **本轮自曝事件（已修复＋守卫化）**：R5 中间迭代里 make_deps 夹具第一版
+   mkdir 把测试的故意无效根一并创建，短暂在 `<repo>/runs` 留下一个**空目录**
+   （取证：零文件零子项；已 rmdir；随后把 `<repo>/runs` 加入套件级 autouse
+   守卫监视清单防复发）。registry/研究事件零涉及。
+3. 包头部 commit 链事实更正（COMMITS_AFTER_BASELINE=4 等）见 §0 区块。
+
+**终态数字（FABLE_MEASURED / CODEX_NOT_FULLY_RERUN）**：全套件 fresh
+**2565 passed / 0 failed / 0 skipped，358.20s**（提交树即被测树）；
+collect==双钉==2565；SCANS=CLEAN；FROZEN OK；diff-check 干净；registry
+`de63b3d6…`（基线逐字）；exposure `e5fcfa14…`（裁定后现势）；`runs/` ABSENT；
+无 tag/READY/授权；两真实根 ABSENT。
+
+```
+REAL_RUN_AUTHORIZED=NO
+READY_APPENDED=NO
+REAL_S0_EXECUTED=NO
+POST_S0_STRATEGY_BUILD_STARTED=NO
+AWAITING_CODEX_FINAL_ACCEPTANCE=YES
 ```

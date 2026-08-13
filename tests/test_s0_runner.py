@@ -107,6 +107,11 @@ def _tmp_output_roots(tmp_path: Path, *, trial: str = "S0-T001",
     """
     runs_root = tmp_path / "governed" / "runs_root"
     archive_root = tmp_path / "governed" / "archive_root"
+    # R5: the OPERATIONAL readiness gate demands the ROOTS exist (it never
+    # creates them — mirroring the production rule that only an operator
+    # creates a real root). The per-run dirs stay uncreated.
+    runs_root.mkdir(parents=True, exist_ok=True)
+    archive_root.mkdir(parents=True, exist_ok=True)
     runs_dir = runs_root / "runs" / f"{trial}_{stamp}"
     attempts_dir = runs_root / "attempts" / f"{trial}-A001_{stamp}"
     return runs_root, archive_root, runs_dir, attempts_dir
@@ -193,6 +198,14 @@ def make_deps(tmp_path: Path, *, gates=(), b_checks=(),
     resolved_runs_root = Path(runs_root) if runs_root is not None else tmp_path
     resolved_archive_root = (Path(archive_root) if archive_root is not None
                              else tmp_path.parent / f"{tmp_path.name}__archive_root")
+    # R5: the OPERATIONAL readiness gate demands existing roots and never
+    # creates them; the fixture is the test-world "operator action" for the
+    # DEFAULT roots only. An explicit override is the caller's to create
+    # (or to deliberately leave invalid for a refusal test).
+    if runs_root is None:
+        resolved_runs_root.mkdir(parents=True, exist_ok=True)
+    if archive_root is None:
+        resolved_archive_root.mkdir(parents=True, exist_ok=True)
     cfg = RunConfig(trial_id="S0-T001",
                     authorized_commit="a" * 40,
                     engineering_seed=20260731,
@@ -995,7 +1008,7 @@ def test_pytest_gate_floor_is_the_audit_baseline():
     """SA-10 N3: the floor tracks the CURRENT suite, closing the
     silent-collection-drop headroom."""
     mod = real_run_module()
-    assert mod.MIN_COLLECTED_TESTS == 2562
+    assert mod.MIN_COLLECTED_TESTS == 2565
 
 
 # ===========================================================================
@@ -3211,7 +3224,11 @@ def test_archive_step_never_attempted_for_a_failed_run(tmp_path):
     assert out.ok is False
     assert out.archive_status == ""
     assert out.archive_report is None
-    assert not archive_root.exists()
+    # R5: make_deps pre-creates the default roots (operational gate), so
+    # existence is no longer the proxy — the semantic proof is that the
+    # archive step left the root EMPTY and reported no archive activity.
+    assert archive_root.exists() and not any(archive_root.iterdir())
+    assert not out.archive_status          # ''/None: never attempted
 
 
 # --- 4. exact-set proof on the new root -------------------------------------
@@ -4063,9 +4080,14 @@ def test_zero_disk_refusal_is_keyed_on_the_one_gate_name_constant():
     it had just declared unfit."""
     import itsf.s0.runner as runner_mod
     assert runner_mod.OUTPUT_ROOTS_GATE_NAME == "output_roots_validated"
+    assert (runner_mod.OUTPUT_ROOTS_OPS_GATE_NAME
+            == "output_roots_operational")
     run_src = inspect.getsource(S0Runner.run)
     assert 'GateCheck(OUTPUT_ROOTS_GATE_NAME,' in run_src
-    assert "allow_disk = gate.name != OUTPUT_ROOTS_GATE_NAME" in run_src
+    assert 'GateCheck(OUTPUT_ROOTS_OPS_GATE_NAME,' in run_src
+    # R5: BOTH root gates are zero-disk on their own failure.
+    assert ("allow_disk = gate.name not in (OUTPUT_ROOTS_GATE_NAME,"
+            in run_src)
     # and the flag is what selects the already-graceful adir-None path
     fail_src = inspect.getsource(S0Runner._fail_pre_run)
     assert "self._attempt_dir() if allow_disk else None" in fail_src
