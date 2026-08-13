@@ -277,7 +277,7 @@ def test_ledger_reveal_row_carries_manifest_binding():
     the outcome-blind manifest (sha) and was committed BEFORE any research
     value entered the model context."""
     table = _table_block()
-    rows = [r for r in table if "RESULT_REVEAL_STARTED" in r]
+    rows = [r for r in table if "| S0-T001 RESULT_REVEAL_STARTED |" in r]
     assert len(rows) == 1, table
     row = rows[0]
     assert "raw exposure count=1575" in row
