@@ -486,3 +486,62 @@ hash 不符 / schema 不符 / 日期计数与 Preflight 不符 / 配置漂移 /
 本授权包只覆盖首次真实 S0（S0-T001）。**不**自动授权：MC、Checkpoint 0、
 IV 访问或采购、Physical Lockbox、任何参数修改、第二次及以后 trial、
 对本包所锁 hash 的任何替换。上述每一项都需要独立申请与 Aaron 独立批准。
+
+
+---
+
+## 12.【2026-08-14 现势追加 —— S0 closeout 终局＋输出根 attestation（原文全部保留，与上文冲突处以本节为准）】
+
+**候选链现势**：S0-closeout 主线自 baseline `bcdf8f36…` 起经八轮候选
+（f54d05a → 0e352e9 → 3e3cc1f → 0bd3b21 → 594bca5 → 999b494 →
+408e908 → 本 attestation 轮 commit）。§0 旧文中的 M6.1.x 时代 HEAD/
+距离/环境锁表全部为历史层，现势以
+`CODEX_REVIEW_PACKET_S0_CLOSEOUT_FINAL.md` 顶部现势事实表为准。
+
+**独立验收现势**：
+
+```
+CODEX_LIMITED_ENGINEERING_REVIEW=PASS        # @999b494（B1–B4 工程行为）
+CODEX_EXACT_TREE_FULL_SUITE=2617 passed / 0 failed / 0 skipped
+CODEX_TESTED_HEAD=408e9085e1482c542a58fd6dee6652c9b8bff7e4
+```
+
+**运维 attestation 现势（2026-08-14，具名提示词
+`START_S0_OUTPUT_ROOTS_ATTESTATION_AFTER_PROMPT_AUDIT` 授权并裁定）**：
+
+```
+OUTPUT_ROOTS_CREATED=YES                     # 两根空目录，操作者身份 aaron
+OUTPUT_ROOTS_STRUCTURAL_GATE=PASS            # runinfra.validate_output_roots
+OUTPUT_ROOTS_OPERATIONAL_GATE=PASS           # 探针写删实测，探针后两根空
+SYNC_ATTESTATION=PASS                        # 客户端配置证据，非路径推断
+DISK_HEALTH_ATTESTATION=PASS                 # 双源 Healthy/OK
+SAME_VOLUME_FOR_S0_T001=ACCEPTED_WITH_DISCLOSED_COMMON_MODE_RISK
+ARCHIVE_ROLE=INTEGRITY_REVIEW_COPY_NOT_BACKUP
+CHECKLIST=ATTESTED                           # ops/OUTPUT_ROOTS_READINESS_CHECKLIST.md
+```
+
+裁定与证据全文：`ops/S0_OUTPUT_ROOTS_OPERATIONS_DECISION.md`、
+`ops/OUTPUT_ROOTS_READINESS_CHECKLIST.md`。冻结覆盖口径（具名统一）：
+
+```
+FROZEN_RUNTIME_CANONICAL_SET_COUNT=7
+APPROVAL_PROVENANCE_ORIGINALS={gate1/G9_EVIDENCE_RESOLUTION.md,IR_APPROVAL_PACKET.md}
+APPROVAL_PROVENANCE_BINDING=AUTHORIZED_COMMIT_PLUS_GIT_CLEAN
+APPROVAL_PROVENANCE_IN_A12_DIRECT_HASH_SET=NO
+```
+
+**授权链剩余闸（顺序固定，每项需具名动作；本节不构成其中任何一项）**：
+
+1. Codex 运维终审（对本 attestation 轮 commit 限定复核）；
+2. Aaron 对彼时精确 HEAD 追加 `READY_FOR_RUN_AUTHORIZATION`
+   （旧行 11 READY @`6cb7eb7…` 的失效语义随该新 READY 一并处置）；
+3. Aaron 按 §10 精确语句对 S0-T001 发出 RUN_AUTHORIZED（格式非法即
+   整链 fail-closed，见 IR-25 解析器契约）；
+4. 首次真实 S0（§9 十三门全过后越过曝光边界）。
+
+**运行前已知边界（授权决策时应知悉）**：`DR5_MC_CONSUMER=ABSENT`、
+`DR5_STATUS=PARTIAL_BY_RULING`（基础 S0 依裁定分阶段封存，
+`handoff.mc_ready_gate` 对一切 MC 依赖消费无条件拒绝）；同卷共模风险
+已具名接受（删除前强制异介质备份，首跑前不要求）；合成 A→F 全绿 ≠
+真实路径已验证（首次真实 S0 是磁盘校验器/KC 闸/L-5 归档的第一次真实
+执行）；`real_s0_authorization` 保持 `REAL_S0_NOT_AUTHORIZED`。

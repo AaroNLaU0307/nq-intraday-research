@@ -160,3 +160,61 @@ def test_ledger_incident_row_precedes_the_cumulative_line():
     text = _read(LEDGER)
     assert text.index("INCIDENT_STRUCTURAL_TEST_LOAD") \
         < text.index("累计 exposure：0")
+
+
+# ---------------------------------------------------------------------------
+# Output-roots attestation round (2026-08-14): the persisted evidence docs
+# ---------------------------------------------------------------------------
+PACKET = REPO / "CODEX_REVIEW_PACKET_S0_CLOSEOUT_FINAL.md"
+OPS_DECISION = REPO / "ops" / "S0_OUTPUT_ROOTS_OPERATIONS_DECISION.md"
+CHECKLIST = REPO / "ops" / "OUTPUT_ROOTS_READINESS_CHECKLIST.md"
+AUTH_PACKET = REPO / "S0_REAL_RUN_AUTHORIZATION_PACKET.md"
+
+_FROZEN_WORDING = (
+    "FROZEN_RUNTIME_CANONICAL_SET_COUNT=7",
+    "APPROVAL_PROVENANCE_ORIGINALS={gate1/G9_EVIDENCE_RESOLUTION.md,"
+    "IR_APPROVAL_PACKET.md}",
+    "APPROVAL_PROVENANCE_BINDING=AUTHORIZED_COMMIT_PLUS_GIT_CLEAN",
+    "APPROVAL_PROVENANCE_IN_A12_DIRECT_HASH_SET=NO",
+)
+
+
+def test_ops_decision_doc_carries_rulings_and_frozen_wording():
+    text = _read(OPS_DECISION)
+    assert ("SAME_VOLUME_FOR_S0_T001="
+            "ACCEPTED_WITH_DISCLOSED_COMMON_MODE_RISK") in text
+    assert "ARCHIVE_ROLE=INTEGRITY_REVIEW_COPY_NOT_BACKUP" in text
+    for line in _FROZEN_WORDING:
+        assert line in text, line
+
+
+def test_checklist_carries_the_attestation_record():
+    text = _read(CHECKLIST)
+    assert "START_S0_OUTPUT_ROOTS_ATTESTATION_AFTER_PROMPT_AUDIT" in text
+    assert "validate_output_roots_operational" in text
+    assert "SYNC_ATTESTATION=PASS" in text
+    assert "DISK_HEALTH_ATTESTATION=PASS" in text
+    # every checklist checkbox is checked (the attestation completed them)
+    assert "- [ ]" not in text
+
+
+def test_packet_has_exactly_one_current_facts_table():
+    text = _read(PACKET)
+    assert text.count("## 现势事实表") == 1
+    assert ("CODEX_TESTED_HEAD="
+            "408e9085e1482c542a58fd6dee6652c9b8bff7e4") in text
+    # the current-facts table precedes every historical section
+    assert text.index("## 现势事实表") < text.index("【HISTORICAL】")
+
+
+def test_auth_packet_keeps_history_and_carries_the_attestation_layer():
+    """The authorization packet is a LAYERED living document — its own
+    convention is dated annotations over preserved originals. Both the
+    original 2026-07-31 header and the 2026-08-14 attestation layer must
+    coexist (an overwrite that drops history fails here)."""
+    text = _read(AUTH_PACKET)
+    assert "packet_approval_status:   PACKET_APPROVED" in text
+    assert "drafted_at_utc: 2026-07-31" in text
+    assert "唯一有效授权语句" in text          # original §10 survives
+    assert "OUTPUT_ROOTS_CREATED=YES" in text  # new attestation layer
+    assert "REAL_S0_NOT_AUTHORIZED" in text

@@ -1,8 +1,42 @@
 # CODEX_REVIEW_PACKET_S0_CLOSEOUT_FINAL（S0 封存主线一次性总验收，供 Codex 独立复审）
 
+## 现势事实表（唯一现势来源；其后所有章节均为历史记录，冲突以本表为准）
+
+```
+BASELINE=bcdf8f368393dba3affcda2b4b729bc525a98886
+COMMITS_AFTER_BASELINE=8   # …→ 594bca5 → 999b494 → 408e908 → 本候选（S0 运维 attestation 轮）
+FILES_CHANGED=41           # bcdf8f36..本候选（最终 staged tree 机械复算，含本文件）
+INSERTIONS=22340
+DELETIONS=8927
+CODEX_LIMITED_ENGINEERING_REVIEW=PASS        # @999b494
+CODEX_EXACT_TREE_FULL_SUITE=2617 passed / 0 failed / 0 skipped
+CODEX_TESTED_HEAD=408e9085e1482c542a58fd6dee6652c9b8bff7e4
+OUTPUT_ROOTS_CREATED=YES                     # 2026-08-14 具名授权 attestation 轮
+OUTPUT_ROOTS_OPERATIONAL_GATE=PASS           # 生产窄入口，探针写删实测，探针后两根空
+SYNC_ATTESTATION=PASS                        # 客户端配置证据，非路径推断
+DISK_HEALTH_ATTESTATION=PASS                 # MSFT_PhysicalDisk+Win32_DiskDrive 双源
+SAME_VOLUME_FOR_S0_T001=ACCEPTED_WITH_DISCLOSED_COMMON_MODE_RISK
+FROZEN_RUNTIME_CANONICAL_SET_COUNT=7
+APPROVAL_PROVENANCE_ORIGINALS={gate1/G9_EVIDENCE_RESOLUTION.md,IR_APPROVAL_PACKET.md}
+APPROVAL_PROVENANCE_BINDING=AUTHORIZED_COMMIT_PLUS_GIT_CLEAN
+APPROVAL_PROVENANCE_IN_A12_DIRECT_HASH_SET=NO
+DR5_MC_CONSUMER=ABSENT
+DR5_STATUS=PARTIAL_BY_RULING
+REPO_RUNS_DIR=ABSENT
+READY_APPENDED=NO
+REAL_RUN_AUTHORIZED=NO
+REAL_S0_EXECUTED=NO
+POST_S0_STRATEGY_BUILD_STARTED=NO
+```
+
+（运维裁定与证据全文：`ops/S0_OUTPUT_ROOTS_OPERATIONS_DECISION.md`＋
+`ops/OUTPUT_ROOTS_READINESS_CHECKLIST.md` 证明记录节；授权链下一步见
+`S0_REAL_RUN_AUTHORIZATION_PACKET.md`。）
+
 - **baseline commit**：`bcdf8f368393dba3affcda2b4b729bc525a98886`（M6.1.8）
 - **本审查对象**：**包含本文件的那个 commit**（M6.1.8 纪律：文档不写自己的 SHA；
-  实际新 HEAD 见终端汇报）。**现势（R5 更正）**：baseline 之后已有多个候选
+  实际新 HEAD 见终端汇报）。**【HISTORICAL — 以下为 R5.1.1 时点事实块，
+  现势数字以顶部事实表为准】** baseline 之后已有多个候选
   commit（Codex 逐轮 HOLD 的窄修复链）：
 
 ```
@@ -261,7 +295,7 @@ IR-28c（DR-1 ii=乘子后 {2,3,3,4}；报告链接入 PARTIAL 具名）、IR-28
 - attempts/ 残留（§7.11）与 GRID_SAMPLES withheld（DR-5 PARTIAL_BY_RULING）
   状态不变。
 
-## 12. Codex 第二轮（`0e352e9` HOLD）的窄收口（第三候选，最终数字附后）
+## 12.【HISTORICAL】Codex 第二轮（`0e352e9` HOLD）的窄收口（第三候选，最终数字附后）
 
 Codex r2 四项逐一核验属实并处置：
 
@@ -297,7 +331,7 @@ FABLE_MEASURED 待 Codex 复算。
   DR-1 sensitivity 报告链与 DR-5 MC consumer 具名 PARTIAL；attempts/ 历史
   残留待 Aaron。
 
-## 13. R4 最终边界收口（第四候选＝最终候选；证据全部 FABLE_MEASURED / CODEX_NOT_YET_REPRODUCED）
+## 13.【HISTORICAL】R4 最终边界收口（第四候选；证据当时 FABLE_MEASURED / CODEX_NOT_YET_REPRODUCED）
 
 MASTER_PROMPT_S0_CLOSEOUT_R4_FINAL_BOUNDARY 三项工程闭合＋治理文字一致化：
 
@@ -349,7 +383,7 @@ STRATEGY_BUILD_STARTED=NO
 AWAITING_CODEX_FINAL_REVIEW=YES
 ```
 
-## 14. R5 终局（具名 Fable 委托六项裁定＋最小接线；第五候选＝终审对象）
+## 14.【HISTORICAL】R5 终局（具名 Fable 委托六项裁定＋最小接线；第五候选）
 
 授权：Aaron"这些东西我会让fable决定"→ R5 MASTER_PROMPT 六项具名委托（不扩展、
 非无限）。六项裁定全文见 IMPLEMENTATION_RESOLUTIONS.md IR-28 终稿（含
@@ -400,7 +434,7 @@ POST_S0_STRATEGY_BUILD_STARTED=NO
 AWAITING_CODEX_FINAL_ACCEPTANCE=YES
 ```
 
-## 15. R5.1 终局窄收口（B1–B4 四项具名修复；第六候选＝限定终审对象）
+## 15.【HISTORICAL】R5.1 终局窄收口（B1–B4 四项具名修复；第六候选，Codex 工程 PASS）
 
 授权：`START_S0_R5_1_FINAL_NARROW_CLOSEOUT`（Aaron 转发 Codex r5 verdict 并
 指示审核后执行）。范围严格限定 B1–B4 及其直接回归；无任何范围外重构。
@@ -482,7 +516,7 @@ POST_S0_STRATEGY_BUILD_STARTED=NO
 AWAITING_CODEX_LIMITED_FINAL_REVIEW=YES
 ```
 
-## 16. R5.1.1 纯文档终局（Codex 限定终审事实记录＋候选事实勘误；第七候选）
+## 16.【HISTORICAL】R5.1.1 纯文档终局（Codex 限定终审事实记录＋候选事实勘误；第七候选）
 
 授权：`START_S0_DOC_FINAL_AND_OPERATIONS_PREPARATION`（本节为其 PHASE C，
 纯文档；生产代码与测试行为零变更，`tests/test_governance_docs.py` 仅新增
