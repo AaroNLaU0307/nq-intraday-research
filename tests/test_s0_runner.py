@@ -995,7 +995,7 @@ def test_pytest_gate_floor_is_the_audit_baseline():
     """SA-10 N3: the floor tracks the CURRENT suite, closing the
     silent-collection-drop headroom."""
     mod = real_run_module()
-    assert mod.MIN_COLLECTED_TESTS == 2519
+    assert mod.MIN_COLLECTED_TESTS == 2536
 
 
 # ===========================================================================
@@ -2988,10 +2988,16 @@ def test_output_roots_gate_refuses_runs_root_inside_repo_tree_via_runner(tmp_pat
     """Deliverable 2: a config whose runs_root/runs_dir sits inside the
     repo tree (the exact historical bug, `RUNS_ROOT = REPO / "runs"`) is
     refused by the runner's own Stage-A gate, pre-exposure — and NOTHING
-    is ever created under the repo tree in the process. `attempts_dir` is
-    kept on a SAFE tmp_path location (a pre-run-attempt failure DOES
-    create the attempts directory, via `_attempt_dir()`, so it must never
-    be allowed to default to somewhere inside the bad runs_root)."""
+    is ever created under the repo tree in the process.
+
+    UPDATED BY CODEX ROUND-2 #2. This test used to close by asserting
+    "the attempts artifacts DID land, but only in the safe tmp location"
+    — i.e. it pinned the very behaviour the round-2 holding refuses. A
+    failure of `output_roots_validated` means every governed output path
+    on the config is unvalidated, INCLUDING an `attempts_dir` that looks
+    fit; the refusal must therefore write to none of them. The assertion
+    is inverted below, and `test_root_gate_refusal_writes_nothing_even_to_
+    a_valid_looking_attempts_dir` is the dedicated regression."""
     bad_runs_root = REPO / "runs"
     safe_attempts_dir = tmp_path / "attempts" / "A001"
     safe_archive_root = tmp_path / "archive_root"
@@ -3012,8 +3018,11 @@ def test_output_roots_gate_refuses_runs_root_inside_repo_tree_via_runner(tmp_pat
     # nothing landed under the repo tree at all.
     assert not bad_runs_root.exists()
     assert not (REPO / "runs").exists()
-    # the attempts artifacts DID land, but only in the safe tmp location
-    assert (safe_attempts_dir / "PRE_RUN_ATTEMPT_FAILURE.md").exists()
+    # Codex round-2 #2: and NOTHING landed on the safe-looking attempts
+    # path either — a refusal of the root gate is zero-I/O on every
+    # configured output path, not just the ones that look unfit.
+    assert not safe_attempts_dir.exists()
+    assert out.attempts_dir is None
 
 
 def test_output_roots_gate_runs_before_any_injected_stage_a_gate(tmp_path):
@@ -3622,6 +3631,116 @@ def test_valid_attempts_dir_still_created_by_a_pre_run_failure(tmp_path):
 
 
 # ===========================================================================
+# S0 CLOSEOUT — Codex ROUND 2 #2: a root-gate refusal must be ZERO-I/O on
+# EVERY configured output path, not only on the ones that look unfit
+# ===========================================================================
+#
+# THE HOLDING. Codex #4 stopped `_attempt_dir` from creating an attempts
+# path inside the repo tree, but its self-check is narrow by construction:
+# absolute + disjoint from the repo. An `attempts_dir` that satisfies that
+# and yet belongs to a config whose ROOTS were just refused was still
+# mkdir-ed, and still received INCIDENT_*.md and the
+# PRE_RUN_ATTEMPT_FAILURE report. When the FAILING gate is
+# `output_roots_validated`, every governed output path is by definition
+# unvalidated — the refusal must write to none of them.
+
+
+def test_root_gate_refusal_writes_nothing_even_to_a_valid_looking_attempts_dir(
+        tmp_path):
+    """THE REGRESSION FOR CODEX ROUND-2 #2. `attempts_dir` here is exactly
+    the case Codex #4's narrow self-check waves through: absolute, well
+    outside the repo tree, under tmp — so before this fix it WAS created
+    and WAS written into. The failing gate is the root gate, so it must
+    now be left completely untouched."""
+    bad_runs_root = REPO / "runs"                    # the L-5 defect
+    valid_looking_attempts = tmp_path / "looks_perfectly_fine" / "A001"
+    assert not valid_looking_attempts.exists()       # precondition
+    deps, events, _ = make_deps(
+        tmp_path, gates=[ok_gate()],
+        runs_root=bad_runs_root,
+        runs_dir=bad_runs_root / "runs" / "S0-T001",
+        attempts_dir=valid_looking_attempts,
+        archive_root=tmp_path / "archive_root")
+    out = S0Runner(deps).run()
+
+    assert out.failed_gate == "output_roots_validated"
+    assert out.failure_kind == "pre_run_attempt"
+    assert out.terminal_stage == RunStage.A_PRECHECK
+    assert out.exposure_consumed is False
+    # ZERO I/O on BOTH configured paths: not the directory, and therefore
+    # not the incident file or the failure report that would live in it.
+    assert not valid_looking_attempts.exists()
+    assert not valid_looking_attempts.parent.exists()
+    assert not bad_runs_root.exists()
+    # ...while the refusal is still fully recorded
+    assert out.attempts_dir is None
+    assert out.incident_id.startswith("INC-")
+    assert [e for e, _ in events] == ["PRE_RUN_ATTEMPT_FAILURE"]
+    assert "NO_ATTEMPT_DIR" in events[0][1]
+    assert out.incident_id in events[0][1]
+
+
+def test_non_root_gate_stage_a_failure_still_writes_the_attempt_record(
+        tmp_path):
+    """THE OTHER HALF, and the reason it is safe: `allow_disk` is keyed on
+    the gate NAME, so every other Stage-A gate keeps today's behaviour.
+    Those failures can only be reached once the root gate has already
+    PASSED (it runs first), i.e. once `attempts_dir` is root-gate
+    validated — so the attempt record still lands on disk in full."""
+    deps, events, _ = make_deps(
+        tmp_path, gates=[bad_gate("some_other_stage_a_gate")])
+    out = S0Runner(deps).run()
+
+    assert out.failed_gate == "some_other_stage_a_gate"
+    assert out.terminal_stage == RunStage.A_PRECHECK
+    assert out.attempts_dir is not None and out.attempts_dir.is_dir()
+    assert (out.attempts_dir / "PRE_RUN_ATTEMPT_FAILURE.md").exists()
+    assert (out.attempts_dir / "PRE_RUN_ATTEMPT_FAILURE.json").exists()
+    assert (out.attempts_dir / f"INCIDENT_{out.incident_id}.md").exists()
+    assert [e for e, _ in events] == ["PRE_RUN_ATTEMPT_FAILURE"]
+    assert "NO_ATTEMPT_DIR" not in events[0][1]
+
+
+def test_a_raising_root_gate_is_also_zero_disk(tmp_path, monkeypatch):
+    """Both Stage-A exits route through the same flag. A gate that RAISES
+    is still a failure of that gate, so an exception out of the root gate
+    must not create output paths either."""
+    import itsf.s0.runner as runner_mod
+    valid_looking_attempts = tmp_path / "raise_path_attempts" / "A001"
+    deps, events, _ = make_deps(
+        tmp_path, attempts_dir=valid_looking_attempts,
+        runs_dir=tmp_path / "runs" / "S0-T001")
+
+    def _boom(cfg):
+        raise RuntimeError("synthetic root-gate explosion")
+
+    monkeypatch.setattr(runner_mod, "_output_roots_gate_check", _boom)
+    out = S0Runner(deps).run()
+
+    assert out.failed_gate == "output_roots_validated"
+    assert out.failure_kind == "pre_run_attempt"
+    assert out.attempts_dir is None
+    assert not valid_looking_attempts.exists()
+    assert [e for e, _ in events] == ["PRE_RUN_ATTEMPT_FAILURE"]
+
+
+def test_zero_disk_refusal_is_keyed_on_the_one_gate_name_constant():
+    """Scope pin for the mechanism. The gate name exists ONCE, as
+    `runner.OUTPUT_ROOTS_GATE_NAME`, and is what both the gate
+    construction and the `allow_disk` decision read — if those two ever
+    drifted apart, the refusal would quietly start writing into the paths
+    it had just declared unfit."""
+    import itsf.s0.runner as runner_mod
+    assert runner_mod.OUTPUT_ROOTS_GATE_NAME == "output_roots_validated"
+    run_src = inspect.getsource(S0Runner.run)
+    assert 'GateCheck(OUTPUT_ROOTS_GATE_NAME,' in run_src
+    assert "allow_disk = gate.name != OUTPUT_ROOTS_GATE_NAME" in run_src
+    # and the flag is what selects the already-graceful adir-None path
+    fail_src = inspect.getsource(S0Runner._fail_pre_run)
+    assert "self._attempt_dir() if allow_disk else None" in fail_src
+
+
+# ===========================================================================
 # S0 CLOSEOUT — Codex final review #5: archive recoverability
 # ===========================================================================
 #
@@ -3796,3 +3915,299 @@ def test_archive_failure_in_the_runner_still_keeps_the_run_sealed(
     assert events[-1][0] == "COMPLETED"
     assert not (archive_root / runs_dir.name).exists()
     assert _archive_partials(archive_root) == []
+
+
+# ===========================================================================
+# S0 CLOSEOUT — Codex ROUND 2 #3: the archive is an EXACT-INVENTORY,
+# reparse-refusing proof
+# ===========================================================================
+#
+# THE HOLDING. The per-file recheck proves each COPIED file's bytes and
+# nothing else. It cannot see (a) a symlink/junction standing in for a real
+# entry, (b) the sealed source CHANGING while the archive was being built —
+# a file mutated after its own recheck, while a later file was still being
+# copied, passes every per-file test — (c) an EXTRA or MISSING entry in the
+# staging tree, which has no per-file recheck to fail, or (d) a destination
+# that diverged during/after promotion, since every prior proof was made at
+# a path that no longer exists. Five inventory steps close all four.
+
+
+def _make_junction(link: Path, target: Path) -> bool:
+    """Create a Windows directory JUNCTION (`mklink /J`), returning True on
+    success. Junctions — unlike symlinks — need no special privilege on
+    this box, which is what makes the reparse-point tests REAL rather than
+    monkeypatched: a junction reports `Path.is_symlink() == False` while
+    carrying FILE_ATTRIBUTE_REPARSE_POINT (measured attrs 0x410), so it is
+    exactly the entry the `is_symlink`-only probe would wave through."""
+    if sys.platform != "win32":
+        return False
+    proc = subprocess.run(["cmd", "/c", "mklink", "/J", str(link),
+                           str(target)], capture_output=True, text=True)
+    return proc.returncode == 0 and link.exists()
+
+
+def _archive_inventory_summary_fields(report):
+    return (report.inventory.source_stable,
+            report.inventory.staging_matches_source,
+            report.inventory.dest_matches_source)
+
+
+def test_archive_refuses_a_real_junction_in_the_source_tree(tmp_path):
+    """(1) REPARSE REFUSAL, with a REAL Windows junction — not a mock.
+    Skipped only if the OS refuses to create one at all."""
+    src = _sealed_source(tmp_path)
+    outside = tmp_path / "somewhere_else"
+    outside.mkdir()
+    (outside / "smuggled.txt").write_bytes(b"not part of the sealed run")
+    # Anti-skip discipline (final_candidate_scans): a box where mklink /J
+    # fails must surface LOUDLY, not silently shrink coverage.
+    assert _make_junction(src / "junction", outside), (
+        "directory junction creation failed (mklink /J) — reparse-refusal "
+        "evidence cannot be produced on this box")
+    archive_root = tmp_path / "archive_root"
+
+    report = runinfra.archive_sealed_run(src, archive_root)
+
+    assert report.ok is False
+    assert report.status == "archive_failed"
+    assert any("reparse point/junction" in e for e in report.errors)
+    assert any(e.startswith("junction:") for e in report.errors)
+    # refused BEFORE anything was promoted, and no debris left behind
+    assert not (archive_root / src.name).exists()
+    assert _archive_partials(archive_root) == []
+    # and the probe really is the attribute one: a junction is NOT a symlink
+    assert (src / "junction").is_symlink() is False
+
+
+def test_archive_refuses_a_symlink_entry_via_a_monkeypatched_probe(
+        tmp_path, monkeypatch):
+    """(1) the SYMLINK half of the same refusal, tested through the probe
+    rather than through a real symlink.
+
+    HONEST ABOUT THE LIMITATION, hence the test name: creating a symlink
+    on this box raises `OSError [WinError 1314] A required privilege is
+    not held by the client`, so the real entry cannot be built here. What
+    IS exercised is the real code path — `Path.is_symlink()` returning
+    True inside `_build_inventory` — with only the OS probe replaced. The
+    junction test above covers the other branch for real."""
+    src = _sealed_source(tmp_path)
+    real_is_symlink = Path.is_symlink
+
+    def patched(self):
+        if self.name == "S0_REPORT.md" and str(self).startswith(str(src)):
+            return True
+        return real_is_symlink(self)
+
+    monkeypatch.setattr(Path, "is_symlink", patched)
+
+    report = runinfra.archive_sealed_run(src, tmp_path / "archive_root")
+
+    assert report.ok is False
+    assert any("S0_REPORT.md: symlink or reparse point/junction" in e
+               for e in report.errors)
+    assert not (tmp_path / "archive_root" / src.name).exists()
+
+
+def test_archive_refuses_a_junction_planted_in_the_staging_tree(
+        tmp_path, monkeypatch):
+    """(1) SAME CHECK ON STAGING ENTRIES. A junction that appears inside
+    the `.partial` tree during the copy is refused there too — the staging
+    inventory is built by the same `_build_inventory` call as the source
+    one, so the refusal is structurally the same refusal."""
+    src = _sealed_source(tmp_path)
+    archive_root = tmp_path / "archive_root"
+    outside = tmp_path / "junction_target"
+    outside.mkdir()
+    real_write = Path.write_bytes
+    planted: list[bool] = []
+
+    def patched(self, data):
+        result = real_write(self, data)
+        # after the LAST staging file is written, plant a junction next to it
+        if (self.name == "manifest.jsonl"
+                and str(self).startswith(str(archive_root)) and not planted):
+            planted.append(_make_junction(self.parent / "sneaky", outside))
+        return result
+
+    monkeypatch.setattr(Path, "write_bytes", patched)
+    report = runinfra.archive_sealed_run(src, archive_root)
+    monkeypatch.undo()
+    # Anti-skip discipline: same rule as the source-side junction test.
+    assert planted and planted[0], (
+        "directory junction creation failed (mklink /J) — staging "
+        "reparse-refusal evidence cannot be produced on this box")
+
+    assert report.ok is False
+    assert any("sneaky: symlink or reparse point/junction" in e
+               for e in report.errors)
+    assert report.inventory.staging_matches_source is False
+    assert not (archive_root / src.name).exists()
+    assert _archive_partials(archive_root) == []
+
+
+def test_archive_refuses_a_source_mutated_between_copy_and_reinventory(
+        tmp_path, monkeypatch):
+    """(3) POST-COPY SOURCE RE-INVENTORY. The mutation is timed so that
+    EVERY per-file recheck still passes: `S0_REPORT.md` sorts first, so it
+    is copied and rechecked, and only then — while `manifest.jsonl` is
+    being written — does its source change. Before this fix the archive
+    would have been declared ok while holding bytes the sealed run no
+    longer had."""
+    src = _sealed_source(tmp_path)
+    archive_root = tmp_path / "archive_root"
+    real_write = Path.write_bytes
+
+    def patched(self, data):
+        result = real_write(self, data)
+        if (self.name == "manifest.jsonl"
+                and str(self).startswith(str(archive_root))):
+            real_write(src / "S0_REPORT.md", b"MUTATED MID-ARCHIVE\n")
+        return result
+
+    monkeypatch.setattr(Path, "write_bytes", patched)
+    report = runinfra.archive_sealed_run(src, archive_root)
+
+    assert report.ok is False
+    assert report.status == "archive_failed"
+    # every per-file recheck passed — this is precisely the blind spot
+    assert all(f.match for f in report.files)
+    assert any("CHANGED while it was being archived" in e
+               for e in report.errors)
+    assert any("post-copy source re-inventory" in e for e in report.errors)
+    assert _archive_inventory_summary_fields(report) == (False, None, None)
+    assert not (archive_root / src.name).exists()
+    assert _archive_partials(archive_root) == []
+
+
+def test_archive_refuses_an_extra_file_injected_into_staging(
+        tmp_path, monkeypatch):
+    """(4) STAGING SET-LEVEL EQUALITY. An extra file in the `.partial`
+    tree has no per-file recheck to fail — only the inventory equality
+    catches it."""
+    src = _sealed_source(tmp_path)
+    archive_root = tmp_path / "archive_root"
+    real_write = Path.write_bytes
+
+    def patched(self, data):
+        result = real_write(self, data)
+        if (self.name == "manifest.jsonl"
+                and str(self).startswith(str(archive_root))):
+            real_write(self.parent / "GHOST.txt", b"undeclared\n")
+        return result
+
+    monkeypatch.setattr(Path, "write_bytes", patched)
+    report = runinfra.archive_sealed_run(src, archive_root)
+
+    assert report.ok is False
+    assert all(f.match for f in report.files)         # again: no per-file signal
+    assert any("GHOST.txt: EXTRA entry in the staging (.partial) tree" in e
+               for e in report.errors)
+    assert _archive_inventory_summary_fields(report) == (True, False, None)
+    assert not (archive_root / src.name).exists()
+    assert _archive_partials(archive_root) == []
+
+
+def test_archive_refuses_a_missing_file_dropped_from_staging(
+        tmp_path, monkeypatch):
+    """(4) the other direction of the same equality: a staging file that
+    disappears after its own recheck."""
+    src = _sealed_source(tmp_path)
+    archive_root = tmp_path / "archive_root"
+    real_write = Path.write_bytes
+
+    def patched(self, data):
+        result = real_write(self, data)
+        if (self.name == "manifest.jsonl"
+                and str(self).startswith(str(archive_root))):
+            (self.parent / "S0_REPORT.md").unlink()
+        return result
+
+    monkeypatch.setattr(Path, "write_bytes", patched)
+    report = runinfra.archive_sealed_run(src, archive_root)
+
+    assert report.ok is False
+    assert any("S0_REPORT.md: in the source inventory but MISSING from the "
+               "staging (.partial) tree" in e for e in report.errors)
+    assert not (archive_root / src.name).exists()
+
+
+def test_archive_final_verify_mismatch_leaves_the_promoted_dest_in_place(
+        tmp_path, monkeypatch):
+    """(5) FINAL INVENTORY AFTER PROMOTION, and the CLEANUP ASYMMETRY.
+    The corruption is injected through the promotion seam (`os.replace`),
+    i.e. strictly after the staging tree was proven equal — so it is
+    invisible to every earlier step. The archive must be marked failed
+    WITH the mismatch listed, and the promoted directory must be RETAINED:
+    it is evidence, not debris."""
+    src = _sealed_source(tmp_path)
+    archive_root = tmp_path / "archive_root"
+    real_replace = runinfra.os.replace
+
+    def patched(a, b):
+        real_replace(a, b)
+        Path(b, "S0_REPORT.md").write_bytes(b"CORRUPTED AFTER PROMOTION\n")
+
+    monkeypatch.setattr(runinfra.os, "replace", patched)
+    report = runinfra.archive_sealed_run(src, archive_root)
+
+    assert report.ok is False
+    assert report.status == "archive_failed"
+    assert any("S0_REPORT.md: inventory mismatch against the promoted "
+               "archive directory" in e for e in report.errors)
+    assert any("RETAINED as evidence" in e for e in report.errors)
+    assert _archive_inventory_summary_fields(report) == (True, True, False)
+    # THE ASYMMETRY: the promoted destination is still there, corrupt bytes
+    # and all, and no partial was left behind
+    dest = archive_root / src.name
+    assert dest.is_dir()
+    assert (dest / "S0_REPORT.md").read_bytes() == \
+        b"CORRUPTED AFTER PROMOTION\n"
+    assert _archive_partials(archive_root) == []
+
+
+def test_archive_honest_run_all_three_inventories_agree(tmp_path):
+    """(2)+(3)+(4)+(5) on the happy path: an honest archive still
+    succeeds, all three equality verdicts are True, the summary counts
+    describe the real tree, and an EMPTY source directory is reproduced —
+    the last one matters because an exact-set staging proof would refuse
+    an honest run whose empty dirs the copy loop silently dropped."""
+    src = _sealed_source(tmp_path)
+    nested = src / "sub"
+    nested.mkdir()
+    (nested / "leaf.txt").write_bytes(b"leaf bytes")
+    (src / "empty_dir").mkdir()
+    archive_root = tmp_path / "archive_root"
+
+    report = runinfra.archive_sealed_run(src, archive_root)
+
+    assert report.ok is True
+    assert report.status == "archive_ok"
+    assert report.errors == ()
+    assert _archive_inventory_summary_fields(report) == (True, True, True)
+    assert report.inventory.n_files == 3            # report, manifest, leaf
+    assert report.inventory.n_dirs == 2             # sub, empty_dir
+    assert report.inventory.total_bytes == sum(
+        len((src / rel).read_bytes())
+        for rel in ("S0_REPORT.md", "manifest.jsonl", "sub/leaf.txt"))
+    dest = archive_root / src.name
+    assert (dest / "empty_dir").is_dir()            # empty dir reproduced
+    assert (dest / "sub" / "leaf.txt").read_bytes() == b"leaf bytes"
+    # and the inventory the report summarises really is the tree on disk
+    src_inv, src_errs = runinfra._build_inventory(src)
+    dest_inv, dest_errs = runinfra._build_inventory(dest)
+    assert (src_errs, dest_errs) == ([], [])
+    assert src_inv == dest_inv
+
+
+def test_archive_inventory_is_none_only_before_it_could_be_built(tmp_path):
+    """The `inventory` field's contract: None means "never reached", not
+    "empty". A destination-already-exists refusal happens before the
+    source is ever inventoried; every later outcome carries a summary."""
+    src = _sealed_source(tmp_path)
+    archive_root = tmp_path / "archive_root"
+    assert runinfra.archive_sealed_run(src, archive_root).inventory is not None
+
+    again = runinfra.archive_sealed_run(src, archive_root)
+    assert again.ok is False
+    assert any("already exists" in e for e in again.errors)
+    assert again.inventory is None

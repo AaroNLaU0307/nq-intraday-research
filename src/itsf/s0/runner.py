@@ -205,6 +205,19 @@ S0 CLOSEOUT (Codex final review) — two runner-side holdings closed here:
       it is a narrow self-check and not a second `validate_output_roots`
       call.
 
+      CODEX ROUND 2 (#2) CLOSES THE REMAINDER. The self-check above is
+      narrow on purpose, so an `attempts_dir` that merely LOOKS fit
+      (absolute, outside the repo — e.g. under %TEMP%) was still created
+      by a refusal of the `output_roots_validated` gate, and still
+      received the INCIDENT file and the PRE_RUN_ATTEMPT_FAILURE report.
+      A failure of THAT gate now takes the `adir=None` path
+      UNCONDITIONALLY (`_fail_pre_run(..., allow_disk=False)`, selected in
+      the Stage-A loop by `gate.name != OUTPUT_ROOTS_GATE_NAME`): when the
+      gate whose meaning is "these output paths are unvalidated" is the
+      one failing, the refusal writes to none of them. Failures of every
+      other Stage-A gate are unchanged — the root gate runs first, so they
+      only happen once it has already validated `attempts_dir`.
+
   (#5, the archive's mid-copy recoverability, is closed in
   `runinfra.archive_sealed_run` — copy into `<dest>.partial`, verify, then
   promote by rename — and is visible from here only as the same
@@ -229,6 +242,15 @@ STAGE_ORDER = (RunStage.A_PRECHECK, RunStage.B_LOAD_VALIDATE,
 
 MANIFEST_NAME = "manifest.jsonl"
 HALF_TRANSITION_NAME = "HALF_TRANSITION.md"
+
+# Codex round-2 #2 (S0 closeout). The name of the INTRINSIC Stage-A gate
+# that validates the governed output roots, as ONE constant rather than a
+# string repeated at the two places that must agree: where the gate is
+# built (`run()`) and where a failure OF THAT GATE is routed to the
+# zero-disk refusal path (`allow_disk=` below). If those two ever drifted,
+# the refusal would go back to writing into paths it had just declared
+# unfit.
+OUTPUT_ROOTS_GATE_NAME = "output_roots_validated"
 
 # M6.1.8 S1 (H-1). The Stage-E artifact LOG LINE identifies each artifact by
 # its ordinal in the fixed write order instead of by name. See
@@ -561,10 +583,34 @@ class S0Runner:
         return True
 
     def _fail_pre_run(self, stage: RunStage, gate_name: str, detail: str,
-                      exc: BaseException | None = None) -> RunOutcome:
+                      exc: BaseException | None = None, *,
+                      allow_disk: bool = True) -> RunOutcome:
         """Packet §3: mechanical failure BEFORE exposure. Keep everything,
-        burn nothing. Raw detail is sealed, never surfaced (F-05)."""
-        adir = self._attempt_dir()
+        burn nothing. Raw detail is sealed, never surfaced (F-05).
+
+        `allow_disk=False` makes the refusal ZERO-I/O on every configured
+        output path (Codex round-2 #2, S0 closeout). Codex #4 had already
+        stopped `_attempt_dir` from creating an attempts path INSIDE the
+        repo tree, but its self-check is narrow by construction — an
+        attempts_dir that merely LOOKS fit (absolute, disjoint from the
+        repo) still got mkdir-ed, and the incident file plus the
+        PRE_RUN_ATTEMPT_FAILURE report still landed in it. When the gate
+        being reported is `output_roots_validated` ITSELF, every governed
+        output path on the config is BY DEFINITION unvalidated, so writing
+        to any of them is exactly the thing being refused. Callers pass
+        `allow_disk=(gate.name != OUTPUT_ROOTS_GATE_NAME)`.
+
+        This is not a new failure mode: it forces the ALREADY-EXISTING
+        `adir is None` degradation (SA-6 F-10 / F-05) — no attempts
+        directory, no INCIDENT_*.md, no failure report on disk, the raw
+        detail withheld rather than sealed — while the registry event is
+        still appended and the returned `RunOutcome` is still well-formed
+        (with `attempts_dir=None`). Failures of every OTHER Stage-A gate
+        keep today's behaviour unchanged, and legitimately so: the root
+        gate runs FIRST, so any later gate failure has already had
+        `attempts_dir` validated by the root gate that passed.
+        """
+        adir = self._attempt_dir() if allow_disk else None
         incident = make_incident_id(self._d.config.trial_id, stage.value,
                                     gate_name, detail, self._d.clock_utc())
         exc_type = classify_exception(exc) if exc is not None else "RunGateError"
@@ -834,19 +880,27 @@ class S0Runner:
         # this ruling closes, and `d.gates` is not this module's to trust
         # blindly for a hard invariant it alone is responsible for.
         stage_a_gates = (
-            GateCheck("output_roots_validated",
+            GateCheck(OUTPUT_ROOTS_GATE_NAME,
                      lambda: _output_roots_gate_check(d.config)),
             *d.gates)
         for gate in stage_a_gates:
+            # Codex round-2 #2: a failure OF the output-roots gate must
+            # write NOTHING to any configured output path — those paths
+            # are precisely what has just been declared unfit. Every other
+            # Stage-A gate keeps the existing behaviour, and safely so:
+            # the root gate runs first, so reaching any later gate means
+            # `attempts_dir` has already been root-gate-validated.
+            allow_disk = gate.name != OUTPUT_ROOTS_GATE_NAME
             try:
                 ok, detail = gate.check()
             except Exception as exc:                 # noqa: BLE001
                 return self._fail_pre_run(
                     RunStage.A_PRECHECK, gate.name,
-                    f"gate raised {type(exc).__name__}: {exc}", exc)
+                    f"gate raised {type(exc).__name__}: {exc}", exc,
+                    allow_disk=allow_disk)
             if not ok:
                 return self._fail_pre_run(RunStage.A_PRECHECK, gate.name,
-                                          detail)
+                                          detail, allow_disk=allow_disk)
         if self._log_errors:
             return self._fail_pre_run(RunStage.A_PRECHECK, "log_guard",
                                       self._log_guard_breach(), LogLeakError())

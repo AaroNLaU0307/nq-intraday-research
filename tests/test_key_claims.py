@@ -14,7 +14,10 @@ from itsf.s0.study import ENGINES
 L3 = 20
 L4 = 18
 
-DAYS = [f"2020-01-{d:02d}" for d in range(1, L3 + 1)]
+# weekdays only: the KC1 plausibility screen refuses weekend dates
+DAYS = [f"2020-01-{d:02d}" for d in
+        (1, 2, 3, 6, 7, 8, 9, 10, 13, 14, 15, 16, 17, 20, 21, 22,
+         23, 24, 27, 28)]
 REMOVED = ["2019-12-30", "2019-12-31"]
 
 FUNNEL = {
@@ -39,6 +42,8 @@ _LABEL_MAP = (("Y_cont", "y_cont"), ("Y1", "y1"), ("Y2", "y2_de_pm"),
 def assertions_bytes(funnel=None):
     locked = {
         "funnel": dict(funnel or FUNNEL),
+        "development_window": {"start_inclusive": "2010-06-06",
+                               "end_exclusive": "2022-01-01"},
         "features": {fk: {"constructible": L3 - 1, "na": 1,
                           "reasons": {"anchor_missing": 1}}
                      for fk, _ in _FEATURE_MAP},
@@ -351,3 +356,38 @@ def test_kc2_missing_mapped_field_is_uncovered_fail():
     rep = run(f)
     assert rep.verdicts["KC2_label_na_counts"] == "FAIL"
     assert any("feature_uncovered:F7" in p for p in rep.problems)
+
+
+# --- Codex r2 #1: self-lock removed, arbitrary fake days refused -----------
+
+def test_kc1_warmup_day_in_eras_is_legitimate_no_self_lock():
+    """The frozen NA policy keeps adr14 warm-up days IN the L3 sample —
+    their presence in the published eras must PASS (Codex r2 self-lock)."""
+    funnel = dict(FUNNEL)
+    funnel["removed_sets"] = {"zero_bar_days": list(REMOVED),
+                              "adr14_warmup_days": [DAYS[0], DAYS[1]]}
+    rep = run(assertions_bytes=assertions_bytes(funnel))
+    assert rep.verdicts["KC1_day_universe"] == "PASS"
+
+
+def test_kc1_arbitrary_weekend_swap_refused():
+    """Codex r2 counter-example: same count, a real day swapped for an
+    unregistered WEEKEND date — must refuse."""
+    f = formal_payload()
+    f["structural"]["eras"]["era_a"][0] = "2020-01-04"     # Saturday
+    rep = run(f)
+    assert rep.verdicts["KC1_day_universe"] == "FAIL"
+    assert any("implausible_published_day" in p for p in rep.problems)
+
+
+def test_kc1_out_of_window_swap_refused():
+    f = formal_payload()
+    f["structural"]["eras"]["era_a"][0] = "2009-05-04"     # pre-window Mon
+    rep = run(f)
+    assert rep.verdicts["KC1_day_universe"] == "FAIL"
+
+
+def test_kc1_unparseable_day_refused():
+    f = formal_payload()
+    f["structural"]["eras"]["era_a"][0] = "not-a-date"
+    assert run(f).verdicts["KC1_day_universe"] == "FAIL"

@@ -179,6 +179,10 @@ def _patch_kc_assertions(mod, monkeypatch, tmp_path, payload):
     labs = per_field.get("labels", {})
     locked = {
         "funnel": dict(st.get("funnel_counts", {})),
+        # Codex r2: the KC1 plausibility screen needs the locked window;
+        # the synthetic market's weekday dates sit inside the real one.
+        "development_window": {"start_inclusive": "2010-06-06",
+                               "end_exclusive": "2022-01-01"},
         # Codex fix round: the strengthened KC2 binds per-field counts by
         # NAME; the synthetic locked file mirrors the payload (wiring
         # verification — production binds against the genuinely locked
@@ -190,8 +194,14 @@ def _patch_kc_assertions(mod, monkeypatch, tmp_path, payload):
                    for yk, pub in _KC_LABEL_MAP},
     }
     assertions = tmp_path / "kc_assertions.json"
-    assertions.write_text(_json.dumps(locked), encoding="utf-8")
+    body = _json.dumps(locked)
+    assertions.write_text(body, encoding="utf-8")
     monkeypatch.setattr(mod, "KEY_CLAIMS_ASSERTIONS_PATH", assertions)
+    # Codex r2: the assertions bytes are sha-pinned in production; the
+    # synthetic file re-pins to its own digest (both names patched).
+    import hashlib as _hl
+    monkeypatch.setattr(mod, "KEY_CLAIMS_ASSERTIONS_SHA256",
+                        _hl.sha256(body.encode("utf-8")).hexdigest())
 
 
 # --- single method-truth-source (M6.1.1 main-agent item 1) ------------------

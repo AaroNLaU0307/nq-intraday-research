@@ -244,3 +244,39 @@ IR-28c（DR-1 ii=乘子后 {2,3,3,4}；报告链接入 PARTIAL 具名）、IR-28
   选择**（H-1 定性：工件名=运行不变常量；与既有 terminal 行同信道）。
 - attempts/ 残留（§7.11）与 GRID_SAMPLES withheld（DR-5 PARTIAL_BY_RULING）
   状态不变。
+
+## 12. Codex 第二轮（`0e352e9` HOLD）的窄收口（第三候选，最终数字附后）
+
+Codex r2 四项逐一核验属实并处置：
+
+| Codex r2 | 处置 |
+|---|---|
+| #1 KC1 自锁＋任意换日假绿 | **FIXED**：排除集改为封闭三组具名整日移除（zero_bar/early_close/missing>10%）——adr14 warm-up 日按冻结 NA 政策留在 L3 样本，其出现在 eras 为合法（反自锁专项钉）；新增伪日 plausibility 筛（ISO 可解析＋锁定 Development 窗内＋工作日；周末/窗外/不可解析换日专项钉）；残余（窗内工作日假期）显式声明由 KC3 的 evidence 成员绑定合围（structural.eras vs EV-1 reducers），非隐藏 |
+| #2 根门失败仍建 attempts | **FIXED**（S7）：`output_roots_validated` 门失败 → 全配置输出路径零 I/O（adir=None 降级；其余 Stage-A 门行为不变） |
+| #3 归档非完整 inventory 证明 | **FIXED**（S7）：源 pre/post 双 inventory 等值＋staging 等值＋晋升后终 inventory 类型/尺寸/内容 sha 三次全验＋symlink/junction/reparse 拒绝；晋升后终验失配的 dest 保留为证据不删 |
+| #4 IR-28 不构成已批准 | **ACCEPTED**：IR-28a-d 降格 `PENDING_AARON_RATIFICATION`（IR 文件已改）；真实 S0 前必须逐项批准。DR-1 sensitivity 报告链与 DR-5 MC consumer 维持具名 PARTIAL |
+| 附带 | 断言快照冻结：`S0_INPUT_PREFLIGHT.json` 字节 sha256 钉
+  `9d6dd1c1…4debd6` 于两个 KC 读取点强制（测试双名补丁） |
+
+`2519 passed` 的 `FABLE_REPORTED` 定级照单接受；第三候选终态数字同为
+FABLE_MEASURED 待 Codex 复算。
+
+**第三候选终态数字（FABLE_MEASURED，供 Codex 复算）**：
+
+- 全套件 fresh：**2536 passed / 0 failed / 0 skipped，355.95s**
+  （`-p no:cacheprovider`，提交树逐字节即被测树）；`--collect-only` = 2536
+  = 双钉。附注：S7 两处条件 pytest.skip 经扫描器抓出后改为硬断言（junction
+  不可建的机器应 loud 失败而非缩减覆盖），改后全电池重跑。
+- 修复轮新增：+17（我方 KC1 反自锁/伪日 4；S7 根门零 I/O 4＋归档 inventory 9；
+  S7 的 13 项新测试在 HEAD 上 revert 实测 13 红 1 过——唯一过者即回归钉本身）。
+- S7 附加实证：真实 junction（mklink /J，attrs=0x410）两测均真实执行非 skip；
+  真实 symlink 因 WinError 1314 不可建，该分支经具名 monkeypatch 探针测试；
+  `shutil.rmtree` 不穿越 junction 经实测确认（staging 清理无删穿风险）。
+- 既有一测试**有记录地反转**：`test_output_roots_gate_refuses_runs_root_
+  inside_repo_tree_via_runner` 原本钉住"attempts 落安全 tmp"——恰是 r2 #2
+  拒绝的行为；现钉零创建，反转理由入其 docstring。
+- `SCANS=CLEAN`；`FROZEN OK`；`git diff --check` 干净；registry/exposure
+  逐字基线；`runs/` 不存在；无 tag；无 READY/授权事件。
+- 待办不变：IR-28a-d `PENDING_AARON_RATIFICATION`（真实 S0 前必须完成）；
+  DR-1 sensitivity 报告链与 DR-5 MC consumer 具名 PARTIAL；attempts/ 历史
+  残留待 Aaron。

@@ -73,6 +73,7 @@ import json
 import os
 import re
 import shutil
+import stat
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -1289,6 +1290,43 @@ class ArchiveFileRecheck:
 
 
 @dataclass(frozen=True)
+class ArchiveInventoryEntry:
+    """One entry of a full-tree inventory — the identity an archive copy
+    must reproduce EXACTLY (Codex round-2 #3).
+
+    `size`/`sha256` are ``None`` for directories (a directory has no
+    content of its own); for files they are the byte length and the
+    SHA-256 of the complete content. Equality of these values is the whole
+    discipline: a copy is an archive of record only if the mapping
+    ``{relative_path: entry}`` built from it EQUALS the mapping built from
+    the source before the copy began.
+    """
+
+    relative_path: str                 # POSIX-separated, relative to the tree root
+    is_dir: bool
+    size: int | None
+    sha256: str | None
+
+
+@dataclass(frozen=True)
+class ArchiveInventorySummary:
+    """Counts of the PRE-COPY SOURCE inventory, plus the verdict of each
+    of the three set-level equality proofs `archive_sealed_run` performs.
+
+    A verdict is ``None`` when that proof was never reached because an
+    earlier step already failed — deliberately distinct from ``False``,
+    which is a proof that RAN and REFUSED.
+    """
+
+    n_files: int
+    n_dirs: int
+    total_bytes: int
+    source_stable: bool | None            # post-copy source RE-inventory == pre-copy
+    staging_matches_source: bool | None   # `<dest>.partial` tree == source
+    dest_matches_source: bool | None      # promoted archive dir == source
+
+
+@dataclass(frozen=True)
 class ArchiveReport:
     """The full result of one `archive_sealed_run` call. `status` is the
     "loud" terminal-state word the runner records on `RunOutcome`:
@@ -1296,7 +1334,13 @@ class ArchiveReport:
     (ok=False — at least one copy/re-read/mismatch problem; `errors`
     carries a human-readable line per problem and `files` carries the
     full per-file recheck manifest, matched and mismatched entries
-    alike)."""
+    alike).
+
+    Codex round-2 #3 added `inventory`: the counts of the pre-copy source
+    inventory plus the three exact-equality verdicts. It is ``None`` only
+    when the call failed before the source inventory could be built at all
+    (destination refusal, unremovable debris, uncreatable staging dir).
+    """
 
     ok: bool
     status: str                        # "archive_ok" | "archive_failed"
@@ -1305,6 +1349,7 @@ class ArchiveReport:
     dest_dir: str
     files: tuple[ArchiveFileRecheck, ...]
     errors: tuple[str, ...]
+    inventory: ArchiveInventorySummary | None = None
 
 
 _ARCHIVE_OK = "archive_ok"
@@ -1337,6 +1382,133 @@ def _remove_archive_partial(partial: Path) -> str | None:
                 f"({type(exc).__name__}: {exc}); it must be deleted by hand "
                 f"before the next archive attempt: {partial}")
     return None
+
+
+_INVENTORY_ROOT_REL = "."
+
+
+def _is_reparse_or_symlink(path: Path) -> bool:
+    """True if `path` is a symlink OR a Windows reparse point / junction.
+
+    Codex round-2 #3. BOTH probes are required and neither subsumes the
+    other: a Windows DIRECTORY JUNCTION reports ``Path.is_symlink() ==
+    False`` while carrying ``FILE_ATTRIBUTE_REPARSE_POINT`` in
+    ``os.lstat(...).st_file_attributes`` (measured on this box: a
+    ``mklink /J`` junction has attrs 0x410), and a POSIX symlink has no
+    ``st_file_attributes`` at all — hence the getattr default of 0, which
+    makes the second probe a no-op off Windows.
+
+    Never follows the entry: `Path.is_symlink` and `os.lstat` both
+    describe the link itself. Raises OSError if the entry cannot be
+    lstat-ed; every caller treats that as a refusal, not as a pass.
+    """
+    if path.is_symlink():
+        return True
+    attrs = getattr(os.lstat(path), "st_file_attributes", 0)
+    return bool(attrs & stat.FILE_ATTRIBUTE_REPARSE_POINT)
+
+
+def _build_inventory(
+        root: Path) -> tuple[dict[str, ArchiveInventoryEntry], list[str]]:
+    """Full recursive inventory of `root`, plus the refusal lines it
+    produced. ``(inventory, errors)``; a non-empty `errors` means the
+    inventory is INCOMPLETE and must not be used as an authority.
+
+    Codex round-2 #3. Two jobs, deliberately in one function so the source
+    tree, the staging tree and the promoted archive tree are all measured
+    by literally the same code:
+
+      * REFUSAL. Any entry that is a symlink or a Windows reparse point /
+        junction — directories included — is an error line, never an
+        inventory entry. The walk is explicit (an `iterdir` stack) rather
+        than `rglob`, precisely so a junction is refused BEFORE anything
+        descends through it; the root itself is probed the same way. Any
+        entry that is neither a regular file nor a directory is refused
+        for the same reason: an archive is an inventory of real bytes.
+      * MEASUREMENT. Each surviving entry becomes an `ArchiveInventoryEntry`
+        keyed by its POSIX relative path — directories with `size`/`sha256`
+        of None, files with their byte length and the SHA-256 of their
+        complete content.
+    """
+    inventory: dict[str, ArchiveInventoryEntry] = {}
+    errors: list[str] = []
+
+    def _refused(entry: Path, rel: str) -> bool:
+        try:
+            if _is_reparse_or_symlink(entry):
+                errors.append(
+                    f"{rel}: symlink or reparse point/junction — an archive "
+                    f"inventory describes real files only (refusing)")
+                return True
+        except OSError as exc:
+            errors.append(f"{rel}: could not be lstat-ed: "
+                          f"{type(exc).__name__}: {exc}")
+            return True
+        return False
+
+    if _refused(root, _INVENTORY_ROOT_REL):
+        return {}, errors
+
+    pending = [root]
+    while pending:
+        current = pending.pop()
+        current_rel = (_INVENTORY_ROOT_REL if current == root
+                       else current.relative_to(root).as_posix())
+        try:
+            entries = sorted(current.iterdir())
+        except OSError as exc:
+            errors.append(f"{current_rel}: directory could not be "
+                          f"enumerated: {type(exc).__name__}: {exc}")
+            continue
+        for entry in entries:
+            rel = entry.relative_to(root).as_posix()
+            if _refused(entry, rel):
+                continue
+            try:
+                if entry.is_dir():
+                    inventory[rel] = ArchiveInventoryEntry(
+                        relative_path=rel, is_dir=True, size=None,
+                        sha256=None)
+                    pending.append(entry)
+                elif entry.is_file():
+                    data = entry.read_bytes()
+                    inventory[rel] = ArchiveInventoryEntry(
+                        relative_path=rel, is_dir=False, size=len(data),
+                        sha256=hashlib.sha256(data).hexdigest())
+                else:
+                    errors.append(
+                        f"{rel}: neither a regular file nor a directory "
+                        f"(refusing to archive a special filesystem entry)")
+            except OSError as exc:
+                errors.append(f"{rel}: could not be inventoried: "
+                              f"{type(exc).__name__}: {exc}")
+    return inventory, errors
+
+
+def _inventory_diff(source: Mapping[str, ArchiveInventoryEntry],
+                    other: Mapping[str, ArchiveInventoryEntry],
+                    *, other_label: str) -> list[str]:
+    """Every way `other` diverges from the SOURCE inventory, as report
+    lines. An empty list means EXACT equality — same relative paths, same
+    file/directory types, same sizes, same content hashes. Missing,
+    surplus and differing entries are all reported, so neither an extra
+    file nor a dropped one nor a changed byte can pass."""
+    out: list[str] = []
+    for rel in sorted(set(source) - set(other)):
+        out.append(f"{rel}: in the source inventory but MISSING from "
+                   f"{other_label}")
+    for rel in sorted(set(other) - set(source)):
+        out.append(f"{rel}: EXTRA entry in {other_label} — absent from the "
+                   f"source inventory")
+    for rel in sorted(set(source) & set(other)):
+        s, o = source[rel], other[rel]
+        if s != o:
+            out.append(
+                f"{rel}: inventory mismatch against {other_label} (source "
+                f"is_dir={s.is_dir} size={s.size} sha256={s.sha256}; "
+                f"{other_label} is_dir={o.is_dir} size={o.size} "
+                f"sha256={o.sha256})")
+    return out
 
 
 def archive_sealed_run(runs_dir: str | Path,
@@ -1392,6 +1564,39 @@ def archive_sealed_run(runs_dir: str | Path,
 
     The `dest.exists()` refusal is UNCHANGED and deliberately so — a
     completed archive is never overwritten, only a partial is.
+
+    EXACT-INVENTORY DISCIPLINE (Codex round-2 #3). The per-file recheck
+    above proves each COPIED file's bytes; it cannot prove that the set of
+    files is right, that the sealed source held still, or that the
+    promotion landed what was verified. Five steps close that:
+
+      1. REPARSE/SYMLINK REFUSAL. While inventorying, any entry that is a
+         symlink or a Windows reparse point / junction — directories
+         included — refuses the whole archive (`_is_reparse_or_symlink`).
+         The same check runs over the staging tree, because it is the same
+         `_build_inventory` call.
+      2. PRE-COPY SOURCE INVENTORY: recursive `(relative_path, is_dir,
+         size, sha256-for-files)`. This is the SINGLE AUTHORITY every
+         later comparison is made against; the copy loop is driven from it
+         (including empty directories, which are materialised explicitly).
+      3. POST-COPY SOURCE RE-INVENTORY: after the copy and per-file
+         recheck complete, the source is enumerated again and must be
+         EXACTLY equal to (2). A sealed run directory that changed while
+         it was being archived invalidates the copy.
+      4. STAGING INVENTORY: the `.partial` tree must be EXACTLY equal to
+         (2). The per-file recheck already covers each file's hash; this
+         set-level equality is what catches an extra file, a missing one,
+         or a divergent directory shape.
+      5. FINAL INVENTORY AFTER PROMOTION: the promoted destination is
+         re-enumerated and re-hashed (a third full content pass) against
+         (2).
+
+    CLEANUP ASYMMETRY, stated because it is deliberate: a failure at steps
+    1-4 (or in the copy) removes the `.partial` best-effort, exactly as
+    before. A failure at step 5 does NOT delete anything — `dest` has
+    already been promoted, so it is no longer an in-progress copy but
+    EVIDENCE of a divergence, and it is retained with an explicit error
+    line saying so.
     """
     src = Path(runs_dir)
     if not src.is_dir():
@@ -1406,47 +1611,91 @@ def archive_sealed_run(runs_dir: str | Path,
     # the atomic promotion at the very end.
     partial = dest_root / f"{src.name}{_ARCHIVE_PARTIAL_SUFFIX}"
 
+    def _report(ok: bool, errs: Sequence[str], *,
+                files: Sequence[ArchiveFileRecheck] = (),
+                inventory: ArchiveInventorySummary | None = None
+                ) -> ArchiveReport:
+        """The one construction site for this call's report — every field
+        that is constant across all outcomes is written exactly once."""
+        return ArchiveReport(
+            ok=ok, status=_ARCHIVE_OK if ok else _ARCHIVE_FAILED,
+            run_dir_name=src.name, source_dir=str(src), dest_dir=str(dest),
+            files=tuple(files), errors=tuple(errs), inventory=inventory)
+
     try:
         dest_root.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        return ArchiveReport(
-            ok=False, status=_ARCHIVE_FAILED, run_dir_name=src.name,
-            source_dir=str(src), dest_dir=str(dest), files=(),
-            errors=(f"archive_root could not be created: "
-                   f"{type(exc).__name__}: {exc}",))
+        return _report(False, [f"archive_root could not be created: "
+                               f"{type(exc).__name__}: {exc}"])
 
     if dest.exists():
-        return ArchiveReport(
-            ok=False, status=_ARCHIVE_FAILED, run_dir_name=src.name,
-            source_dir=str(src), dest_dir=str(dest), files=(),
-            errors=(f"archive destination already exists (refusing to "
-                   f"overwrite a prior archive copy): {dest}",))
+        return _report(False, [f"archive destination already exists "
+                               f"(refusing to overwrite a prior archive "
+                               f"copy): {dest}"])
 
     # debris from a crashed prior attempt: safe to delete (a partial is
     # never an archive of record), and NOT safe to write into, because
     # stale files would silently survive under a fresh copy.
     stale = _remove_archive_partial(partial)
     if stale is not None:
-        return ArchiveReport(
-            ok=False, status=_ARCHIVE_FAILED, run_dir_name=src.name,
-            source_dir=str(src), dest_dir=str(dest), files=(),
-            errors=(stale,))
+        return _report(False, [stale])
     try:
         partial.mkdir(parents=True, exist_ok=False)
     except OSError as exc:
-        return ArchiveReport(
-            ok=False, status=_ARCHIVE_FAILED, run_dir_name=src.name,
-            source_dir=str(src), dest_dir=str(dest), files=(),
-            errors=(f"in-progress archive copy could not be created: "
-                   f"{type(exc).__name__}: {exc}",))
+        return _report(False, [f"in-progress archive copy could not be "
+                               f"created: {type(exc).__name__}: {exc}"])
 
     errors: list[str] = []
     files: list[ArchiveFileRecheck] = []
 
-    source_files = sorted(p for p in src.rglob("*") if p.is_file())
-    for source_path in source_files:
-        rel = source_path.relative_to(src).as_posix()
-        dest_path = partial / source_path.relative_to(src)
+    # --- (1)+(2) PRE-COPY SOURCE INVENTORY ------------------------------
+    # The symlink/reparse refusal fires here, and what survives is the
+    # SINGLE AUTHORITY for every comparison below: the copy loop, the
+    # post-copy source re-inventory, the staging equality and the final
+    # post-promotion verification are all measured against this one
+    # mapping, never against each other.
+    source_inventory, inventory_errors = _build_inventory(src)
+    n_files = sum(1 for e in source_inventory.values() if not e.is_dir)
+    n_dirs = len(source_inventory) - n_files
+    total_bytes = sum(e.size or 0 for e in source_inventory.values())
+
+    def _summary(*, source_stable: bool | None = None,
+                 staging_matches_source: bool | None = None,
+                 dest_matches_source: bool | None = None
+                 ) -> ArchiveInventorySummary:
+        return ArchiveInventorySummary(
+            n_files=n_files, n_dirs=n_dirs, total_bytes=total_bytes,
+            source_stable=source_stable,
+            staging_matches_source=staging_matches_source,
+            dest_matches_source=dest_matches_source)
+
+    def _abandon_partial(errs: list[str]) -> list[str]:
+        """Discard the in-progress copy (best effort) and disclose a
+        removal that itself failed. Only ever called BEFORE promotion —
+        see the cleanup asymmetry in this function's docstring."""
+        cleanup = _remove_archive_partial(partial)
+        if cleanup is not None:
+            errs.append(cleanup)
+        return errs
+
+    if inventory_errors:
+        return _report(False, _abandon_partial(inventory_errors),
+                       inventory=_summary())
+
+    # Directories come from the inventory rather than implicitly from a
+    # file's parent mkdir, so an EMPTY source directory is reproduced too;
+    # the staging equality below is an exact-set proof and would otherwise
+    # refuse an honest run that happens to contain one.
+    for rel in sorted(r for r, e in source_inventory.items() if e.is_dir):
+        try:
+            (partial / rel).mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            errors.append(f"{rel}: directory could not be created in the "
+                          f"in-progress copy: {type(exc).__name__}: {exc}")
+
+    for rel in sorted(r for r, e in source_inventory.items() if not e.is_dir):
+        source_path = src / rel
+        dest_path = partial / rel
         try:
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             dest_path.write_bytes(source_path.read_bytes())
@@ -1494,13 +1743,44 @@ def archive_sealed_run(runs_dir: str | Path,
     if errors:
         # NOTHING is left at the final name, so the next attempt is a
         # plain retry rather than a manual cleanup.
-        cleanup = _remove_archive_partial(partial)
-        if cleanup is not None:
-            errors.append(cleanup)
-        return ArchiveReport(
-            ok=False, status=_ARCHIVE_FAILED, run_dir_name=src.name,
-            source_dir=str(src), dest_dir=str(dest), files=tuple(files),
-            errors=tuple(errors))
+        return _report(False, _abandon_partial(errors), files=files,
+                       inventory=_summary())
+
+    # --- (3) POST-COPY SOURCE RE-INVENTORY ------------------------------
+    # The sealed run directory must not have changed WHILE it was being
+    # archived. The per-file recheck cannot see this: each file is
+    # re-read immediately after its own copy, so a file mutated after its
+    # recheck (while a LATER file was still being copied) passes every
+    # per-file test and still ends up archived as bytes the sealed run no
+    # longer holds.
+    source_after, source_after_errors = _build_inventory(src)
+    source_diff = _inventory_diff(
+        source_inventory, source_after,
+        other_label="the post-copy source re-inventory")
+    if source_after_errors or source_diff:
+        errors.extend(source_after_errors)
+        errors.extend(source_diff)
+        errors.append(
+            "the sealed run directory CHANGED while it was being archived; "
+            "the copy proves nothing about it and was discarded")
+        return _report(False, _abandon_partial(errors), files=files,
+                       inventory=_summary(source_stable=False))
+
+    # --- (4) STAGING INVENTORY ------------------------------------------
+    # Exact equality of the `.partial` tree against the source inventory.
+    # The per-file recheck already covers each copied file's bytes; this
+    # is the SET-level proof — an extra entry, a missing entry or a
+    # divergent directory shape has no per-file recheck to fail.
+    staging_inventory, staging_errors = _build_inventory(partial)
+    staging_diff = _inventory_diff(
+        source_inventory, staging_inventory,
+        other_label="the staging (.partial) tree")
+    if staging_errors or staging_diff:
+        errors.extend(staging_errors)
+        errors.extend(staging_diff)
+        return _report(False, _abandon_partial(errors), files=files,
+                       inventory=_summary(source_stable=True,
+                                          staging_matches_source=False))
 
     # THE PROMOTION. One rename, after every file is copied and proven.
     # `dest` was checked non-existent above, so this creates it rather
@@ -1512,15 +1792,36 @@ def archive_sealed_run(runs_dir: str | Path,
     except OSError as exc:
         errors.append(f"verified archive copy could not be promoted to its "
                       f"final name ({type(exc).__name__}: {exc}): {dest}")
-        cleanup = _remove_archive_partial(partial)
-        if cleanup is not None:
-            errors.append(cleanup)
-        return ArchiveReport(
-            ok=False, status=_ARCHIVE_FAILED, run_dir_name=src.name,
-            source_dir=str(src), dest_dir=str(dest), files=tuple(files),
-            errors=tuple(errors))
+        return _report(False, _abandon_partial(errors), files=files,
+                       inventory=_summary(source_stable=True,
+                                          staging_matches_source=True))
 
-    return ArchiveReport(
-        ok=True, status=_ARCHIVE_OK,
-        run_dir_name=src.name, source_dir=str(src), dest_dir=str(dest),
-        files=tuple(files), errors=())
+    # --- (5) FINAL INVENTORY, AFTER PROMOTION ---------------------------
+    # A third full content pass, this time over the archive OF RECORD.
+    # Everything verified so far was verified at a path that no longer
+    # exists; this is the only step that speaks about the directory
+    # anybody will actually read.
+    final_inventory, final_errors = _build_inventory(dest)
+    final_diff = _inventory_diff(
+        source_inventory, final_inventory,
+        other_label="the promoted archive directory")
+    if final_errors or final_diff:
+        errors.extend(final_errors)
+        errors.extend(final_diff)
+        # THE ONE FAILURE PATH THAT DELETES NOTHING. `dest` is no longer
+        # an in-progress copy — it has been promoted — so it is EVIDENCE
+        # of a divergence and is retained for adjudication, never
+        # silently removed or "repaired".
+        errors.append(
+            f"the promoted archive directory FAILED its final inventory "
+            f"verification and is deliberately RETAINED as evidence (not "
+            f"deleted, not repaired): {dest}")
+        return _report(False, errors, files=files,
+                       inventory=_summary(source_stable=True,
+                                          staging_matches_source=True,
+                                          dest_matches_source=False))
+
+    return _report(True, (), files=files,
+                   inventory=_summary(source_stable=True,
+                                      staging_matches_source=True,
+                                      dest_matches_source=True))

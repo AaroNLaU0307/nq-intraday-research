@@ -1252,28 +1252,60 @@ def _kc1_kc2(formal, ctx, problems, verdicts) -> None:
                 "key_claims.KC1.era_union_size_not_locked_l3:"
                 + repr(len(published_days)) + "!=" + repr(l3_pop))
             v1 = "FAIL"
+        # WHOLE-DAY removal groups only (Codex r2 #1 self-lock fix):
+        # adr14_warmup_days are deliberately NOT here — the frozen NA policy
+        # keeps them IN the L3 sample (features NA, day retained), so they
+        # legitimately appear in the published eras. The exclusion list is
+        # CLOSED and by name, never "everything under removed_sets".
+        _KC_WHOLE_DAY_REMOVALS = ("zero_bar_days",
+                                  "scheduled_early_close_days",
+                                  "rth_missing_gt_10pct_days")
         excluded: set = set()
         removed = funnel.get("removed_sets")
         if isinstance(removed, Mapping):
-            for dates in removed.values():
+            for group in _KC_WHOLE_DAY_REMOVALS:
+                dates = removed.get(group)
                 if isinstance(dates, (list, tuple)):
                     excluded.update(str(d) for d in dates)
-        anchors = locked.get("anchors")
-        if isinstance(anchors, Mapping):
-            for node in anchors.values():
-                md = (node.get("missing_dates")
-                      if isinstance(node, Mapping) else None)
-                if isinstance(md, (list, tuple)):
-                    # anchor-missing days stay IN the sample (NA policy);
-                    # only whole-day REMOVALS may not reappear. Anchors are
-                    # collected but bound through KC2 counts, not exclusion.
-                    pass
         overlap = sorted(excluded & published_days)
         if overlap:
             problems.append(
                 "key_claims.KC1.removed_day_republished:"
                 + ",".join(overlap[:5]))
             v1 = "FAIL"
+        # Arbitrary fake-day detection (Codex r2 #1 second half): a swapped-
+        # in day that is not a plausible member of the locked universe must
+        # refuse — every published day must parse as an ISO date, fall
+        # inside the locked Development window, and be a weekday. Residual
+        # (an in-window weekday HOLIDAY) is stated, not hidden: date-set
+        # IDENTITY is bound by the evidence channel (KC3 — structural.eras
+        # is reconciled against the EV-1 reducers rebuilt from parsed
+        # records), so KC1's plausibility screen and KC3's membership
+        # binding compose to close the swap.
+        window = locked.get("development_window")
+        w_lo = (window.get("start_inclusive")
+                if isinstance(window, Mapping) else None)
+        w_hi = (window.get("end_exclusive")
+                if isinstance(window, Mapping) else None)
+        if not (isinstance(w_lo, str) and isinstance(w_hi, str)):
+            problems.append("key_claims.KC1.locked_window_unusable")
+            v1 = "FAIL"
+        else:
+            import datetime as _dt
+            bad: list = []
+            for d in published_days:
+                try:
+                    parsed = _dt.date.fromisoformat(d)
+                except Exception:
+                    bad.append(d)
+                    continue
+                if not (w_lo <= d < w_hi) or parsed.weekday() >= 5:
+                    bad.append(d)
+            if bad:
+                problems.append(
+                    "key_claims.KC1.implausible_published_day:"
+                    + ",".join(sorted(bad)[:5]))
+                v1 = "FAIL"
     else:
         problems.append("key_claims.KC1.published_eras_missing")
         v1 = "FAIL"

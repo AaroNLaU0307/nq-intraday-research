@@ -53,7 +53,7 @@ ATTEMPTS_ROOT = GOVERNED_RUNS_ROOT / "attempts"
 # Baseline collected-test count at the SA-6 audit commit. The pytest gate
 # requires the suite to still COLLECT at least this many tests, so a muted
 # or filtered run cannot satisfy the gate with a handful of tests (F-09).
-MIN_COLLECTED_TESTS = 2519                  # S0 closeout: floor = current suite
+MIN_COLLECTED_TESTS = 2536                  # S0 closeout: floor = current suite
 
 # External read-only tooling (packet §9 gate 4). Invoked as a subprocess;
 # the tool itself only reads repository files.
@@ -1114,8 +1114,7 @@ def render_s0_report(result, *, expected_governance=None,
             kc = _op_kc.verify_key_claims(
                 formal,
                 _op_kc.ResearchClaimsContext(
-                    assertions_bytes=Path(
-                        KEY_CLAIMS_ASSERTIONS_PATH).read_bytes(),
+                    assertions_bytes=_read_key_claims_assertions(),
                     ruled_methods=methods,
                     evidence_problems=list(ev_flat),
                     disk_report=None),
@@ -1203,8 +1202,24 @@ SPREAD_COST_TABLE_SHA256 = (
 #: F-2 key-claims independent source: the locked compare-only assertions
 #: file. Module-level so the synthetic e2e can point it at a synthetic
 #: assertions file matching its synthetic market; production leaves it at
-#: the locked artifact (same discipline as RUNS_ROOT).
+#: the locked artifact (same discipline as RUNS_ROOT). Codex r2: the BYTES
+#: are sha256-pinned exactly like the spread table — the KC gate's
+#: independent source cannot drift silently. Tests patch BOTH names.
 KEY_CLAIMS_ASSERTIONS_PATH = REPO / "S0_INPUT_PREFLIGHT.json"
+KEY_CLAIMS_ASSERTIONS_SHA256 = (
+    "9d6dd1c15602f6188e0b85754118dd51eb81b65cd60a086a133dee1bb14debd6")
+
+
+def _read_key_claims_assertions() -> bytes:
+    """The locked assertions bytes, sha256-verified against the pin.
+    A drifted file is a hard refusal, never a silent acceptance."""
+    raw = Path(KEY_CLAIMS_ASSERTIONS_PATH).read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != KEY_CLAIMS_ASSERTIONS_SHA256:
+        raise RunGateError(
+            "key-claims assertions file drifted from its pin: "
+            f"{digest} != {KEY_CLAIMS_ASSERTIONS_SHA256}")
+    return raw
 
 
 class _BindableDayLabelResolver:
@@ -2710,8 +2725,7 @@ class RealChain:
         kc = _op.verify_key_claims(
             disk_formal,
             _op.ResearchClaimsContext(
-                assertions_bytes=Path(
-                    KEY_CLAIMS_ASSERTIONS_PATH).read_bytes(),
+                assertions_bytes=_read_key_claims_assertions(),
                 # the VALIDATED config's methods — never a fresh source
                 # resolution after exposure (M6.1.6 discipline).
                 ruled_methods=prepared.config.methods,
