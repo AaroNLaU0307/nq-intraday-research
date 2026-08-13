@@ -151,9 +151,12 @@ def test_ledger_incident_row_is_inside_the_table_with_quantity_zero():
     assert "IR-28d" in incident[0]
 
 
-def test_ledger_cumulative_exposure_is_zero_and_final():
+def test_ledger_cumulative_exposure_matches_the_reveal_and_is_final():
+    """Updated at S0-T001 reveal (2026-08-14): the cumulative line now
+    carries the conservative reveal count from the outcome-blind manifest
+    — the pin tracks the TRUE current state, it is never relaxed."""
     lines = [ln for ln in _ledger_lines() if ln.strip()]
-    assert lines[-1].strip() == "累计 exposure：0"
+    assert lines[-1].strip().startswith("累计 exposure：1575")
 
 
 def test_ledger_incident_row_precedes_the_cumulative_line():
@@ -250,8 +253,27 @@ def test_ledger_blind_closeout_row_generated_not_seen():
     assert "raw_viewed_relation_count=0" in row
     cells = [c.strip() for c in row.split("|")]
     assert cells[4] == "0", cells
-    lines = [ln for ln in _ledger_lines() if ln.strip()]
-    assert lines[-1].strip() == "累计 exposure：0"
+
+
+def test_ledger_reveal_row_carries_manifest_binding():
+    """The RESULT_REVEAL_STARTED row must bind the conservative count to
+    the outcome-blind manifest (sha) and was committed BEFORE any research
+    value entered the model context."""
+    table = _table_block()
+    rows = [r for r in table if "RESULT_REVEAL_STARTED" in r]
+    assert len(rows) == 1, table
+    row = rows[0]
+    assert "raw exposure count=1575" in row
+    assert ("02381b025316548994b6c2862abd40d8dca37722a6826b3fd6209189"
+            "de0d1e16") in row
+    cells = [c.strip() for c in row.split("|")]
+    assert cells[4] == "1575", cells
+    manifest = REPO / "ops" / "S0_T001_REVEAL_EXPOSURE_MANIFEST.jsonl"
+    body = manifest.read_bytes()
+    import hashlib
+    assert hashlib.sha256(body).hexdigest() == (
+        "02381b025316548994b6c2862abd40d8dca37722a6826b3fd6209189de0d1e16")
+    assert len(body.decode("utf-8").splitlines()) == 1575
 
 
 def test_auth_packet_records_the_completed_lifecycle():
