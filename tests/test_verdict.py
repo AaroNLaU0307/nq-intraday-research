@@ -12,7 +12,8 @@ def vi(engine="E1", platform="topstep", p5=-100.0, med_c=-50.0, med_s=-50.0,
        p95=-10.0, feasible=True) -> VerdictInput:
     return VerdictInput(p5_cons=p5, median_cons=med_c, median_stress=med_s,
                         p95_cons=p95, feasible=feasible,
-                        platform=platform, engine=engine)
+                        platform=platform, engine=engine,
+                        channel="theta_0.5")
 
 
 def test_clean_go():

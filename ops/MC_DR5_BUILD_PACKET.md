@@ -114,3 +114,80 @@ pool/length 语义（bootstrap 加法参数默认行为不变性）；H2 判定�
 registry 语法；3. grid 重放 harness＋feasibility 机器判定电池建成并经
 Codex 验收；4. Codex 对本候选 PASS；5. Aaron 以新语法发出精确 MC 运行
 授权。在此之前 `run_real_mc` 保持确定性拒绝。
+
+
+---
+
+## 10.【R2 现势（Codex findings 轮）——与上文冲突处以本节为准】
+
+授权：`START_MC_DR5_CONSUMER_ENGINEERING_R2_CODEX_FINDINGS`（Aaron 勘误：
+seed-11=笔误按冻结 7/13/31；θ 按 S0 §7 L133 机械修复；M 轴不发明定义）。
+
+### 10.1 六项 R2 修复（全部落地＋行为测试）
+
+1. **θ 硬绑定**（PHASE B）：S0 §7 L133"θ 主 0.5、副 0.3，不得事后升格"
+   ——`PRIMARY_THETA_CHANNEL`/`SECONDARY_THETA_CHANNEL` 源自
+   study.THETA_PRIMARY/SECONDARY；VerdictInput 携带 channel；epistemic
+   门与 verdict 门双层拒绝 θ.3（全绿也拒）；seal 绑定
+   primary_theta_channel；**R1 packet 把 θ 列为 Aaron 决策系误判，撤回**。
+2. **外部保管链**（PHASE C）：`expected_file_sha256` 必需；键集=全 14
+   文件（含 manifest.jsonl）精确恒等；逐文件 64-hex 校验；payload＋内部
+   manifest 同步改写攻击夹具必败；缺一/多一/未钉 manifest/换型全拒。
+3. **GRID 事实审计**（PHASE D）：R1 的 `YES` **显式撤回**——
+   `CAN_GRID_SAMPLES_BE_RECONSTRUCTED_FROM_CURRENT_SEAL=NO`、
+   `MISSING_AUTHORITY=EXACT_PER_DAY_DAY_STRATA`、
+   `GRID_REPLAY_STATUS=BLOCKED`（分层抽样需全池逐日 year×vol×event
+   归层；封存件仅有 headline 已抽日/层级计数/digest；DAY_STRATA 当时
+   withheld；digest 不可反演；读原始数据重建被禁）。
+4. **收敛/feasibility 生产化**（PHASE E）：`convergence_from_evidence`
+   全部从 RunEvidence 计算（run 身份/prepared 摘要/轴/规模校验、per-axis
+   漂移图精确键集、seed verdict 从实际结果算出、MCSE 从实际样本）；
+   `FeasibilityEvidence` 从 lifecycle 输出机械计算（§10.4 三项的直读：
+   整数仓位未全跳过＋交易机会存在＋payout 路径实际实现——必要条件读法，
+   Codex 可收紧）；调用方布尔与手工全绿对象全面废除（gate 签名无
+   feasible 参数，静态测试钉）。**M 轴=DECISION_REQUIRED_M_AXIS**：MC §5
+   把 M 钉为穷尽枚举起始相位（≈21），"加倍 M"无唯一冻结语义——生产
+   不可组装合法 M-doubled run，收敛因此结构性不可满足直至 Aaron 裁决
+   （测试同时证明：机制在合成 M 夹具下端到端可用，语义未被发明）。
+5. **深度不可变**（PHASE F）：FrozenTradePath（由 contracts 动态生成的
+   frozen/slots 镜像，mtm=tuple）；快照递归冻结（dict→MappingProxy、
+   list→tuple）；prepare 后改源 dict/list/快照零影响；prepared 内部
+   赋值/leaf 变异全部抛错；`prepared_digest` seal 前后复核相等。
+6. **aleatoric 诚实边界**（PHASE G）：`run_conditional_aleatoric` 绑定
+   **单一固定世界**（长度=全模板槽、成员⊆通道池、world_digest 入结果）；
+   历史序列平铺已删除；**total predictive（B×M）未实现 → R9 降
+   PARTIAL**。
+
+### 10.2 现势状态（诚实）
+
+```
+MC_CONSUMER_BUILD=PARTIAL
+MC_INPUT_BUNDLE_READY=YES        # 十项电池＋外部 custody 完整
+GRID_SAMPLES_READY=NO            # BLOCKED（缺 EXACT_PER_DAY_DAY_STRATA）
+GRID_REPLAY_STATUS=BLOCKED
+DECISION_REQUIRED_M_AXIS=YES
+MC_REAL_RUN_READY=NO
+MC_EXECUTED=NO
+MC_REGISTRY_EVENTS_APPENDED=NO
+STRATEGY_BUILD_STARTED=NO
+```
+
+PARTIAL 依据（PHASE H PASS 条件对照）：θ 门✓、外部 custody✓、深度不可变✓、
+收敛/MCSE/feasibility 证据化✓、conditional aleatoric✓——但 **GRID replay
+来源不完整（BLOCKED）**、**total predictive 未实现**、**M 轴语义未决**，
+三者任一都排除 PASS。
+
+### 10.3 GRID/DAY_STRATA 三选一（Aaron 决策包，不替选）
+
+| 选项 | 内容 | trial/exposure | 封存不可变性 | 可比性 |
+|---|---|---|---|---|
+| **A** | 接受 S0-T001 无法提供正式 deployable-region grid replay；MC 保持 HOLD（Checkpoint-0 主判定不受阻，但 H1 资格层永缺） | 零新 trial、零新 exposure | 封存件不动 | 完整——不引入任何新工件 |
+| **B** | 授权一个**独立记账**的数据重建/补充封存流程：从原始 Development 数据重导 DAY_STRATA（逐日 year×vol×event），以新 registry 事件＋新封存目录记账 | 零 trial 消耗；**结构性数据访问需登记**（同 incident 纪律；零 outcome 查看可设计为盲式） | 原封存件不动；新工件独立封存＋哈希；与原 run 的绑定=commit＋seeds＋day 池交叉核验 | 需披露"补充工件晚于揭盲生成"——审计上弱于运行时封存 |
+| **C** | 授权新 S0 trial（S0-T002）：运行时正式封存 DAY_STRATA/GRID_SAMPLES（handoff schema 已在，formal_sealable 条件已备） | **消耗 S0-T002 编号**＋一次完整真实运行；exposure 依盲式纪律可控 | 运行时密封=最强 | 最强，但 S0-T002 结果与 T001 存在重复检验语义需预注册处理 |
+
+### 10.4 真实 MC 最小授权条件（更新）
+
+1. Aaron 三选一裁决（10.3）；2. Aaron 裁 M 轴加倍语义（或裁定以 B/K 双轴
+＋M=穷尽枚举豁免替代——同为语义级裁决）；3. `MC_RUN_AUTHORIZED` registry
+语法批准＋实现；4. Codex 对本候选 PASS；5. 精确 MC 运行授权。
+不满足前 `run_real_mc` 保持确定性拒绝；本轮不生成任何授权语句。

@@ -31,6 +31,11 @@ class VerdictInput:
     feasible: bool          # integer sizing / frequency / payout path OK (MC-confirmed)
     platform: str           # 'lucid' | 'topstep'
     engine: str             # 'E1' | 'E2'
+    # DR-5 R2: the oracle selection channel this combo's statistics were
+    # computed on. Checkpoint-0 accepts ONLY the frozen primary channel
+    # (S0 §7 L133: θ 主 0.5、副 0.3，不得事后升格) — enforced by the
+    # consumer gate; carried here so the seal candidate binds it.
+    channel: str            # e.g. 'theta_0.5'
 
 
 @dataclass(frozen=True)
