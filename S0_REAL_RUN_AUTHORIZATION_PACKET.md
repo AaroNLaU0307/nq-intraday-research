@@ -545,3 +545,30 @@ APPROVAL_PROVENANCE_IN_A12_DIRECT_HASH_SET=NO
 已具名接受（删除前强制异介质备份，首跑前不要求）；合成 A→F 全绿 ≠
 真实路径已验证（首次真实 S0 是磁盘校验器/KC 闸/L-5 归档的第一次真实
 执行）；`real_s0_authorization` 保持 `REAL_S0_NOT_AUTHORIZED`。
+
+
+---
+
+## 13.【2026-08-14 现势追加 —— S0-T001 首次真实运行 COMPLETED（盲式收口）】
+
+本包 §10 语句已由 Aaron 于 2026-08-14 首次有效发出（registry 事件 13，
+commit `876c1b74131b4ab1a89dce433ecce646ba481f8c`）。真实运行当日完成：
+
+```
+TERMINAL=stage=F_SEALED ok=True exposure_consumed=True kind=success incident=none archive=archive_ok
+RUN_DIR=C:\Users\Aaron\quant-data\itsf-runs\runs\S0-T001_20260813T170432Z
+ARCHIVE_DIR=C:\Users\Aaron\quant-data\itsf-runs-archive\S0-T001_20260813T170432Z
+RESULT_VALUES_VIEWED=NO
+RESEARCH_CONCLUSION=SEALED_NOT_REVEALED
+```
+
+§0 状态机走完 `RUN_AUTHORIZED → RUNNING → COMPLETED`；S0-T001 编号已
+消耗（exposure slot sequence 1，registry RUN_STARTED 行）。盲式独立复核
+（inventory/链重放/validator 全过、run==archive 逐字节）见
+`ops/S0_T001_POST_RUN_ATTESTATION.md`；researcher exposure 仍 0
+（EXPOSURE_LEDGER.md 2026-08-14 行）。
+
+**本包生命周期就此闭合**：§11 排除清单继续有效——揭盲、MC、策略 build、
+S0-T002 等每一项都需独立申请与 Aaron 独立批准；揭盲口令为
+`START_S0_T001_RESULT_REVEAL_AND_DECISION_COUNCIL_AFTER_BLIND_CLOSEOUT`
+（仅 Aaron 主动发送才生效）。

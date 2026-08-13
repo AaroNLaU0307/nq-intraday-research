@@ -218,3 +218,47 @@ def test_auth_packet_keeps_history_and_carries_the_attestation_layer():
     assert "唯一有效授权语句" in text          # original §10 survives
     assert "OUTPUT_ROOTS_CREATED=YES" in text  # new attestation layer
     assert "REAL_S0_NOT_AUTHORIZED" in text
+
+
+# ---------------------------------------------------------------------------
+# S0-T001 blind post-run closeout (2026-08-14)
+# ---------------------------------------------------------------------------
+POST_RUN = REPO / "ops" / "S0_T001_POST_RUN_ATTESTATION.md"
+
+
+def test_post_run_attestation_is_blind_and_complete():
+    text = _read(POST_RUN)
+    assert "RESULT_VALUES_VIEWED=NO" in text
+    assert "RESEARCH_CONCLUSION=SEALED_NOT_REVEALED" in text
+    assert "RUN_ARCHIVE_INVENTORY_EQUAL=YES" in text
+    assert "CHAIN_VALID=YES" in text
+    assert "validate_formal_payload problems=0" in text
+    assert "MC_READY_GATE=REFUSED_AS_DESIGNED" in text
+    assert "876c1b74131b4ab1a89dce433ecce646ba481f8c" in text
+
+
+def test_ledger_blind_closeout_row_generated_not_seen():
+    """The 2026-08-14 row must say outcomes WERE generated and were NOT
+    seen — never 'zero outcomes generated' (that wording belongs to the
+    2026-08-10 incident row alone) — and cumulative stays 0."""
+    table = _table_block()
+    rows = [r for r in table if "盲式收口" in r]
+    assert len(rows) == 1, table
+    row = rows[0]
+    assert "outcome_generated=YES" in row
+    assert "outcome_seen=NO" in row
+    assert "raw_viewed_relation_count=0" in row
+    cells = [c.strip() for c in row.split("|")]
+    assert cells[4] == "0", cells
+    lines = [ln for ln in _ledger_lines() if ln.strip()]
+    assert lines[-1].strip() == "累计 exposure：0"
+
+
+def test_auth_packet_records_the_completed_lifecycle():
+    text = _read(AUTH_PACKET)
+    assert "SEALED_NOT_REVEALED" in text
+    assert "S0-T001_20260813T170432Z" in text
+    # the reveal passphrase is recorded but the packet still says it only
+    # works when Aaron sends it
+    assert ("START_S0_T001_RESULT_REVEAL_AND_DECISION_COUNCIL_"
+            "AFTER_BLIND_CLOSEOUT") in text
