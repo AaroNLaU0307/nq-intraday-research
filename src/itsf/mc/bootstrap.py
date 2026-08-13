@@ -36,36 +36,56 @@ EXPECTED_BLOCK_DAYS = 5.0
 
 
 def stationary_bootstrap_indices(n: int, expected_block: float = EXPECTED_BLOCK_DAYS,
-                                 *, rng: np.random.Generator) -> np.ndarray:
+                                 *, rng: np.random.Generator,
+                                 pool_n: int | None = None) -> np.ndarray:
     """Politis–Romano stationary bootstrap index sequence of length n.
 
     Geometric block lengths with mean `expected_block`: at each step a new
     block starts with probability p = 1/expected_block at a uniform random
     index; otherwise the previous index advances by one with CIRCULAR wrap
-    (index n-1 continues to 0).  # frozen: MC1 SS5 stationary bootstrap
+    (the last pool index continues to 0).  # frozen: MC1 SS5 stationary
+    bootstrap
+
+    `pool_n` (DR-5 consumer round, ADDITIVE) separates the SEQUENCE length
+    from the POOL size: indices are drawn over [0, pool_n) while the
+    output has length n — the MC SS4.1 template-filling case, where the
+    24-month template slot count differs from the historical day-pool
+    size. Defaults to `n`, which is byte-identical to the historical
+    single-argument behaviour (same rng call sequence, same output).
     """
     if n < 0:
         raise ValueError("n must be >= 0")
     if expected_block <= 0:
         raise ValueError("expected_block must be > 0")
+    if pool_n is None:
+        pool_n = n
+    if pool_n <= 0 and n > 0:
+        raise ValueError("pool_n must be >= 1 when n > 0")
     if n == 0:
         return np.empty(0, dtype=np.int64)
     p = 1.0 / float(expected_block)
     out = np.empty(n, dtype=np.int64)
-    current = int(rng.integers(0, n))          # first block starts uniform
+    current = int(rng.integers(0, pool_n))     # first block starts uniform
     out[0] = current
     for t in range(1, n):
         if rng.random() < p:                   # geometric restart
-            current = int(rng.integers(0, n))
+            current = int(rng.integers(0, pool_n))
         else:
-            current = (current + 1) % n        # circular wrap
+            current = (current + 1) % pool_n   # circular wrap
         out[t] = current
     return out
 
 
 def build_worlds(day_ids: Sequence[str], B: int, master_seed: int,
-                 expected_block: float = EXPECTED_BLOCK_DAYS) -> list[list[str]]:
-    """Build B bootstrap worlds as day-id sequences (each of length len(day_ids)).
+                 expected_block: float = EXPECTED_BLOCK_DAYS,
+                 *, length: int | None = None) -> list[list[str]]:
+    """Build B bootstrap worlds as day-id sequences.
+
+    `length` (DR-5 consumer round, ADDITIVE) is the OUTPUT sequence length
+    — the number of template slots to fill (MC SS4.1: bootstrap decides
+    the outcome sequence placed on the template's trading days, i.e. ALL
+    of them). Defaults to len(day_ids) — byte-identical to the historical
+    behaviour for every existing caller.
 
     Child seeds are derived via SeedSequence(master_seed).spawn(B); world b
     uses Generator(PCG64(child_b)).  # frozen: MC1 SS5 seed derivation, PCG64
@@ -93,11 +113,15 @@ def build_worlds(day_ids: Sequence[str], B: int, master_seed: int,
             "RESEARCH_BOOTSTRAP_SEEDS) — IR DR-02: the only seeds any "
             f"research-path RNG may derive from; got {seed}")
     days = list(day_ids)
-    n = len(days)
+    pool_n = len(days)
+    out_n = pool_n if length is None else int(length)
+    if out_n <= 0:
+        raise ValueError("length must be >= 1")
     children = np.random.SeedSequence(seed).spawn(B)
     worlds: list[list[str]] = []
     for child in children:
         rng = np.random.Generator(np.random.PCG64(child))
-        idx = stationary_bootstrap_indices(n, expected_block, rng=rng)
+        idx = stationary_bootstrap_indices(out_n, expected_block, rng=rng,
+                                           pool_n=pool_n)
         worlds.append([days[i] for i in idx])
     return worlds
