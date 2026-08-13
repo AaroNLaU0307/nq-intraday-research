@@ -46,6 +46,43 @@ def test_ir28_has_exactly_one_current_definition():
     assert "DECIDED_BY_EXPLICIT_FABLE_DELEGATION" in current[0]
 
 
+# --- R5.1.1 (C2): each IR has exactly ONE current section; the only extra
+# IR header the file may carry is the ONE explicitly-archived IR-28. -------
+
+def _headers(prefix: str) -> list[str]:
+    return [line for line in _read(RESOLUTIONS).splitlines()
+            if line.startswith(prefix)]
+
+
+def test_each_ir_number_has_exactly_one_current_section():
+    assert len(_headers("### IR-25")) == 1
+    assert len(_headers("### IR-26")) == 1
+    assert len(_headers("### IR-27")) == 1
+    ir28 = _headers("### IR-28")
+    current = [h for h in ir28 if "HISTORICAL_SUPERSEDED" not in h]
+    historical = [h for h in ir28 if "HISTORICAL_SUPERSEDED" in h]
+    assert len(current) == 1, ir28
+    assert len(historical) == 1, ir28
+
+
+def test_resolutions_has_no_duplicated_content_window():
+    """The R5-era python-splice edits twice left byte-identical duplicate
+    blocks behind (IR-26/27 sections; the orphaned P1/P2+IR-25-erratum
+    table). This guard fails on ANY repeated 20-line window of substance,
+    so the whole drift class is caught structurally rather than by header
+    greps alone."""
+    lines = _read(RESOLUTIONS).splitlines()
+    seen: dict[str, int] = {}
+    for i in range(len(lines) - 19):
+        window = "\n".join(lines[i:i + 20])
+        if len(window.strip()) <= 200:
+            continue
+        assert window not in seen, (
+            f"lines {seen[window] + 1} and {i + 1} start identical "
+            "20-line blocks — an accidental duplication survived")
+        seen[window] = i
+
+
 def test_ir28_every_other_header_is_marked_superseded():
     headers = _ir28_headers()
     assert len(headers) >= 2, "the archived R2/R3 proposal section vanished"

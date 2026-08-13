@@ -6,15 +6,18 @@
   commit（Codex 逐轮 HOLD 的窄修复链）：
 
 ```
-COMMITS_AFTER_BASELINE=5   # f54d05a → 0e352e9 → 3e3cc1f → 0bd3b21 → 594bca5（R5.1 候选为第 6 个）
-FILES_CHANGED=37           # bcdf8f36..594bca5（git diff --shortstat 机械复算）
-INSERTIONS=21201
-DELETIONS=8924
+COMMITS_AFTER_BASELINE=7   # f54d05a → 0e352e9 → 3e3cc1f → 0bd3b21 → 594bca5 → 999b494 → 本候选（R5.1.1 纯文档）
+FILES_CHANGED=39           # bcdf8f36..本候选（最终 staged tree 机械复算，含本文件）
+INSERTIONS=22076
+DELETIONS=8927
 ```
 
-（以上四值为 `git rev-list --count bcdf8f36..594bca5` 与
-`git diff --shortstat bcdf8f36..594bca5` 的机械输出，覆盖至上一候选；
-R5.1 候选自身的 diff 见终端汇报的 `git show --stat`。）
+（口径【R5.1.1 更正，Codex 裁定采纳】：四值覆盖**至本候选自身**——
+FILES/INSERTIONS/DELETIONS 为 `git diff --shortstat --cached bcdf8f36`
+对最终 staged tree 的机械输出（staged tree 即候选 commit 的树），
+COMMITS 为父候选累计数＋1；写入后重新暂存复算确认稳定，commit 后再以
+`git diff --shortstat bcdf8f36..HEAD` 逐项复核相等。不再使用旧的
+"统计到上一候选、当前候选另见终端"口径。）
 
 - **diff 范围**：`git diff bcdf8f36..<候选>`＝全部变更（五工程车道＋主代理
   集成＋三轮 Codex 修复＋测试＋本文件）。
@@ -478,3 +481,53 @@ DR5_MC_CONSUMER=ABSENT
 POST_S0_STRATEGY_BUILD_STARTED=NO
 AWAITING_CODEX_LIMITED_FINAL_REVIEW=YES
 ```
+
+## 16. R5.1.1 纯文档终局（Codex 限定终审事实记录＋候选事实勘误；第七候选）
+
+授权：`START_S0_DOC_FINAL_AND_OPERATIONS_PREPARATION`（本节为其 PHASE C，
+纯文档；生产代码与测试行为零变更，`tests/test_governance_docs.py` 仅新增
+结构测试）。
+
+**Codex 对 `999b494` 的独立验收事实（照录）**：
+
+```
+CODEX_LIMITED_ENGINEERING_REVIEW=PASS
+CODEX_FULL_SUITE_REPRODUCED=2615 passed / 0 failed / 0 skipped
+CODEX_FULL_SUITE_DURATION=411.34s
+SCANS=CLEAN
+FROZEN_HASHES=PASS
+REGISTRY_UNCHANGED=YES
+RUNS_DIR=ABSENT
+```
+
+边界区分（防止误读）：
+
+- **B1–B3 工程行为已由 Codex 独立复核通过**（sensitivity 结构＋字节重算
+  测试、DR-5 边界/链路/默认拒绝测试、治理结构测试、全电池复跑）——本轮
+  对它们**零改动**；
+- **B4 是本轮修正的候选事实勘误**（`999b494` 包头仍统计到父提交
+  `594bca5` 的 5/37/21201/8924；现势口径与最终数字见 §0 区块）；
+- sensitivity 为 formal disclosure 通道、DR-5 为 machine-readable
+  boundary——均非已存在的生产 consumer：`DR5_MC_CONSUMER=ABSENT`、
+  `DR5_STATUS=PARTIAL_BY_RULING`；
+- `REAL_RUN_READY=NO`、`REAL_RUN_AUTHORIZED=NO` 不变。
+
+**本轮文档修正清单（全部 doc-only）**：
+
+1. §0 事实块改为最终候选口径（Codex HOLD 唯一阻断项）；
+2. `IMPLEMENTATION_RESOLUTIONS.md` 删除三处历史 python 切片编辑意外遗留
+   的重复块：IR-26 重复段（旧 236-254 行，与 123-141 字节级相同）、IR-27
+   重复段（旧 255-283 行，与 142-170 字节级相同）、无标题孤儿块（旧
+   215-234 行，为原 IR-25 段 P1/P2 表＋勘误的字节级副本）。删除后现势
+   IR-25/26/27/28 各恰一份＋一份显式 `HISTORICAL_SUPERSEDED` IR-28 存档
+   （302→233 行）。**不改变任何裁决内容或现势语义；删除意外重复不是撤销
+   历史裁决**；
+3. `tests/test_governance_docs.py` 新增结构证明：每个 IR 现势定义唯一
+   （IR-25/26/27/28 计数各=1＋恰一份历史 IR-28）＋任意 20 行实质内容
+   窗口不得重复（防同类漂移复发的通用守卫）。
+
+**本轮验收（doc-only 口径，如实）**：治理文档专项测试全绿；收集数上升
+（新增结构测试所致），`MIN_COLLECTED_TESTS=2615` 为下限语义且钉文件不在
+本轮允许修改清单，floor 不动；SCANS/冻结哈希/diff-check/registry/exposure
+哈希逐项复核；**本轮无生产代码变化，未重跑 2615 全电池（如实声明，
+Codex 已于 `999b494` 独立复跑通过）**。
