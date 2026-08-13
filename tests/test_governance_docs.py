@@ -162,7 +162,24 @@ def test_ledger_cumulative_exposure_matches_the_reveal_and_is_final():
 def test_ledger_incident_row_precedes_the_cumulative_line():
     text = _read(LEDGER)
     assert text.index("INCIDENT_STRUCTURAL_TEST_LOAD") \
-        < text.index("累计 exposure：0")
+        < text.index("累计 exposure：")
+
+
+def test_ledger_reveal_completed_row_is_zero_quantity_crossref():
+    table = _table_block()
+    rows = [r for r in table if "RESULT_REVEAL_COMPLETED" in r]
+    assert len(rows) == 1, table
+    cells = [c.strip() for c in rows[0].split("|")]
+    assert cells[4] == "0", cells
+
+
+def test_reveal_attestation_exists_and_is_value_free():
+    text = _read(REPO / "ops" / "S0_T001_RESULT_REVEAL_ATTESTATION.md")
+    assert "RESULT_VALUES_VIEWED=YES" in text
+    assert "RAW_EXPOSURE_COUNT=1575" in text
+    assert "RECOMMENDATION=PROCEED_TO_STRATEGY_SPEC" in text
+    assert "MC_STARTED=NO" in text
+    assert "STRATEGY_BUILD_STARTED=NO" in text
 
 
 # ---------------------------------------------------------------------------
