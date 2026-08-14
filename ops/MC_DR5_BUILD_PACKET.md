@@ -346,3 +346,130 @@ base 归约，不重开任意 Boolean。
 FABLE_MEASURED=车道 S1 25 项（自改后）＋S2（见其回执）＋主代理 43 项；全套件见终报
 CODEX_NOT_YET_REPRODUCED=YES
 ```
+
+## 13.【R2.3 现势（evidence hardening＋M 枚举＋GRID-B 准备轮）——与上文冲突处以本节为准】
+
+授权：`START_MC_DR5_R2_3_EVIDENCE_HARDENING_M_ENUMERATION_AND_GRID_B_PREPARATION`
+（Aaron："你看看有没有必要做吧，审核提示词"→Fable 审核 ACCEPT→Aaron：
+"那现在执行吧"）。提示词内两项裁定行随逐字发送即批准并已登记为
+**IR-29**（见 IMPLEMENTATION_RESOLUTIONS.md）：M 轴有限支撑豁免加倍＋
+GRID 采 Option B（本轮仅工具构建）。**feasibility 阈值明确未批**。
+车道租约：S1＝`tests/test_mc_r2_3_evidence.py`（20 项，独占新文件）；
+S2＝`src/itsf/mc/day_strata_supplement.py`＋`tests/test_mc_day_strata_supplement.py`
+（27 项，独占新文件）；主代理＝consumer.py 集成＋既有测试文件
+（provenance/consumer/r2_2_integration 已归主代理"既有测试"）＋治理文档。
+
+### 13.1 红字证明（修复前 @`a327f1e` 实测）
+
+| 探针 | @`a327f1e` 行为 | R2.3 修复后 |
+|---|---|---|
+| PROBE1：调用方持有 world_means list，构造后原地 append/篡改 | **成立**——EpistemicResult 存的是调用方 list 的别名，构造后突变使 world_means 与已存 p5 分道（自认证被绕过） | `_canonical_float_tuple` 在 `__post_init__` 第一步把样本折叠为纯 float tuple（断别名；bool/非数/非有限拒 `epistemic_samples_invalid`），派生量复算基于折叠后副本 |
+| PROBE2：`FeasibilityEvidence(n_paths=-5, payout_realized_share=3.7, …)` | **成立**——聚合标量为构造器直收，负数/超界/凭空声明全接受 | 聚合层重建：唯一入口 `from_observations`（B×M 条 `FeasibilityObservation` 原始层，逐条验证 `feasibility_observation_invalid`；计数=expected_n 且 (world,phase) 无重复；六项聚合量从原始层复算，失配拒 `feasibility_derived_stats_mismatch`）＋绑定八元组（digest/platform/engine/scenario/channel/B/M/master_seed）由 `EpistemicResult.__post_init__` 交叉核验（`feasibility_binding_mismatch`） |
+
+上游化效应：R2.1 的 digest/channel 内层篡改反例现于**构造点**即拒
+（provenance 两测试相应上移；收敛层内外绑定检查保留为纵深防御）。
+`RunEvidence.__post_init__` 深冻结 results（MappingProxyType＋tuple 对）。
+
+### 13.2 IR-29 落地（M 轴）
+
+`DOUBLING_AXES={B,K}`；`M_AXIS_DOUBLING_STATUS=
+"RESOLVED_BY_IR29_EXHAUSTIVE_SUPPORT_CERTIFICATE"`。收敛证据新增必要件
+`ExhaustiveSupportCertificate`（绑定 prepared_digest＋支撑序列）：
+doubled_by_axis 现 "M" 条目→`m_axis_doubling_forbidden_by_ir29`；证书
+缺失→`m_support_certificate_missing`；证书六类违规各有专码（wrong_calendar/
+duplicate_phase/incomplete/extra/order_violation/execution_mismatch）。
+B/K 义务不变；K 维持 `k_axis_evidence_blocked_grid_replay`（终端拒绝——
+证书有效时 K 拒绝可达性已被测试钉定）。
+`verdict_and_seal_from_evidence` 签名相应扩为五参（签名扫描测试已更新）。
+
+### 13.3 Feasibility 逐指标状态（FEASIBILITY_METRICS_STATUS，代码内 MappingProxyType）
+
+| 指标 | 状态 |
+|---|---|
+| payout_realization / payout_count / n0_skip_rate / ambiguous_share / exhaustion_share | COMPUTED |
+| winning_days（台账逐日余额差）/ days_profit_ge_150（冻结 Lucid $150 地板） | COMPUTED |
+| contract_cap_hits（事件流无逐日 n） | PENDING_ENGINEERING |
+| e2_over_budget_days（需 record 级管道） | PENDING_ENGINEERING |
+| qualifying_distribution_vs_payout_requirements | PENDING_ENGINEERING |
+
+原始层已为 PENDING 三项预留 None 字段（None=PENDING_ENGINEERING 显式语义，
+非 0 伪装）。
+
+### 13.4 GRID Option B 工具（S2 车道交付；BUILT，未执行）
+
+`src/itsf/mc/day_strata_supplement.py`：`SUPPLEMENT_ID="MC-DS-S001"`、
+schema `mc_day_strata_supplement.v1`；`build_day_strata_supplement` 纯函数
+（4 键行、禁研究值字段即拒、日集与冻结全池精确相等、5 键绑定头）；
+`seal_supplement` .partial 暂存后原子落位；`authorize_supplement` **默认
+无条件拒绝**（`SupplementNotAuthorized`），`run_supplement_production`
+gate-first 同拒。**本轮零真实执行、零真实数据读取。**
+
+### 13.5 MC-DS-S001 执行授权模板（模板≠授权；本轮不生成任何可用授权语句）
+
+未来 Aaron 如决定执行补充封存，需逐字发送（占位符由 Aaron 填写，缺一即无效）：
+
+```
+START_MC_DS_S001_DAY_STRATA_SUPPLEMENT_EXECUTION
+supplement_id: MC-DS-S001
+authorized_commit: <40-hex commit>
+output_root: <真实输出根路径>
+```
+
+本模板含未填占位符，**不构成授权**；default-refuse 工具在收到上述逐字
+语句并核验三字段前维持拒绝。真实 MC 运行授权另需 §10.4 全部条件，两者
+互不替代。
+
+### 13.6 Feasibility 决策包 v3（分平台呈列；派生 vs 裁量显式分栏；取代 §12.3 表）
+
+**Lucid（冻结参数：qualifying_days_required=5；qualifying_day_min_profit_usd=$150，每次 payout 后重计）**
+
+| 门 | 候选阈值 | 性质 |
+|---|---|---|
+| payout 路径 | 世界内模拟实际实现 payout 的世界占比 ≥X%（X∈{25,50}）；最弱读法＝≥1 次实现。**注意：`payout_realized_share>0` 只证明"模拟内出现过 payout 事件"，不得表述为"已确认可行"** | X 为裁量；"≥1 次"为最弱下界（派生自"路径存在"字面） |
+| 频率 | 周期内 `days_profit_ge_150`≥5 的世界占比 ≥X% | 5×$150 为冻结派生；X 为裁量 |
+| 整数仓位 | n=0 跳过率 ≤Y%（候选 25/50 仅为区间示例，非推导值） | **纯裁量** |
+
+**Topstep XFA（冻结参数：≥3 交易日（每日≥1 笔）＋ largest_winning_day/total ≤0.40）**
+
+| 门 | 候选阈值 | 性质 |
+|---|---|---|
+| payout 路径 | 同 Lucid 读法，consistency 0.40 约束下的实现占比 | 0.40 为冻结派生；占比阈值裁量 |
+| 频率 | 周期内 winning_days≥3 的世界占比 ≥X% | 3 为冻结派生；X 为裁量 |
+| 整数仓位 | 同 Lucid | **纯裁量** |
+
+规则不变：Aaron 未择定前，`gate_status="DECISION_REQUIRED"` 冻结在
+FeasibilityEvidence 上，归约步确定性拒绝，VerdictInput 不可构造，
+CHECKPOINT0_VERDICT_REACHABLE=NO。
+
+### 13.7 现势状态
+
+```
+EPISTEMIC_SELF_AUTHENTICATION=HARDENED_R2_3（别名断绝＋原始观测层）
+FEASIBILITY_EVIDENCE_STATUS=OBSERVATION_LAYER_REBUILT（7 COMPUTED / 3 PENDING_ENGINEERING；gate=DECISION_REQUIRED）
+M_SUPPORT_CERTIFICATE_STATUS=LANDED（IR-29；DOUBLING_AXES={B,K}）
+GRID_B_TOOLING_STATUS=BUILT_DEFAULT_REFUSE
+GRID_B_EXECUTED=NO
+GRID_REPLAY_STATUS=BLOCKED（待 MC-DS-S001 真实封存）
+FEASIBILITY_GATE=DECISION_REQUIRED
+CHECKPOINT0_VERDICT_REACHABLE=NO
+MC_REAL_RUN_READY=NO
+MC_EXECUTED=NO
+STRATEGY_BUILD_STARTED=NO
+```
+
+### 13.8 证据等级
+
+```
+FABLE_MEASURED=S1 车道 20 项＋S2 车道 27 项＋provenance 25 项＋MC 家族合计 106 项；全套件与地板重钉见本节终态行
+CODEX_NOT_YET_REPRODUCED=YES
+```
+
+### 13.9 终态（最终字节树 fresh 实测）
+
+```
+FULL_SUITE=2761 passed / 0 failed / 0 error（389.04s，最终树）
+MIN_COLLECTED_TESTS 重钉=2714→2761（scripts/s0_real_run.py＋tests/test_s0_runner.py 双 pin，floor 子测试 6/6）
+registry sha256 前缀=ee9da33f（逐字不变）；exposure sha256 前缀=382182bf（逐字不变）
+S0-T001 封存 14 文件 run==archive 全等；真实输出根零写入
+禁令扫描：代码/测试 delta 无 S0-T002/真实根路径/授权口令 token
+```

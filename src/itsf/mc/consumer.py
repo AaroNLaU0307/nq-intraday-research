@@ -72,8 +72,14 @@ PRIMARY_VERDICT_GRID = frozenset(
     for platform, _p in PRIMARY_COMBOS for engine in ENGINES)
 # frozen: S0 SS10.4 — the four mutually exclusive verdict categories
 VERDICT_CATEGORIES = frozenset({"STOP", "GO", "beta", "alpha"})
-# frozen: MC SS5 rule (a) — B, M and K are EACH doubled separately
-DOUBLING_AXES = frozenset({"B", "M", "K"})
+# MC SS5 rule (a) as amended by IR-29 (Aaron, R2.3 named prompt): B and K
+# keep their doubling obligation; M — the exhaustively enumerated start-
+# phase set — is EXEMPT from doubling and instead owes an
+# EXHAUSTIVE_SUPPORT_CERTIFICATE (complete/unique/each-phase-exactly-once
+# over the prepared calendar's legal first-month offsets).
+DOUBLING_AXES = frozenset({"B", "K"})
+M_AXIS_RULING = ("FINITE_SUPPORT_EXHAUSTIVE_ENUMERATION_EXEMPT_FROM_"
+                 "DOUBLING (IR-29, R2.3)")
 # frozen: MC SS4.1 synthetic template calendar window
 TEMPLATE_START = "2026-08-01"
 TEMPLATE_END = "2028-07-31"
@@ -117,13 +123,11 @@ class MCNotConverged(RuntimeError):
     """MC SS5 convergence rules not satisfied — verdicts are refused."""
 
 
-# frozen: MC SS5 — M is the EXHAUSTIVELY ENUMERATED start-phase count
-# (first template month, ≈21; "非 200"). "Doubling M" has NO unique frozen
-# meaning for an exhaustive enumeration, so the M axis of convergence rule
-# (a) is DECISION_REQUIRED and CANNOT be assembled in production — the
-# convergence evidence path refuses without it, which keeps every real
-# Checkpoint-0 verdict structurally unreachable until Aaron rules.
-M_AXIS_DOUBLING_STATUS = "DECISION_REQUIRED_M_AXIS"
+# HISTORICAL (R2.1/R2.2): "doubling M" had no frozen meaning and the axis
+# was DECISION_REQUIRED. RESOLVED by IR-29 (R2.3): M is exempt from
+# doubling and owes an ExhaustiveSupportCertificate instead — see
+# M_AXIS_RULING and convergence_from_evidence.
+M_AXIS_DOUBLING_STATUS = "RESOLVED_BY_IR29_EXHAUSTIVE_SUPPORT_CERTIFICATE"
 
 
 # Deeply immutable canonical mirror of TradePathRecord (R2 PHASE F): the
@@ -700,6 +704,13 @@ def _paths_for_world(prepared: PreparedMCInput, world: Sequence[str],
     return out
 
 
+# frozen: platform_params lucidflex_50k payouts.qualifying_day_min_profit
+# _usd = 150 (每次批准 payout 后重置重计) — the ledger's daily balance
+# delta is the mechanical read of a day's net profit (fee events also move
+# the balance; disclosed derivation, no invention).
+QUALIFYING_DAY_MIN_PROFIT_USD = 150.0
+
+
 def _lifecycle_stats(prepared: PreparedMCInput, platform: str,
                      paths_by_day: dict, start_offset: int) -> dict:
     cfg = orch.LifecycleConfig(platform=platform,
@@ -707,9 +718,26 @@ def _lifecycle_stats(prepared: PreparedMCInput, platform: str,
     res = orch.run_lifecycle(cfg, list(prepared.calendar.days),
                              paths_by_day, start_offset=start_offset)
     rep = res.ledger_report
+    payout_count = 0
+    winning_days = 0
+    days_ge_150 = 0
+    prev_balance = None
+    for ev in res.events:
+        if ev.payout_gross > 0.0:
+            payout_count += 1
+        if prev_balance is not None:
+            delta = ev.balance - prev_balance
+            if delta > 0.0:
+                winning_days += 1
+            if delta >= QUALIFYING_DAY_MIN_PROFIT_USD:
+                days_ge_150 += 1
+        prev_balance = ev.balance
     return {
         "monthly_ev": float(rep["prop_operating_ev_monthly"]),
         "payout_realized": float(rep["payout_cash_total"]) > 0.0,
+        "payout_count": payout_count,
+        "winning_days": winning_days,
+        "days_profit_ge_150": days_ge_150,
         "skips_n0": int(res.skips_n0),
         "exhausted": bool(res.terminated_by_exhaustion),
         "n_offered": len(paths_by_day),
@@ -725,38 +753,169 @@ def _lifecycle_stats(prepared: PreparedMCInput, platform: str,
 # unreachable (see epistemic_go_gate_input).
 FEASIBILITY_GATE_STATUS = "DECISION_REQUIRED"
 
+# R2.3 PHASE D: per-metric readiness — replaces the blanket YES.
+FEASIBILITY_METRICS_STATUS = MappingProxyType({
+    "payout_realization": "COMPUTED",
+    "payout_count": "COMPUTED",
+    "n0_skip_rate": "COMPUTED",
+    "ambiguous_share": "COMPUTED",
+    "exhaustion_share": "COMPUTED",
+    "winning_days": "COMPUTED",              # ledger daily balance delta
+    "days_profit_ge_150": "COMPUTED",        # frozen Lucid qualifying floor
+    "contract_cap_hits": "PENDING_ENGINEERING",   # no per-day n on events
+    "e2_over_budget_days": "PENDING_ENGINEERING",  # needs record-level pipe
+    "qualifying_distribution_vs_payout_requirements":
+        "PENDING_ENGINEERING",
+})
+
+
+def _nonneg_int(v, allow_none=False):
+    if v is None and allow_none:
+        return True
+    return isinstance(v, int) and not isinstance(v, bool) and v >= 0
+
+
+@dataclass(frozen=True, slots=True)
+class FeasibilityObservation:
+    """ONE raw feasibility observation for one (world, start-phase) path
+    (R2.3 PHASE D) — the atoms every FeasibilityEvidence scalar is
+    recomputed from. `contract_cap_hits` / `e2_over_budget_days` are None
+    while their event plumbing is PENDING_ENGINEERING — never a forged 0.
+    """
+    world_index: int
+    phase_offset: int
+    offered: int
+    skips_n0: int
+    payout_realized: bool
+    payout_count: int
+    winning_days: int
+    days_profit_ge_150: int
+    exhausted: bool
+    ambiguous_days: int
+    contract_cap_hits: object = None
+    e2_over_budget_days: object = None
+
+    def __post_init__(self):
+        ok = (_nonneg_int(self.world_index)
+              and _nonneg_int(self.phase_offset)
+              and _nonneg_int(self.offered)
+              and _nonneg_int(self.skips_n0)
+              and _nonneg_int(self.payout_count)
+              and _nonneg_int(self.winning_days)
+              and _nonneg_int(self.days_profit_ge_150)
+              and _nonneg_int(self.ambiguous_days)
+              and isinstance(self.payout_realized, bool)
+              and isinstance(self.exhausted, bool)
+              and _nonneg_int(self.contract_cap_hits, allow_none=True)
+              and _nonneg_int(self.e2_over_budget_days, allow_none=True)
+              and self.skips_n0 <= self.offered
+              and self.ambiguous_days <= self.offered)
+        if not ok:
+            raise MCInputError("feasibility_observation_invalid",
+                               f"world={self.world_index!r} "
+                               f"phase={self.phase_offset!r}")
+
+
+def _feasibility_derived(observations: tuple, expected_n: int) -> dict:
+    """The ONE derivation of every feasibility scalar from observations."""
+    if len(observations) != int(expected_n):
+        raise MCInputError(
+            "feasibility_observations_incomplete",
+            f"{len(observations)} observations != expected {expected_n}")
+    keys = [(o.world_index, o.phase_offset) for o in observations]
+    if len(set(keys)) != len(keys):
+        raise MCInputError("feasibility_observations_duplicate",
+                           "repeated (world, phase) observation")
+    n = len(observations)
+    offered = sum(o.offered for o in observations)
+    return {
+        "n_paths": n,
+        "payout_realized_share": (sum(1 for o in observations
+                                      if o.payout_realized) / n
+                                  if n else 0.0),
+        "total_skips_n0": sum(o.skips_n0 for o in observations),
+        "total_offered": offered,
+        "exhausted_share": (sum(1 for o in observations if o.exhausted) / n
+                            if n else 0.0),
+        "ambiguous_share": (sum(o.ambiguous_days for o in observations)
+                            / offered if offered else 0.0),
+    }
+
 
 @dataclass(frozen=True)
 class FeasibilityEvidence:
-    """MECHANICALLY computed feasibility METRICS (never a caller-declared
-    boolean; R2 PHASE E.5, re-scoped R2.1 PHASE G). Carries no `feasible`
-    property: the metric->boolean reduction rule is not frozen anywhere,
-    so it is DECISION_REQUIRED for Aaron — the R2 necessary-conditions
-    reading is retracted as a gate and preserved only as reported
-    metrics."""
+    """Feasibility METRICS recomputed from the COMPLETE immutable raw
+    observations (R2.3 PHASE D — no caller-declared scalar can exist:
+    `__post_init__` re-derives everything and refuses mismatches; a
+    removed, duplicated or tampered observation is caught by the same
+    derivation). Bound to prepared_digest + combo + scenario + theta +
+    B + M + seed. No `feasible` boolean exists anywhere: the reduction
+    rule stays DECISION_REQUIRED for Aaron."""
+    observations: tuple
+    expected_n: int
     n_paths: int
     payout_realized_share: float
     total_skips_n0: int
     total_offered: int
     exhausted_share: float
-    ambiguous_share: float            # share of consumed paths flagged
+    ambiguous_share: float
+    prepared_digest: str
+    platform: str
+    engine: str
+    scenario: str
+    channel: str
+    B: int
+    M: int
+    master_seed: int
     gate_status: str = FEASIBILITY_GATE_STATUS
 
+    def __post_init__(self):
+        obs = tuple(self.observations)
+        object.__setattr__(self, "observations", obs)
+        for o in obs:
+            if type(o) is not FeasibilityObservation:
+                raise MCInputError("feasibility_observation_invalid",
+                                   f"non-observation element {type(o)}")
+        want = _feasibility_derived(obs, self.expected_n)
+        for field_name, expected in want.items():
+            if getattr(self, field_name) != expected:
+                raise MCInputError(
+                    "feasibility_derived_stats_mismatch",
+                    f"{field_name}: declared "
+                    f"{getattr(self, field_name)!r} != derived "
+                    f"{expected!r}")
+        if self.gate_status != FEASIBILITY_GATE_STATUS:
+            raise MCInputError("feasibility_gate_status_invalid",
+                               self.gate_status)
+
     @staticmethod
-    def from_stats(stats: Sequence[Mapping]) -> "FeasibilityEvidence":
-        n = len(stats)
-        offered = sum(int(s["n_offered"]) for s in stats)
-        ambiguous = sum(int(s.get("n_ambiguous", 0)) for s in stats)
+    def from_observations(observations, expected_n, *, prepared_digest,
+                          platform, engine, scenario, channel, B, M,
+                          master_seed) -> "FeasibilityEvidence":
+        obs = tuple(observations)
+        d = _feasibility_derived(obs, expected_n)
         return FeasibilityEvidence(
-            n_paths=n,
-            payout_realized_share=(sum(1 for s in stats
-                                       if s["payout_realized"]) / n
-                                   if n else 0.0),
-            total_skips_n0=sum(int(s["skips_n0"]) for s in stats),
-            total_offered=offered,
-            exhausted_share=(sum(1 for s in stats if s["exhausted"]) / n
-                             if n else 0.0),
-            ambiguous_share=(ambiguous / offered if offered else 0.0))
+            observations=obs, expected_n=int(expected_n),
+            prepared_digest=prepared_digest, platform=platform,
+            engine=engine, scenario=scenario, channel=channel,
+            B=int(B), M=int(M), master_seed=int(master_seed), **d)
+
+
+def _canonical_float_tuple(values, what: str) -> tuple:
+    """R2.3 PHASE C/D: canonicalize a sample container to a PLAIN-FLOAT
+    tuple — breaking any aliasing with the caller's container — refusing
+    bools (a bool is not a sample), non-numerics and non-finite values."""
+    out = []
+    for x in values:
+        if isinstance(x, bool) or not isinstance(x, (int, float)):
+            raise MCInputError("epistemic_samples_invalid",
+                               f"{what}: non-numeric entry {x!r}")
+        f = float(x)
+        if not math.isfinite(f):
+            raise MCInputError("epistemic_samples_invalid",
+                               f"{what}: non-finite entry {x!r}")
+        out.append(f)
+    return tuple(out)
 
 
 def _epistemic_derived(world_means: tuple, within_world_ses: tuple,
@@ -831,6 +990,29 @@ class EpistemicResult:
     feasibility: FeasibilityEvidence
 
     def __post_init__(self):
+        # R2.3 PHASE D.1: CANONICALIZE FIRST — the samples become plain-
+        # float tuples on the instance BEFORE the first derivation, so a
+        # list-constructed instance shares no container with the caller
+        # and post-construction source mutation cannot diverge anything.
+        object.__setattr__(self, "world_means",
+                           _canonical_float_tuple(self.world_means,
+                                                  "world_means"))
+        object.__setattr__(self, "within_world_ses",
+                           _canonical_float_tuple(self.within_world_ses,
+                                                  "within_world_ses"))
+        if not self.world_means:
+            raise MCInputError("epistemic_samples_invalid",
+                               "world means empty")
+        # R2.3 PHASE D.2: canonical identity invariants.
+        for name, v in (("B", self.B), ("M", self.M),
+                        ("master_seed", self.master_seed)):
+            if isinstance(v, bool) or not isinstance(v, int) or v <= 0:
+                raise MCInputError("epistemic_identity_invalid",
+                                   f"{name}={v!r}")
+        if not isinstance(self.prepared_digest, str) \
+                or len(self.prepared_digest) != 64:
+            raise MCInputError("epistemic_identity_invalid",
+                               "prepared_digest not 64-hex")
         want = _epistemic_derived(self.world_means, self.within_world_ses,
                                   self.B)
         for field_name, expected in want.items():
@@ -840,6 +1022,20 @@ class EpistemicResult:
                     "epistemic_derived_stats_mismatch",
                     f"{field_name}: declared {got!r} != derived "
                     f"{expected!r} from the raw samples")
+        # R2.3 PHASE D.6: the feasibility evidence must be BOUND to this
+        # exact result identity — a foreign combo's observations refuse.
+        fe = self.feasibility
+        if type(fe) is not FeasibilityEvidence:
+            raise MCInputError("feasibility_binding_mismatch",
+                               "feasibility is not a FeasibilityEvidence")
+        binding = (fe.prepared_digest, fe.platform, fe.engine, fe.scenario,
+                   fe.channel, fe.B, fe.M, fe.master_seed)
+        own = (self.prepared_digest, self.platform, self.engine,
+               self.scenario, self.channel, self.B, self.M,
+               self.master_seed)
+        if binding != own:
+            raise MCInputError("feasibility_binding_mismatch",
+                               f"{binding} != {own}")
 
     @staticmethod
     def from_world_means(platform, engine, scenario, channel, world_means,
@@ -883,28 +1079,42 @@ def run_epistemic(prepared: PreparedMCInput, *, platform: str, engine: str,
     worlds = mc_bootstrap.build_worlds(day_ids, B, master_seed,
                                        length=n_slots)
     offsets = prepared.calendar.first_month_offsets
+    pdig = prepared_digest(prepared)
     world_means = []
     ses = []
-    all_stats = []
-    for world in worlds:
+    observations = []
+    for wi, world in enumerate(worlds):
         if len(world) != n_slots:
             raise MCInputError("world_length_mismatch",
                                f"{len(world)} != {n_slots}")
         paths = _paths_for_world(prepared, world, channel, engine, scenario)
-        stats = [_lifecycle_stats(prepared, platform, paths, off)
-                 for off in offsets]
-        all_stats.extend(stats)
-        evs = [s["monthly_ev"] for s in stats]
+        evs = []
+        for off in offsets:
+            s = _lifecycle_stats(prepared, platform, paths, off)
+            evs.append(s["monthly_ev"])
+            observations.append(FeasibilityObservation(
+                world_index=wi, phase_offset=int(off),
+                offered=s["n_offered"], skips_n0=s["skips_n0"],
+                payout_realized=s["payout_realized"],
+                payout_count=s["payout_count"],
+                winning_days=s["winning_days"],
+                days_profit_ge_150=s["days_profit_ge_150"],
+                exhausted=s["exhausted"],
+                ambiguous_days=s["n_ambiguous"]))
         world_means.append(float(np.mean(evs)))
         n = len(evs)
         ses.append(float(np.std(evs, ddof=1) / math.sqrt(n))
                    if n > 1 else 0.0)
+    feasibility = FeasibilityEvidence.from_observations(
+        observations, expected_n=B * len(offsets), prepared_digest=pdig,
+        platform=platform, engine=engine, scenario=scenario,
+        channel=channel, B=B, M=len(offsets), master_seed=master_seed)
     return EpistemicResult.from_world_means(
         platform, engine, scenario, channel, world_means,
         within_world_ses=ses, B=B, M=len(offsets),
         master_seed=master_seed,
-        prepared_digest_value=prepared_digest(prepared),
-        feasibility=FeasibilityEvidence.from_stats(all_stats))
+        prepared_digest_value=pdig,
+        feasibility=feasibility)
 
 
 @dataclass(frozen=True)
@@ -1020,9 +1230,9 @@ class RunEvidence:
     metadata is never trusted — `validate_inner_binding` cross-checks
     every claim against the INNER EpistemicResults, so changing an outer
     number cannot impersonate a differently-scaled run."""
-    run_label: str                # 'base' | 'double_B' | 'double_M' |
-    #                               'double_K' | 'seed_<n>'
-    axis: str                     # 'base' | 'B' | 'M' | 'K' | 'seed'
+    run_label: str                # 'base' | 'double_B' | 'double_K' |
+    #                               'seed_<n>'
+    axis: str                     # 'base' | 'B' | 'K' | 'seed'
     B: int
     M: int                        # start-phase count actually used
     K: int                        # grid repeats per seed (frozen 200)
@@ -1030,6 +1240,20 @@ class RunEvidence:
     prepared_digest: str
     results: Mapping              # combo_id -> (cons: EpistemicResult,
     #                                            stress: EpistemicResult)
+
+    def __post_init__(self):
+        # R2.3 PHASE D.3: DEEP-FREEZE the results mapping — a plain dict
+        # of [cons, stress] lists becomes an immutable mapping of tuples,
+        # sharing no container with the caller.
+        frozen = {}
+        for cid, pair in dict(self.results).items():
+            if not isinstance(pair, (tuple, list)) or len(pair) != 2:
+                raise MCInputError("run_evidence_inner_mismatch:combo",
+                                   f"{self.run_label}:{cid} not a "
+                                   "(cons, stress) pair")
+            frozen[cid] = (pair[0], pair[1])
+        object.__setattr__(self, "results",
+                           MappingProxyType(frozen))
 
     def validate_inner_binding(self) -> None:
         """R2.1 PHASE C: every OUTER field must agree with every INNER
@@ -1126,9 +1350,59 @@ def _check_run_provenance(base: RunEvidence, other: RunEvidence,
 BASE_MASTER_SEED = RESEARCH_BOOTSTRAP_SEEDS[0]        # 7
 
 
+@dataclass(frozen=True, slots=True)
+class ExhaustiveSupportCertificate:
+    """IR-29 (R2.3) — the M axis's convergence obligation: PROOF that the
+    exhaustively enumerated start-phase support was covered completely,
+    uniquely, and exactly once per phase, by every Primary combo, on the
+    SAME prepared calendar. Replaces "M doubling"; never a pseudo-2M."""
+    prepared_digest: str
+    support: tuple                    # the claimed start-phase offsets
+
+    def validate(self, base: RunEvidence,
+                 prepared: "PreparedMCInput") -> None:
+        if self.prepared_digest != prepared_digest(prepared):
+            raise MCInputError("m_support_wrong_calendar",
+                               "certificate bound to a different "
+                               "prepared input")
+        legal = tuple(prepared.calendar.first_month_offsets)
+        support = tuple(int(i) for i in self.support)
+        if len(set(support)) != len(support):
+            raise MCInputError("m_support_duplicate_phase",
+                               f"{support}")
+        missing = sorted(set(legal) - set(support))
+        extra = sorted(set(support) - set(legal))
+        if missing or extra:
+            raise MCInputError(
+                "m_support_incomplete" if missing else "m_support_extra",
+                f"missing={missing} extra={extra}")
+        if support != legal:
+            raise MCInputError("m_support_order_violation",
+                               f"{support} != legal enumeration {legal}")
+        # every phase executed exactly once by every Primary combo: each
+        # inner result's M is the actual offset count used, and its
+        # prepared digest binds it to the SAME calendar (offsets are part
+        # of the digest preimage) — so M == len(legal) proves one-pass
+        # exhaustive execution, and duplication cannot fake a "2M" (the
+        # duplicate would break the unique-support check above).
+        if base.M != len(legal):
+            raise MCInputError("m_support_execution_mismatch",
+                               f"base M={base.M} != |support|={len(legal)}")
+        for cid, (cons, stress) in base.results.items():
+            for r in (cons, stress):
+                if r.M != len(legal):
+                    raise MCInputError(
+                        "m_support_execution_mismatch",
+                        f"{cid}: inner M={r.M} != |support|={len(legal)}")
+
+
 def convergence_from_evidence(base: RunEvidence,
                               doubled_by_axis: Mapping,
-                              seed_runs: Mapping) -> ConvergenceReport:
+                              seed_runs: Mapping, *,
+                              m_support_certificate:
+                              "ExhaustiveSupportCertificate | None" = None,
+                              prepared: "PreparedMCInput | None" = None,
+                              ) -> ConvergenceReport:
     """Compute MC SS5 rules (a)-(d) FROM run evidence (R2 PHASE E,
     hardened R2.1 PHASE C). Validation order (so every violation surfaces
     with its OWN code):
@@ -1187,35 +1461,42 @@ def convergence_from_evidence(base: RunEvidence,
             f"base must run B={B_WORLDS_FROZEN}, K={K_PER_SEED_FROZEN}, "
             f"master_seed={BASE_MASTER_SEED}; got B={base.B}, "
             f"K={base.K}, seed={base.master_seed}")
-    # (3) per-axis reality rules over the SUPPLIED entries, DETERMINISTIC
-    # order M then K (the semantics-level blocker outranks the
-    # evidence-level one):
-    #     M — exhaustively enumerated, doubling semantics DECISION_REQUIRED;
-    #     K — grid replay BLOCKED, no actual K-doubled evidence can exist.
-    for axis in ("M", "K"):
-        if axis not in doubled_by_axis:
-            continue
-        if axis == "M":
-            raise MCInputError(
-                "m_axis_semantics_decision_required",
-                "M is the exhaustively enumerated start-phase set (MC "
-                "SS5, ~21); doubling it has no unique frozen meaning — "
-                "Aaron must rule (recommendation: finite-support "
-                "enumeration exempt from doubling)")
+    # (3) IR-29: M owes an EXHAUSTIVE SUPPORT CERTIFICATE, not a doubled
+    # run — an M entry in doubled_by_axis is a ruling violation; the
+    # certificate is validated against the prepared input's own legal
+    # enumeration (missing/extra/duplicate/order/wrong-calendar refuse).
+    if "M" in doubled_by_axis:
+        raise MCInputError(
+            "m_axis_doubling_forbidden_by_ir29",
+            "IR-29: M is exempt from doubling — supply an "
+            "ExhaustiveSupportCertificate instead")
+    if m_support_certificate is None or prepared is None:
+        raise MCInputError(
+            "m_support_certificate_missing",
+            "IR-29 requires an ExhaustiveSupportCertificate plus the "
+            "prepared input it binds to")
+    if type(m_support_certificate) is not ExhaustiveSupportCertificate:
+        raise MCInputError("m_support_certificate_missing",
+                           "wrong certificate type")
+    m_support_certificate.validate(base, prepared)
+    # (4) K — grid replay BLOCKED (GRID Option B tooling exists but the
+    # supplement is UNEXECUTED): no actual K-doubled evidence can exist
+    # and metadata may not impersonate it.
+    if "K" in doubled_by_axis:
         raise MCInputError(
             "k_axis_evidence_blocked_grid_replay",
-            "grid replay is BLOCKED (EXACT_PER_DAY_DAY_STRATA missing "
-            "from the seal) — no actual K-doubled evidence can exist "
-            "and metadata may not impersonate it")
-    # (4) axes-set completeness — reachable only when no K/M entry was
-    # supplied at all, i.e. the caller never even attempted them.
+            "grid replay is BLOCKED (EXACT_PER_DAY_DAY_STRATA supplement "
+            "MC-DS-S001 not yet executed) — no actual K-doubled evidence "
+            "can exist and metadata may not impersonate it")
+    # (5) axes-set completeness — reachable only when no K entry was
+    # supplied at all.
     if set(doubled_by_axis) != DOUBLING_AXES:
         raise MCInputError("doubling_axes_violation",
                            f"need exactly {sorted(DOUBLING_AXES)}, got "
                            f"{sorted(doubled_by_axis)}")
     raise AssertionError(
-        "unreachable: every legal axes-set carries an M entry and "
-        "refuses above until Aaron rules")
+        "unreachable: every legal axes-set carries a K entry and "
+        "refuses above until the GRID-B supplement executes")
 
 
 def _reduce_primary_from_base(base: RunEvidence) -> dict:
@@ -1240,7 +1521,10 @@ def _reduce_primary_from_base(base: RunEvidence) -> dict:
 def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
                                    base: RunEvidence,
                                    doubled_by_axis: Mapping,
-                                   seed_runs: Mapping) -> dict:
+                                   seed_runs: Mapping,
+                                   m_support_certificate:
+                                   "ExhaustiveSupportCertificate | None"
+                                   = None) -> dict:
     """The ONLY path to a Checkpoint-0 verdict AND its seal candidate
     (R2.2 PHASE D — the sealed `primary` table and the mechanical verdict
     are read from the SAME internal reduction object; convergence is
@@ -1256,7 +1540,9 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
                            "prepared input")
     digest_before = prepared_digest(prepared)
     reduction = _reduce_primary_from_base(base)
-    convergence_from_evidence(base, doubled_by_axis, seed_runs)
+    convergence_from_evidence(base, doubled_by_axis, seed_runs,
+                              m_support_certificate=m_support_certificate,
+                              prepared=prepared)
     verdict = apply_verdict(dict(reduction))
     digest_after = prepared_digest(prepared)
     if digest_before != digest_after:

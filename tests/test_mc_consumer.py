@@ -448,7 +448,7 @@ def test_hand_built_verdict_inputs_have_no_callable_entry():
         assert "primary_inputs" not in params, name
     sig = inspect.signature(mcc.verdict_and_seal_from_evidence)
     assert set(sig.parameters) == {"prepared", "base", "doubled_by_axis",
-                                   "seed_runs"}
+                                   "seed_runs", "m_support_certificate"}
 
 
 # --- authorization gate -----------------------------------------------------

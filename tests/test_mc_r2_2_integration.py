@@ -87,9 +87,18 @@ def test_codex_ce1_forged_stats_refused_at_construction():
     mcse_ok=True must fail BEFORE any RunEvidence/convergence step —
     the type itself refuses (R2.2 PHASE C)."""
     B = 4
-    feas = mcc.FeasibilityEvidence(
-        n_paths=1, payout_realized_share=1.0, total_skips_n0=0,
-        total_offered=4, exhausted_share=0.0, ambiguous_share=0.0)
+    # R2.3: feasibility evidence is built from raw observations with a
+    # binding octuple matching the claimed result identity, so the forged
+    # derived stats below are the ONLY sin in this counterexample.
+    feas = mcc.FeasibilityEvidence.from_observations(
+        [mcc.FeasibilityObservation(
+            world_index=w, phase_offset=p, offered=1, skips_n0=0,
+            payout_realized=True, payout_count=1, winning_days=1,
+            days_profit_ge_150=0, exhausted=False, ambiguous_days=0)
+         for w in range(B) for p in range(2)],
+        expected_n=B * 2, prepared_digest="0" * 64, platform="topstep",
+        engine="E1", scenario="Conservative", channel=PRIMARY, B=B, M=2,
+        master_seed=7)
     with pytest.raises(mcc.MCInputError,
                        match="epistemic_derived_stats_mismatch"):
         mcc.EpistemicResult(

@@ -231,3 +231,34 @@ DR-5 状态更正（非裁决，事实陈述）：S0 侧 consumer（K-repeat/θ�
 标记）已上生产路径；**加倍循环与 §5 收敛判定按裁决原文归 MC 接线，故 DR-5
 端到端状态 = PARTIAL_BY_RULING**，`GRID_SAMPLES` 相应 withheld。任何"全部 DR
 已端到端闭合"的表述均以本行为准修正。
+
+### IR-29 M 轴有限支撑豁免＋GRID Option B 裁定（APPROVED_BY_AARON 2026-08-14，R2.3 具名提示词逐字发出即批准）
+
+**授权出处**：Aaron 逐字发送具名提示词
+`START_MC_DR5_R2_3_EVIDENCE_HARDENING_M_ENUMERATION_AND_GRID_B_PREPARATION`
+（内含两项裁定行 `M_AXIS=FINITE_SUPPORT_EXHAUSTIVE_ENUMERATION_EXEMPT_FROM_DOUBLING`、
+`GRID_OPTION=B_BLIND_SUPPLEMENTAL_DAY_STRATA_SEAL`），随后指示"那现在执行吧"。
+本记录只登记这两项已批裁定；**feasibility 阈值（BUILD_PACKET §12.3 决策包）明确
+未批，仍 DECISION_REQUIRED**。
+
+1. **IR-29a（M 轴）**：M＝首模板月起始相位的**有限、穷尽枚举支撑**（MC SS5
+   "非 200"），不是抽样轴——对已穷尽的有限支撑做"加倍收敛检验"无冻结语义，
+   故 M 轴**豁免加倍义务**；其覆盖性改由 `ExhaustiveSupportCertificate`
+   见证（绑定 prepared_digest；`validate()` 逐项核验：支撑与 prepared 日历
+   逐相位相等、无重复、无缺失、无多余、序不变、与实际执行一致，违规各有
+   专码 `m_support_wrong_calendar / m_support_duplicate_phase /
+   m_support_incomplete / m_support_extra / m_support_order_violation /
+   m_support_execution_mismatch`）。机制落地：`DOUBLING_AXES=frozenset({"B","K"})`；
+   `M_AXIS_DOUBLING_STATUS="RESOLVED_BY_IR29_EXHAUSTIVE_SUPPORT_CERTIFICATE"`
+   （取代 R2 的 `DECISION_REQUIRED_M_AXIS`）；doubled_by_axis 出现任何 "M"
+   条目即拒（`m_axis_doubling_forbidden_by_ir29`）；证书缺失即拒
+   （`m_support_certificate_missing`）。**B/K 两轴加倍义务不变**；K 轴在
+   MC-DS-S001 真实封存前维持 `k_axis_evidence_blocked_grid_replay`。
+2. **IR-29b（GRID 三选一采 Option B）**：以**盲式独立记账补充封存**
+   （supplement id `MC-DS-S001`，day-strata 分层表）补齐 GRID 重放所缺的
+   EXACT_PER_DAY_DAY_STRATA。本轮（R2.3）交付**仅限工具构建**：
+   `src/itsf/mc/day_strata_supplement.py`（纯函数构建＋.partial 暂存封存＋
+   `authorize_supplement` 默认无条件拒绝）。**真实执行不在本裁定内**——需
+   未来具名授权语句逐字绑定 exact commit＋supplement id `MC-DS-S001`＋输出
+   根，方可解除默认拒绝。执行前 GRID 状态维持 BLOCKED，Checkpoint-0 判定
+   维持结构性不可达（CHECKPOINT0_VERDICT_REACHABLE=NO）。

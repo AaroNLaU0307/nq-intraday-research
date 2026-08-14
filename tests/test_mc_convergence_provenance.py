@@ -15,10 +15,11 @@ Behaviour tests for the R2.1 contract on
      k_per_seed=200; first frozen seed 7; theta_0.5) or refuse with
      `frozen_scale_violation`; a doubled-B run must be an ACTUAL 2x.
   C. AXIS REALITY — production convergence is STRUCTURALLY unsatisfiable
-     today and the refusals are honest: the M axis is DECISION_REQUIRED
-     (`m_axis_semantics_decision_required` — M is the exhaustively
-     enumerated start-phase set, doubling has no frozen meaning), the K
-     axis has no grid-replay evidence
+     today and the refusals are honest: the M axis is RESOLVED by IR-29
+     (finite-support exhaustive enumeration — doubling it is FORBIDDEN,
+     `m_axis_doubling_forbidden_by_ir29`; coverage is instead witnessed
+     by an ExhaustiveSupportCertificate validated against the prepared
+     input), the K axis has no grid-replay evidence
      (`k_axis_evidence_blocked_grid_replay`, source matrix R12), and
      binding / scale / seed-identity violations surface with their OWN
      codes BEFORE the M/K refusals.
@@ -191,27 +192,24 @@ def _evidence(results, *, label="base", axis="base", B=2, M=None, K=200,
 def env():
     """Real small runs, built once: B=2/3/4 grids at the frozen seeds."""
     prepared = _prepare()
-    m4 = dataclasses.replace(prepared, calendar=_calendar(n_offsets=4))
     return SimpleNamespace(
         prepared=prepared,
         base=_grid_results(prepared, B=2, seed=7),
         b3=_grid_results(prepared, B=3, seed=7),
         b4=_grid_results(prepared, B=4, seed=7),
-        m4=_grid_results(m4, B=2, seed=7),
         s13=_grid_results(prepared, B=2, seed=13),
         s31=_grid_results(prepared, B=2, seed=31),
     )
 
 
 def _small_fixture(env):
-    """FULLY COHERENT small-scale evidence: binding clean, doubling exact
-    (B 2->4, M 2->4, K 200->400), seed set exactly {7,13,31}. Its ONLY
-    sin is scale — the frozen-scale seal must be what refuses it."""
+    """FULLY COHERENT small-scale evidence: binding clean, the IR-29
+    doubling axes {B, K} exactly doubled (B 2->4, K 200->400), seed set
+    exactly {7,13,31}. Its ONLY sin is scale — the frozen-scale seal
+    must be what refuses it."""
     base = _evidence(env.base)
     doubled = {
         "B": _evidence(env.b4, label="double_B", axis="B", B=4),
-        "M": _evidence(env.m4, label="double_M", axis="M",
-                       M=_inner_M(env.m4, fallback=4)),
         "K": _evidence(env.base, label="double_K", axis="K", K=400),
     }
     seeds = {
@@ -224,35 +222,69 @@ def _small_fixture(env):
 
 # --- synthetic production-scale evidence (no real 1000-world runs) ----------
 
-def _feas() -> mcc.FeasibilityEvidence:
-    return mcc.FeasibilityEvidence(
-        n_paths=8, payout_realized_share=1.0, total_skips_n0=0,
-        total_offered=16, exhausted_share=0.0, ambiguous_share=0.0)
+def _feas_for(*, B, M, digest, platform, engine, scenario, channel,
+              seed) -> mcc.FeasibilityEvidence:
+    """R2.3-aligned: feasibility evidence built from B*M synthetic raw
+    observations with the binding octuple matching the result it rides
+    on (EpistemicResult.__post_init__ cross-checks it)."""
+    obs = [mcc.FeasibilityObservation(
+        world_index=w, phase_offset=p, offered=2, skips_n0=0,
+        payout_realized=True, payout_count=1, winning_days=1,
+        days_profit_ge_150=0, exhausted=False, ambiguous_days=0)
+        for w in range(B) for p in range(M)]
+    return mcc.FeasibilityEvidence.from_observations(
+        obs, expected_n=B * M, prepared_digest=digest, platform=platform,
+        engine=engine, scenario=scenario, channel=channel, B=B, M=M,
+        master_seed=seed)
 
 
 def _from_world_means(world_means, ses, *, platform="topstep", engine="E1",
                       scenario="Conservative", channel=PRIMARY, B=None,
-                      seed=FIRST_SEED, M=2, digest=_PROD_DIGEST,
+                      seed=FIRST_SEED, M=2, digest=None,
                       feasibility=None):
-    """Direct call into the MCSE computing seam.
-
-    integration point: main agent aligns this call — R2.1 adds an M field
-    (start offsets actually used) to EpistemicResult; if the
-    from_world_means keyword lands under a different name, adjust HERE."""
-    kwargs = dict(
-        within_world_ses=tuple(ses),
-        B=len(world_means) if B is None else B,
-        master_seed=seed, prepared_digest_value=digest,
-        feasibility=feasibility if feasibility is not None else _feas())
-    if "M" in inspect.signature(
-            mcc.EpistemicResult.from_world_means).parameters:
-        kwargs["M"] = M
+    """Direct call into the MCSE computing seam (R2.3-aligned: the
+    feasibility evidence is built per call with a matching binding;
+    `digest` resolves the module global at CALL time so the real
+    prod-prepared digest is picked up once built)."""
+    digest = digest if digest is not None else _PROD_DIGEST
+    b = len(world_means) if B is None else B
+    if feasibility is None and b > 0:
+        feasibility = _feas_for(B=b, M=M, digest=digest,
+                                platform=platform, engine=engine,
+                                scenario=scenario, channel=channel,
+                                seed=seed)
     return mcc.EpistemicResult.from_world_means(
-        platform, engine, scenario, channel, tuple(world_means), **kwargs)
+        platform, engine, scenario, channel, tuple(world_means),
+        within_world_ses=tuple(ses), B=b, M=M, master_seed=seed,
+        prepared_digest_value=digest, feasibility=feasibility)
+
+
+_PROD_PREPARED = None
+
+
+def _prod_prepared():
+    """Module-scoped REAL prepared input whose calendar enumerates
+    exactly PROD_M start phases — the digest and the IR-29 support
+    certificate for the synthetic production-scale evidence both bind to
+    it (R2.3: a fabricated digest can no longer reach the K refusal)."""
+    global _PROD_PREPARED, _PROD_DIGEST
+    if _PROD_PREPARED is None:
+        _PROD_PREPARED = _prepare(calendar=_calendar(n_days=25,
+                                                     n_offsets=PROD_M))
+        _PROD_DIGEST = mcc.prepared_digest(_PROD_PREPARED)
+    return _PROD_PREPARED
+
+
+def _prod_certificate():
+    prepared = _prod_prepared()
+    return mcc.ExhaustiveSupportCertificate(
+        prepared_digest=mcc.prepared_digest(prepared),
+        support=tuple(prepared.calendar.first_month_offsets))
 
 
 def _prod_result(platform, engine, scenario, *, B=PROD_B, seed=FIRST_SEED,
                  M=PROD_M):
+    _prod_prepared()                 # ensure _PROD_DIGEST is the real one
     means = tuple(100.0 + float(i % 13) for i in range(B))
     ses = tuple(0.01 for _ in range(B))
     return _from_world_means(means, ses, platform=platform, engine=engine,
@@ -273,18 +305,15 @@ def _prod_grid(*, B=PROD_B, seed=FIRST_SEED, M=PROD_M):
 
 def _prod_fixture(*, base_seed=FIRST_SEED, base_K=PROD_K):
     """Frozen-scale-clean synthetic evidence (B=1000, M=21, K=200 unless a
-    test tampers a knob). Every outer field is coherent with its inner
-    results, and the doubled runs double EXACTLY one axis, so the only
-    refusals left are the structural M/K ones — unless a test breaks
-    exactly one thing on purpose."""
+    test tampers a knob), doubled on EXACTLY the IR-29 axes {B, K}. Every
+    outer field is coherent with its inner results, so the only refusal
+    left is the structural K one — unless a test breaks exactly one thing
+    on purpose (an M entry is now itself a violation, IR-29)."""
     base = _evidence(_prod_grid(seed=base_seed), label="base", axis="base",
                      B=PROD_B, M=PROD_M, K=base_K, seed=base_seed)
     doubled = {
         "B": _evidence(_prod_grid(seed=base_seed, B=2 * PROD_B),
                        label="double_B", axis="B", B=2 * PROD_B, M=PROD_M,
-                       K=base_K, seed=base_seed),
-        "M": _evidence(_prod_grid(seed=base_seed, M=2 * PROD_M),
-                       label="double_M", axis="M", B=PROD_B, M=2 * PROD_M,
                        K=base_K, seed=base_seed),
         "K": _evidence(_prod_grid(seed=base_seed), label="double_K",
                        axis="K", B=PROD_B, M=PROD_M, K=2 * base_K,
@@ -354,36 +383,29 @@ def test_relabelled_inner_B_refused_at_construction(env):
 
 
 def test_inner_prepared_digest_disagreement_refused(env):
-    """R2.1 A: one combo's inner results carry a foreign prepared_digest
-    while the outer field stays honest — refused at binding, never
-    laundered into the cross-run provenance comparison."""
-    _, doubled, seeds = _small_fixture(env)
-    results = dict(env.base)
-    c, s = results["topstep|E1|P2"]
-    results["topstep|E1|P2"] = (
-        dataclasses.replace(c, prepared_digest="0" * 64),
-        dataclasses.replace(s, prepared_digest="0" * 64))
-    base = _evidence(results)      # outer digest from the untampered cell
-    with pytest.raises(
-            mcc.MCInputError,
-            match="run_evidence_inner_mismatch:prepared_digest"):
-        mcc.convergence_from_evidence(base, doubled, seeds)
+    """R2.1 A, refusal moved UPSTREAM by R2.3: an inner result relabelled
+    with a foreign prepared_digest can no longer even be CONSTRUCTED —
+    its FeasibilityEvidence carries the original digest in the binding
+    octuple and EpistemicResult.__post_init__ cross-checks it, so
+    dataclasses.replace refuses at construction. The tampered object
+    never exists to be laundered into RunEvidence, and the convergence-
+    level inner/outer digest check remains as defense in depth."""
+    c, _ = env.base["topstep|E1|P2"]
+    with pytest.raises(mcc.MCInputError,
+                       match="feasibility_binding_mismatch"):
+        dataclasses.replace(c, prepared_digest="0" * 64)
 
 
 def test_secondary_channel_inner_results_refused(env):
-    """R2.1 A: convergence evidence is theta_0.5 ONLY (S0 §7 L133 — the
-    secondary channel is report-only, 不得事后升格). An inner result
-    relabelled theta_0.3 refuses with the channel binding code."""
-    _, doubled, seeds = _small_fixture(env)
-    results = dict(env.base)
-    c, s = results["topstep|E1|P2"]
-    results["topstep|E1|P2"] = (
-        dataclasses.replace(c, channel=SECONDARY),
-        dataclasses.replace(s, channel=SECONDARY))
-    base = _evidence(results)
+    """R2.1 A, refusal moved UPSTREAM by R2.3: convergence evidence is
+    theta_0.5 ONLY (S0 §7 L133 — the secondary channel is report-only,
+    不得事后升格). Relabelling an inner result theta_0.3 refuses at
+    CONSTRUCTION: the feasibility binding octuple still says theta_0.5,
+    so the upgraded-channel object can never exist."""
+    c, _ = env.base["topstep|E1|P2"]
     with pytest.raises(mcc.MCInputError,
-                       match="run_evidence_inner_mismatch:channel"):
-        mcc.convergence_from_evidence(base, doubled, seeds)
+                       match="feasibility_binding_mismatch"):
+        dataclasses.replace(c, channel=SECONDARY)
 
 
 def test_combo_key_platform_swap_refused(env):
@@ -479,33 +501,47 @@ def test_missing_doubling_axes_refused():
     for subset in ({}, {"B": doubled["B"]}):
         with pytest.raises(mcc.MCInputError,
                            match="doubling_axes_violation"):
-            mcc.convergence_from_evidence(base, subset, seeds)
+            mcc.convergence_from_evidence(
+                base, subset, seeds,
+                m_support_certificate=_prod_certificate(),
+                prepared=_prod_prepared())
 
 
-def test_m_axis_entry_refused_decision_required():
-    """R2.1 C: M is the EXHAUSTIVELY ENUMERATED start-phase set (MC SS5,
-    first template month, "非 200") — doubling it has no frozen meaning,
-    so ANY M entry refuses with the DECISION_REQUIRED code. With binding,
-    scales and seeds all clean at production scale this is the terminal
-    refusal: production convergence stays structurally unsatisfiable
-    until Aaron rules."""
-    assert mcc.M_AXIS_DOUBLING_STATUS == "DECISION_REQUIRED_M_AXIS"
+def test_m_axis_entry_refused_by_ir29():
+    """R2.1 C, re-ruled by IR-29 (R2.3 named prompt): M is the
+    EXHAUSTIVELY ENUMERATED start-phase set (MC SS5, first template
+    month, "非 200") — a finite fully-enumerated support has no
+    convergence question, so doubling it is FORBIDDEN outright and its
+    coverage is witnessed by the ExhaustiveSupportCertificate instead.
+    ANY M entry in doubled_by_axis refuses with the IR-29 code, before
+    the certificate is even consulted."""
+    assert (mcc.M_AXIS_DOUBLING_STATUS
+            == "RESOLVED_BY_IR29_EXHAUSTIVE_SUPPORT_CERTIFICATE")
+    assert mcc.DOUBLING_AXES == frozenset({"B", "K"})
     base, doubled, seeds = _prod_fixture()
+    doubled = dict(doubled)
+    doubled["M"] = _evidence(
+        _prod_grid(M=2 * PROD_M), label="double_M", axis="M", B=PROD_B,
+        M=2 * PROD_M, K=PROD_K, seed=FIRST_SEED)
     with pytest.raises(mcc.MCInputError,
-                       match="m_axis_semantics_decision_required"):
+                       match="m_axis_doubling_forbidden_by_ir29"):
         mcc.convergence_from_evidence(base, doubled, seeds)
 
 
 def test_k_axis_entry_refused_no_grid_replay_evidence():
-    """R2.1 C: no grid-replay harness exists (source matrix R12) — a K
-    entry is metadata impersonating evidence and refuses in its own
-    right. Reached with the M entry ABSENT, because an M entry refuses on
-    its own axis first."""
+    """R2.1 C: no grid-replay harness exists (source matrix R12; GRID
+    Option B supplement MC-DS-S001 is BUILT but not executed) — a K entry
+    is metadata impersonating evidence and refuses in its own right. With
+    a VALID IR-29 support certificate presented, this is the terminal
+    refusal: production convergence stays structurally unsatisfiable
+    until the day-strata supplement is actually sealed."""
     base, doubled, seeds = _prod_fixture()
-    doubled = {"B": doubled["B"], "K": doubled["K"]}
     with pytest.raises(mcc.MCInputError,
                        match="k_axis_evidence_blocked_grid_replay"):
-        mcc.convergence_from_evidence(base, doubled, seeds)
+        mcc.convergence_from_evidence(
+            base, doubled, seeds,
+            m_support_certificate=_prod_certificate(),
+            prepared=_prod_prepared())
 
 
 def test_seed_set_must_be_exactly_the_frozen_three():
