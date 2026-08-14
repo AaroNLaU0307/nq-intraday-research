@@ -473,3 +473,87 @@ registry sha256 前缀=ee9da33f（逐字不变）；exposure sha256 前缀=38218
 S0-T001 封存 14 文件 run==archive 全等；真实输出根零写入
 禁令扫描：代码/测试 delta 无 S0-T002/真实根路径/授权口令 token
 ```
+
+## 14.【N01+N02 现势（OPUS5 master 执行首段）——与上文冲突处以本节为准】
+
+授权：Codex 综合稿 `OPUS5_MC_TO_STRATEGY_V1`，Aaron 逐字发送
+`EXECUTE_OPUS5_MC_TO_STRATEGY_MASTER_V1` 启动。恢复锚与 canonical DAG 见
+`ops/MC_TO_STRATEGY_MASTER_PLAN.md`（**旧节点编号 V1/V1.1/V1.2 已作废**）。
+本段执行范围＝`N-PLAN → N01 → N02`＋准备 N00/N-D1 决策包，随后强制停止。
+
+### 14.1 架构变更（统一原子层取代三套 caller 输入）
+
+| 项 | 变更 |
+|---|---|
+| **D1 统一原子** | 新 `src/itsf/mc/atoms.py`：`SimulationPathObservation`（每 (world,phase) 一条）＋`ObservationSet`。world means／分位／within-world SE／feasibility 指标／M 证书／verdict inputs／conditional aleatoric／total predictive **全部由同一组原子归约**（旧的三套互不绑定 caller 输入已删）。`total_predictive` 落地即闭合 R9 PARTIAL |
+| **D2 身份绑定** | `lifecycle_config_digest`：`dataclasses.fields()` 机械枚举 LifecycleConfig 全字段＋**机械收割 61 个冻结常量**（orchestrator/lucid/topstep/account 的 UPPER_CASE 扫描，排除集为空且被测试钉死）＋轴／快照锚／版本锚，共 14 键前像；atom/container/cold-replay/seal **四层精确相等**；`combo` 降为显示标签（`combo_label_not_authoritative`） |
+| **D3 冷重放封存门** | 删除一切可序列化的 `match=True`；`verdict_and_seal_from_evidence` 每次调用从 pinned prepared bytes＋config 前像＋RNG 规范**冷启动重放全部生命周期**，比完整键集与逐原子 digest，失配 `cold_replay_divergence`；receipt 只是审计描述，改成"全绿"也绕不过（有测试） |
+| **D4 B×M 与 M 证书** | `expected_n` 全面删除（AST 钉死）；键集恒等 `range(B) × prepared.first_month_offsets`；四码 `key_grid_duplicate/substitution/missing/extra`；world 表冷重建绑定；**B-doubling world-digest 前缀内容证明**（`SeedSequence(seed).spawn(2B)[:B] == spawn(B)` 已实测成立且 seed-specific）；**M 证书改由 `derive_support_certificate` 从实际迹派生**，caller 参数删除 |
+| **D5 平台权威事实** | `AccountEvent` 新增 `day_net_usd/qualifying_day/account_generation/requested_n/traded_n/cap_applied/over_budget`，由平台在**事件产生处**发射；`account_generation` 七个余额重置边界（三层证明无遗漏）；`qualifying_day` 三态且取自平台自身计数器（**不是** `day_net>=150` 重导——Topstep 申请日净额过 150 却不达标）；`balance−prev+payout_gross` 降级为同代非重置日交叉核验 |
+| **D6 原始 trace 与双 reducer** | 规范 JSONL＋两级 digest；类型内 reducer declare-and-verify；独立 `cold_reducer.py`（import 集 ⊆ `{__future__,hashlib,json,math}`，AST 钉死零 `itsf` 依赖），失配 `reducer_disagreement`。为使逐位一致，`atoms.py` 以纯 float 重实现同一 type-7 分位与 ddof-1 SD，consumer 不再 import numpy |
+
+### 14.2 修复轮（N01 唯一一轮）关闭的三项
+
+1. **D-1 强度回退（必修）**：声明-派生比对原为**数值**相等，因 `True == 1.0` 使
+   `world_means=(True, False)` 在派生值恰为 `(1.0, 0.0)` 时被接受——R2.3 曾显式
+   拒绝布尔样本。已加 `strict_scalar_equal`（`type(got) is type(expected)`）与
+   `strict_float_sequence_equal`（逐元素 `type(x) is float`）；三种伪装
+   （bool 冒 float、int 冒 float 分位、bool 冒 feasibility 计数）各有负例，且每个
+   负例**先断言数值比较确实相等**再断言拒绝。
+2. **D-2 空集≠零噪声**：`stderr_of(())`/`sample_sd(())` 原返回 `0.0`（会让
+   MC §5 规则 (d) 免费通过）；现 n==0 拒绝 `epistemic_samples_invalid`，
+   n==1 保留真实的 ddof-1 零。cold_reducer 同步。
+3. **D-4 fail-closed 词汇**：`convergence_from_evidence` 末端 `AssertionError`
+   → `MCInputError("convergence_unreachable_state")`，K 轴将来解封时不再以
+   非 MCInputError 逃逸绕过 fail-closed 语义。
+
+### 14.3 既有电池迁移（48 项，零弱化）
+
+36 `MIGRATED_STRONGER` / 9 `MIGRATED_SAME_STRENGTH` / 3 `OBSOLETE_BY_CONSTRUCTION`
+（后者**全部保留为测试**并改为断言"入口不存在"＋接上更深的后继守卫，无一删除）
+＋2 项新增（冻结常量值 pin、`from_world_means` 已删缝红线）。
+**变异证明**：57 个变异锚点，对照组 0 红，48+2 个测试**每一个都被至少一个针对性
+变异杀死**（程序化核验）。变异工装置于 session scratchpad，未入库（锚点为源码
+字符串精确匹配，脆但响亮）——是否转为常设审计资产待定。
+生产规模夹具不可行（B=1000×M=21×8 组≈百万原子），裁定：逻辑测试 monkeypatch
+`B_WORLDS_FROZEN`（仅此一个，K 与 seed 保持真值 200/7），常量真值另由
+`test_frozen_scale_constants_are_pinned_at_production_values` 独立钉死。
+
+### 14.4 主代理跨车道集成裁定（三项，`tests/test_mc_node_integration.py` 25 项）
+
+1. **令牌词表跨钉**：两车道"按规范约定、不靠 import"各自定义缺失令牌，唯一机械
+   守卫在此——任一侧改名会改变封存报告的**含义**而其他测试全绿。
+2. **不变量冲突已裁**：S1 要求 `contract_cap_hits ≤ executed_trade_days`，S2 允许
+   `cap_applied=True` 配 `traded_n=0`。核实 Lucid 在 `micros>0` 守卫外不计算请求、
+   Topstep 上限恒为 {20,30,50}/50 → 该组合**生产路径结构性不可达**，两侧不冲突
+   （跨平台×跨盈亏扫描测试钉死）。
+3. **层-1 缺陷范围**：见 §14.5-2，隔离性已成测试。
+
+### 14.5 新增待裁事项（全部入主计划 N-D2；本轮未替 Aaron 决定）
+
+1. **E2 `over_budget` 谓词未定义**：冻结文本要求披露却从未定义（哪个损失／哪个
+   基准／哪个预算）。两车道拒绝发射布尔，改发类型化 `PENDING_RULING`；
+   `OVER_BUDGET_PREDICATE_RULED=False` 期间 `AccountEvent` **拒绝携带布尔**。
+2. **冻结层-1 会计确认缺陷**：Lucid 过阶时 `strategy_account_EV` 丢弃评估期利润
+   （实测两个 +1500 日报 0.0，权威和 3000.0）。**影响范围机械钉死**：
+   Checkpoint-0 用 `prop_operating_EV`＝`payout_cash+terminal_cash−fees`，
+   不以层-1 为输入 → 缺陷**够不到判定统计量**。改冻结层数字属 Aaron 裁定，
+   本轮未改；权威累加器与旧口径并存使差额可测（且不入 `ledger_report`）。
+3. **生产规模从未执行**（诚实披露）：全部逻辑测试在 B=2/M=2。R2.3 的"生产规模"
+   夹具是用已删除接口**伪造的摘要**，同样从未真跑——本轮把该缺口由"被掩盖"
+   变为"显式"。是否要求一次生产规模冒烟运行归 Aaron。
+
+### 14.6 现势状态
+
+```
+UNIFIED_ATOM_LAYER=LANDED（单一归约源；三套 caller 输入已删）
+COLD_REPLAY_SEAL_GATE=LANDED（无可序列化 match；每次调用冷重放）
+LIFECYCLE_CONFIG_DIGEST=LANDED（14 键前像／61 常量机械收割／四层相等）
+PLATFORM_AUTHORITATIVE_FACTS=LANDED（7 字段／7 代边界／三态 qualifying_day）
+M_SUPPORT_CERTIFICATE=DERIVED_FROM_TRACE（caller 入口已删）
+FEASIBILITY_GATE=DECISION_REQUIRED（未裁；无 feasible 布尔存在）
+GRID_REPLAY_STATUS=BLOCKED（K 轴终端拒绝；MC-DS-S001 未执行）
+CHECKPOINT0_VERDICT_REACHABLE=NO
+MC_EXECUTED=NO ／ SUPPLEMENT_EXECUTED=NO ／ STRATEGY_BUILD_STARTED=NO
+NEXT=N00（Round-4 权威文本）＋N-D1（决策批 1）——均 BLOCKED_ON_AARON
+```

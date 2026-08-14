@@ -140,6 +140,27 @@ candidate-specific 策略代码；两候选不得被模糊记成一个 raw varia
 - 其他：θ0.3 完整报告规模；IR-28c 真实重放 vs 近似；**fixed-world 选择**
   （单个预注册 world／P5-P50-P95 邻近集合／不选而报告全部 world 条件切片）；
   late-phase bias 披露；历史 feasibility 文档勘误批准。
+- **N01/N02 执行中新发现（2026-08-15 追加，三项）**：
+  1. **E2 `over_budget` 谓词未定义**。冻结文本（MC §3/§6）**要求披露**
+     `P(realised_loss > 预算)` 与 `P(intraday_adverse_loss > 预算)`，却从未定义
+     per-day 布尔指哪一个、损失基准（每合约 vs 仓位）、预算基准（policy budget
+     vs n×anchor）。两条车道均拒绝发射布尔，改发类型化 `PENDING_RULING`；
+     `AccountEvent` 在 `OVER_BUDGET_PREDICATE_RULED is False` 期间**拒绝携带布尔**，
+     故无人能私自发明该谓词。Aaron 裁定谓词后方可翻转该常量。
+  2. **冻结层-1 会计确认缺陷**。MC §4.4 层-1 `strategy_account_EV`＝"平台内交易
+     净损益"，但 Lucid 生命周期通过评估阶段时会丢弃评估期利润（实测：两个 +1500
+     日报为 0.0，权威和 3000.0）。**影响范围已机械钉死**：Checkpoint-0 判定用
+     `prop_operating_EV`（S0 §10.5 L233），其公式 `payout_cash + terminal_cash −
+     fees` 不以层-1 为输入，故缺陷**够不到判定统计量**（见
+     `tests/test_mc_node_integration.py::test_checkpoint0_statistic_is_insulated
+     _from_layer1_accounting`）。改冻结层的数字属 Aaron 裁定；本轮未改，权威累加器
+     与旧口径并存以使差额可测。
+  3. **生产规模从未被执行过**（诚实披露，非本轮造成）。全部逻辑测试在 B=2/M=2；
+     任何只在 B=1000 或 M=21 显形的缺陷（浮点累加顺序、type-7 分位边界、
+     内存/耗时）在本仓库任何地方都未被执行。注意 R2.3 的"生产规模"夹具是用
+     已删除的 `from_world_means` **伪造的摘要**，同样从未真跑——本轮把这条缺口
+     从"被掩盖"变为"显式"。是否要求一次生产规模冒烟运行（及其算力/授权口径）
+     归 Aaron。
 
 ### N-D3 — 决策批 3（MC 治理；须先于 MC parser 与完整 runner）
 1. MC 批 2 事件词表／字段／状态转移／授权句式；2. MC-R001 formal-trial 地位；
@@ -207,4 +228,7 @@ Codex 且正是当年 `RUN_AUTHORIZATION_SUPERSEDED` 教训形态。）
 
 | 时间 | 节点 | commit | 全套件 | 备注 |
 |---|---|---|---|---|
-| 2026-08-15 | N-PLAN | 本 commit | 未跑（doc-only） | 主计划落盘；DAG 与租约冻结 |
+| 2026-08-15 | N-PLAN | `ba7fa4a` | 未跑（doc-only） | 主计划落盘；DAG 与租约冻结 |
+| 2026-08-15 | N02 | `314a2a5` | 见 N01 终态树 | 平台权威日事实（7 字段／7 代边界／三态 qualifying_day／over_budget 类型化缺席）；EV 台账逐值不变；58 新测试。孤立态绿由车道实测（主代理实测的是终态树） |
+| 2026-08-15 | N01 | `9a09164` | **3118 / 0 / 0**（822s，终态树，主代理实测） | 统一原子＋冷重放门＋config digest＋B×M 键集＋迹派生 M 证书＋双 reducer；含唯一一轮修复（类型严格比对／空集拒绝／fail-closed 词汇）；48 项迁移零弱化＋57 变异全命中；floor 2761→3118 双 pin |
+| 2026-08-15 | 决策包 | 本 commit | 未跑（doc-only） | N00＋N-D1 决策包；主计划 N-D2 追加三项；packet §14 现势节。**执行段到此强制停止** |
