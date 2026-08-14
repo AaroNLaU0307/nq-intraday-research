@@ -91,7 +91,19 @@ class Ledgers:
     payout_cash: float = 0.0             # gross x split - rail (platform-computed)
     fees: dict[str, float] = field(default_factory=dict)
     terminal_cash: float = 0.0
+    # LEGACY ACCUMULATOR — NOT the authoritative definition of a day's net
+    # (N02/D5-4). It is fed by `balance - prev_balance + payout_gross`, a
+    # BALANCE-DIFFERENCE proxy that is exact only within one account
+    # generation on a non-reset day. It is retained BYTE-IDENTICAL so the
+    # frozen MC SS4.4 layer-1 number cannot drift under this node; the
+    # authoritative sum sits beside it and the divergence is quantified in
+    # the N02 receipt (Lucid evaluation-pass days only).
     strategy_account_pnl: float = 0.0    # sim balance deltas (pre-split, info)
+    # AUTHORITATIVE layer-1 candidate: sum of the platforms' own emitted
+    # day_net_usd. Deliberately NOT part of report() — changing a frozen
+    # accounting layer's reported value is the main agent's / Aaron's call,
+    # not this node's. Exposed on LifecycleResult as evidence.
+    strategy_account_pnl_authoritative: float = 0.0
 
     def book_fee(self, kind: str, usd: float) -> None:
         """Always materializes the key — zero-amount markers (e.g. a credit-
@@ -132,6 +144,11 @@ class LifecycleResult:
     terminated_by_exhaustion: bool
     b2f_used_total: int
     skips_n0: int
+    # N02/D5-4 evidence: the same layer-1 quantity summed from the platforms'
+    # AUTHORITATIVE day_net_usd instead of from balance differences. Kept off
+    # `ledger_report` on purpose — the frozen report keeps its current
+    # values; this field only makes the divergence measurable.
+    strategy_account_pnl_authoritative: float = 0.0
 
 
 class _ApiBiller:
@@ -151,12 +168,38 @@ class _ApiBiller:
         return fees
 
 
+# Sentinel "no platform limit" cap used ONLY to obtain the pre-clamp request
+# for the fact layer (N02/D5-1). It never sizes a trade.
+_UNCAPPED_REQUEST_MICROS = 10 ** 9
+
+
+def _facts(ev: AccountEvent) -> AccountEvent:
+    """Gate every emitted event on the authoritative day-fact layer (D5-1).
+
+    Checked AT THE EMISSION POINT so a platform branch that forgets the
+    facts fails here instead of handing a consumer a None it could read as
+    "the day earned nothing"."""
+    if ev.day_net_usd is None or ev.account_generation is None:
+        raise AssertionError(
+            f"event {ev.day!r} emitted without authoritative day-facts "
+            "(day_net_usd / account_generation)")
+    return ev
+
+
 def _n_for_day(policy: str, balance: float, floor: float,
-               anchor_usd: float, platform_cap: int) -> int:
-    """Sizing via account.py pure functions ONLY (no formula duplication)."""
+               anchor_usd: float, platform_cap: int) -> tuple[int, int]:
+    """(requested_n, n) — sizing via account.py pure functions ONLY.
+
+    `requested_n` is floor(risk_budget / anchor) with NO platform cap: the
+    fact layer needs the size the strategy asked for before the platform
+    clamped it, otherwise `cap_applied` could never be true (this caller
+    pre-clamps). `n` is the real, capped size and is the only value that
+    ever reaches a trade.
+    """
     buf = acct.buffer_at_entry(balance, floor)
     budget = acct.risk_budget_usd(policy, buf)
-    return acct.n_micros(budget, anchor_usd, platform_cap)
+    requested = acct.n_micros(budget, anchor_usd, _UNCAPPED_REQUEST_MICROS)
+    return requested, acct.n_micros(budget, anchor_usd, platform_cap)
 
 
 def run_lifecycle(cfg: LifecycleConfig, days: list[TemplateDay],
@@ -178,6 +221,13 @@ def run_lifecycle(cfg: LifecycleConfig, days: list[TemplateDay],
         # Live is structurally unreachable (frozen: MC SS2.6); enforce loudly.
         if ev.phase not in _ALLOWED_PHASES:
             raise AssertionError(f"forbidden phase emitted: {ev.phase!r}")
+        # N02/D5-1: every production event carries the authoritative day-fact
+        # layer. A new emission site that forgets it fails HERE rather than
+        # silently handing a consumer a None it may read as "no profit".
+        if ev.day_net_usd is None or ev.account_generation is None:
+            raise AssertionError(
+                f"event {ev.day!r} emitted without authoritative day-facts "
+                "(day_net_usd / account_generation)")
     return result
 
 
@@ -202,7 +252,8 @@ def _run_lucid(cfg: LifecycleConfig, days: list[TemplateDay],
     exhausted = False
     skips = 0
     halt_left = 0
-    life = LucidLifecycle(fee_usd=0.0)    # fees booked HERE, not via ctor event
+    gen = 0                               # account generation (N02/D5-2)
+    life = LucidLifecycle(fee_usd=0.0, generation=gen)  # fees booked HERE, not via ctor
     led.book_fee("lucid_purchase", LUCID_FIRST_PURCHASE_USD)
     prev_balance = life.balance
     died_in = ""                          # phase the account was in when it broke
@@ -221,38 +272,51 @@ def _run_lucid(cfg: LifecycleConfig, days: list[TemplateDay],
             funded_death = died_in == "funded"
             led.book_fee("lucid_repurchase" if funded_death else "lucid_reset",
                          LUCID_REPURCHASE_USD if funded_death else LUCID_RESET_USD)
-            life = LucidLifecycle(fee_usd=0.0)
+            # BALANCE-RESET BOUNDARY (N02/D5-2): a brand-new account at the
+            # 50000 start balance -> next generation.
+            gen += 1
+            life = LucidLifecycle(fee_usd=0.0, generation=gen)
             prev_balance = life.balance
             died_in = ""
 
         if halt_left > 0:                 # IR-8: 2-day processing halt window
             halt_left -= 1
-            ev = life.step_day(None, 0)
+            ev = _facts(life.step_day(None, 0))
             ev.day = td.day_id            # template calendar label is canonical
             ev.notes = (ev.notes + ";" if ev.notes else "") + "processing_halt"
             events.append(ev)
+            gen = ev.account_generation
+            led.strategy_account_pnl_authoritative += ev.day_net_usd
             continue
 
         micros = life.max_contracts_today()
         if path is not None and micros > 0 and life.phase in ("evaluation", "funded"):
-            n = _n_for_day(cfg.sizing_policy, life.balance,
-                           life.floor_engine.floor, path.sizing_anchor_usd, micros)
+            requested_n, n = _n_for_day(cfg.sizing_policy, life.balance,
+                                        life.floor_engine.floor,
+                                        path.sizing_anchor_usd, micros)
         else:
-            n = 0
+            requested_n, n = 0, 0
         if path is not None and n == 0 and micros > 0:
             skips += 1                    # frozen: MC SS3 n=0 -> skip counted
 
         phase_before = life.phase
-        ev = life.step_day(path if n > 0 else None, n)
+        ev = _facts(life.step_day(path if n > 0 else None, n,
+                                 requested_n=requested_n))
         ev.day = td.day_id                # template calendar label is canonical
         events.append(ev)
+        gen = ev.account_generation       # platform may have crossed a boundary
         if ev.breached:
             died_in = phase_before        # eval vs funded death for restart fee
         led.book_fee("lucid_event_fees", ev.fees_usd)   # ctor fee 0 -> only real ones
         if ev.payout_gross > 0.0:
             led.payout_cash += ev.payout_cash           # platform-computed cash
             halt_left = LUCID_PROCESSING_HALT_DAYS      # IR-8
+        # LEGACY layer-1 accumulator (N02/D5-4) — a balance-difference PROXY,
+        # explicitly NOT the definition of a day's net; kept unchanged so the
+        # frozen MC SS4.4 numbers do not drift under this node. The
+        # authoritative figure is the platform-emitted day_net_usd below.
         led.strategy_account_pnl += (ev.balance - prev_balance) + ev.payout_gross
+        led.strategy_account_pnl_authoritative += ev.day_net_usd
         prev_balance = ev.balance
 
     # frozen: payout_accounting.terminal_withdrawable_value = gross x split - rail
@@ -261,7 +325,8 @@ def _run_lucid(cfg: LifecycleConfig, days: list[TemplateDay],
         led.terminal_cash = tg * lucid_mod.TRADER_SPLIT - lucid_mod.PAYOUT_RAIL_FEE_USD
 
     return LifecycleResult(cfg, events, led.report(cfg.research_costs_usd),
-                           attempts, exhausted, 0, skips)
+                           attempts, exhausted, 0, skips,
+                           led.strategy_account_pnl_authoritative)
 
 
 # --- Topstep ----------------------------------------------------------------
@@ -277,7 +342,9 @@ def _run_topstep(cfg: LifecycleConfig, days: list[TemplateDay],
 
     api = _ApiBiller(days[0].cal_offset if days else 0, enabled=True)  # IR-9
     sub = SubscriptionEngine(anchor_day=days[0].cal_offset if days else 0)
-    combine: CombineLifecycle | None = CombineLifecycle(subscription=sub)
+    gen = 0                               # account generation (N02/D5-2)
+    combine: CombineLifecycle | None = CombineLifecycle(subscription=sub,
+                                                        generation=gen)
     xfa: XfaLifecycle | None = None
     b2f_used = 0
     xfa_death_cal: int | None = None
@@ -305,7 +372,9 @@ def _run_topstep(cfg: LifecycleConfig, days: list[TemplateDay],
                     b2f_used += 1
                     b2f_total += 1
                     led.book_fee("topstep_b2f", ts.B2F_FEE_USD)
-                    xfa = XfaLifecycle()
+                    # BALANCE-RESET BOUNDARY (N02/D5-2): fresh XFA at $0.
+                    gen += 1
+                    xfa = XfaLifecycle(generation=gen)
                     prev_balance = xfa.balance
                 else:
                     if attempts >= MAX_EVALUATION_STARTS:
@@ -314,30 +383,39 @@ def _run_topstep(cfg: LifecycleConfig, days: list[TemplateDay],
                     attempts += 1
                     sub = SubscriptionEngine(anchor_day=td.cal_offset,
                                              credits=sub.credits)  # credits survive
-                    combine = CombineLifecycle(subscription=sub)
+                    # BALANCE-RESET BOUNDARY (N02/D5-2): new Combine at 50000.
+                    gen += 1
+                    combine = CombineLifecycle(subscription=sub, generation=gen)
                     xfa = None
                     b2f_used = 0
                     prev_balance = combine.balance
             if xfa is not None and not xfa.dead:
-                n = 0
+                requested_n, n = 0, 0
                 if path is not None:
-                    n = _n_for_day(cfg.sizing_policy, xfa.balance,
-                                   xfa.floor_engine.floor,
-                                   path.sizing_anchor_usd, xfa.micro_cap)
+                    requested_n, n = _n_for_day(cfg.sizing_policy, xfa.balance,
+                                                xfa.floor_engine.floor,
+                                                path.sizing_anchor_usd,
+                                                xfa.micro_cap)
                     if n == 0:
                         skips += 1
                 # frozen: MC SS4.2 payout_policy_primary first_eligible_session,
                 # maximum_allowed; Topstep XFA does NOT halt.
                 req = xfa.payout_eligible()
-                ev = xfa.process_day(td.cal_offset, path if n > 0 else None,
-                                     n, request_payout=req)
+                ev = _facts(xfa.process_day(td.cal_offset,
+                                            path if n > 0 else None, n,
+                                            request_payout=req,
+                                            requested_n=requested_n))
                 ev.day = td.day_id        # template calendar label is canonical
                 events.append(ev)
+                gen = ev.account_generation
                 if ev.payout_gross > 0.0:
                     led.payout_cash += ev.payout_cash
                 if ev.breached:
                     xfa_death_cal = td.cal_offset
+                # LEGACY balance-difference proxy (see Ledgers) — NOT the
+                # definition of a day's net; authoritative sum below.
                 led.strategy_account_pnl += (ev.balance - prev_balance) + ev.payout_gross
+                led.strategy_account_pnl_authoritative += ev.day_net_usd
                 prev_balance = ev.balance
                 continue
             if xfa is None and combine is not None:
@@ -351,28 +429,42 @@ def _run_topstep(cfg: LifecycleConfig, days: list[TemplateDay],
                     exhausted = True
                     break
                 attempts += 1
+                # BALANCE-RESET BOUNDARY (N02/D5-2): combine.reset() restores
+                # the 50000 start balance and bumps the platform's own
+                # generation counter; mirror it here.
                 fee, used_credit = combine.reset(td.cal_offset)
+                gen = combine.generation
                 led.book_fee("topstep_reset_paid", fee)
                 if used_credit:
                     led.book_fee("topstep_reset_credit_used", 0.0)
                 prev_balance = combine.balance
-            n = 0
+            requested_n, n = 0, 0
             if path is not None and not combine.breached:
-                n = _n_for_day(cfg.sizing_policy, combine.balance,
-                               combine.floor_engine.floor,
-                               path.sizing_anchor_usd, ts.COMBINE_MAX_MICROS)
+                requested_n, n = _n_for_day(cfg.sizing_policy, combine.balance,
+                                            combine.floor_engine.floor,
+                                            path.sizing_anchor_usd,
+                                            ts.COMBINE_MAX_MICROS)
                 if n == 0:
                     skips += 1
-            ev = combine.process_day(td.cal_offset, path if n > 0 else None, n)
+            ev = _facts(combine.process_day(td.cal_offset,
+                                           path if n > 0 else None, n,
+                                           requested_n=requested_n))
             ev.day = td.day_id            # template calendar label is canonical
             events.append(ev)
+            gen = ev.account_generation
             led.book_fee("topstep_subscription_activation", ev.fees_usd)
+            # LEGACY balance-difference proxy (see Ledgers) — NOT the
+            # definition of a day's net; authoritative sum below. (Combine
+            # never pays out, hence no payout_gross term here.)
             led.strategy_account_pnl += ev.balance - prev_balance
+            led.strategy_account_pnl_authoritative += ev.day_net_usd
             prev_balance = ev.balance
             if combine.passed:
                 # frozen: MC SS2.3 pass -> activation (fee already in event),
                 # XFA starts at $0 next session
-                xfa = XfaLifecycle()
+                # BALANCE-RESET BOUNDARY (N02/D5-2): 50000+ -> $0.
+                gen += 1
+                xfa = XfaLifecycle(generation=gen)
                 b2f_used = 0
                 prev_balance = xfa.balance
         elif combine is None and xfa is None:
@@ -385,4 +477,5 @@ def _run_topstep(cfg: LifecycleConfig, days: list[TemplateDay],
         led.terminal_cash = tg * ts.TRADER_SPLIT - ts.PAYOUT_RAIL_FEE_USD
 
     return LifecycleResult(cfg, events, led.report(cfg.research_costs_usd),
-                           attempts, exhausted, b2f_total, skips)
+                           attempts, exhausted, b2f_total, skips,
+                           led.strategy_account_pnl_authoritative)

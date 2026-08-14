@@ -960,9 +960,106 @@ class RunConfig:
     archive_root: str = RULED_ARCHIVE_ROOT
 
 
+# --- authoritative platform day-facts (N02 / PHASE D5) ----------------------
+# WHY THESE EXIST (read before consuming AccountEvent anywhere):
+#
+# A consumer that re-derives "what did this day earn" from ADJACENT event
+# balances is wrong on two whole classes of day, in the unsafe direction:
+#   (1) payout days — the platform removes the payout GROSS from the sim
+#       balance (frozen: platform_params payout_accounting
+#       .account_balance_effect "balance - gross"; lucid.py _process_payout,
+#       topstep.py XfaLifecycle.process_day), so `balance - prev_balance`
+#       reports a multi-thousand-dollar LOSS on the single best day of the
+#       cycle;
+#   (2) balance-reset boundaries — evaluation->funded, Combine reset,
+#       Combine pass -> XFA, Back2Funded, new Combine: the balance is
+#       REPLACED by a fresh start balance, so the delta across the boundary
+#       is an artifact of the reset, not a trading result.
+# The platform state machines already hold the correct per-day figures at the
+# point they compute them. The fields below EMIT those figures. Downstream
+# code must consume them and must NOT re-derive day P&L from balances.
+
+
+class OverBudgetStatus(str, Enum):
+    """Typed state for the E2 realized-loss-vs-anchor over-budget FACT.
+
+    Frozen text status (searched 2026-08-15 across MC_METHOD_SPEC.md,
+    gate1/platform_params.yaml, IMPLEMENTATION_RESOLUTIONS.md, ADJUDICATIONS
+    .md): MC SS3 MANDATES the E2 disclosure `P(realised_loss > 预算)` and
+    `P(intraday_adverse_loss > 预算)` but NEVER defines the predicate — it
+    fixes neither which of the two losses a per-day boolean denotes, nor the
+    loss basis (per-contract vs position), nor the budget basis (policy
+    budget vs n x anchor). No definition exists in platform_params
+    (`payout_accounting`, `execution_costs`) or in any IR. Therefore the
+    boolean is NOT emitted; a typed state is emitted instead.
+
+    NEVER encode an unruled quantity as False/0 — that reads downstream as a
+    measured "did not exceed budget" and silently manufactures evidence.
+    """
+    # E1: the frozen MC SS3 disclosure is E2-SCOPED. This says the frozen
+    # obligation does not reach E1 days; it does NOT claim an E1 day can
+    # never exceed its budget (stop slippage exists).
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+    # No position was taken (no path / n == 0 / halt / dead / payout-only):
+    # there is no realized loss and no budget draw to compare.
+    NOT_APPLICABLE_NO_TRADE = "NOT_APPLICABLE_NO_TRADE"
+    # E2 day: the fact is REQUESTED by frozen text and UNDEFINED by frozen
+    # text. Awaiting an Aaron ruling (see the N02 receipt / DECISION packet).
+    PENDING_RULING = "PENDING_RULING"
+
+
+# Flipped ONLY by an explicit Aaron ruling that defines the E2 over-budget
+# predicate. While False, AccountEvent refuses to carry a boolean over_budget
+# at all, so no lane can quietly invent the predicate downstream.
+OVER_BUDGET_PREDICATE_RULED = False
+
+# Phases whose frozen ruleset defines a "qualifying day" at all:
+#   Lucid funded  — platform_params lucidflex_50k.payouts
+#                   .qualifying_days_required 5 / qualifying_day_min_profit_usd 150
+#   Topstep XFA   — platform_params topstep_50k.xfa.payout_paths.standard
+#                   .qualifying "5 个盈利日，每日净利 >= $150"
+# Evaluation / Combine / dead / done have NO such concept: those days emit
+# qualifying_day=None (tri-state), never False.
+QUALIFYING_PHASES = frozenset({"funded", "xfa"})
+
+# Structural rejection codes for the day-fact fields (type-level, raised at
+# construction — a malformed fact can never reach a consumer).
+FACT_TRADED_EXCEEDS_REQUESTED = "traded_n_exceeds_requested_n"
+FACT_NEGATIVE_CONTRACTS = "negative_contract_count"
+FACT_CAP_FLAG_INCONSISTENT = "cap_applied_without_clamp"
+FACT_QUALIFYING_PHASE_MISMATCH = "qualifying_day_true_on_nonqualifying_phase"
+FACT_DAY_NET_NOT_FINITE = "day_net_usd_not_finite"
+FACT_NEGATIVE_GENERATION = "account_generation_negative"
+FACT_OVER_BUDGET_UNRULED = "over_budget_emitted_without_ruling"
+FACT_OVER_BUDGET_STATUS_TYPE = "over_budget_status_not_typed"
+
+DAY_FACT_REJECTION_CODES = frozenset({
+    FACT_TRADED_EXCEEDS_REQUESTED, FACT_NEGATIVE_CONTRACTS,
+    FACT_CAP_FLAG_INCONSISTENT, FACT_QUALIFYING_PHASE_MISMATCH,
+    FACT_DAY_NET_NOT_FINITE, FACT_NEGATIVE_GENERATION,
+    FACT_OVER_BUDGET_UNRULED, FACT_OVER_BUDGET_STATUS_TYPE,
+})
+
+
+class AuthoritativeFactError(ValueError):
+    """A day-fact combination is structurally impossible (carries `.code`)."""
+
+    def __init__(self, code: str, detail: str = ""):
+        self.code = code
+        super().__init__(f"{code}: {detail}" if detail else code)
+
+
 @dataclass
 class AccountEvent:
-    """Emitted by platform lifecycles per simulated day."""
+    """Emitted by platform lifecycles per simulated day.
+
+    The trailing block is the AUTHORITATIVE day-fact layer (N02/D5). Every
+    field is emitted by the platform state machine at the point the fact is
+    produced; all default to a neutral value so the addition is purely
+    additive for pre-existing construction sites (`day_net_usd is None`
+    is the migration marker meaning "this event predates the fact layer /
+    was emitted by a non-production helper", NOT "the day earned nothing").
+    """
     day: str
     phase: str                 # evaluation | funded | combine | xfa | dead | done
     balance: float
@@ -972,3 +1069,82 @@ class AccountEvent:
     payout_cash: float = 0.0   # gross*split - rail fee (payout_accounting, frozen)
     fees_usd: float = 0.0      # platform fees charged today (subs/reset/activation/...)
     notes: str = ""
+
+    # --- authoritative day-facts (N02 / PHASE D5) ---------------------------
+    # AUTHORITATIVE net TRADING result of this session, in account-balance
+    # USD, as computed by the platform itself. EXCLUDES payout gross
+    # deduction, excludes any balance-reset jump, excludes fees (fees never
+    # touch the sim balance in either platform). A non-trading day (no path,
+    # n == 0, payout halt, processing halt, dead-inert) is 0.0 — NOT None.
+    # On a breach day it is the settled loss of that day (frozen R1
+    # settlement minus the day's opening balance), which is a genuine
+    # same-day trading result.
+    # None == this event predates / opts out of the fact layer.
+    day_net_usd: float | None = None
+    # TRI-STATE. Exact rule, machine-enforced below and re-verified by
+    # itsf.mc.platforms.authoritative.check_event_facts:
+    #   non-None  <=>  phase in QUALIFYING_PHASES ({funded, xfa})
+    #   value     ==   the PLATFORM'S OWN qualifying-day counter incremented
+    #                  for this day (single source of truth), never a
+    #                  re-derived "day_net >= threshold" comparison.
+    # Consequence that a re-derivation would get wrong: a Topstep XFA
+    # payout-request day with net >= $150 is False, because frozen MC SS4.2
+    # / payout_paths.standard.after_payout exclude the request day from
+    # every count. Evaluation / Combine / dead / done emit None ("this
+    # ruleset has no qualifying-day concept"), never False.
+    qualifying_day: bool | None = None
+    # Account "generation": 0-based, +1 at EVERY balance-reset boundary of
+    # the lifecycle. Cross-generation balance deltas are meaningless and
+    # MUST NOT be consumed. None == fact layer absent.
+    account_generation: int | None = None
+    # Position-size request BEFORE the platform cap, actual size AFTER it,
+    # and whether the platform cap is what bound. cap_applied is scoped to
+    # the position-size cap on a day that actually offered a trade; halt /
+    # dead / no-path days report False with the raw pair still visible, so
+    # any other reading stays recoverable without this field asserting it.
+    requested_n: int = 0
+    traded_n: int = 0
+    cap_applied: bool = False
+    # E2 realized-vs-anchor over-budget FACT. Stays None until Aaron rules
+    # the predicate (OVER_BUDGET_PREDICATE_RULED); the companion status field
+    # says WHICH kind of None this is.
+    over_budget: bool | None = None
+    over_budget_status: OverBudgetStatus | None = None
+
+    def __post_init__(self):
+        if self.requested_n < 0 or self.traded_n < 0:
+            raise AuthoritativeFactError(
+                FACT_NEGATIVE_CONTRACTS,
+                f"requested_n={self.requested_n} traded_n={self.traded_n}")
+        if self.traded_n > self.requested_n:
+            raise AuthoritativeFactError(
+                FACT_TRADED_EXCEEDS_REQUESTED,
+                f"traded_n={self.traded_n} > requested_n={self.requested_n}")
+        if self.cap_applied and not self.traded_n < self.requested_n:
+            raise AuthoritativeFactError(
+                FACT_CAP_FLAG_INCONSISTENT,
+                f"traded_n={self.traded_n} requested_n={self.requested_n}")
+        if (self.qualifying_day is not None
+                and self.phase not in QUALIFYING_PHASES):
+            # Both directions are refused: a True on a phase with no
+            # qualifying concept invents a qualifying day, and a False there
+            # disguises "concept does not exist" as "measured, did not
+            # qualify" — the exact misread the tri-state exists to prevent.
+            raise AuthoritativeFactError(
+                FACT_QUALIFYING_PHASE_MISMATCH,
+                f"phase={self.phase!r} qualifying_day={self.qualifying_day!r}")
+        if self.day_net_usd is not None and not math.isfinite(self.day_net_usd):
+            raise AuthoritativeFactError(
+                FACT_DAY_NET_NOT_FINITE, repr(self.day_net_usd))
+        if self.account_generation is not None and self.account_generation < 0:
+            raise AuthoritativeFactError(
+                FACT_NEGATIVE_GENERATION, repr(self.account_generation))
+        if self.over_budget is not None and not OVER_BUDGET_PREDICATE_RULED:
+            raise AuthoritativeFactError(
+                FACT_OVER_BUDGET_UNRULED,
+                "MC SS3 mandates the E2 disclosure but defines no predicate; "
+                "emit over_budget_status instead of a fabricated boolean")
+        if (self.over_budget_status is not None
+                and not isinstance(self.over_budget_status, OverBudgetStatus)):
+            raise AuthoritativeFactError(
+                FACT_OVER_BUDGET_STATUS_TYPE, repr(self.over_budget_status))

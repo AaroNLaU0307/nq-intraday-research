@@ -24,6 +24,7 @@ touch the sim balance.
 from __future__ import annotations
 
 from itsf.contracts import AccountEvent, TradePathRecord
+from itsf.mc.platforms.authoritative import over_budget_status_for
 from itsf.mc.platforms.base import TrailingFloorEngine
 
 # --- frozen machine parameters ----------------------------------------------
@@ -69,10 +70,15 @@ class LucidLifecycle:
       eligible_terminal_gross() -> float    # for MC terminal_value (frozen: MC SS2.6, SS4.2)
     """
 
-    def __init__(self, fee_usd: float = 98.0):
+    def __init__(self, fee_usd: float = 98.0, generation: int = 0):
         # frozen: platform_params lucidflex_50k.evaluation.fees first_purchase_usd 98 /
         # subsequent_repurchase_primary_usd 140 -- caller chooses which applies.
         self.fee_usd = float(fee_usd)
+        # Account generation (N02/D5-2): 0-based, +1 at every balance-RESET
+        # boundary. This ctor IS such a boundary when the caller restarts a
+        # lifecycle after death, so the caller passes the next generation in
+        # (orchestrator._run_lucid); a standalone account starts at 0.
+        self.generation = int(generation)
         self._fee_recorded = False
         self.phase = "evaluation"
         self.balance = START_BALANCE_USD
@@ -101,11 +107,21 @@ class LucidLifecycle:
             return EVAL_MAX_MICROS  # frozen: platform_params lucidflex_50k.evaluation.max_position
         return self._tier_micros
 
-    def step_day(self, path: TradePathRecord | None, micros: int) -> AccountEvent:
+    def step_day(self, path: TradePathRecord | None, micros: int,
+                 *, requested_n: int | None = None) -> AccountEvent:
         """Advance one session. `path` is the per-contract intraday record
-        (S0 SS10.1 schema); None == no-trade day."""
+        (S0 SS10.1 schema); None == no-trade day.
+
+        `requested_n` (N02/D5-1) is FACT-ONLY: the position size the caller
+        wanted BEFORE any cap was applied, so `cap_applied` can be emitted
+        truthfully when the caller (orchestrator) has already pre-clamped
+        `micros` to this platform's cap. It never influences sizing, P&L or
+        any state transition. Defaults to `micros` (direct callers request
+        exactly what they pass).
+        """
         self._session_no += 1
         day = path.trade_date if path is not None else f"sim-{self._session_no:04d}"
+        req = int(micros) if requested_n is None else int(requested_n)
         fee = 0.0
         if not self._fee_recorded:
             fee = self.fee_usd  # one-time purchase fee recorded on first event only
@@ -114,12 +130,17 @@ class LucidLifecycle:
         if self.phase == "dead":
             return AccountEvent(day=day, phase="dead", balance=self.balance,
                                 floor=self.floor_engine.floor, fees_usd=fee,
-                                notes="dead_no_action")
+                                notes="dead_no_action",
+                                # inert: no trade, no balance move
+                                day_net_usd=0.0, qualifying_day=None,
+                                account_generation=self.generation,
+                                requested_n=req, traded_n=0, cap_applied=False,
+                                over_budget_status=over_budget_status_for(None, 0))
 
         if self.phase == "funded" and self._payout_pending:
-            return self._process_payout(day, fee)
+            return self._process_payout(day, fee, req)
 
-        return self._trade_day(day, fee, path, micros)
+        return self._trade_day(day, fee, path, micros, req)
 
     def eligible_terminal_gross(self) -> float:
         """Gross amount withdrawable if the horizon ended now; 0 when not
@@ -165,6 +186,11 @@ class LucidLifecycle:
         (frozen: MC SS2.2; platform_params lucidflex_50k.mll_engine breach_scope
         'evaluation and funded identical')."""
         self.phase = "funded"
+        # BALANCE-RESET BOUNDARY (N02/D5-2): the evaluation balance is
+        # discarded and replaced by the funded start balance. Any consumer
+        # differencing balances across this event would read the discarded
+        # evaluation profit as a loss.
+        self.generation += 1
         self.balance = START_BALANCE_USD
         self.floor_engine = TrailingFloorEngine(
             INITIAL_MLL_USD, TRAIL_DISTANCE_USD, LOCKED_MLL_USD)
@@ -174,10 +200,12 @@ class LucidLifecycle:
         self._payout_pending = False
         self._update_tier()  # profit 0 -> lowest tier 2/20 first funded day (frozen: platform_params N6)
 
-    def _process_payout(self, day: str, fee: float) -> AccountEvent:
+    def _process_payout(self, day: str, fee: float,
+                        requested_n: int = 0) -> AccountEvent:
         """Payout request day == halt day; no new trade even if a path was
         supplied (frozen: MC SS4.2 lucidflex halt). 2-business-day processing
         is the MC calendar's concern."""
+        qual_before = self._qualifying_days
         gross = self._gross_candidate()
         # frozen: payout_accounting.trader_cash_received = gross x split - rail fee
         cash = gross * TRADER_SPLIT - PAYOUT_RAIL_FEE_USD
@@ -197,11 +225,43 @@ class LucidLifecycle:
             notes += ";" + G7_NOTE
         return AccountEvent(day=day, phase="funded", balance=self.balance,
                             floor=self.floor_engine.floor, payout_gross=gross,
-                            payout_cash=cash, fees_usd=fee, notes=notes)
+                            payout_cash=cash, fees_usd=fee, notes=notes,
+                            # AUTHORITATIVE day-fact layer (N02/D5-5): the
+                            # halt day traded nothing, so its net TRADING
+                            # result is 0.0. The balance fell by `gross`;
+                            # differencing balances here would report this
+                            # day as a -gross loss day. It is not one.
+                            day_net_usd=0.0,
+                            # funded phase -> the qualifying ruleset is in
+                            # force; the platform's own counter did not
+                            # increment today (it was reset to 0 above), so
+                            # the day contributed no qualifying day.
+                            qualifying_day=self._qualifying_days > qual_before,
+                            account_generation=self.generation,
+                            requested_n=requested_n, traded_n=0,
+                            cap_applied=False,
+                            over_budget_status=over_budget_status_for(None, 0))
 
     def _trade_day(self, day: str, fee: float,
-                   path: TradePathRecord | None, micros: int) -> AccountEvent:
-        contracts = max(0, min(int(micros), self.max_contracts_today()))
+                   path: TradePathRecord | None, micros: int,
+                   requested_n: int = 0) -> AccountEvent:
+        balance_at_open = self.balance
+        qual_before = self._qualifying_days
+        cap_today = self.max_contracts_today()
+        contracts = max(0, min(int(micros), cap_today))
+        traded = contracts if (path is not None and contracts > 0) else 0
+        # cap_applied (N02/D5-1): the POSITION-SIZE cap in force is what cut
+        # the request down, on a day that actually offered a trade. Halt /
+        # dead / no-path days report False (their `traded_n=0` has nothing to
+        # do with the scaling tier) while `requested_n`/`traded_n` stay raw,
+        # so any other reading remains recoverable without this flag
+        # asserting it.
+        cap_applied = (path is not None and traded < requested_n
+                       and cap_today < requested_n)
+        facts = dict(account_generation=self.generation,
+                     requested_n=requested_n, traded_n=traded,
+                     cap_applied=cap_applied,
+                     over_budget_status=over_budget_status_for(path, traded))
         if path is not None and contracts > 0:
             # Intraday breach on the ADVERSE path, equity incl. unrealized
             # (frozen: platform_params lucidflex_50k.mll_engine.intraday_breach;
@@ -217,7 +277,12 @@ class LucidLifecycle:
                     self.floor_engine.floor, equity_path[_hit], contracts)
                 return AccountEvent(day=day, phase="dead", balance=self.balance,
                                     floor=self.floor_engine.floor, breached=True,
-                                    fees_usd=fee, notes="mll_breach_adverse_path")
+                                    fees_usd=fee, notes="mll_breach_adverse_path",
+                                    # The R1 settlement IS this day's realized
+                                    # trading result; it is a same-day, same-
+                                    # generation balance move, not a reset.
+                                    day_net_usd=self.balance - balance_at_open,
+                                    qualifying_day=None, **facts)
             day_net = contracts * path.final_pnl_per_contract
         else:
             day_net = 0.0
@@ -234,12 +299,27 @@ class LucidLifecycle:
                 # largest_single_day_profit / account_profit <= 0.50, checked at
                 # pass time, STRICT (cushion not modeled -- frozen: G6)
                 eval_balance = self.balance
-                self._enter_funded()
+                self._enter_funded()          # <- generation boundary
+                facts["account_generation"] = self.generation
                 return AccountEvent(day=day, phase="funded", balance=self.balance,
                                     floor=self.floor_engine.floor, fees_usd=fee,
-                                    notes=f"evaluation_passed eval_balance={eval_balance:.2f}")
+                                    notes=f"evaluation_passed eval_balance={eval_balance:.2f}",
+                                    # The day's trading result stands on its
+                                    # own; the balance shown is already the
+                                    # post-reset funded start balance, which
+                                    # is why the generation moved. Consumers
+                                    # MUST NOT difference across this event.
+                                    day_net_usd=day_net,
+                                    # phase 'funded' -> tri-state must be a
+                                    # bool; the funded counter starts at 0 and
+                                    # this (evaluation-rules) day added none.
+                                    qualifying_day=self._qualifying_days > 0,
+                                    **facts)
             return AccountEvent(day=day, phase="evaluation", balance=self.balance,
-                                floor=self.floor_engine.floor, fees_usd=fee)
+                                floor=self.floor_engine.floor, fees_usd=fee,
+                                day_net_usd=day_net,
+                                # evaluation has no qualifying-day concept
+                                qualifying_day=None, **facts)
 
         # funded session end
         notes: list[str] = []
@@ -261,4 +341,11 @@ class LucidLifecycle:
             notes.append("remain_sim")  # frozen: MC SS2.6 (keeps trading, no payouts)
         return AccountEvent(day=day, phase="funded", balance=self.balance,
                             floor=self.floor_engine.floor, fees_usd=fee,
-                            notes=";".join(notes))
+                            notes=";".join(notes),
+                            day_net_usd=day_net,
+                            # SINGLE SOURCE OF TRUTH: the platform's own
+                            # counter transition above (frozen threshold
+                            # QUALIFYING_DAY_MIN_USD applied exactly once, in
+                            # one place). Never re-compare day_net here.
+                            qualifying_day=self._qualifying_days > qual_before,
+                            **facts)

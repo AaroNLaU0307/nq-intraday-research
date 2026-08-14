@@ -27,6 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from itsf.contracts import AccountEvent, TradePathRecord
+from itsf.mc.platforms.authoritative import over_budget_status_for
 from itsf.mc.platforms.base import TrailingFloorEngine
 
 # --- Combine (standard path) -------------------------------------------------
@@ -200,10 +201,17 @@ class CombineLifecycle:
     # frozen: MC SS2.3 consistency is a soft rule, must NOT be a hard fail (N4)
     """
 
-    def __init__(self, subscription: SubscriptionEngine | None = None) -> None:
+    def __init__(self, subscription: SubscriptionEngine | None = None,
+                 generation: int = 0) -> None:
         self.subscription = subscription
         self.breached = False
         self.passed = False
+        # Account generation (N02/D5-2): 0-based, +1 at every balance-RESET
+        # boundary. Constructing a Combine IS such a boundary whenever the
+        # caller is replacing a previous account in the same lifecycle
+        # (orchestrator: new Combine after XFA death), so the caller passes
+        # the next generation in.
+        self.generation = int(generation)
         self._fresh_state()
 
     def _fresh_state(self) -> None:
@@ -221,20 +229,40 @@ class CombineLifecycle:
         return self.balance - COMBINE_START_BALANCE_USD
 
     def process_day(self, day: int, trade: TradePathRecord | None = None,
-                    n_micros: int = 1) -> AccountEvent:
+                    n_micros: int = 1, *,
+                    requested_n: int | None = None) -> AccountEvent:
+        """`requested_n` (N02/D5-1) is FACT-ONLY — the pre-cap position size
+        the caller wanted, used solely so `cap_applied` can be emitted
+        truthfully when the caller already pre-clamped `n_micros`. It never
+        influences sizing, P&L or any state transition."""
         fees = self.subscription.on_day(day) if self.subscription else 0.0
+        req = int(n_micros) if requested_n is None else int(requested_n)
+        # Combine has NO qualifying-day concept (frozen: qualifying days live
+        # only in xfa.payout_paths) -> qualifying_day is None on every event.
+        idle_facts = dict(day_net_usd=0.0, qualifying_day=None,
+                          account_generation=self.generation,
+                          requested_n=req, traded_n=0, cap_applied=False,
+                          over_budget_status=over_budget_status_for(None, 0))
         if self.passed:
             return AccountEvent(day=str(day), phase="done", balance=self.balance,
                                 floor=self.floor_engine.floor, fees_usd=fees,
-                                notes="combine_passed")
+                                notes="combine_passed", **idle_facts)
         if self.breached:
             # frozen: subscription_engine.continues_after_mll_breach — practice
             # mode until reset: subscription still bills, trades do not count
             return AccountEvent(day=str(day), phase="combine", balance=self.balance,
                                 floor=self.floor_engine.floor, fees_usd=fees,
-                                notes="awaiting_reset")
+                                notes="awaiting_reset", **idle_facts)
         if trade is not None:
+            balance_at_open = self.balance
             n = min(n_micros, COMBINE_MAX_MICROS)   # frozen: combine.max_position micros 50
+            traded = max(0, n)
+            facts = dict(qualifying_day=None,
+                         account_generation=self.generation,
+                         requested_n=req, traded_n=traded,
+                         cap_applied=(traded < req
+                                      and COMBINE_MAX_MICROS < req),
+                         over_budget_status=over_budget_status_for(trade, traded))
             # frozen: combine.mll_engine.intraday_breach — realtime net P&L
             # incl. unrealized, adverse path (MC SS3); touch == breach
             equity_path = [self.balance + n * p for p in trade.mtm_adverse_pnl_1m]
@@ -247,7 +275,11 @@ class CombineLifecycle:
                     self.floor_engine.floor, equity_path[idx], n)
                 return AccountEvent(day=str(day), phase="combine", balance=self.balance,
                                     floor=self.floor_engine.floor, breached=True,
-                                    fees_usd=fees, notes="mll_breach_flattened")
+                                    fees_usd=fees, notes="mll_breach_flattened",
+                                    # R1 settlement = this day's realized
+                                    # result (same day, same generation).
+                                    day_net_usd=self.balance - balance_at_open,
+                                    **facts)
             day_pnl = n * trade.final_pnl_per_contract
             self.balance += day_pnl
             # frozen: consistency_target.best_day_lock_time 15:10 CT — daily
@@ -266,9 +298,17 @@ class CombineLifecycle:
                     self.subscription.cancel()   # frozen: auto_cancel_on_pass
                 return AccountEvent(day=str(day), phase="done", balance=self.balance,
                                     floor=self.floor_engine.floor, fees_usd=fees,
-                                    notes="combine_passed_activation_charged")
+                                    notes="combine_passed_activation_charged",
+                                    # The pass day itself is a normal trading
+                                    # day; the XFA balance reset happens in
+                                    # the NEXT account (new generation).
+                                    day_net_usd=day_pnl, **facts)
+            return AccountEvent(day=str(day), phase="combine", balance=self.balance,
+                                floor=self.floor_engine.floor, fees_usd=fees,
+                                day_net_usd=day_pnl, **facts)
         return AccountEvent(day=str(day), phase="combine", balance=self.balance,
-                            floor=self.floor_engine.floor, fees_usd=fees)
+                            floor=self.floor_engine.floor, fees_usd=fees,
+                            **idle_facts)
 
     def reset(self, day: int) -> tuple[float, bool]:
         """Reset after evaluation failure. Returns (fee_usd, used_credit).
@@ -281,6 +321,11 @@ class CombineLifecycle:
         if self.subscription is None:
             raise RuntimeError("reset requires an active SubscriptionEngine")
         fee, used_credit = self.subscription.reset(day)
+        # BALANCE-RESET BOUNDARY (N02/D5-2): _fresh_state restores the 50000
+        # start balance, so every event after this one belongs to a new
+        # account generation and must not be differenced against the last
+        # pre-reset event.
+        self.generation += 1
         self._fresh_state()
         self.breached = False
         return fee, used_credit
@@ -299,7 +344,12 @@ class XfaLifecycle:
     # frozen: platform_params xfa.back2funded + MC SS4.3
     """
 
-    def __init__(self) -> None:
+    def __init__(self, generation: int = 0) -> None:
+        # Account generation (N02/D5-2): constructing an XFA is ALWAYS a
+        # balance-reset boundary in a running lifecycle (Combine pass -> XFA
+        # at $0, or Back2Funded -> fresh XFA at $0), so the caller passes the
+        # next generation in.
+        self.generation = int(generation)
         self.balance = XFA_START_BALANCE_USD
         # frozen: xfa.mll_engine initial_mll -2000 / trail 2000 / locked 0
         self.floor_engine = TrailingFloorEngine(
@@ -358,13 +408,34 @@ class XfaLifecycle:
         return gross >= XFA_PAYOUT_MIN_USD
 
     def process_day(self, day: int, trade: TradePathRecord | None = None,
-                    n_micros: int = 1, request_payout: bool = False) -> AccountEvent:
+                    n_micros: int = 1, request_payout: bool = False,
+                    *, requested_n: int | None = None) -> AccountEvent:
+        """`requested_n` (N02/D5-1) is FACT-ONLY — the pre-cap position size
+        the caller wanted, used solely so `cap_applied` can be emitted
+        truthfully when the caller already pre-clamped `n_micros`. It never
+        influences sizing, P&L or any state transition."""
+        req = int(n_micros) if requested_n is None else int(requested_n)
         if self.dead:
             return AccountEvent(day=str(day), phase="dead", balance=self.balance,
-                                floor=self.floor_engine.floor, notes="account_dead")
+                                floor=self.floor_engine.floor, notes="account_dead",
+                                # inert: no trade, no balance move; a dead
+                                # account has no qualifying-day concept left
+                                day_net_usd=0.0, qualifying_day=None,
+                                account_generation=self.generation,
+                                requested_n=req, traded_n=0, cap_applied=False,
+                                over_budget_status=over_budget_status_for(None, 0))
+        balance_at_open = self.balance
+        qual_before = self.qualifying_days
         # frozen: xfa.scaling_tiers.update next_session_only — today's cap was
         # fixed at the END of the previous session; platform enforces the limit
-        n = min(n_micros, self.micro_cap)
+        cap_today = self.micro_cap
+        n = min(n_micros, cap_today)
+        traded = max(0, n) if trade is not None else 0
+        facts = dict(account_generation=self.generation,
+                     requested_n=req, traded_n=traded,
+                     cap_applied=(trade is not None and traded < req
+                                  and cap_today < req),
+                     over_budget_status=over_budget_status_for(trade, traded))
         day_net = 0.0
         payout_gross = 0.0
         payout_cash = 0.0
@@ -381,7 +452,13 @@ class XfaLifecycle:
                     self.floor_engine.floor, equity_path[idx], n)
                 return AccountEvent(day=str(day), phase="dead", balance=self.balance,
                                     floor=self.floor_engine.floor, breached=True,
-                                    notes="mll_breach_permanent_close")
+                                    notes="mll_breach_permanent_close",
+                                    # R1 settlement = this day's realized
+                                    # result (same day, same generation).
+                                    day_net_usd=self.balance - balance_at_open,
+                                    # phase 'dead': the XFA qualifying
+                                    # ruleset no longer applies to the event
+                                    qualifying_day=None, **facts)
             day_net = n * trade.final_pnl_per_contract
             self.balance += day_net
         if request_payout:
@@ -414,4 +491,19 @@ class XfaLifecycle:
         self.micro_cap = self._tier_micros(self.balance)
         return AccountEvent(day=str(day), phase="xfa", balance=self.balance,
                             floor=self.floor_engine.floor,
-                            payout_gross=payout_gross, payout_cash=payout_cash)
+                            payout_gross=payout_gross, payout_cash=payout_cash,
+                            # AUTHORITATIVE (N02/D5-5): the day's TRADING net
+                            # only. On a payout day the balance also fell by
+                            # payout_gross (frozen: payout_accounting), so a
+                            # balance-difference reading would report the
+                            # cycle's best day as a large loss day.
+                            day_net_usd=day_net,
+                            # SINGLE SOURCE OF TRUTH: the platform's own
+                            # counter transition. On a payout-request day it
+                            # is False even when day_net >= $150, because
+                            # frozen MC SS4.2 / payout_paths.standard
+                            # .after_payout exclude the request day from
+                            # every count — a re-derived threshold test would
+                            # get exactly this day wrong.
+                            qualifying_day=self.qualifying_days > qual_before,
+                            **facts)
