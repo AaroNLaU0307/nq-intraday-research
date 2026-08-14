@@ -338,18 +338,19 @@ def test_flagship_outer_K_claim_cannot_pass(env):
     assert not ei.value.code.startswith("run_evidence_inner_mismatch")
 
 
-def test_relabelled_inner_B_still_refused_by_world_means_length(env):
-    """R2.1 A: outer B=4 with inner `.B` ALSO relabelled to 4 — but the
-    world_means tuples still hold 2 entries. The ARRAY LENGTH is the
-    witness (len(world_means) != outer B), not the label."""
-    results = {
-        cid: (dataclasses.replace(c, B=4), dataclasses.replace(s, B=4))
-        for cid, (c, s) in env.base.items()}
-    base = _evidence(results, B=4)
-    _, doubled, seeds = _small_fixture(env)
-    with pytest.raises(mcc.MCInputError,
-                       match="run_evidence_inner_mismatch:B"):
-        mcc.convergence_from_evidence(base, doubled, seeds)
+def test_relabelled_inner_B_refused_at_construction(env):
+    """R2.1 A / R2.2 self-authentication: relabelling a REAL B=2 result's
+    `.B` to 4 while its world_means tuples still hold 2 entries. R2.2
+    moved this refusal UPSTREAM from the convergence check into the type
+    constructor itself: EpistemicResult.__post_init__ re-derives every
+    statistic from the raw samples and refuses the sample-count lie at
+    CONSTRUCTION (len(world_means) != B -> epistemic_samples_invalid),
+    dataclasses.replace included — the relabelled object can never even
+    exist to become RunEvidence input. The ARRAY LENGTH is the witness,
+    not the label."""
+    cons = _inner_cons(env.base)
+    with pytest.raises(mcc.MCInputError, match="epistemic_samples_invalid"):
+        dataclasses.replace(cons, B=4)
 
 
 def test_inner_prepared_digest_disagreement_refused(env):

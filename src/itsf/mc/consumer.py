@@ -311,16 +311,36 @@ class CustodyAuthority:
 # (written and committed BEFORE any reveal; its hash table is the
 # independent record of the sealed bundle's bytes).
 ATTESTATION_PATH = "ops/S0_T001_POST_RUN_ATTESTATION.md"
+# R2.2 PHASE E — the attestation document's OWN digest, pinned in CODE
+# (commit-bound): a synchronized rewrite of attestation + bundle +
+# manifest still fails against this constant. Any legitimate future
+# change to the attestation requires a reviewed code change here.
+ATTESTATION_SHA256_PINNED = (
+    "d839b965a35e749f0a9052cc3fb85f9b4032ed5d412043f36ac3349779941805")
 
 
 def load_custody_authority_from_attestation(
-        path: str = ATTESTATION_PATH) -> CustodyAuthority:
-    """Parse the blind post-run attestation's file table into a typed
-    production authority (test_only=False). Fail-closed: the table must
-    yield EXACTLY the bundle exact-set with well-formed digests, and the
-    trial/commit lines must be present."""
-    p = _REPO_ROOT / path
-    raw = p.read_bytes()
+        path: str = ATTESTATION_PATH,
+        attestation_bytes: bytes | None = None) -> CustodyAuthority:
+    """Parse the blind post-run attestation into a typed production
+    authority (test_only=False). Fail-closed (R2.2 PHASE E): the RAW
+    BYTES must hash to the CODE-PINNED attestation digest, the source id
+    must be the approved path, the table must yield EXACTLY the bundle
+    exact-set with well-formed digests, and the trial/commit lines must
+    be present. This is the ONLY constructor of a non-test authority the
+    production prepare entry will honour."""
+    if path != ATTESTATION_PATH:
+        raise MCInputError("custody_authority_source_violation",
+                           f"source id {path!r} != approved "
+                           f"{ATTESTATION_PATH!r}")
+    raw = (attestation_bytes if attestation_bytes is not None
+           else (_REPO_ROOT / path).read_bytes())
+    got_sha = hashlib.sha256(raw).hexdigest()
+    if got_sha != ATTESTATION_SHA256_PINNED:
+        raise MCInputError(
+            "custody_authority_source_digest_mismatch",
+            f"attestation bytes hash {got_sha[:12]} != pinned "
+            f"{ATTESTATION_SHA256_PINNED[:12]}")
     text = raw.decode("utf-8")
     trial = re.search(r"TRIAL_ID=(\S+)", text)
     commit = re.search(r"AUTHORIZED_COMMIT=([0-9a-f]{40})", text)
@@ -359,20 +379,23 @@ def _parse_record(row: dict, name: str, i: int) -> FrozenTradePath:
 
 def prepare_mc_input(bundle: Mapping[str, bytes], *,
                      authorization_snapshot: Mapping,
-                     custody_authority: CustodyAuthority,
+                     attestation_bytes: bytes,
                      ) -> PreparedMCInput:
-    """PRODUCTION prepare entry: typed external custody authority ONLY
-    (R2.1 PHASE F — a test_only authority refuses) and the FROZEN-window
-    template calendar (no injection seam here). Tests use
-    `prepare_mc_input_for_tests`."""
-    if not isinstance(custody_authority, CustodyAuthority):
-        raise MCInputError("custody_authority_missing")
-    if custody_authority.test_only:
-        raise MCInputError("custody_authority_test_only_in_production")
+    """PRODUCTION prepare entry (R2.2 PHASE E — non-self-authenticating):
+    accepts the RAW attestation bytes, never a caller-built authority
+    object. The authority is constructed INTERNALLY by
+    `load_custody_authority_from_attestation`, which pins the source id
+    AND the source document digest in code — a hand-built
+    CustodyAuthority(test_only=False) has NO production entry, and a
+    synchronized attestation+bundle+manifest rewrite still fails against
+    the code pin. The frozen-window calendar is built here (no injection
+    seam). Tests use `prepare_mc_input_for_tests`."""
+    authority = load_custody_authority_from_attestation(
+        attestation_bytes=attestation_bytes)
     return _prepare_mc_input_impl(bundle,
                                   authorization_snapshot=
                                   authorization_snapshot,
-                                  custody_authority=custody_authority,
+                                  custody_authority=authority,
                                   calendar=None)
 
 
@@ -382,11 +405,17 @@ def prepare_mc_input_for_tests(bundle: Mapping[str, bytes], *,
                                test_only_calendar:
                                "TemplateCalendar | None" = None,
                                ) -> PreparedMCInput:
-    """TEST_ONLY seam (R2.1 PHASE E.5/F): accepts test_only authorities
-    and an injected non-frozen-window calendar. NEVER a production path —
-    the production entry above refuses both."""
+    """TEST_ONLY seam (R2.1 PHASE E.5/F; hardened R2.2): accepts ONLY
+    test_only authorities — a caller-built test_only=False authority has
+    no entry here either (production non-test authorities exist solely
+    via the internal attestation constructor)."""
     if not isinstance(custody_authority, CustodyAuthority):
         raise MCInputError("custody_authority_missing")
+    if not custody_authority.test_only:
+        raise MCInputError(
+            "custody_authority_production_object_in_test_entry",
+            "non-test authorities are constructed ONLY inside "
+            "prepare_mc_input from pinned attestation bytes")
     return _prepare_mc_input_impl(bundle,
                                   authorization_snapshot=
                                   authorization_snapshot,
@@ -730,17 +759,65 @@ class FeasibilityEvidence:
             ambiguous_share=(ambiguous / offered if offered else 0.0))
 
 
+def _epistemic_derived(world_means: tuple, within_world_ses: tuple,
+                       B: int) -> dict:
+    """The ONE derivation of every epistemic statistic from raw samples —
+    used by BOTH the constructor helper and the self-authentication check
+    (R2.2 PHASE C), so a declared statistic can never disagree silently."""
+    arr = np.asarray(world_means, dtype=float)
+    # R2.1 PHASE D: NaN/inf/empty samples and negative/non-finite SEs are
+    # refusals — a quantile computed over garbage is not evidence.
+    if arr.size == 0 or not np.isfinite(arr).all():
+        raise MCInputError("epistemic_samples_invalid",
+                           "world means empty or non-finite")
+    ses = [float(s) for s in within_world_ses]
+    if any((not math.isfinite(s)) or s < 0.0 for s in ses):
+        raise MCInputError("epistemic_samples_invalid",
+                           "within-world SEs negative or non-finite")
+    # R2.2 PHASE C: sample counts must equal B — one mean and one SE per
+    # world, no truncation, no padding.
+    if arr.size != int(B) or len(ses) != int(B):
+        raise MCInputError("epistemic_samples_invalid",
+                           f"len(world_means)={arr.size} "
+                           f"len(within_world_ses)={len(ses)} != B={B}")
+    between_sd = float(arr.std(ddof=1)) if arr.size > 1 else 0.0
+    max_se = max(ses) if ses else 0.0
+    # frozen: MC SS5 rule (d) — within-world MCSE <= 10% of the
+    # between-world SD, computed from ACTUAL samples (never declared).
+    # R2.1 PHASE D: zero between-world variance passes ONLY with zero
+    # within-world MCSE.
+    if between_sd == 0.0:
+        mcse_ok = (max_se == 0.0)
+    else:
+        mcse_ok = max_se <= MCSE_MAX_FRACTION * between_sd
+    return {
+        "p5": float(np.percentile(arr, 5)),
+        "median": float(np.percentile(arr, 50)),
+        "p95": float(np.percentile(arr, 95)),
+        "between_world_sd": between_sd,
+        "max_within_world_se": max_se,
+        "mcse_ok": mcse_ok,
+    }
+
+
 @dataclass(frozen=True)
 class EpistemicResult:
     """B world-level mean monthly prop_operating_EVs + decision quantiles.
     THE ONLY object Checkpoint-0 statistics may be read from. Carries its
-    own provenance (prepared digest, B, master seed) and the mechanically
-    computed feasibility evidence (R2 PHASE E)."""
+    own provenance (prepared digest, B, master seed), the COMPLETE raw
+    within-world SEs and the mechanically computed feasibility evidence.
+
+    SELF-AUTHENTICATING (R2.2 PHASE C): `__post_init__` re-derives every
+    statistic from the raw samples and refuses any disagreement — direct
+    construction with forged p5/median/p95/mcse_ok, and
+    `dataclasses.replace` of any derived field, both fail
+    deterministically. There is no bypass: the check lives on the type."""
     platform: str
     engine: str
     scenario: str
     channel: str
     world_means: tuple
+    within_world_ses: tuple           # COMPLETE per-world SEs (len == B)
     p5: float
     median: float
     p95: float
@@ -753,40 +830,32 @@ class EpistemicResult:
     prepared_digest: str
     feasibility: FeasibilityEvidence
 
+    def __post_init__(self):
+        want = _epistemic_derived(self.world_means, self.within_world_ses,
+                                  self.B)
+        for field_name, expected in want.items():
+            got = getattr(self, field_name)
+            if got != expected:
+                raise MCInputError(
+                    "epistemic_derived_stats_mismatch",
+                    f"{field_name}: declared {got!r} != derived "
+                    f"{expected!r} from the raw samples")
+
     @staticmethod
     def from_world_means(platform, engine, scenario, channel, world_means,
                          *, within_world_ses, B, M, master_seed,
                          prepared_digest_value,
                          feasibility) -> "EpistemicResult":
-        arr = np.asarray(world_means, dtype=float)
-        # R2.1 PHASE D: NaN/inf/empty samples and negative/non-finite SEs
-        # are refusals — a quantile computed over garbage is not evidence.
-        if arr.size == 0 or not np.isfinite(arr).all():
-            raise MCInputError("epistemic_samples_invalid",
-                               "world means empty or non-finite")
-        ses = [float(s) for s in (within_world_ses or ())]
-        if any((not math.isfinite(s)) or s < 0.0 for s in ses):
-            raise MCInputError("epistemic_samples_invalid",
-                               "within-world SEs negative or non-finite")
-        between_sd = float(arr.std(ddof=1)) if arr.size > 1 else 0.0
-        max_se = max(ses) if ses else 0.0
-        # frozen: MC SS5 rule (d) — within-world MCSE <= 10% of the
-        # between-world SD, computed from ACTUAL samples (never declared).
-        # R2.1 PHASE D: zero between-world variance passes ONLY with zero
-        # within-world MCSE — a degenerate distribution cannot excuse a
-        # noisy inner estimate.
-        if between_sd == 0.0:
-            mcse_ok = (max_se == 0.0)
-        else:
-            mcse_ok = max_se <= MCSE_MAX_FRACTION * between_sd
+        wm = tuple(float(x) for x in world_means)
+        ses = tuple(float(s) for s in (within_world_ses or ()))
+        d = _epistemic_derived(wm, ses, B)
         return EpistemicResult(
             platform=platform, engine=engine, scenario=scenario,
-            channel=channel, world_means=tuple(float(x) for x in arr),
-            p5=float(np.percentile(arr, 5)),
-            median=float(np.percentile(arr, 50)),
-            p95=float(np.percentile(arr, 95)),
-            mcse_ok=mcse_ok, max_within_world_se=max_se,
-            between_world_sd=between_sd, B=int(B), M=int(M),
+            channel=channel, world_means=wm, within_world_ses=ses,
+            p5=d["p5"], median=d["median"], p95=d["p95"],
+            mcse_ok=d["mcse_ok"],
+            max_within_world_se=d["max_within_world_se"],
+            between_world_sd=d["between_world_sd"], B=int(B), M=int(M),
             master_seed=int(master_seed),
             prepared_digest=prepared_digest_value,
             feasibility=feasibility)
@@ -1149,69 +1218,57 @@ def convergence_from_evidence(base: RunEvidence,
         "refuses above until Aaron rules")
 
 
-def verdict_or_refuse(primary_inputs: Mapping, *, base: RunEvidence,
-                      doubled_by_axis: Mapping, seed_runs: Mapping):
-    """The ONLY path to a Checkpoint-0 verdict.
+def _reduce_primary_from_base(base: RunEvidence) -> dict:
+    """R2.2 PHASE D — THE single internal reduction: Primary VerdictInputs
+    are derived EXCLUSIVELY from `base.results` (Conservative/Stress,
+    platform, engine, theta channel and prepared digest all come from the
+    same RunEvidence). There is no public entry that accepts externally
+    built VerdictInputs, so a hand-made positive grid has no callable
+    path into the verdict or the seal.
 
-    R2.1 PHASE C.8: takes the convergence EVIDENCE, never a report object
-    — a hand-built all-green ConvergenceReport can no longer enter the
-    seal path, because convergence is recomputed HERE from the runs.
+    Today this reduction refuses deterministically at the feasibility
+    gate inside `epistemic_go_gate_input` (FEASIBILITY_GATE=
+    DECISION_REQUIRED) — CHECKPOINT0_VERDICT_REACHABLE=NO. When Aaron
+    freezes the feasibility rule, the ONLY legal extension is a typed,
+    provenance-bound decision-evidence object attached to this same
+    reduction — never a reopened boolean."""
+    base.validate_inner_binding()
+    return {cid: epistemic_go_gate_input(cons, stress)
+            for cid, (cons, stress) in sorted(base.results.items())}
 
-    Refuses (review H2) unless the input grid covers EXACTLY the frozen
-    Primary verdict grid — both lifecycles x P2 x BOTH engines (MC SS0
-    quantifier scope; S0 SS10.4 row 1 quantifies over "E1 与 E2 的所有预
-    注册组合" and row 3's first arm needs the E2 combos present) — with
-    every combo id matching its VerdictInput's own labels and the frozen
-    primary theta channel; then recomputes convergence from evidence
-    (structurally refusing today: M semantics DECISION_REQUIRED, K
-    evidence BLOCKED, feasibility gate DECISION_REQUIRED upstream)."""
+
+def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
+                                   base: RunEvidence,
+                                   doubled_by_axis: Mapping,
+                                   seed_runs: Mapping) -> dict:
+    """The ONLY path to a Checkpoint-0 verdict AND its seal candidate
+    (R2.2 PHASE D — the sealed `primary` table and the mechanical verdict
+    are read from the SAME internal reduction object; convergence is
+    recomputed from evidence inside; nothing caller-declared survives).
+
+    Structurally unreachable today: the reduction refuses at the
+    feasibility gate, convergence refuses at M/K — every refusal is the
+    honest missing-decision, not a gap."""
     from itsf.mc.verdict import apply_verdict
-    if set(primary_inputs) != PRIMARY_VERDICT_GRID:
-        raise MCInputError(
-            "primary_grid_coverage_violation",
-            f"need exactly {sorted(PRIMARY_VERDICT_GRID)}, got "
-            f"{sorted(primary_inputs)}")
-    for cid, v in primary_inputs.items():
-        platform, engine, _policy = cid.split("|")
-        if v.platform != platform or v.engine != engine:
-            raise MCInputError("primary_grid_label_mismatch",
-                               f"{cid} carries {v.platform}/{v.engine}")
-        # R2 PHASE B: Checkpoint-0 accepts ONLY the frozen primary theta
-        # channel (S0 §7 L133); a secondary-channel input refuses here
-        # even if every other gate is green.
-        if v.channel != PRIMARY_THETA_CHANNEL:
-            raise MCInputError("theta_channel_not_primary",
-                               f"{cid} carries channel={v.channel!r}")
-    convergence_from_evidence(base, doubled_by_axis, seed_runs)
-    return apply_verdict(dict(primary_inputs))
-
-
-def render_verdict_inputs(prepared: PreparedMCInput,
-                          primary_inputs: Mapping, *, base: RunEvidence,
-                          doubled_by_axis: Mapping,
-                          seed_runs: Mapping) -> dict:
-    """MC SS6 `verdict_inputs.json` seal CANDIDATE: the Primary combos'
-    epistemic P5/median/P95 + feasibility flags + the mechanical verdict,
-    bound to the prepared input's identity. R2.1: takes convergence
-    EVIDENCE (recomputed inside verdict_or_refuse) — an unconverged or
-    hand-declared candidate cannot render."""
+    if base.prepared_digest != prepared_digest(prepared):
+        raise MCInputError("provenance_mismatch",
+                           "base evidence was not computed from THIS "
+                           "prepared input")
     digest_before = prepared_digest(prepared)
-    verdict = verdict_or_refuse(primary_inputs, base=base,
-                                doubled_by_axis=doubled_by_axis,
-                                seed_runs=seed_runs)
+    reduction = _reduce_primary_from_base(base)
+    convergence_from_evidence(base, doubled_by_axis, seed_runs)
+    verdict = apply_verdict(dict(reduction))
     digest_after = prepared_digest(prepared)
     if digest_before != digest_after:
         raise MCInputError("prepared_digest_instability",
                            f"{digest_before[:12]} -> {digest_after[:12]}")
     return {
-        "schema": "mc_verdict_inputs.v2",
+        "schema": "mc_verdict_inputs.v3",
         "trial_id": prepared.trial_id,
         "authorized_commit": prepared.authorized_commit,
         "method_digest": prepared.method_digest,
         "prepared_digest": digest_before,
         "primary_theta_channel": PRIMARY_THETA_CHANNEL,
-        # provenance (review LOW): the sealed numbers are bound to the
-        # exact bundle bytes they were computed from.
         "bundle_file_sha256": dict(prepared.file_sha256),
         "seeds": list(prepared.seeds),
         "primary": {
@@ -1219,7 +1276,7 @@ def render_verdict_inputs(prepared: PreparedMCInput,
                   "median_stress": v.median_stress, "p95_cons": v.p95_cons,
                   "feasible": v.feasible, "platform": v.platform,
                   "engine": v.engine, "channel": v.channel}
-            for cid, v in sorted(primary_inputs.items())},
+            for cid, v in sorted(reduction.items())},
         "convergence_evidence": {
             "base_run": base.run_label,
             "doubled_axes": sorted(doubled_by_axis),

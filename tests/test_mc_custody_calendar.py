@@ -151,14 +151,6 @@ def _prepare(bundle=None, authority=None, calendar=None):
         else _calendar())
 
 
-def _prepare_production(bundle, authority):
-    """PRODUCTION prepare entry — deliberately NO calendar injection.
-    integration point: main agent aligns this call."""
-    return mcc.prepare_mc_input(
-        bundle, authorization_snapshot=_snapshot(),
-        custody_authority=authority)
-
-
 # --- R2.1 PHASE A: typed custody authority ----------------------------------
 
 def test_load_custody_authority_from_real_attestation():
@@ -179,6 +171,7 @@ def test_load_custody_authority_from_real_attestation():
     assert auth.authorized_commit == COMMIT
     assert auth.source_artifact_id == ATTESTATION_REL
     assert auth.source_artifact_sha256 == hashlib.sha256(raw).hexdigest()
+    assert auth.source_artifact_sha256 == mcc.ATTESTATION_SHA256_PINNED
     assert dict(auth.file_sha256) == table
     assert set(auth.file_sha256) == set(mcc.BUNDLE_EXACT_SET)
     # spot-pins copied verbatim from the attestation table (guards the
@@ -191,14 +184,39 @@ def test_load_custody_authority_from_real_attestation():
         auth.trial_id = "X"                    # type: ignore
 
 
-def test_production_entry_refuses_test_only_authority():
-    """prepare_mc_input is the PRODUCTION entry: a test_only custody
-    authority can NEVER authorize it — synthetic custody must be
-    structurally incapable of opening the real prepare path."""
+def test_no_caller_built_authority_crosses_either_entry():
+    """R2.2 custody rooting: the PRODUCTION entry accepts NO authority
+    object at all — its signature takes raw `attestation_bytes` and the
+    authority is constructed internally against the code-pinned source.
+    Symmetrically, the TEST entry refuses a hand-built test_only=False
+    object, so non-test authorities exist ONLY via the internal
+    attestation constructor."""
+    sig_prod = inspect.signature(mcc.prepare_mc_input)
+    assert "attestation_bytes" in sig_prod.parameters
+    assert "custody_authority" not in sig_prod.parameters
     b = _bundle()
+    prod_like = dataclasses.replace(mcc.CustodyAuthority.for_tests(b),
+                                    test_only=False)
+    with pytest.raises(
+            mcc.MCInputError,
+            match="custody_authority_production_object_in_test_entry"):
+        _prepare(b, authority=prod_like)
+
+
+def test_attestation_source_pins_refuse_tamper_and_wrong_path():
+    """R2.2 PHASE E: the internal authority constructor is rooted TWICE
+    in code — tampered attestation bytes fail the pinned document
+    digest, and any source id other than the approved attestation path
+    is refused before bytes are even read."""
+    raw = ATTESTATION_PATH.read_bytes()
     with pytest.raises(mcc.MCInputError,
-                       match="custody_authority_test_only_in_production"):
-        _prepare_production(b, _authority(b))
+                       match="custody_authority_source_digest_mismatch"):
+        mcc.load_custody_authority_from_attestation(
+            attestation_bytes=b"x" + raw)
+    with pytest.raises(mcc.MCInputError,
+                       match="custody_authority_source_violation"):
+        mcc.load_custody_authority_from_attestation(
+            path="ops/SOME_OTHER_DOC.md")
 
 
 def test_test_only_entry_accepts_test_authority():

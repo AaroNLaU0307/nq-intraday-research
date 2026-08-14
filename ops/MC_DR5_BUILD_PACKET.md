@@ -285,3 +285,64 @@ M_AXIS_RECOMMENDATION=FINITE_SUPPORT_EXHAUSTIVE_ENUMERATION_EXEMPT_FROM_DOUBLING
 FABLE_MEASURED=三 MC 测试文件 75 项＋既有 87 项全绿；全套件见终报；attestation loader 对真实文件实测
 CODEX_NOT_YET_REPRODUCED=YES
 ```
+
+
+---
+
+## 12.【R2.2 现势（self-authenticating evidence 轮）——与上文冲突处以本节为准】
+
+授权：`START_MC_DR5_R2_2_SELF_AUTHENTICATING_EVIDENCE`（Aaron 执行令，
+并确认 Fable 对 Codex 审核持最终裁量权——本轮三项反例经独立核实全部
+成立后采纳）。Subagent 租约：S1/S2 各自续话自改本车道文件（接口涟漪
+经 follow-up 由原车道修复，主代理零触碰）；主代理新增独占
+`tests/test_mc_r2_2_integration.py`。
+
+### 12.1 三反例修复前后
+
+| Codex 反例 | 修复前（R2.1） | 修复后（R2.2） |
+|---|---|---|
+| 伪造派生统计量（world_means=[-100]×B 声明 p5=+999/mcse_ok=true） | dataclass 构造器接受任意声明值，`dataclasses.replace` 可伪造 | **类型自认证**：`__post_init__` 从原始样本（含完整 `within_world_ses` tuple，长度必须=B）精确复算全部派生量，失配即 `epistemic_derived_stats_mismatch`；构造与 replace 均拒；进不了 RunEvidence |
+| 合法收敛证据＋手工正收益 VerdictInput | `verdict_or_refuse(primary_inputs=…)` 独立信任面存在 | **入口删除**：`verdict_and_seal_from_evidence(prepared, base, doubled, seeds)` 为唯一判定＋封印路径，Primary 表由 `base.results` 内部归约，封印表与机械 verdict 共用同一归约对象；签名扫描测试钉"无任何公共函数收 primary_inputs" |
+| 手构 `CustodyAuthority(test_only=False)` | 任何调用方可构造并投喂生产入口 | **生产入口只收原始 attestation 字节**：authority 由内部构造器生成，来源 id＋文档摘要双 pin 于代码（`ATTESTATION_SHA256_PINNED=d839b965…`）；同步改写 attestation＋bundle＋manifest 仍败于代码 pin；测试入口拒 test_only=False（`custody_authority_production_object_in_test_entry`）；`real_input.py` 收敛为唯一正式 caller |
+
+### 12.2 现势状态
+
+```
+MC_CONSUMER_BUILD=PARTIAL
+CONVERGENCE_EVIDENCE_READY=PARTIAL
+MC_INPUT_BUNDLE_READY=YES
+GRID_REPLAY_STATUS=BLOCKED
+DECISION_REQUIRED_M_AXIS=YES
+FEASIBILITY_GATE=DECISION_REQUIRED
+CHECKPOINT0_VERDICT_REACHABLE=NO
+MC_REAL_RUN_READY=NO
+MC_EXECUTED=NO
+STRATEGY_BUILD_STARTED=NO
+```
+
+### 12.3 Feasibility 决策包 v2（阈值改从冻结平台规则推导，取代 §11.3C 的整数候选）
+
+**GO 必需门**（S0 §10.4 row 2 明名三项，各自的量从冻结参数落地）：
+
+| 门 | 冻结依据 | 派生候选（Aaron 择定/另定） | 归类 |
+|---|---|---|---|
+| payout 路径可行 | Lucid：`qualifying_days_required=5`＋`qualifying_day_min_profit_usd=$150`（每次 payout 后重计）；Topstep XFA：`≥3 交易日（每日≥1笔）＋ largest_winning_day/total ≤ 0.40` | 认知层世界中**模拟内实际实现 payout** 的世界占比 ≥X%（X∈{25,50}）——或最低要求：≥1 次实现（当前 `payout_realized_share>0` 即此读法） | GO 必需 |
+| 频率可行 | 同上（5 达标日/周期与 ≥3 日/周期是频率的冻结下界来源） | 月均可交易日 ≥ 派生下界：Lucid 周期内可达 5×$150 日（≈月均 ≥5 个交易机会才可能）；Topstep ≥3 | GO 必需 |
+| 整数仓位可行 | MC §3 `n = min(floor(budget/anchor), 档位, absolute_max)`；n=0 跳过计数为冻结输出 | n=0 跳过率 ≤Y%（Y 无冻结值——**纯 Aaron 裁量**，候选 25/50 仅为区间示例并如实标注为非推导值） | GO 必需 |
+
+**仅报告项**（MC §6 强制输出、冻结文本未 GO 条件化）：ambiguous 占比
+（COMPUTED）；E2 超预算概率（PENDING_ENGINEERING）；合约上限触碰率
+（PENDING_ENGINEERING）；达标盈利日 vs payout 要求全分布
+（PENDING_ENGINEERING）；exhausted 占比（COMPUTED）。
+
+规则不变：布尔归约未获 Aaron 冻结前，归约步确定性拒绝
+（`feasibility_gate_decision_required`），VerdictInput 不可构造；批准后
+唯一合法扩展=一份 typed、provenance-bound decision evidence 附着于同一
+base 归约，不重开任意 Boolean。
+
+### 12.4 证据等级
+
+```
+FABLE_MEASURED=车道 S1 25 项（自改后）＋S2（见其回执）＋主代理 43 项；全套件见终报
+CODEX_NOT_YET_REPRODUCED=YES
+```

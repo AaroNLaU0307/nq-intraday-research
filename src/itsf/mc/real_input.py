@@ -31,10 +31,14 @@ def prepare_real_mc_input() -> "mcc.PreparedMCInput":
     mcc.authorize_real_mc(
         registry.read_text(encoding="utf-8") if registry.exists() else "")
     # --- unreachable today (authorize_real_mc always raises) -------------
-    authority = mcc.load_custody_authority_from_attestation()
+    # R2.2 PHASE E: the SOLE formal entry — raw attestation bytes go in,
+    # the authority is constructed and pinned INSIDE prepare_mc_input.
+    attestation_bytes = (mcc._REPO_ROOT / mcc.ATTESTATION_PATH).read_bytes()
+    authority = mcc.load_custody_authority_from_attestation(
+        attestation_bytes=attestation_bytes)
     bundle = {p.name: p.read_bytes() for p in SEALED_RUN_DIR.iterdir()
               if p.is_file()}
     snapshot = {"trial_id": authority.trial_id,
                 "authorized_commit": authority.authorized_commit}
     return mcc.prepare_mc_input(bundle, authorization_snapshot=snapshot,
-                                custody_authority=authority)
+                                attestation_bytes=attestation_bytes)

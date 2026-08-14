@@ -429,30 +429,26 @@ def test_no_public_surface_accepts_a_feasibility_boolean():
     assert mcc.FEASIBILITY_GATE_STATUS == "DECISION_REQUIRED"
 
 
-def test_verdict_gate_rechecks_channel_and_grid():
-    """Defense in depth at verdict_or_refuse: hand-built VerdictInputs
-    with a secondary channel refuse on theta; a subset grid refuses on
-    coverage — both BEFORE any convergence evidence is consulted."""
-    from itsf.mc.verdict import VerdictInput
-
-    def grid(channel):
-        return {
-            f"{platform}|{engine}|{policy}": VerdictInput(
-                p5_cons=1.0, median_cons=2.0, median_stress=1.0,
-                p95_cons=3.0, feasible=True, platform=platform,
-                engine=engine, channel=channel)
-            for platform, policy in mcc.PRIMARY_COMBOS
-            for engine in mcc.ENGINES}
-
-    dummy = None      # never reached: both cases refuse before evidence
-    with pytest.raises(mcc.MCInputError, match="theta_channel_not_primary"):
-        mcc.verdict_or_refuse(grid(SECONDARY), base=dummy,
-                              doubled_by_axis={}, seed_runs={})
-    g = grid(PRIMARY)
-    del g["topstep|E2|P2"]
-    with pytest.raises(mcc.MCInputError, match="primary_grid_coverage"):
-        mcc.verdict_or_refuse(g, base=dummy, doubled_by_axis={},
-                              seed_runs={})
+def test_hand_built_verdict_inputs_have_no_callable_entry():
+    """R2.2 PHASE D (Codex counterexample): a hand-made positive
+    VerdictInput grid has NO entry into the consumer's verdict/seal path —
+    the old primary_inputs surfaces are gone and no public consumer
+    function accepts VerdictInput objects."""
+    import inspect
+    assert not hasattr(mcc, "verdict_or_refuse")
+    assert not hasattr(mcc, "render_verdict_inputs")
+    for name, fn in vars(mcc).items():
+        if name.startswith("_") or not callable(fn) \
+                or not getattr(fn, "__module__", "").endswith("consumer"):
+            continue
+        try:
+            params = inspect.signature(fn).parameters
+        except (TypeError, ValueError):
+            continue
+        assert "primary_inputs" not in params, name
+    sig = inspect.signature(mcc.verdict_and_seal_from_evidence)
+    assert set(sig.parameters) == {"prepared", "base", "doubled_by_axis",
+                                   "seed_runs"}
 
 
 # --- authorization gate -----------------------------------------------------
