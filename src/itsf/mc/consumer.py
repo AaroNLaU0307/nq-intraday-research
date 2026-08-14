@@ -44,12 +44,23 @@ from typing import Mapping, Sequence
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
-import numpy as np
+# N01 PHASE D6: numpy is no longer imported here. Every statistic is
+# reduced by `itsf.mc.atoms` in plain float arithmetic so the INDEPENDENT
+# `itsf.mc.cold_reducer` can agree bitwise; numpy remains where it
+# belongs, inside `itsf.mc.bootstrap`'s PCG64 world construction.
 
 from itsf.contracts import RESEARCH_BOOTSTRAP_SEEDS, TradePathRecord
+from itsf.mc import atoms as mc_atoms
 from itsf.mc import bootstrap as mc_bootstrap
+from itsf.mc import cold_reducer as mc_cold
 from itsf.mc import orchestrator as orch
 from itsf.mc.account import PRIMARY_POLICY
+# NOT_APPLICABLE / PENDING_RULING / PENDING_ENGINEERING are imported for
+# RE-EXPORT: report and decision-packet code reads them as
+# `consumer.<TOKEN>` and must never re-spell the tokens as bare strings.
+from itsf.mc.atoms import (NOT_APPLICABLE, PENDING_ENGINEERING,  # noqa: F401
+                           PENDING_RULING, MCInputError, ObservationSet,
+                           SimulationPathObservation)
 from itsf.s0.study import THETA_PRIMARY, THETA_SECONDARY
 
 # frozen: S0 §7 L133 — "θ 主 0.5、副 0.3（完整报告，不得事后升格）".
@@ -59,9 +70,11 @@ PRIMARY_THETA_CHANNEL = f"theta_{THETA_PRIMARY}"        # 'theta_0.5'
 SECONDARY_THETA_CHANNEL = f"theta_{THETA_SECONDARY}"    # 'theta_0.3'
 
 # --- frozen axes (MC SS2.5 / SS4.1 / SS5) ----------------------------------
-ENGINES = ("E1", "E2")
-SCENARIOS = ("Base", "Conservative", "Stress", "Severe")
-PLATFORMS = ("lucid", "topstep")
+# N01 PHASE D1: the axes now have ONE definition, in the atom layer; these
+# names remain as re-exports so existing consumers keep working.
+ENGINES = mc_atoms.ENGINES
+SCENARIOS = mc_atoms.SCENARIOS
+PLATFORMS = mc_atoms.PLATFORMS
 # frozen: MC SS2.5 decision_roles.primary — 2 lifecycles x P2, nothing else
 PRIMARY_COMBOS = (("lucid", PRIMARY_POLICY), ("topstep", PRIMARY_POLICY))
 # frozen: MC SS0 quantifier scope — the verdict grid is the FULL cross of
@@ -106,13 +119,12 @@ BUNDLE_EXACT_SET = frozenset(
 _RECORD_FIELDS = tuple(TradePathRecord.__dataclass_fields__)  # 19 fields
 
 
-class MCInputError(ValueError):
-    """Fail-closed refusal from the prepared-input battery. `code` is the
-    machine-readable refusal reason (source matrix R13)."""
-
-    def __init__(self, code: str, detail: str = ""):
-        self.code = code
-        super().__init__(f"{code}: {detail}" if detail else code)
+# `MCInputError` (fail-closed refusal carrying a machine-readable `code`,
+# source matrix R13) now LIVES in itsf.mc.atoms so the atom layer and the
+# consumer raise ONE type without an import cycle. Imported above and
+# re-exported here under its historical name — `consumer.MCInputError`
+# remains the same class object every existing caller already catches.
+__all_error__ = MCInputError
 
 
 class MCNotAuthorized(RuntimeError):
@@ -705,45 +717,78 @@ def _paths_for_world(prepared: PreparedMCInput, world: Sequence[str],
 
 
 # frozen: platform_params lucidflex_50k payouts.qualifying_day_min_profit
-# _usd = 150 (每次批准 payout 后重置重计) — the ledger's daily balance
-# delta is the mechanical read of a day's net profit (fee events also move
-# the balance; disclosed derivation, no invention).
-QUALIFYING_DAY_MIN_PROFIT_USD = 150.0
+# _usd = 150. Re-exported from the atom layer (single definition).
+QUALIFYING_DAY_MIN_PROFIT_USD = mc_atoms.QUALIFYING_DAY_MIN_PROFIT_USD
 
 
-def _lifecycle_stats(prepared: PreparedMCInput, platform: str,
-                     paths_by_day: dict, start_offset: int) -> dict:
-    cfg = orch.LifecycleConfig(platform=platform,
-                               sizing_policy=PRIMARY_POLICY)
-    res = orch.run_lifecycle(cfg, list(prepared.calendar.days),
-                             paths_by_day, start_offset=start_offset)
-    rep = res.ledger_report
-    payout_count = 0
-    winning_days = 0
-    days_ge_150 = 0
-    prev_balance = None
-    for ev in res.events:
-        if ev.payout_gross > 0.0:
-            payout_count += 1
-        if prev_balance is not None:
-            delta = ev.balance - prev_balance
-            if delta > 0.0:
-                winning_days += 1
-            if delta >= QUALIFYING_DAY_MIN_PROFIT_USD:
-                days_ge_150 += 1
-        prev_balance = ev.balance
-    return {
-        "monthly_ev": float(rep["prop_operating_ev_monthly"]),
-        "payout_realized": float(rep["payout_cash_total"]) > 0.0,
-        "payout_count": payout_count,
-        "winning_days": winning_days,
-        "days_profit_ge_150": days_ge_150,
-        "skips_n0": int(res.skips_n0),
-        "exhausted": bool(res.terminated_by_exhaustion),
-        "n_offered": len(paths_by_day),
-        "n_ambiguous": sum(1 for p in paths_by_day.values()
-                           if p.ambiguous_stop_vs_floor),
-    }
+def lifecycle_config_for(platform: str):
+    """THE lifecycle configuration every Primary path runs under. One
+    definition, used by the forward run AND by the cold replay."""
+    if platform not in PLATFORMS:
+        raise MCInputError("axis_violation", platform)
+    return orch.LifecycleConfig(platform=platform,
+                                sizing_policy=PRIMARY_POLICY)
+
+
+def _run_path_atom(prepared: PreparedMCInput, *, platform: str,
+                   engine: str, scenario: str, channel: str,
+                   world: Sequence[str], world_index: int,
+                   phase_offset: int, lifecycle_config_digest: str,
+                   master_seed: int, prepared_digest_value: str
+                   ) -> SimulationPathObservation:
+    """Run ONE (world, start-phase) lifecycle and emit ONE atom.
+
+    THE only place a lifecycle is executed. The forward run and the cold
+    replay both call this, so a divergence between them can only come
+    from the inputs — never from two code paths.
+
+    Day facts come from `atoms.path_facts_from_events`, the ONE narrow
+    adapter over lane S2's platform-authoritative event fields. The
+    former neighbouring-balance-delta derivation is DELETED: it double-
+    counted payout debits and produced phantom deltas across account
+    generations."""
+    cfg = lifecycle_config_for(platform)
+    days = list(prepared.calendar.days)
+    window = days[phase_offset:]
+    paths = _paths_for_world(prepared, world, channel, engine, scenario)
+    res = orch.run_lifecycle(cfg, days, paths, start_offset=phase_offset)
+    facts = mc_atoms.path_facts_from_events(res.events, engine=engine,
+                                            platform=platform)
+    # WINDOW-scoped offered/ambiguous counts. The R2.3 code counted over
+    # the WHOLE calendar's path map, which over-counted whenever
+    # start_offset > 0 (the trimmed prefix days can never be offered).
+    window_ids = {td.day_id for td in window}
+    offered = sum(1 for d in paths if d in window_ids)
+    ambiguous = sum(1 for d, p in paths.items()
+                    if d in window_ids and p.ambiguous_stop_vs_floor)
+    if facts["event_days"] > len(window):
+        raise MCInputError(
+            "atom_event_days_exceed_window",
+            f"{facts['event_days']} events > window {len(window)}")
+    return SimulationPathObservation(
+        prepared_digest=prepared_digest_value,
+        lifecycle_config_digest=lifecycle_config_digest,
+        world_index=int(world_index),
+        world_digest=mc_atoms.world_digest(world),
+        phase_offset=int(phase_offset),
+        platform=platform, engine=engine, scenario=scenario,
+        theta_channel=channel, master_seed=int(master_seed),
+        monthly_prop_operating_ev=float(
+            res.ledger_report["prop_operating_ev_monthly"]),
+        days_in_window=len(window),
+        offered_days=offered,
+        executed_trade_days=facts["executed_trade_days"],
+        skips_n0=int(res.skips_n0),
+        payout_count=facts["payout_count"],
+        winning_days=facts["winning_days"],
+        days_profit_ge_150=facts["days_profit_ge_150"],
+        qualifying_days=facts["qualifying_days"],
+        exhausted=bool(res.terminated_by_exhaustion),
+        ambiguous_days=ambiguous,
+        attempts_used=int(res.attempts_used),
+        b2f_used=int(res.b2f_used_total),
+        contract_cap_hits=facts["contract_cap_hits"],
+        e2_over_budget_days=facts["e2_over_budget_days"])
 
 
 # R2.1 PHASE G: the R2 necessary-conditions boolean ("any payout AND not
@@ -753,206 +798,179 @@ def _lifecycle_stats(prepared: PreparedMCInput, platform: str,
 # unreachable (see epistemic_go_gate_input).
 FEASIBILITY_GATE_STATUS = "DECISION_REQUIRED"
 
-# R2.3 PHASE D: per-metric readiness — replaces the blanket YES.
+# N01 PHASE D1: per-metric readiness. Every metric is now reduced from
+# the SAME atom set; the ones marked PENDING_LANE_S2 are computable the
+# moment lane S2 (node N02) emits the platform-authoritative day fields —
+# until then the seam adapter REFUSES rather than approximating, so no
+# metric is ever silently wrong.
 FEASIBILITY_METRICS_STATUS = MappingProxyType({
-    "payout_realization": "COMPUTED",
-    "payout_count": "COMPUTED",
-    "n0_skip_rate": "COMPUTED",
-    "ambiguous_share": "COMPUTED",
-    "exhaustion_share": "COMPUTED",
-    "winning_days": "COMPUTED",              # ledger daily balance delta
-    "days_profit_ge_150": "COMPUTED",        # frozen Lucid qualifying floor
-    "contract_cap_hits": "PENDING_ENGINEERING",   # no per-day n on events
-    "e2_over_budget_days": "PENDING_ENGINEERING",  # needs record-level pipe
+    "payout_events": "COMPUTED",             # AccountEvent.payout_gross
+    "n0_skip_rate": "COMPUTED",              # LifecycleResult.skips_n0
+    "ambiguous_share": "COMPUTED",           # sealed record flag
+    "exhaustion_share": "COMPUTED",          # LifecycleResult
+    "attempts_used": "COMPUTED",             # LifecycleResult
+    "b2f_used": "COMPUTED",                  # LifecycleResult
+    "winning_days": "COMPUTED",              # AccountEvent.day_net_usd
+    "days_profit_ge_150": "COMPUTED",        # AccountEvent.day_net_usd
+    "qualifying_days": "COMPUTED",           # platform's OWN counter
+    "contract_cap_hits": "COMPUTED",         # AccountEvent.cap_applied
+    "e2_over_budget_days": "DECISION_REQUIRED",  # predicate unruled (S2)
     "qualifying_distribution_vs_payout_requirements":
-        "PENDING_ENGINEERING",
+        "DECISION_REQUIRED",                 # the RULE is Aaron's (N-D2)
 })
-
-
-def _nonneg_int(v, allow_none=False):
-    if v is None and allow_none:
-        return True
-    return isinstance(v, int) and not isinstance(v, bool) and v >= 0
-
-
-@dataclass(frozen=True, slots=True)
-class FeasibilityObservation:
-    """ONE raw feasibility observation for one (world, start-phase) path
-    (R2.3 PHASE D) — the atoms every FeasibilityEvidence scalar is
-    recomputed from. `contract_cap_hits` / `e2_over_budget_days` are None
-    while their event plumbing is PENDING_ENGINEERING — never a forged 0.
-    """
-    world_index: int
-    phase_offset: int
-    offered: int
-    skips_n0: int
-    payout_realized: bool
-    payout_count: int
-    winning_days: int
-    days_profit_ge_150: int
-    exhausted: bool
-    ambiguous_days: int
-    contract_cap_hits: object = None
-    e2_over_budget_days: object = None
-
-    def __post_init__(self):
-        ok = (_nonneg_int(self.world_index)
-              and _nonneg_int(self.phase_offset)
-              and _nonneg_int(self.offered)
-              and _nonneg_int(self.skips_n0)
-              and _nonneg_int(self.payout_count)
-              and _nonneg_int(self.winning_days)
-              and _nonneg_int(self.days_profit_ge_150)
-              and _nonneg_int(self.ambiguous_days)
-              and isinstance(self.payout_realized, bool)
-              and isinstance(self.exhausted, bool)
-              and _nonneg_int(self.contract_cap_hits, allow_none=True)
-              and _nonneg_int(self.e2_over_budget_days, allow_none=True)
-              and self.skips_n0 <= self.offered
-              and self.ambiguous_days <= self.offered)
-        if not ok:
-            raise MCInputError("feasibility_observation_invalid",
-                               f"world={self.world_index!r} "
-                               f"phase={self.phase_offset!r}")
-
-
-def _feasibility_derived(observations: tuple, expected_n: int) -> dict:
-    """The ONE derivation of every feasibility scalar from observations."""
-    if len(observations) != int(expected_n):
-        raise MCInputError(
-            "feasibility_observations_incomplete",
-            f"{len(observations)} observations != expected {expected_n}")
-    keys = [(o.world_index, o.phase_offset) for o in observations]
-    if len(set(keys)) != len(keys):
-        raise MCInputError("feasibility_observations_duplicate",
-                           "repeated (world, phase) observation")
-    n = len(observations)
-    offered = sum(o.offered for o in observations)
-    return {
-        "n_paths": n,
-        "payout_realized_share": (sum(1 for o in observations
-                                      if o.payout_realized) / n
-                                  if n else 0.0),
-        "total_skips_n0": sum(o.skips_n0 for o in observations),
-        "total_offered": offered,
-        "exhausted_share": (sum(1 for o in observations if o.exhausted) / n
-                            if n else 0.0),
-        "ambiguous_share": (sum(o.ambiguous_days for o in observations)
-                            / offered if offered else 0.0),
-    }
 
 
 @dataclass(frozen=True)
 class FeasibilityEvidence:
-    """Feasibility METRICS recomputed from the COMPLETE immutable raw
-    observations (R2.3 PHASE D — no caller-declared scalar can exist:
-    `__post_init__` re-derives everything and refuses mismatches; a
-    removed, duplicated or tampered observation is caught by the same
-    derivation). Bound to prepared_digest + combo + scenario + theta +
-    B + M + seed. No `feasible` boolean exists anywhere: the reduction
-    rule stays DECISION_REQUIRED for Aaron."""
-    observations: tuple
-    expected_n: int
-    n_paths: int
-    payout_realized_share: float
-    total_skips_n0: int
-    total_offered: int
-    exhausted_share: float
-    ambiguous_share: float
-    prepared_digest: str
-    platform: str
-    engine: str
-    scenario: str
-    channel: str
-    B: int
-    M: int
-    master_seed: int
+    """RAW feasibility metrics reduced from the SAME `ObservationSet`
+    every other statistic comes from (N01 PHASE D1).
+
+    There is no `expected_n` (the expected count is a CONSEQUENCE of the
+    B x legal-phase-support grid the ObservationSet already enforces),
+    no caller-supplied observation tuple, and no identity field that can
+    disagree with the trace — every identity is READ from the set.
+
+    `__post_init__` is the in-type reducer: it recomputes the whole
+    metric mapping from the atoms and refuses any disagreement. No
+    `feasible` boolean exists anywhere in this type: the metric->boolean
+    reduction rule stays DECISION_REQUIRED for Aaron (D7)."""
+    observations: ObservationSet
+    metrics: Mapping
     gate_status: str = FEASIBILITY_GATE_STATUS
 
     def __post_init__(self):
-        obs = tuple(self.observations)
-        object.__setattr__(self, "observations", obs)
-        for o in obs:
-            if type(o) is not FeasibilityObservation:
-                raise MCInputError("feasibility_observation_invalid",
-                                   f"non-observation element {type(o)}")
-        want = _feasibility_derived(obs, self.expected_n)
-        for field_name, expected in want.items():
-            if getattr(self, field_name) != expected:
+        if type(self.observations) is not ObservationSet:
+            raise MCInputError(
+                "feasibility_observations_invalid",
+                f"{type(self.observations).__name__} is not an "
+                "ObservationSet — feasibility has no other source")
+        want = self.observations.feasibility_counts()
+        got = dict(self.metrics)
+        missing = sorted(set(want) - set(got))
+        extra = sorted(set(got) - set(want))
+        if missing or extra:
+            raise MCInputError(
+                "feasibility_derived_stats_mismatch",
+                f"metric key set: missing={missing} extra={extra}")
+        for name, expected in want.items():
+            # TYPE-EXACT (N01 fix D-1): `n_paths=True` must not pass just
+            # because the derived count happens to be 1.
+            if not mc_atoms.strict_scalar_equal(got[name], expected):
                 raise MCInputError(
                     "feasibility_derived_stats_mismatch",
-                    f"{field_name}: declared "
-                    f"{getattr(self, field_name)!r} != derived "
-                    f"{expected!r}")
+                    f"{name}: declared {got[name]!r} "
+                    f"({type(got[name]).__name__}) != derived "
+                    f"{expected!r} ({type(expected).__name__}) from the "
+                    "atom trace")
+        object.__setattr__(self, "metrics", MappingProxyType(dict(want)))
         if self.gate_status != FEASIBILITY_GATE_STATUS:
             raise MCInputError("feasibility_gate_status_invalid",
                                self.gate_status)
 
+    # identity is READ from the trace; nothing here can be declared
+    @property
+    def prepared_digest(self) -> str:
+        return self.observations.prepared_digest
+
+    @property
+    def platform(self) -> str:
+        return self.observations.platform
+
+    @property
+    def engine(self) -> str:
+        return self.observations.engine
+
+    @property
+    def scenario(self) -> str:
+        return self.observations.scenario
+
+    @property
+    def channel(self) -> str:
+        return self.observations.theta_channel
+
+    @property
+    def B(self) -> int:
+        return self.observations.B
+
+    @property
+    def M(self) -> int:
+        return self.observations.M
+
+    @property
+    def master_seed(self) -> int:
+        return self.observations.master_seed
+
     @staticmethod
-    def from_observations(observations, expected_n, *, prepared_digest,
-                          platform, engine, scenario, channel, B, M,
-                          master_seed) -> "FeasibilityEvidence":
-        obs = tuple(observations)
-        d = _feasibility_derived(obs, expected_n)
+    def from_observations(observations: ObservationSet
+                          ) -> "FeasibilityEvidence":
+        if type(observations) is not ObservationSet:
+            raise MCInputError(
+                "feasibility_observations_invalid",
+                f"{type(observations).__name__} is not an ObservationSet")
         return FeasibilityEvidence(
-            observations=obs, expected_n=int(expected_n),
-            prepared_digest=prepared_digest, platform=platform,
-            engine=engine, scenario=scenario, channel=channel,
-            B=int(B), M=int(M), master_seed=int(master_seed), **d)
+            observations=observations,
+            metrics=observations.feasibility_counts())
 
 
-def _canonical_float_tuple(values, what: str) -> tuple:
-    """R2.3 PHASE C/D: canonicalize a sample container to a PLAIN-FLOAT
-    tuple — breaking any aliasing with the caller's container — refusing
-    bools (a bool is not a sample), non-numerics and non-finite values."""
-    out = []
-    for x in values:
-        if isinstance(x, bool) or not isinstance(x, (int, float)):
+def _type_label(value) -> str:
+    """Diagnostic type name. For a sequence it also names the ELEMENT
+    types, because that is where a bool-as-float impersonation hides —
+    `(True, False)` and `(1.0, 0.0)` are both `tuple`."""
+    name = type(value).__name__
+    if isinstance(value, tuple):
+        inner = sorted({type(x).__name__ for x in value})
+        return f"{name}[{','.join(inner) or 'empty'}]"
+    return name
+
+
+def _epistemic_derived(observations: ObservationSet) -> dict:
+    """THE ONE derivation of every epistemic statistic — reduced from the
+    ATOM TRACE, never from caller-supplied sample containers.
+
+    Quantiles use the frozen type-7 linear estimator implemented in plain
+    float arithmetic (`atoms.percentile_linear`), so the INDEPENDENT cold
+    reducer can agree BITWISE without sharing a line of code. (The R2.3
+    code used `numpy.percentile`, whose internal lerp switches expression
+    form at t >= 0.5 and cannot be reproduced bit-for-bit by an honest
+    reimplementation; the estimator is the same, the evaluation order is
+    now specified.)"""
+    if type(observations) is not ObservationSet:
+        raise MCInputError("epistemic_samples_invalid",
+                           f"{type(observations).__name__} is not an "
+                           "ObservationSet")
+    means = observations.world_means()
+    ses = observations.within_world_ses()
+    if len(means) != observations.B or len(ses) != observations.B:
+        # unreachable via ObservationSet (the key grid already proves the
+        # world domain); kept as a belt-and-braces refusal.
+        raise MCInputError("epistemic_samples_invalid",
+                           f"len(world_means)={len(means)} "
+                           f"len(within_world_ses)={len(ses)} != "
+                           f"B={observations.B}")
+    for x in means:
+        if not math.isfinite(x):
             raise MCInputError("epistemic_samples_invalid",
-                               f"{what}: non-numeric entry {x!r}")
-        f = float(x)
-        if not math.isfinite(f):
+                               "world means non-finite")
+    for s in ses:
+        if (not math.isfinite(s)) or s < 0.0:
             raise MCInputError("epistemic_samples_invalid",
-                               f"{what}: non-finite entry {x!r}")
-        out.append(f)
-    return tuple(out)
-
-
-def _epistemic_derived(world_means: tuple, within_world_ses: tuple,
-                       B: int) -> dict:
-    """The ONE derivation of every epistemic statistic from raw samples —
-    used by BOTH the constructor helper and the self-authentication check
-    (R2.2 PHASE C), so a declared statistic can never disagree silently."""
-    arr = np.asarray(world_means, dtype=float)
-    # R2.1 PHASE D: NaN/inf/empty samples and negative/non-finite SEs are
-    # refusals — a quantile computed over garbage is not evidence.
-    if arr.size == 0 or not np.isfinite(arr).all():
-        raise MCInputError("epistemic_samples_invalid",
-                           "world means empty or non-finite")
-    ses = [float(s) for s in within_world_ses]
-    if any((not math.isfinite(s)) or s < 0.0 for s in ses):
-        raise MCInputError("epistemic_samples_invalid",
-                           "within-world SEs negative or non-finite")
-    # R2.2 PHASE C: sample counts must equal B — one mean and one SE per
-    # world, no truncation, no padding.
-    if arr.size != int(B) or len(ses) != int(B):
-        raise MCInputError("epistemic_samples_invalid",
-                           f"len(world_means)={arr.size} "
-                           f"len(within_world_ses)={len(ses)} != B={B}")
-    between_sd = float(arr.std(ddof=1)) if arr.size > 1 else 0.0
+                               "within-world SEs negative or non-finite")
+    ordered = sorted(means)
+    between_sd = mc_atoms.sample_sd(means)
     max_se = max(ses) if ses else 0.0
     # frozen: MC SS5 rule (d) — within-world MCSE <= 10% of the
     # between-world SD, computed from ACTUAL samples (never declared).
-    # R2.1 PHASE D: zero between-world variance passes ONLY with zero
-    # within-world MCSE.
+    # Zero between-world variance passes ONLY with zero within-world MCSE.
     if between_sd == 0.0:
         mcse_ok = (max_se == 0.0)
     else:
         mcse_ok = max_se <= MCSE_MAX_FRACTION * between_sd
     return {
-        "p5": float(np.percentile(arr, 5)),
-        "median": float(np.percentile(arr, 50)),
-        "p95": float(np.percentile(arr, 95)),
+        "world_means": tuple(means),
+        "within_world_ses": tuple(ses),
+        "p5": mc_atoms.percentile_linear(ordered, 5),
+        "median": mc_atoms.percentile_linear(ordered, 50),
+        "p95": mc_atoms.percentile_linear(ordered, 95),
         "between_world_sd": between_sd,
         "max_within_world_se": max_se,
         "mcse_ok": mcse_ok,
@@ -961,20 +979,20 @@ def _epistemic_derived(world_means: tuple, within_world_ses: tuple,
 
 @dataclass(frozen=True)
 class EpistemicResult:
-    """B world-level mean monthly prop_operating_EVs + decision quantiles.
-    THE ONLY object Checkpoint-0 statistics may be read from. Carries its
-    own provenance (prepared digest, B, master seed), the COMPLETE raw
-    within-world SEs and the mechanically computed feasibility evidence.
+    """B world-level mean monthly prop_operating_EVs + decision quantiles,
+    REDUCED FROM THE ATOM TRACE. THE ONLY object Checkpoint-0 statistics
+    may be read from.
 
-    SELF-AUTHENTICATING (R2.2 PHASE C): `__post_init__` re-derives every
-    statistic from the raw samples and refuses any disagreement — direct
-    construction with forged p5/median/p95/mcse_ok, and
-    `dataclasses.replace` of any derived field, both fail
-    deterministically. There is no bypass: the check lives on the type."""
-    platform: str
-    engine: str
-    scenario: str
-    channel: str
+    N01 PHASE D1 — the R2.3 constructor `from_world_means(world_means=...,
+    within_world_ses=..., feasibility=...)` is DELETED. It accepted THREE
+    independent caller inputs that were only cross-checked against each
+    other; a caller who supplied a coherent triple could describe a run
+    that never happened. There is now exactly ONE input: the
+    `ObservationSet`. Every statistic, the feasibility evidence and every
+    identity field are derived from it, and `__post_init__` re-derives
+    them all and refuses any disagreement (`dataclasses.replace` of a
+    derived field fails the same way)."""
+    observations: ObservationSet
     world_means: tuple
     within_world_ses: tuple           # COMPLETE per-world SEs (len == B)
     p5: float
@@ -983,179 +1001,273 @@ class EpistemicResult:
     mcse_ok: bool
     max_within_world_se: float
     between_world_sd: float
-    B: int
-    M: int                            # start-phase count ACTUALLY used
-    master_seed: int
-    prepared_digest: str
     feasibility: FeasibilityEvidence
 
     def __post_init__(self):
-        # R2.3 PHASE D.1: CANONICALIZE FIRST — the samples become plain-
-        # float tuples on the instance BEFORE the first derivation, so a
-        # list-constructed instance shares no container with the caller
-        # and post-construction source mutation cannot diverge anything.
-        object.__setattr__(self, "world_means",
-                           _canonical_float_tuple(self.world_means,
-                                                  "world_means"))
-        object.__setattr__(self, "within_world_ses",
-                           _canonical_float_tuple(self.within_world_ses,
-                                                  "within_world_ses"))
-        if not self.world_means:
-            raise MCInputError("epistemic_samples_invalid",
-                               "world means empty")
-        # R2.3 PHASE D.2: canonical identity invariants.
-        for name, v in (("B", self.B), ("M", self.M),
-                        ("master_seed", self.master_seed)):
-            if isinstance(v, bool) or not isinstance(v, int) or v <= 0:
-                raise MCInputError("epistemic_identity_invalid",
-                                   f"{name}={v!r}")
-        if not isinstance(self.prepared_digest, str) \
-                or len(self.prepared_digest) != 64:
-            raise MCInputError("epistemic_identity_invalid",
-                               "prepared_digest not 64-hex")
-        want = _epistemic_derived(self.world_means, self.within_world_ses,
-                                  self.B)
+        if type(self.observations) is not ObservationSet:
+            raise MCInputError(
+                "epistemic_samples_invalid",
+                f"{type(self.observations).__name__} is not an "
+                "ObservationSet — there is no other statistic source")
+        want = _epistemic_derived(self.observations)
         for field_name, expected in want.items():
             got = getattr(self, field_name)
-            if got != expected:
+            if isinstance(expected, tuple):
+                # container canonicalisation (a caller list becomes a
+                # tuple) is allowed; ELEMENT types are not negotiable.
+                got = tuple(got)
+                object.__setattr__(self, field_name, got)
+                ok = mc_atoms.strict_float_sequence_equal(got, expected)
+            else:
+                ok = mc_atoms.strict_scalar_equal(got, expected)
+            if not ok:
                 raise MCInputError(
                     "epistemic_derived_stats_mismatch",
-                    f"{field_name}: declared {got!r} != derived "
-                    f"{expected!r} from the raw samples")
-        # R2.3 PHASE D.6: the feasibility evidence must be BOUND to this
-        # exact result identity — a foreign combo's observations refuse.
+                    f"{field_name}: declared {got!r} "
+                    f"({_type_label(got)}) != derived {expected!r} "
+                    f"({_type_label(expected)}) from the atom trace")
+        # the feasibility evidence must be reduced from THE SAME trace —
+        # identity comparison is not enough, the OBJECT must match.
         fe = self.feasibility
         if type(fe) is not FeasibilityEvidence:
             raise MCInputError("feasibility_binding_mismatch",
                                "feasibility is not a FeasibilityEvidence")
-        binding = (fe.prepared_digest, fe.platform, fe.engine, fe.scenario,
-                   fe.channel, fe.B, fe.M, fe.master_seed)
-        own = (self.prepared_digest, self.platform, self.engine,
-               self.scenario, self.channel, self.B, self.M,
-               self.master_seed)
-        if binding != own:
-            raise MCInputError("feasibility_binding_mismatch",
-                               f"{binding} != {own}")
+        if fe.observations is not self.observations:
+            if fe.observations.observations_digest != \
+                    self.observations.observations_digest:
+                raise MCInputError(
+                    "feasibility_binding_mismatch",
+                    f"feasibility trace "
+                    f"{fe.observations.observations_digest[:12]} != "
+                    f"result trace "
+                    f"{self.observations.observations_digest[:12]}")
+
+    # identity READ from the trace — nothing declarable
+    @property
+    def platform(self) -> str:
+        return self.observations.platform
+
+    @property
+    def engine(self) -> str:
+        return self.observations.engine
+
+    @property
+    def scenario(self) -> str:
+        return self.observations.scenario
+
+    @property
+    def channel(self) -> str:
+        return self.observations.theta_channel
+
+    @property
+    def B(self) -> int:
+        return self.observations.B
+
+    @property
+    def M(self) -> int:
+        """Start-phase count ACTUALLY executed (a consequence of the
+        prepared calendar's legal support, never a declared scalar)."""
+        return self.observations.M
+
+    @property
+    def master_seed(self) -> int:
+        return self.observations.master_seed
+
+    @property
+    def prepared_digest(self) -> str:
+        return self.observations.prepared_digest
+
+    @property
+    def lifecycle_config_digest(self) -> str:
+        return self.observations.lifecycle_config_digest
+
+    @property
+    def observations_digest(self) -> str:
+        return self.observations.observations_digest
 
     @staticmethod
-    def from_world_means(platform, engine, scenario, channel, world_means,
-                         *, within_world_ses, B, M, master_seed,
-                         prepared_digest_value,
-                         feasibility) -> "EpistemicResult":
-        wm = tuple(float(x) for x in world_means)
-        ses = tuple(float(s) for s in (within_world_ses or ()))
-        d = _epistemic_derived(wm, ses, B)
+    def from_observations(observations: ObservationSet
+                          ) -> "EpistemicResult":
+        """THE only constructor helper. One input, everything derived."""
+        d = _epistemic_derived(observations)
         return EpistemicResult(
-            platform=platform, engine=engine, scenario=scenario,
-            channel=channel, world_means=wm, within_world_ses=ses,
-            p5=d["p5"], median=d["median"], p95=d["p95"],
-            mcse_ok=d["mcse_ok"],
-            max_within_world_se=d["max_within_world_se"],
-            between_world_sd=d["between_world_sd"], B=int(B), M=int(M),
-            master_seed=int(master_seed),
-            prepared_digest=prepared_digest_value,
-            feasibility=feasibility)
+            observations=observations,
+            feasibility=FeasibilityEvidence.from_observations(
+                observations),
+            **d)
 
 
-def run_epistemic(prepared: PreparedMCInput, *, platform: str, engine: str,
-                  scenario: str, channel: str, B: int,
-                  master_seed: int) -> EpistemicResult:
-    """B bootstrap worlds -> per-world MEAN monthly prop_operating_EV over
-    the start-phase offsets (MC SS5 inner source (1)) -> quantiles.
+def build_world_table(prepared: PreparedMCInput, *, channel: str, B: int,
+                      master_seed: int) -> tuple:
+    """COLD-REBUILD the world table from (prepared, seed, B, block,
+    length) — the complete deterministic input set of
+    `bootstrap.build_worlds`. Returns the worlds themselves; their
+    content digests are what every atom binds to.
+
+    The pool is the channel's ordered day sequence; the OUTPUT length is
+    the full template slot count (MC SS4.1: the bootstrap fills EVERY
+    template trading day)."""
+    if channel not in prepared.day_sequences:
+        raise MCInputError("axis_violation", f"channel {channel!r}")
+    day_ids = prepared.day_sequences[channel]
+    n_slots = len(prepared.calendar.days)
+    worlds = mc_bootstrap.build_worlds(day_ids, B, master_seed,
+                                       length=n_slots)
+    for w in worlds:
+        if len(w) != n_slots:
+            raise MCInputError("world_length_mismatch",
+                               f"{len(w)} != {n_slots}")
+    return tuple(tuple(w) for w in worlds)
+
+
+def run_observation_set(prepared: PreparedMCInput, *, run_label: str,
+                        platform: str, engine: str, scenario: str,
+                        channel: str, B: int,
+                        master_seed: int) -> ObservationSet:
+    """Execute the COMPLETE B x legal-phase-support grid and emit the
+    atom trace. This is the ONE producer of atoms.
+
+    `legal_phase_support` comes ONLY from the prepared authority
+    (`prepared.calendar.first_month_offsets`); no caller may narrow,
+    widen or reorder it, and no caller supplies an expected count — the
+    count is a consequence of the grid.
 
     CRN: worlds derive ONLY from (day_ids, B, master_seed) via the frozen
-    builder, so every (platform, engine, scenario) evaluated with the same
-    arguments sees IDENTICAL worlds by construction."""
+    builder, so every (platform, engine, scenario) evaluated with the
+    same arguments sees IDENTICAL worlds by construction."""
     if platform not in PLATFORMS:
         raise MCInputError("axis_violation", platform)
     if (engine, scenario) not in prepared.records:
         raise MCInputError("axis_violation", f"{engine}|{scenario}")
-    day_ids = prepared.day_sequences[channel]
-    n_slots = len(prepared.calendar.days)
-    # review H1: worlds must fill EVERY template slot (MC SS4.1 — the
-    # bootstrap decides the outcome sequence placed on the template's
-    # trading days, all of them; the pool size is the historical eligible
-    # universe, which is smaller than the 24-month template).
-    worlds = mc_bootstrap.build_worlds(day_ids, B, master_seed,
-                                       length=n_slots)
-    offsets = prepared.calendar.first_month_offsets
+    support = tuple(prepared.calendar.first_month_offsets)
+    worlds = build_world_table(prepared, channel=channel, B=B,
+                               master_seed=master_seed)
     pdig = prepared_digest(prepared)
-    world_means = []
-    ses = []
-    observations = []
+    cfg_digest = mc_atoms.lifecycle_config_digest_for(
+        lifecycle_config_for(platform), engine=engine, scenario=scenario,
+        theta_channel=channel)
+    atoms = []
     for wi, world in enumerate(worlds):
-        if len(world) != n_slots:
-            raise MCInputError("world_length_mismatch",
-                               f"{len(world)} != {n_slots}")
-        paths = _paths_for_world(prepared, world, channel, engine, scenario)
-        evs = []
-        for off in offsets:
-            s = _lifecycle_stats(prepared, platform, paths, off)
-            evs.append(s["monthly_ev"])
-            observations.append(FeasibilityObservation(
+        for off in support:
+            atoms.append(_run_path_atom(
+                prepared, platform=platform, engine=engine,
+                scenario=scenario, channel=channel, world=world,
                 world_index=wi, phase_offset=int(off),
-                offered=s["n_offered"], skips_n0=s["skips_n0"],
-                payout_realized=s["payout_realized"],
-                payout_count=s["payout_count"],
-                winning_days=s["winning_days"],
-                days_profit_ge_150=s["days_profit_ge_150"],
-                exhausted=s["exhausted"],
-                ambiguous_days=s["n_ambiguous"]))
-        world_means.append(float(np.mean(evs)))
-        n = len(evs)
-        ses.append(float(np.std(evs, ddof=1) / math.sqrt(n))
-                   if n > 1 else 0.0)
-    feasibility = FeasibilityEvidence.from_observations(
-        observations, expected_n=B * len(offsets), prepared_digest=pdig,
-        platform=platform, engine=engine, scenario=scenario,
-        channel=channel, B=B, M=len(offsets), master_seed=master_seed)
-    return EpistemicResult.from_world_means(
-        platform, engine, scenario, channel, world_means,
-        within_world_ses=ses, B=B, M=len(offsets),
-        master_seed=master_seed,
-        prepared_digest_value=pdig,
-        feasibility=feasibility)
+                lifecycle_config_digest=cfg_digest,
+                master_seed=master_seed, prepared_digest_value=pdig))
+    obs = ObservationSet.from_atoms(
+        atoms, run_label=run_label, platform=platform, engine=engine,
+        scenario=scenario, theta_channel=channel,
+        sizing_policy=PRIMARY_POLICY, B=B, master_seed=master_seed,
+        prepared_digest=pdig, lifecycle_config_digest=cfg_digest,
+        legal_phase_support=support)
+    _bind_world_content(obs, worlds)
+    return obs
+
+
+def _bind_world_content(observations: ObservationSet,
+                        worlds: Sequence[Sequence[str]]) -> None:
+    """D4: each atom's `world_digest` must equal the COLD-REBUILT world
+    table's corresponding entry. A trace that claims world b but carries
+    another world's content refuses."""
+    want = [mc_atoms.world_digest(w) for w in worlds]
+    if len(want) != observations.B:
+        raise MCInputError(
+            "world_content_binding_mismatch",
+            f"rebuilt table has {len(want)} worlds != B="
+            f"{observations.B}")
+    got = observations.world_digests()
+    for i, (a, b) in enumerate(zip(got, want)):
+        if a != b:
+            raise MCInputError(
+                "world_content_binding_mismatch",
+                f"world {i}: trace {a[:12]} != cold-rebuilt {b[:12]}")
+
+
+def run_epistemic(prepared: PreparedMCInput, *, platform: str, engine: str,
+                  scenario: str, channel: str, B: int, master_seed: int,
+                  run_label: str = "base") -> EpistemicResult:
+    """Thin reduction over `run_observation_set` — kept as the historical
+    public name. Every number it returns is reduced from the atoms."""
+    return EpistemicResult.from_observations(run_observation_set(
+        prepared, run_label=run_label, platform=platform, engine=engine,
+        scenario=scenario, channel=channel, B=B,
+        master_seed=master_seed))
 
 
 @dataclass(frozen=True)
 class AleatoricResult:
     """CONDITIONAL aleatoric distribution (MC SS5): the M single-attempt
     paths WITHIN ONE FIXED bootstrap world — reporting only, never a GO
-    gate input. Binds the fixed world by digest (R2 PHASE G)."""
+    gate input. Binds the fixed world by digest.
+
+    N01 PHASE D1: reduced from the SAME atom trace as the epistemic
+    layer. It no longer re-executes lifecycles from a caller-supplied
+    world (that was a PARALLEL simulation path whose numbers nothing
+    forced to agree with the epistemic run)."""
     platform: str
     engine: str
     scenario: str
     channel: str
+    world_index: int
     world_digest: str
     attempt_monthly_evs: tuple
+    observations_digest: str
 
 
-def run_conditional_aleatoric(prepared: PreparedMCInput, *,
-                              world: Sequence[str], platform: str,
-                              engine: str, scenario: str,
-                              channel: str) -> AleatoricResult:
+@dataclass(frozen=True)
+class TotalPredictiveResult:
+    """The B x M MIXTURE (MC SS5 total_predictive) — explicitly labelled
+    a mixture, reduced from the SAME atoms. Reporting only."""
+    platform: str
+    engine: str
+    scenario: str
+    channel: str
+    B: int
+    M: int
+    mixture_monthly_evs: tuple
+    observations_digest: str
+
+
+def run_conditional_aleatoric(observations: ObservationSet, *,
+                              world_index: int) -> AleatoricResult:
     """M attempt paths inside ONE FIXED world (frozen: MC SS5 conditional
-    aleatoric — "固定世界内 M 条账户路径的结果分布"). The world must be a
-    full-slot-length sequence drawn from the channel's pool (i.e. one
-    element of a bootstrap worlds list); historical-sequence tiling is NOT
-    a fixed-world simulation and is refused."""
-    n_slots = len(prepared.calendar.days)
-    if len(world) != n_slots:
-        raise MCInputError("world_length_mismatch",
-                           f"{len(world)} != {n_slots}")
-    pool = set(prepared.day_sequences[channel])
-    if not set(world) <= pool:
-        raise MCInputError("world_membership_violation",
-                           "world draws days outside the channel pool")
-    paths = _paths_for_world(prepared, tuple(world), channel, engine,
-                             scenario)
-    evs = [_lifecycle_stats(prepared, platform, paths, off)["monthly_ev"]
-           for off in prepared.calendar.first_month_offsets]
-    wd = hashlib.sha256("|".join(world).encode("utf-8")).hexdigest()
-    return AleatoricResult(platform=platform, engine=engine,
-                           scenario=scenario, channel=channel,
-                           world_digest=wd,
-                           attempt_monthly_evs=tuple(evs))
+    aleatoric — "固定世界内 M 条账户路径的结果分布"), sliced out of the
+    executed atom trace.
+
+    D7: the caller NAMES the world; no fixed-world SELECTION rule exists
+    here. Which world(s) the report fixes is Aaron's ruling (master plan
+    N-D2: single pre-registered world / P5-P50-P95 neighbourhood / report
+    every world), and inventing one would be a decision leak."""
+    if type(observations) is not ObservationSet:
+        raise MCInputError("aleatoric_source_invalid",
+                           f"{type(observations).__name__} is not an "
+                           "ObservationSet")
+    evs = observations.conditional_aleatoric_evs(int(world_index))
+    digests = observations.world_digests()
+    return AleatoricResult(
+        platform=observations.platform, engine=observations.engine,
+        scenario=observations.scenario,
+        channel=observations.theta_channel, world_index=int(world_index),
+        world_digest=digests[int(world_index)],
+        attempt_monthly_evs=evs,
+        observations_digest=observations.observations_digest)
+
+
+def run_total_predictive(observations: ObservationSet
+                         ) -> TotalPredictiveResult:
+    """The B x M mixture, reduced from the SAME atoms."""
+    if type(observations) is not ObservationSet:
+        raise MCInputError("aleatoric_source_invalid",
+                           f"{type(observations).__name__} is not an "
+                           "ObservationSet")
+    return TotalPredictiveResult(
+        platform=observations.platform, engine=observations.engine,
+        scenario=observations.scenario,
+        channel=observations.theta_channel, B=observations.B,
+        M=observations.M,
+        mixture_monthly_evs=observations.total_predictive_evs(),
+        observations_digest=observations.observations_digest)
 
 
 def epistemic_go_gate_input(cons: EpistemicResult,
@@ -1207,6 +1319,29 @@ def epistemic_go_gate_input(cons: EpistemicResult,
 # Convergence (MC SS5 rules a-d; rule encoded, the doubling RUNS happen at
 # real-MC time — an unconverged input refuses to produce a verdict)
 # ---------------------------------------------------------------------------
+
+def _assert_config_digest(result: "EpistemicResult", *, layer: str,
+                          where: str = "") -> str:
+    """FOUR-LAYER exact equality of `lifecycle_config_digest` (D2).
+
+    Layer 1 is enforced inside `ObservationSet` (atom vs set). Layers 2-4
+    (container / cold-replay / seal) all call THIS function, which
+    re-derives the digest from the LIVE frozen modules for the result's
+    own axes — so a constant that moved between producing the evidence
+    and sealing it is caught, with a per-layer refusal code."""
+    if layer not in ("container", "cold_replay", "seal"):
+        raise MCInputError("lifecycle_config_layer_unknown", layer)
+    want = mc_atoms.lifecycle_config_digest_for(
+        lifecycle_config_for(result.platform), engine=result.engine,
+        scenario=result.scenario, theta_channel=result.channel)
+    got = result.lifecycle_config_digest
+    if got != want:
+        raise MCInputError(
+            f"lifecycle_config_digest_mismatch:{layer}",
+            f"{where}: trace carries {got[:12]} != digest re-derived "
+            f"from the live frozen configuration {want[:12]}")
+    return want
+
 
 @dataclass(frozen=True)
 class ConvergenceReport:
@@ -1295,13 +1430,25 @@ class RunEvidence:
                     raise MCInputError(
                         "run_evidence_inner_mismatch:channel",
                         f"{self.run_label}:{cid} carries {r.channel!r}")
-            platform, engine, _policy = cid.split("|")
+                # LAYER 2 of the four-layer lifecycle-config equality:
+                # the container re-derives the digest from the LIVE
+                # frozen modules for this result's own axes and requires
+                # the trace to carry exactly it.
+                _assert_config_digest(r, layer="container",
+                                      where=f"{self.run_label}:{cid}")
+            # N01 PHASE D2: `combo` is a DISPLAY LABEL. It is RENDERED
+            # from the inner authoritative fields and compared; it is
+            # never split back into platform/engine/policy (that made the
+            # string the sole authority for sizing + payout path).
             for r in (cons, stress):
-                if r.platform != platform or r.engine != engine:
+                want = mc_atoms.combo_label(
+                    r.platform, r.engine, r.observations.sizing_policy)
+                if cid != want:
                     raise MCInputError(
-                        "run_evidence_inner_mismatch:combo",
-                        f"{self.run_label}:{cid} inner labels "
-                        f"{r.platform}/{r.engine}")
+                        "combo_label_not_authoritative",
+                        f"{self.run_label}: label {cid!r} != label "
+                        f"rendered from the authoritative fields "
+                        f"{want!r}")
             if cons.scenario != "Conservative" or \
                     stress.scenario != "Stress":
                 raise MCInputError(
@@ -1321,6 +1468,24 @@ class RunEvidence:
             out[f"{cid}.p95_cons"] = cons.p95
             out[f"{cid}.median_stress"] = stress.median
         return out
+
+    def observation_sets(self) -> dict:
+        """set_key -> ObservationSet for every (combo, scenario) of this
+        run. THE index the cold replay and the M certificate consume."""
+        out = {}
+        for cid, (cons, stress) in sorted(self.results.items()):
+            for r in (cons, stress):
+                out[r.observations.set_key] = r.observations
+        return out
+
+    def trace_digests(self) -> dict:
+        """LEVEL-1 flat digests: one per (run_label, combo, scenario)."""
+        return {k: s.observations_digest
+                for k, s in sorted(self.observation_sets().items())}
+
+    def trace_digest_of_digests(self) -> str:
+        """LEVEL-2 container digest (D6 two-level flattening)."""
+        return mc_atoms.digest_of_digests(self.trace_digests())
 
 
 def _check_run_provenance(base: RunEvidence, other: RunEvidence,
@@ -1352,82 +1517,177 @@ BASE_MASTER_SEED = RESEARCH_BOOTSTRAP_SEEDS[0]        # 7
 
 @dataclass(frozen=True, slots=True)
 class ExhaustiveSupportCertificate:
-    """IR-29 (R2.3) — the M axis's convergence obligation: PROOF that the
+    """IR-29 — the M axis's convergence obligation: PROOF that the
     exhaustively enumerated start-phase support was covered completely,
-    uniquely, and exactly once per phase, by every Primary combo, on the
-    SAME prepared calendar. Replaces "M doubling"; never a pseudo-2M."""
-    prepared_digest: str
-    support: tuple                    # the claimed start-phase offsets
+    uniquely, and exactly once per phase, by every Primary combo and
+    every scenario, on the SAME prepared calendar. Replaces "M doubling";
+    never a pseudo-2M.
 
-    def validate(self, base: RunEvidence,
-                 prepared: "PreparedMCInput") -> None:
-        if self.prepared_digest != prepared_digest(prepared):
-            raise MCInputError("m_support_wrong_calendar",
-                               "certificate bound to a different "
-                               "prepared input")
-        legal = tuple(prepared.calendar.first_month_offsets)
-        support = tuple(int(i) for i in self.support)
+    N01 PHASE D4: this object is DERIVED, not accepted. It is built ONLY
+    by `derive_support_certificate`, which reduces
+    `actual_phase_keys_by_world` out of the real atom trace — world by
+    world, combo by combo, scenario by scenario. The R2.3 version
+    validated a CALLER-SUPPLIED support tuple against `base.M`, i.e. it
+    proved a declared scalar against another declared scalar; a run that
+    executed the wrong phases while reporting the right count passed.
+
+    `trace_digests` is the witness of WHICH BYTES' execution trace the
+    proof was reduced from."""
+    prepared_digest: str
+    support: tuple                    # the legal enumeration (authority)
+    trace_digests: Mapping            # set_key -> level-1 trace digest
+    trace_digest_of_digests: str      # level-2 container digest
+
+    def __post_init__(self):
+        object.__setattr__(self, "support",
+                           tuple(int(i) for i in self.support))
+        object.__setattr__(self, "trace_digests",
+                           MappingProxyType(dict(self.trace_digests)))
+        want = mc_atoms.digest_of_digests(dict(self.trace_digests))
+        if self.trace_digest_of_digests != want:
+            raise MCInputError(
+                "m_support_trace_digest_mismatch",
+                f"declared {str(self.trace_digest_of_digests)[:12]} != "
+                f"recomputed {want[:12]}")
+
+
+def derive_support_certificate(base: RunEvidence,
+                               prepared: "PreparedMCInput"
+                               ) -> ExhaustiveSupportCertificate:
+    """Reduce the M exhaustive-support certificate FROM THE ATOM TRACE.
+
+    The legal enumeration comes from the prepared authority. For EVERY
+    Primary combo x scenario, and within it for EVERY world, the ACTUAL
+    executed phase keys must equal that enumeration exactly once, in
+    order. Every violation keeps its IR-29-pinned refusal code."""
+    if base.prepared_digest != prepared_digest(prepared):
+        raise MCInputError("m_support_wrong_calendar",
+                           "base evidence is bound to a different "
+                           "prepared input")
+    legal = tuple(int(i) for i in prepared.calendar.first_month_offsets)
+    if len(set(legal)) != len(legal):
+        raise MCInputError("m_support_duplicate_phase",
+                           f"prepared authority itself repeats: {legal}")
+    sets = base.observation_sets()
+    if not sets:
+        raise MCInputError("m_support_execution_mismatch",
+                           "no observation sets in the base run")
+    for key, obs in sorted(sets.items()):
+        support = tuple(obs.legal_phase_support)
         if len(set(support)) != len(support):
             raise MCInputError("m_support_duplicate_phase",
-                               f"{support}")
+                               f"{key}: {support}")
         missing = sorted(set(legal) - set(support))
         extra = sorted(set(support) - set(legal))
-        if missing or extra:
-            raise MCInputError(
-                "m_support_incomplete" if missing else "m_support_extra",
-                f"missing={missing} extra={extra}")
+        if missing:
+            raise MCInputError("m_support_incomplete",
+                               f"{key}: missing={missing}")
+        if extra:
+            raise MCInputError("m_support_extra",
+                               f"{key}: extra={extra}")
         if support != legal:
-            raise MCInputError("m_support_order_violation",
-                               f"{support} != legal enumeration {legal}")
-        # every phase executed exactly once by every Primary combo: each
-        # inner result's M is the actual offset count used, and its
-        # prepared digest binds it to the SAME calendar (offsets are part
-        # of the digest preimage) — so M == len(legal) proves one-pass
-        # exhaustive execution, and duplication cannot fake a "2M" (the
-        # duplicate would break the unique-support check above).
-        if base.M != len(legal):
-            raise MCInputError("m_support_execution_mismatch",
-                               f"base M={base.M} != |support|={len(legal)}")
-        for cid, (cons, stress) in base.results.items():
-            for r in (cons, stress):
-                if r.M != len(legal):
-                    raise MCInputError(
-                        "m_support_execution_mismatch",
-                        f"{cid}: inner M={r.M} != |support|={len(legal)}")
+            raise MCInputError(
+                "m_support_order_violation",
+                f"{key}: {support} != legal enumeration {legal}")
+        # THE reduction from the real trace: per world, per combo, per
+        # scenario — actual == legal, each phase exactly once.
+        actual = obs.actual_phase_keys_by_world()
+        if sorted(actual) != list(range(obs.B)):
+            raise MCInputError(
+                "m_support_execution_mismatch",
+                f"{key}: worlds executed {sorted(actual)[:4]}... != "
+                f"range({obs.B})")
+        for w, phases in sorted(actual.items()):
+            if tuple(sorted(phases)) != legal:
+                raise MCInputError(
+                    "m_support_execution_mismatch",
+                    f"{key} world {w}: executed phases "
+                    f"{tuple(sorted(phases))} != legal {legal}")
+            if len(phases) != len(legal):
+                raise MCInputError(
+                    "m_support_execution_mismatch",
+                    f"{key} world {w}: {len(phases)} executions != "
+                    f"|support|={len(legal)}")
+    if base.M != len(legal):
+        raise MCInputError("m_support_execution_mismatch",
+                           f"base M={base.M} != |support|={len(legal)}")
+    digests = base.trace_digests()
+    return ExhaustiveSupportCertificate(
+        prepared_digest=base.prepared_digest, support=legal,
+        trace_digests=digests,
+        trace_digest_of_digests=mc_atoms.digest_of_digests(digests))
+
+
+def _check_b_doubling_world_prefix(base: RunEvidence,
+                                   doubled: RunEvidence) -> None:
+    """D4 — CONTENT-level witness of the B-doubling relation.
+
+    `numpy.random.SeedSequence(seed).spawn(2B)` yields child sequences
+    whose first B entries are IDENTICAL to `spawn(B)` (verified against
+    THIS repository's `bootstrap.build_worlds`, see
+    tests/test_mc_cold_replay.py::test_seedsequence_spawn_prefix_property
+    _holds_in_this_repo). A genuine double-B run therefore reuses the
+    base run's worlds verbatim as its first B worlds — a re-drawn or
+    re-seeded "double" cannot fake that."""
+    base_sets = base.observation_sets()
+    for key, dbl in sorted(doubled.observation_sets().items()):
+        base_key = key.replace(f"{doubled.run_label}/",
+                               f"{base.run_label}/", 1)
+        b_obs = base_sets.get(base_key)
+        if b_obs is None:
+            raise MCInputError(
+                "b_doubling_world_prefix_violation",
+                f"{key}: no matching base observation set {base_key!r}")
+        b_digests = b_obs.world_digests()
+        d_digests = dbl.world_digests()
+        if len(d_digests) < len(b_digests):
+            raise MCInputError(
+                "b_doubling_world_prefix_violation",
+                f"{key}: doubled run has {len(d_digests)} worlds < base "
+                f"{len(b_digests)}")
+        for i, (a, b) in enumerate(zip(b_digests, d_digests)):
+            if a != b:
+                raise MCInputError(
+                    "b_doubling_world_prefix_violation",
+                    f"{key}: world {i} of the double-B run "
+                    f"({b[:12]}) differs from the base run ({a[:12]}) — "
+                    "a genuine B doubling extends the world table, it "
+                    "does not redraw it")
 
 
 def convergence_from_evidence(base: RunEvidence,
                               doubled_by_axis: Mapping,
                               seed_runs: Mapping, *,
-                              m_support_certificate:
-                              "ExhaustiveSupportCertificate | None" = None,
-                              prepared: "PreparedMCInput | None" = None,
+                              prepared: "PreparedMCInput",
                               ) -> ConvergenceReport:
-    """Compute MC SS5 rules (a)-(d) FROM run evidence (R2 PHASE E,
-    hardened R2.1 PHASE C). Validation order (so every violation surfaces
-    with its OWN code):
+    """Compute MC SS5 rules (a)-(d) FROM run evidence. Validation order
+    (so every violation surfaces with its OWN code):
 
     1. inner/outer binding of EVERY supplied run (RunEvidence.
        validate_inner_binding — outer metadata cannot impersonate);
-    2. doubling axes set == {B, M, K};
-    3. B-axis provenance/scale relations, seed-run set/identity, and the
-       FROZEN base scales (B=1000, K=200, base seed 7, primary theta) —
-       a small-scale or off-seed base refuses with
-       "frozen_scale_violation";
-    4. M axis: REFUSED — MC SS5 fixes M as the exhaustively enumerated
-       start-phase set; doubling has no unique frozen meaning
-       (DECISION_REQUIRED_M_AXIS; nothing is invented here);
+    2. B-axis provenance/scale relations PLUS the CONTENT-level world
+       prefix witness (`b_doubling_world_prefix_violation`);
+    3. seed-run set/identity, and the FROZEN base scales (B=1000, K=200,
+       base seed 7, primary theta) — a small-scale or off-seed base
+       refuses with "frozen_scale_violation";
+    4. M axis: doubling FORBIDDEN (IR-29a); the exhaustive-support
+       certificate is DERIVED HERE from the actual atom trace — the
+       caller can no longer supply one (N01 PHASE D4);
     5. K axis: REFUSED — grid replay is BLOCKED (missing per-day
        DAY_STRATA), so no ACTUAL K-doubled evidence can exist; outer
        metadata may not impersonate it.
 
     Production convergence is therefore STRUCTURALLY UNSATISFIABLE until
-    Aaron rules on M and the grid authority — the honest fail-closed
-    state. Categories/drift/MCSE computation below steps 4-5 is retained
-    for the post-ruling wiring and is unreachable today."""
+    the GRID-B supplement executes — the honest fail-closed state."""
     if base.axis != "base":
         raise MCInputError("axis_identity_mismatch",
                            f"base run carries axis={base.axis!r}")
+    if not isinstance(prepared, PreparedMCInput):
+        raise MCInputError(
+            "prepared_authority_missing",
+            "convergence needs the prepared input: the M support "
+            "certificate is DERIVED from its legal enumeration and the "
+            "actual trace, never accepted from a caller")
     base.validate_inner_binding()
     # (1) inner/outer binding + B-axis relations for every SUPPLIED run —
     # a tampered outer number surfaces its own code before anything else.
@@ -1436,6 +1696,7 @@ def convergence_from_evidence(base: RunEvidence,
         run.validate_inner_binding()
         if axis == "B":
             _check_run_provenance(base, run, "B")
+            _check_b_doubling_world_prefix(base, run)
     if isinstance(seed_runs, Mapping):
         for seed, run in seed_runs.items():
             run.validate_inner_binding()
@@ -1468,17 +1729,12 @@ def convergence_from_evidence(base: RunEvidence,
     if "M" in doubled_by_axis:
         raise MCInputError(
             "m_axis_doubling_forbidden_by_ir29",
-            "IR-29: M is exempt from doubling — supply an "
-            "ExhaustiveSupportCertificate instead")
-    if m_support_certificate is None or prepared is None:
-        raise MCInputError(
-            "m_support_certificate_missing",
-            "IR-29 requires an ExhaustiveSupportCertificate plus the "
-            "prepared input it binds to")
-    if type(m_support_certificate) is not ExhaustiveSupportCertificate:
-        raise MCInputError("m_support_certificate_missing",
-                           "wrong certificate type")
-    m_support_certificate.validate(base, prepared)
+            "IR-29: M is exempt from doubling — its obligation is the "
+            "DERIVED ExhaustiveSupportCertificate")
+    # N01 PHASE D4: DERIVED from the actual atom trace. There is no
+    # caller-supplied certificate parameter any more, so a hand-built
+    # "complete support" object has no callable path into convergence.
+    derive_support_certificate(base, prepared)
     # (4) K — grid replay BLOCKED (GRID Option B tooling exists but the
     # supplement is UNEXECUTED): no actual K-doubled evidence can exist
     # and metadata may not impersonate it.
@@ -1494,9 +1750,20 @@ def convergence_from_evidence(base: RunEvidence,
         raise MCInputError("doubling_axes_violation",
                            f"need exactly {sorted(DOUBLING_AXES)}, got "
                            f"{sorted(doubled_by_axis)}")
-    raise AssertionError(
-        "unreachable: every legal axes-set carries a K entry and "
-        "refuses above until the GRID-B supplement executes")
+    # N01 fix D-4: this arm was an AssertionError, which is only correct
+    # while DOUBLING_AXES permanently contains "K". The moment the K axis
+    # is unblocked (GRID-B supplement sealed + KReplayEvidence wired),
+    # this path becomes reachable and an AssertionError would escape the
+    # fail-closed vocabulary entirely — it is not an MCInputError, so no
+    # caller's refusal handling would catch it and it carries no machine-
+    # readable code. It is now a normal fail-closed refusal.
+    raise MCInputError(
+        "convergence_unreachable_state",
+        "every legal axes-set carries a K entry and must refuse above "
+        f"until the GRID-B supplement executes; reaching here means "
+        f"DOUBLING_AXES={sorted(DOUBLING_AXES)} no longer implies a K "
+        "refusal and the rule (a)-(d) computation below has not been "
+        "wired yet — no verdict may be produced from this state")
 
 
 def _reduce_primary_from_base(base: RunEvidence) -> dict:
@@ -1518,30 +1785,298 @@ def _reduce_primary_from_base(base: RunEvidence) -> dict:
             for cid, (cons, stress) in sorted(base.results.items())}
 
 
+# ---------------------------------------------------------------------------
+# Cold replay (N01 PHASE D3): the seal gate re-executes EVERYTHING from a
+# cold start, every call. No serialisable caller conclusion exists.
+# ---------------------------------------------------------------------------
+
+def prepared_identity_bytes(prepared: PreparedMCInput) -> bytes:
+    """The PINNED prepared bytes the cold replay starts from: the exact
+    canonical preimage `prepared_digest` hashes. Re-deriving the digest
+    from these bytes is what makes the replay "cold" rather than a reuse
+    of the in-memory object's claim about itself.
+
+    The preimage construction is DELIBERATELY written out a second time
+    rather than shared with `prepared_digest`: if the two ever drift,
+    `cold_replay_observation_set` refuses with
+    `prepared_identity_bytes_unstable` instead of both sides agreeing on
+    a silently changed identity."""
+    ident = {
+        "trial_id": prepared.trial_id,
+        "authorized_commit": prepared.authorized_commit,
+        "file_sha256": dict(prepared.file_sha256),
+        "seeds": list(prepared.seeds),
+        "k_per_seed": prepared.k_per_seed,
+        "method_digest": prepared.method_digest,
+        "day_sequences": {ch: list(seq) for ch, seq in
+                          sorted(prepared.day_sequences.items())},
+        "traded_day_sets": {ch: sorted(days) for ch, days in
+                            sorted(prepared.traded_day_sets.items())},
+        "calendar_days": [[d.day_id, d.cal_offset]
+                          for d in prepared.calendar.days],
+        "first_month_offsets": list(prepared.calendar.first_month_offsets),
+        "authorization_snapshot": _unfreeze(
+            prepared.authorization_snapshot),
+    }
+    return json.dumps(ident, sort_keys=True).encode("utf-8")
+
+
+@dataclass(frozen=True, slots=True)
+class ReplaySpec:
+    """The COMPLETE cold-start specification of ONE observation set. It
+    carries no statistic and no conclusion — only what is needed to
+    re-execute the run from scratch."""
+    run_label: str
+    platform: str
+    engine: str
+    scenario: str
+    theta_channel: str
+    B: int
+    master_seed: int
+    prepared_digest: str
+    lifecycle_config_digest: str
+    rng_spec: str
+    method_version: str
+
+    @staticmethod
+    def from_observations(obs: ObservationSet) -> "ReplaySpec":
+        return ReplaySpec(
+            run_label=obs.run_label, platform=obs.platform,
+            engine=obs.engine, scenario=obs.scenario,
+            theta_channel=obs.theta_channel, B=obs.B,
+            master_seed=obs.master_seed,
+            prepared_digest=obs.prepared_digest,
+            lifecycle_config_digest=obs.lifecycle_config_digest,
+            rng_spec=mc_atoms.RNG_SPEC,
+            method_version=mc_atoms.METHOD_VERSION)
+
+
+def cold_replay_observation_set(prepared: PreparedMCInput,
+                                spec: ReplaySpec) -> ObservationSet:
+    """Re-execute ONE observation set from a COLD START.
+
+    Cold start = the identity is re-derived from the PINNED prepared
+    bytes, the config digest is re-derived from the LIVE frozen modules,
+    the RNG spec and method version are re-checked, the world table is
+    rebuilt from (prepared, seed, B, block, length), and every lifecycle
+    is run again. Nothing from the forward run is reused."""
+    if type(spec) is not ReplaySpec:
+        raise MCInputError("cold_replay_spec_invalid",
+                           f"{type(spec).__name__} is not a ReplaySpec")
+    cold_digest = hashlib.sha256(
+        prepared_identity_bytes(prepared)).hexdigest()
+    if cold_digest != prepared_digest(prepared):
+        raise MCInputError(
+            "prepared_identity_bytes_unstable",
+            "the pinned prepared bytes do not reproduce the prepared "
+            "digest — the cold-start preimage and the live digest have "
+            "diverged")
+    if spec.prepared_digest != cold_digest:
+        raise MCInputError(
+            "cold_replay_prepared_binding_mismatch",
+            f"spec {spec.prepared_digest[:12]} != cold-derived "
+            f"{cold_digest[:12]}")
+    if spec.rng_spec != mc_atoms.RNG_SPEC:
+        raise MCInputError("cold_replay_rng_spec_mismatch",
+                           "the randomness specification moved")
+    if spec.method_version != mc_atoms.METHOD_VERSION:
+        raise MCInputError("cold_replay_method_version_mismatch",
+                           f"{spec.method_version!r} != "
+                           f"{mc_atoms.METHOD_VERSION!r}")
+    want_cfg = mc_atoms.lifecycle_config_digest_for(
+        lifecycle_config_for(spec.platform), engine=spec.engine,
+        scenario=spec.scenario, theta_channel=spec.theta_channel)
+    if spec.lifecycle_config_digest != want_cfg:
+        raise MCInputError(
+            "lifecycle_config_digest_mismatch:cold_replay",
+            f"{spec.run_label}: spec carries "
+            f"{spec.lifecycle_config_digest[:12]} != live "
+            f"{want_cfg[:12]}")
+    return run_observation_set(
+        prepared, run_label=spec.run_label, platform=spec.platform,
+        engine=spec.engine, scenario=spec.scenario,
+        channel=spec.theta_channel, B=spec.B,
+        master_seed=spec.master_seed)
+
+
+def compare_atom_tables(produced: ObservationSet,
+                        replayed: ObservationSet) -> dict:
+    """Two-sided comparison of a forward run against its cold replay.
+
+    Compares (a) the COMPLETE Cartesian key set and (b) the PER-ATOM
+    canonical digest, and returns both digest tables plus the mismatch
+    list. It never raises on divergence — the caller refuses; this
+    function exists so the evidence of divergence is inspectable."""
+    left = produced.atom_digest_table()
+    right = replayed.atom_digest_table()
+    mismatches = []
+    for key in sorted(set(left) - set(right)):
+        mismatches.append({"key": list(key), "kind": "missing_in_replay",
+                           "produced": left[key], "replayed": None})
+    for key in sorted(set(right) - set(left)):
+        mismatches.append({"key": list(key), "kind": "extra_in_replay",
+                           "produced": None, "replayed": right[key]})
+    for key in sorted(set(left) & set(right)):
+        if left[key] != right[key]:
+            mismatches.append({"key": list(key), "kind": "digest_differs",
+                               "produced": left[key],
+                               "replayed": right[key]})
+    return {
+        "set_key": produced.set_key,
+        "key_set_equal": set(left) == set(right),
+        "produced_set_digest": produced.observations_digest,
+        "replayed_set_digest": replayed.observations_digest,
+        "produced_atom_digests": {f"{w}:{p}": d
+                                  for (w, p), d in sorted(left.items())},
+        "replayed_atom_digests": {f"{w}:{p}": d
+                                  for (w, p), d in sorted(right.items())},
+        "mismatches": mismatches,
+    }
+
+
+def _dual_reducer_check(observations: ObservationSet) -> dict:
+    """Run BOTH reducers over the same trace and refuse any disagreement.
+
+    Production side: the in-type reducer (`_epistemic_derived` +
+    `feasibility_counts`, which recompute from live atoms).
+    Independent side: `itsf.mc.cold_reducer`, which starts from the
+    SERIALISED canonical JSONL and shares no helper with production
+    (import-graph pinned in tests)."""
+    hot = _epistemic_derived(observations)
+    hot_feas = observations.feasibility_counts()
+    try:
+        cold = mc_cold.reduce_trace(observations.to_jsonl())
+    except mc_cold.ColdReducerError as exc:
+        raise MCInputError("reducer_disagreement",
+                           f"{observations.set_key}: independent reducer "
+                           f"refused the sealed trace ({exc})") from exc
+    disagreements = []
+    for name in ("world_means", "within_world_ses", "p5", "median",
+                 "p95", "between_world_sd", "max_within_world_se"):
+        if hot[name] != cold[name]:
+            disagreements.append(f"{name}: {hot[name]!r} != {cold[name]!r}")
+    if cold["observations_digest"] != observations.observations_digest:
+        disagreements.append(
+            f"observations_digest: "
+            f"{observations.observations_digest[:12]} != "
+            f"{cold['observations_digest'][:12]}")
+    for name, value in sorted(hot_feas.items()):
+        other = cold["feasibility"].get(name, "<absent>")
+        if isinstance(value, mc_atoms.AbsentQuantity):
+            value = value.token
+        if value != other:
+            disagreements.append(f"feasibility.{name}: {value!r} != "
+                                 f"{other!r}")
+    if observations.actual_phase_keys_by_world() != \
+            cold["actual_phase_keys_by_world"]:
+        disagreements.append("actual_phase_keys_by_world")
+    if disagreements:
+        raise MCInputError(
+            "reducer_disagreement",
+            f"{observations.set_key}: {disagreements[:3]}")
+    return cold
+
+
+def cold_replay_evidence(prepared: PreparedMCInput,
+                         runs: Sequence[RunEvidence]) -> dict:
+    """Cold-replay EVERY observation set of EVERY supplied run and refuse
+    on ANY divergence. Returns the AUDIT DESCRIPTION (two-sided digest
+    tables + mismatch lists).
+
+    The returned mapping is a receipt in the strict sense: it DESCRIBES
+    what happened. It is not accepted back as an input anywhere — there
+    is no parameter on this module's seal entry that takes one, so a
+    receipt rewritten to be "all green" cannot skip a single replay."""
+    legal = tuple(prepared.calendar.first_month_offsets)
+    comparisons = {}
+    config_digests = {}
+    for run in runs:
+        for key, obs in sorted(run.observation_sets().items()):
+            # D4: the legal start-phase support is the PREPARED
+            # authority's, never the trace's own claim.
+            if tuple(obs.legal_phase_support) != legal:
+                raise MCInputError(
+                    "legal_phase_support_not_from_prepared",
+                    f"{key}: trace claims {tuple(obs.legal_phase_support)}"
+                    f" but the prepared calendar enumerates {legal}")
+            spec = ReplaySpec.from_observations(obs)
+            replayed = cold_replay_observation_set(prepared, spec)
+            cmp = compare_atom_tables(obs, replayed)
+            if not cmp["key_set_equal"] or cmp["mismatches"]:
+                raise MCInputError(
+                    "cold_replay_divergence",
+                    f"{key}: key_set_equal={cmp['key_set_equal']} "
+                    f"mismatches={cmp['mismatches'][:2]}")
+            _dual_reducer_check(obs)
+            _dual_reducer_check(replayed)
+            comparisons[key] = cmp
+            config_digests[key] = obs.lifecycle_config_digest
+    return {
+        "schema": "mc_cold_replay_receipt.v1",
+        "replay_algo_version": mc_atoms.REPLAY_ALGO_VERSION,
+        "cold_reducer_version": mc_cold.COLD_REDUCER_VERSION,
+        "rng_spec": mc_atoms.RNG_SPEC,
+        "method_version": mc_atoms.METHOD_VERSION,
+        "prepared_digest": prepared_digest(prepared),
+        "prepared_identity_bytes_sha256": hashlib.sha256(
+            prepared_identity_bytes(prepared)).hexdigest(),
+        "legal_phase_support": list(legal),
+        "lifecycle_config_digests": config_digests,
+        "n_sets_replayed": len(comparisons),
+        "comparisons": comparisons,
+    }
+
+
 def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
                                    base: RunEvidence,
                                    doubled_by_axis: Mapping,
-                                   seed_runs: Mapping,
-                                   m_support_certificate:
-                                   "ExhaustiveSupportCertificate | None"
-                                   = None) -> dict:
-    """The ONLY path to a Checkpoint-0 verdict AND its seal candidate
-    (R2.2 PHASE D — the sealed `primary` table and the mechanical verdict
-    are read from the SAME internal reduction object; convergence is
-    recomputed from evidence inside; nothing caller-declared survives).
+                                   seed_runs: Mapping) -> dict:
+    """The ONLY path to a Checkpoint-0 verdict AND its seal candidate.
+
+    N01 PHASE D3 — EVERY call, unconditionally:
+      1. cold-starts from the PINNED prepared bytes + the full lifecycle
+         config preimage + the RNG spec + the method version;
+      2. INDEPENDENTLY replays every lifecycle of every supplied run;
+      3. compares the COMPLETE Cartesian key set;
+      4. compares the PER-ATOM canonical digest;
+      5. produces two-sided digest tables and a mismatch list;
+      6. refuses to seal (`cold_replay_divergence`) on any mismatch;
+      7. runs BOTH reducers over both traces and refuses any
+         disagreement (`reducer_disagreement`).
+
+    This doubles the computation (see the node receipt for the magnitude)
+    and that is the price of the guarantee. There is NO parameter that
+    accepts a prior receipt, a `match=True`, or any other caller
+    conclusion: the replay cannot be skipped.
 
     Structurally unreachable today: the reduction refuses at the
-    feasibility gate, convergence refuses at M/K — every refusal is the
-    honest missing-decision, not a gap."""
+    feasibility gate (DECISION_REQUIRED), convergence refuses at K —
+    every refusal is the honest missing decision, not a gap."""
     from itsf.mc.verdict import apply_verdict
     if base.prepared_digest != prepared_digest(prepared):
         raise MCInputError("provenance_mismatch",
                            "base evidence was not computed from THIS "
                            "prepared input")
     digest_before = prepared_digest(prepared)
+    base.validate_inner_binding()
+    runs = [base]
+    for _axis, run in sorted(doubled_by_axis.items()):
+        run.validate_inner_binding()
+        runs.append(run)
+    for _seed, run in sorted(seed_runs.items()):
+        run.validate_inner_binding()
+        runs.append(run)
+    # (1)-(7) UNCONDITIONAL cold replay, before anything is reduced.
+    replay_receipt = cold_replay_evidence(prepared, runs)
+    # LAYER 4 of the four-layer config equality: the seal boundary.
+    for run in runs:
+        for _cid, (cons, stress) in sorted(run.results.items()):
+            for r in (cons, stress):
+                _assert_config_digest(r, layer="seal",
+                                      where=f"{run.run_label}:{r.platform}"
+                                            f"/{r.engine}/{r.scenario}")
     reduction = _reduce_primary_from_base(base)
     convergence_from_evidence(base, doubled_by_axis, seed_runs,
-                              m_support_certificate=m_support_certificate,
                               prepared=prepared)
     verdict = apply_verdict(dict(reduction))
     digest_after = prepared_digest(prepared)
@@ -1549,14 +2084,18 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
         raise MCInputError("prepared_digest_instability",
                            f"{digest_before[:12]} -> {digest_after[:12]}")
     return {
-        "schema": "mc_verdict_inputs.v3",
+        "schema": "mc_verdict_inputs.v4",
         "trial_id": prepared.trial_id,
         "authorized_commit": prepared.authorized_commit,
         "method_digest": prepared.method_digest,
+        "method_version": mc_atoms.METHOD_VERSION,
         "prepared_digest": digest_before,
         "primary_theta_channel": PRIMARY_THETA_CHANNEL,
         "bundle_file_sha256": dict(prepared.file_sha256),
         "seeds": list(prepared.seeds),
+        "trace_digests": base.trace_digests(),
+        "trace_digest_of_digests": base.trace_digest_of_digests(),
+        "cold_replay_receipt": replay_receipt,
         "primary": {
             cid: {"p5_cons": v.p5_cons, "median_cons": v.median_cons,
                   "median_stress": v.median_stress, "p95_cons": v.p95_cons,

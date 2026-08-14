@@ -9,17 +9,21 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import inspect
 import json
+import pathlib
 
 import pytest
 
 from conftest import make_trade_path
 from itsf.contracts import RESEARCH_BOOTSTRAP_SEEDS
+from itsf.mc import atoms as A
 from itsf.mc import bootstrap as mb
 from itsf.mc import consumer as mcc
 from itsf.mc.orchestrator import TemplateDay
 from itsf.s0.handoff import McConsumerAbsent
 
+REPO = pathlib.Path(__file__).resolve().parents[1]
 TRIAL = "S0-T001"
 COMMIT = "876c1b74131b4ab1a89dce433ecce646ba481f8c"
 TP_DAYS = ("2026-08-03", "2026-08-05", "2026-08-07")
@@ -316,17 +320,46 @@ def _epi(prepared, platform="topstep", engine="E1", scenario="Conservative",
 
 
 def test_epistemic_crn_provenance_and_metrics():
+    """MIGRATED TO N01 AND STRENGTHENED.
+
+    The historical CRN assertion compared the `world_means` of two
+    IDENTICAL calls, which any deterministic function passes. Under N01
+    every atom carries its world's CONTENT DIGEST, so the frozen MC SS5
+    CRN claim — the SAME worlds are reused across every
+    (platform, engine, scenario) evaluated at the same
+    (channel, B, master_seed) — is checkable directly, and is asserted at
+    content level here. The feasibility scalars moved under `.metrics`
+    (they are reduced from the same atoms as every other statistic)."""
     prepared = _prepare()
     a = _epi(prepared)
     b = _epi(prepared)
-    assert a.world_means == b.world_means      # CRN by construction
+    assert a.world_means == b.world_means      # deterministic
+    assert a.observations.observations_digest == \
+        b.observations.observations_digest
     assert a.p5 <= a.median <= a.p95
     assert (a.B, a.M, a.master_seed) == (2, 2, 7)
     assert a.prepared_digest == mcc.prepared_digest(prepared)
+    # CRN AT CONTENT LEVEL: identical world tables across the whole grid
+    want = mcc.build_world_table(prepared, channel=PRIMARY, B=2,
+                                 master_seed=7)
+    want_digests = tuple(hashlib.sha256("|".join(w).encode("utf-8"))
+                         .hexdigest() for w in want)
+    assert a.observations.world_digests() == want_digests
+    for platform in mcc.PLATFORMS:
+        for engine in mcc.ENGINES:
+            for scenario in ("Conservative", "Stress"):
+                other = _epi(prepared, platform=platform, engine=engine,
+                             scenario=scenario)
+                assert other.observations.world_digests() == want_digests
+    # a DIFFERENT seed must not reproduce them (CRN is seed-scoped)
+    assert _epi(prepared, seed=13).observations.world_digests() != \
+        want_digests
     fe = a.feasibility
     assert fe.gate_status == "DECISION_REQUIRED"
     assert not hasattr(fe, "feasible")         # the R2 boolean is GONE
-    assert 0.0 <= fe.ambiguous_share <= 1.0
+    assert "feasible" not in fe.metrics
+    assert 0.0 <= fe.metrics["ambiguous_share"] <= 1.0
+    assert fe.metrics["n_paths"] == a.B * a.M
 
 
 def test_non_frozen_master_seed_refused():
@@ -340,41 +373,120 @@ def test_platform_variant_missing_refused():
 
 
 def test_conditional_aleatoric_binds_one_fixed_world():
+    """MIGRATED: the conditional-aleatoric slice is now REDUCED from the
+    same atom trace as the epistemic layer (it no longer re-executes
+    lifecycles from a caller-handed world), so the caller NAMES a world
+    index instead of supplying world content. The world-identity formula
+    is still pinned to the exact sha256 of the drawn day sequence, and the
+    slice must be the M attempts of THAT world."""
     prepared = _prepare()
     worlds = mb.build_worlds(prepared.day_sequences[PRIMARY], 2, 7,
                              length=len(prepared.calendar.days))
-    al = mcc.run_conditional_aleatoric(
-        prepared, world=worlds[0], platform="topstep", engine="E1",
-        scenario="Conservative", channel=PRIMARY)
+    obs = mcc.run_observation_set(
+        prepared, run_label="base", platform="topstep", engine="E1",
+        scenario="Conservative", channel=PRIMARY, B=2, master_seed=7)
+    al = mcc.run_conditional_aleatoric(obs, world_index=0)
     assert len(al.attempt_monthly_evs) == \
-        len(prepared.calendar.first_month_offsets)
+        len(prepared.calendar.first_month_offsets) == obs.M
     assert al.world_digest == hashlib.sha256(
         "|".join(worlds[0]).encode("utf-8")).hexdigest()
+    # the slice IS the trace's world-0 atoms, in phase order — not a
+    # parallel re-execution that merely resembles them
+    assert al.attempt_monthly_evs == tuple(
+        a.monthly_prop_operating_ev
+        for a in sorted(obs.atoms, key=lambda x: x.key)
+        if a.world_index == 0)
+    assert al.observations_digest == obs.observations_digest
+    other = mcc.run_conditional_aleatoric(obs, world_index=1)
+    assert other.world_digest == hashlib.sha256(
+        "|".join(worlds[1]).encode("utf-8")).hexdigest()
+    assert other.world_digest != al.world_digest
 
 
-def test_aleatoric_refuses_partial_or_foreign_worlds():
+def test_aleatoric_refuses_partial_or_foreign_worlds(monkeypatch):
+    """OBSOLETE BY CONSTRUCTION — the entry these counterexamples attacked
+    is gone; the same defects are now unreachable by construction and the
+    surviving guards are proven live.
+
+    HISTORICAL COUNTEREXAMPLES (kept on the record): the R2.3
+    `run_conditional_aleatoric(prepared, world=..., ...)` accepted world
+    CONTENT from the caller and ran its OWN lifecycles over it — a parallel
+    simulation nothing forced to agree with the epistemic run. Two attacks
+    were closed there: a PARTIAL world (`world_length_mismatch`) and a
+    FOREIGN world of days outside the channel pool (`world_membership`).
+
+    N01 PHASE D1 deleted the parameter: worlds are built ONLY by
+    `build_world_table` from (prepared, channel, B, master_seed), so
+    neither a partial nor a foreign world has any way in — `world_membership`
+    no longer exists as a code anywhere in the module. What replaces them:
+
+      * `world_length_mismatch` survives inside `build_world_table` and is
+        proven LIVE here by fault-injecting the world builder;
+      * the foreign-content attack is answered one layer deeper and more
+        strongly by `world_content_binding_mismatch`: every atom carries
+        its world's CONTENT digest and it must equal the cold-rebuilt
+        world table's entry, so a trace that claims world b while carrying
+        another world's content refuses;
+      * naming a world the trace does not contain refuses
+        (`aleatoric_world_absent`), and handing over anything that is not
+        an ObservationSet refuses (`aleatoric_source_invalid`)."""
     prepared = _prepare()
-    with pytest.raises(mcc.MCInputError, match="world_length_mismatch"):
-        mcc.run_conditional_aleatoric(
-            prepared, world=list(ALL_DAYS), platform="topstep",
-            engine="E1", scenario="Conservative", channel=PRIMARY)
-    n = len(prepared.calendar.days)
-    with pytest.raises(mcc.MCInputError, match="world_membership"):
-        mcc.run_conditional_aleatoric(
-            prepared, world=["2099-01-01"] * n, platform="topstep",
-            engine="E1", scenario="Conservative", channel=PRIMARY)
+    sig = inspect.signature(mcc.run_conditional_aleatoric)
+    assert list(sig.parameters) == ["observations", "world_index"]
+    assert "world" not in sig.parameters and "prepared" not in sig.parameters
+    src = (REPO / "src" / "itsf" / "mc" / "consumer.py").read_text(
+        encoding="utf-8")
+    assert "world_membership" not in src
+
+    obs = mcc.run_observation_set(
+        prepared, run_label="base", platform="topstep", engine="E1",
+        scenario="Conservative", channel=PRIMARY, B=2, master_seed=7)
+    with pytest.raises(mcc.MCInputError) as ei:
+        mcc.run_conditional_aleatoric(obs, world_index=99)
+    assert ei.value.code == "aleatoric_world_absent"
+    with pytest.raises(mcc.MCInputError) as ei:
+        mcc.run_conditional_aleatoric(list(ALL_DAYS), world_index=0)
+    assert ei.value.code == "aleatoric_source_invalid"
+
+    # foreign world CONTENT — the successor of `world_membership`
+    forged = A.ObservationSet.from_atoms(
+        [dataclasses.replace(a, world_digest="e" * 64) for a in obs.atoms],
+        run_label=obs.run_label, platform=obs.platform, engine=obs.engine,
+        scenario=obs.scenario, theta_channel=obs.theta_channel,
+        sizing_policy=obs.sizing_policy, B=obs.B,
+        master_seed=obs.master_seed, prepared_digest=obs.prepared_digest,
+        lifecycle_config_digest=obs.lifecycle_config_digest,
+        legal_phase_support=obs.legal_phase_support)
+    worlds = mcc.build_world_table(prepared, channel=PRIMARY, B=2,
+                                   master_seed=7)
+    with pytest.raises(mcc.MCInputError) as ei:
+        mcc._bind_world_content(forged, worlds)
+    assert ei.value.code == "world_content_binding_mismatch"
+
+    # PARTIAL world — the guard survives inside the world builder; fault
+    # injection (test process only, auto-restored) proves it is live code
+    monkeypatch.setattr(mcc.mc_bootstrap, "build_worlds",
+                        lambda *a, **k: [list(ALL_DAYS)])
+    with pytest.raises(mcc.MCInputError) as ei:
+        mcc.build_world_table(prepared, channel=PRIMARY, B=1,
+                              master_seed=7)
+    assert ei.value.code == "world_length_mismatch"
 
 
 def test_aleatoric_result_cannot_enter_go_gate():
     prepared = _prepare()
-    worlds = mb.build_worlds(prepared.day_sequences[PRIMARY], 1, 7,
-                             length=len(prepared.calendar.days))
-    al = mcc.run_conditional_aleatoric(
-        prepared, world=worlds[0], platform="topstep", engine="E1",
-        scenario="Conservative", channel=PRIMARY)
+    obs = mcc.run_observation_set(
+        prepared, run_label="base", platform="topstep", engine="E1",
+        scenario="Conservative", channel=PRIMARY, B=1, master_seed=7)
+    al = mcc.run_conditional_aleatoric(obs, world_index=0)
     stress = _epi(prepared, scenario="Stress")
     with pytest.raises(mcc.MCInputError, match="aleatoric_leak"):
         mcc.epistemic_go_gate_input(al, stress)      # type: ignore
+    with pytest.raises(mcc.MCInputError, match="aleatoric_leak"):
+        mcc.epistemic_go_gate_input(stress, al)      # type: ignore
+    total = mcc.run_total_predictive(obs)
+    with pytest.raises(mcc.MCInputError, match="aleatoric_leak"):
+        mcc.epistemic_go_gate_input(total, stress)   # type: ignore
 
 
 def test_cross_combo_stitching_refused():
@@ -433,7 +545,15 @@ def test_hand_built_verdict_inputs_have_no_callable_entry():
     """R2.2 PHASE D (Codex counterexample): a hand-made positive
     VerdictInput grid has NO entry into the consumer's verdict/seal path —
     the old primary_inputs surfaces are gone and no public consumer
-    function accepts VerdictInput objects."""
+    function accepts VerdictInput objects.
+
+    MIGRATED AND STRENGTHENED. N01 PHASE D4 removed the LAST caller-built
+    evidence object on this path: `m_support_certificate` was a parameter
+    of both the seal entry and `convergence_from_evidence`, so a
+    hand-assembled 'complete support' proof could be handed in. The
+    certificate is now DERIVED from the atom trace inside convergence, and
+    neither entry accepts one — so the seal signature is exactly the four
+    real inputs and nothing else."""
     import inspect
     assert not hasattr(mcc, "verdict_or_refuse")
     assert not hasattr(mcc, "render_verdict_inputs")
@@ -446,9 +566,21 @@ def test_hand_built_verdict_inputs_have_no_callable_entry():
         except (TypeError, ValueError):
             continue
         assert "primary_inputs" not in params, name
+        # no consumer entry accepts a caller-built support certificate
+        assert "m_support_certificate" not in params, name
+        assert "certificate" not in params, name
     sig = inspect.signature(mcc.verdict_and_seal_from_evidence)
     assert set(sig.parameters) == {"prepared", "base", "doubled_by_axis",
-                                   "seed_runs", "m_support_certificate"}
+                                   "seed_runs"}
+    conv = inspect.signature(mcc.convergence_from_evidence)
+    assert set(conv.parameters) == {"base", "doubled_by_axis", "seed_runs",
+                                    "prepared"}
+    assert conv.parameters["prepared"].default is inspect.Parameter.empty
+    # the certificate type still exists, but ONLY as the derivation's
+    # output — its sole producer is derive_support_certificate(base,
+    # prepared), which takes the real trace and the prepared authority
+    assert list(inspect.signature(
+        mcc.derive_support_certificate).parameters) == ["base", "prepared"]
 
 
 # --- authorization gate -----------------------------------------------------

@@ -85,30 +85,51 @@ def _prepare():
 def test_codex_ce1_forged_stats_refused_at_construction():
     """world_means=[-100]*B with declared p5/median/p95=+999 and
     mcse_ok=True must fail BEFORE any RunEvidence/convergence step —
-    the type itself refuses (R2.2 PHASE C)."""
+    the type itself refuses (R2.2 PHASE C).
+
+    MIGRATED TO N01 AND STRENGTHENED. R2.2/R2.3 forged a COHERENT triple
+    (samples + quantiles + feasibility that agreed with each other) and
+    the type had to notice the internal contradiction. Under N01 the type
+    has exactly ONE input — the atom trace — and re-derives EVERY declared
+    field from it, so both halves of the attack die independently:
+
+      (a) the R2.2 counterexample verbatim (forged samples AND forged
+          quantiles) refuses;
+      (b) the strictly harder version — HONEST samples with ONLY the
+          decision quantiles and mcse_ok forged, which no
+          internal-consistency check could ever catch — refuses too.
+
+    Both with the same code, at construction, before any RunEvidence
+    exists."""
+    prepared = _prepare()
     B = 4
-    # R2.3: feasibility evidence is built from raw observations with a
-    # binding octuple matching the claimed result identity, so the forged
-    # derived stats below are the ONLY sin in this counterexample.
-    feas = mcc.FeasibilityEvidence.from_observations(
-        [mcc.FeasibilityObservation(
-            world_index=w, phase_offset=p, offered=1, skips_n0=0,
-            payout_realized=True, payout_count=1, winning_days=1,
-            days_profit_ge_150=0, exhausted=False, ambiguous_days=0)
-         for w in range(B) for p in range(2)],
-        expected_n=B * 2, prepared_digest="0" * 64, platform="topstep",
-        engine="E1", scenario="Conservative", channel=PRIMARY, B=B, M=2,
-        master_seed=7)
+    obs = mcc.run_observation_set(
+        prepared, run_label="base", platform="topstep", engine="E1",
+        scenario="Conservative", channel=PRIMARY, B=B, master_seed=7)
+    feas = mcc.FeasibilityEvidence.from_observations(obs)
+    honest = mcc._epistemic_derived(obs)
+    assert len(honest["world_means"]) == B
+
+    # (a) the R2.2 counterexample verbatim
     with pytest.raises(mcc.MCInputError,
                        match="epistemic_derived_stats_mismatch"):
         mcc.EpistemicResult(
-            platform="topstep", engine="E1", scenario="Conservative",
-            channel=PRIMARY, world_means=(-100.0,) * B,
-            within_world_ses=(0.0,) * B,
+            observations=obs, feasibility=feas,
+            world_means=(-100.0,) * B, within_world_ses=(0.0,) * B,
             p5=999.0, median=999.0, p95=999.0, mcse_ok=True,
-            max_within_world_se=0.0, between_world_sd=0.0,
-            B=B, M=2, master_seed=7, prepared_digest="0" * 64,
-            feasibility=feas)
+            max_within_world_se=0.0, between_world_sd=0.0)
+
+    # (b) honest samples, forged decision quantiles only
+    forged = dict(honest)
+    forged.update(p5=999.0, median=999.0, p95=999.0, mcse_ok=True)
+    with pytest.raises(mcc.MCInputError,
+                       match="epistemic_derived_stats_mismatch"):
+        mcc.EpistemicResult(observations=obs, feasibility=feas, **forged)
+
+    # the honest construction is the ONLY one that survives
+    good = mcc.EpistemicResult(observations=obs, feasibility=feas,
+                               **honest)
+    assert good.p5 <= good.median <= good.p95
 
 
 def test_codex_ce1_replace_of_any_derived_stat_refused():
