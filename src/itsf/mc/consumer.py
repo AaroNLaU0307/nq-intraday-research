@@ -107,16 +107,32 @@ CONV_REL = 0.05
 # frozen: MC SS5 convergence rule (d) — MCSE <= 10% of between-world SD
 MCSE_MAX_FRACTION = 0.10
 
+# The eight per-(engine, scenario) atomic-record files. These are the ONLY
+# bundle members whose RAW BYTES the prepared input retains (N01 C1): they
+# are the numerical authority every lifecycle consumes, so the replay must
+# be able to re-parse them from custody-checked bytes rather than trusting
+# a live mapping. The other six members are consumed ONCE during the
+# battery (governance, seeds, counts, day universes) and are NOT retained —
+# S0_REPORT.json alone is 349 MB against ~92 MB for all eight handoff
+# files, and its content is already pinned by `file_sha256` inside the
+# prepared identity, so retaining it would multiply the footprint ~4.8x to
+# re-prove something the digest already proves.
+HANDOFF_FILES = tuple(f"MC_HANDOFF_{e}_{s}.jsonl"
+                      for e in ENGINES for s in SCENARIOS)
+HANDOFF_FILE_SET = frozenset(HANDOFF_FILES)
+
 # The sealed-bundle exact set (S0-T001 layout; runner-side custody files
 # included — the consumer re-derives day universes and governance identity
 # from the SAME bytes the S0 seal proved).
 BUNDLE_EXACT_SET = frozenset(
-    [f"MC_HANDOFF_{e}_{s}.jsonl" for e in ENGINES for s in SCENARIOS]
+    list(HANDOFF_FILES)
     + ["S0_REPORT.json", "S0_REPORT.md", "HANDOFF_ADMISSION.json",
        "SEED_MANIFEST.json", "REGISTRY_AFTER_RUN_STARTED.json",
        "manifest.jsonl"])
 
 _RECORD_FIELDS = tuple(TradePathRecord.__dataclass_fields__)  # 19 fields
+_HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
+RECORDS_DIGEST_SCHEMA = "mc_records_custody.v1"
 
 
 # `MCInputError` (fail-closed refusal carrying a machine-readable `code`,
@@ -176,17 +192,160 @@ class TemplateCalendar:
     first_month_offsets: tuple        # start-phase offsets (MC SS5 source 1)
 
 
+def _record_canonical_row(rec, *, where: str) -> dict:
+    """Canonical JSON-shaped mapping of ONE atomic record, over the
+    COMPLETE frozen field set.
+
+    The field names are enumerated MECHANICALLY from the contracts
+    dataclass (`_RECORD_FIELDS`), never spelled here — a field lane S0
+    adds enters the custody digest automatically, and this module still
+    names no diagnostic field. Presence in an IDENTITY digest is not
+    consumption: nothing downstream reads these values, they only make a
+    substituted record impossible to hide."""
+    row = {}
+    for name in _RECORD_FIELDS:
+        try:
+            value = getattr(rec, name)
+        except AttributeError as exc:
+            raise MCInputError(
+                "records_custody_row_malformed",
+                f"{where}: record has no field {name!r} — it is not a "
+                "TradePathRecord-shaped row") from exc
+        row[name] = mc_atoms.jsonable(value)
+    return row
+
+
+def records_canonical_digest(records: Mapping) -> str:
+    """Deterministic digest over the COMPLETE parsed record set: every
+    (engine, scenario) file, every trade date, every field.
+
+    This is the link the R2.3 identity was missing. `prepared_digest`
+    covered the bundle FILE digests but nothing about the PARSED records,
+    so a `PreparedMCInput` whose identity fields were copied verbatim
+    while its `records` mapping was swapped produced a bit-identical
+    digest, and the forged trace replayed green (the replay consumed the
+    same live object). Content now enters the identity.
+
+    The rows are STREAMED into the hash (one canonical JSON object per
+    row, newline separated — the same discipline as the atom trace's
+    JSONL) rather than materialised into a list: at production scale the
+    eight handoff files are ~92 MB of source and a materialised preimage
+    would double the transient footprint for no added strength. Canonical
+    JSON is ASCII with no raw newline, so the separator is unambiguous."""
+    if not isinstance(records, Mapping):
+        raise MCInputError("records_custody_shape",
+                           f"{type(records).__name__} is not a mapping")
+    for key in records:
+        if not (isinstance(key, tuple) and len(key) == 2):
+            raise MCInputError("records_custody_shape",
+                               f"record key {key!r} is not "
+                               "(engine, scenario)")
+    digest = hashlib.sha256()
+    digest.update(mc_atoms.canonical_json(
+        {"schema": RECORDS_DIGEST_SCHEMA,
+         "fields": list(_RECORD_FIELDS)}).encode("utf-8"))
+    for key in sorted(records, key=lambda k: (str(k[0]), str(k[1]))):
+        rows = records[key]
+        if not isinstance(rows, Mapping):
+            raise MCInputError(
+                "records_custody_shape",
+                f"{key[0]}|{key[1]} is not a date->record mapping")
+        engine, scenario = str(key[0]), str(key[1])
+        for date in sorted(rows):
+            digest.update(b"\n")
+            digest.update(mc_atoms.canonical_json({
+                "engine": engine, "scenario": scenario,
+                "trade_date": str(date),
+                "record": _record_canonical_row(
+                    rows[date],
+                    where=f"{engine}|{scenario}:{date}"),
+            }).encode("utf-8"))
+    return digest.hexdigest()
+
+
+def records_key_index(records: Mapping) -> dict:
+    """The COMPLETE engine/scenario/date key set, canonically ordered.
+
+    Carried in the identity preimage ALONGSIDE the content digest: a
+    dropped or added trade date is then visible as a key-set change even
+    to a reader who never recomputes the content digest."""
+    out = {}
+    for key in sorted(records, key=lambda k: (str(k[0]), str(k[1]))):
+        out[f"{key[0]}|{key[1]}"] = sorted(str(d) for d in records[key])
+    return out
+
+
+def _parse_handoff_file(raw: bytes, *, name: str, engine: str,
+                        scenario: str) -> Mapping:
+    """Parse ONE MC_HANDOFF_* blob into {trade_date -> FrozenTradePath}.
+
+    THE single parser. `_prepare_mc_input_impl` and the cold replay both
+    reach the records through it, so the forward run and the replay can
+    only disagree about records if the BYTES disagree."""
+    if not isinstance(raw, (bytes, bytearray)):
+        raise MCInputError("records_custody_source_not_bytes",
+                           f"{name}: {type(raw).__name__}")
+    rows: dict = {}
+    for i, line in enumerate(bytes(raw).decode("utf-8").splitlines()):
+        if not line.strip():
+            continue
+        rec = _parse_record(json.loads(line), name, i)
+        if rec.engine != engine or rec.cost_scenario != scenario:
+            raise MCInputError("axis_violation",
+                               f"{name}:{i} carries "
+                               f"{rec.engine}/{rec.cost_scenario}")
+        if rec.trade_date in rows:
+            raise MCInputError("duplicate_record_date",
+                               f"{name}:{rec.trade_date}")
+        rows[rec.trade_date] = rec           # FrozenTradePath (deep)
+    return MappingProxyType(rows)
+
+
+def records_from_handoff_bytes(handoff_bytes: Mapping) -> Mapping:
+    """Re-parse the COMPLETE record set from custody-held raw bytes.
+
+    The bytes are the authority. Nothing here reads a live mapping, a
+    forward observation, or any caller-declared snapshot."""
+    if not isinstance(handoff_bytes, Mapping):
+        raise MCInputError("records_custody_shape",
+                           f"{type(handoff_bytes).__name__} is not a "
+                           "mapping of handoff bytes")
+    names = set(handoff_bytes)
+    if names != HANDOFF_FILE_SET:
+        raise MCInputError(
+            "records_custody_source_keyset",
+            f"missing={sorted(HANDOFF_FILE_SET - names)} "
+            f"extra={sorted(names - HANDOFF_FILE_SET)}")
+    out: dict = {}
+    for e in ENGINES:
+        for s in SCENARIOS:
+            name = f"MC_HANDOFF_{e}_{s}.jsonl"
+            out[(e, s)] = _parse_handoff_file(handoff_bytes[name],
+                                              name=name, engine=e,
+                                              scenario=s)
+    return MappingProxyType(out)
+
+
 @dataclass(frozen=True, slots=True)
 class PreparedMCInput:
     """Run-scoped immutable MC input (source matrix R13/R14).
 
     Built ONCE by `prepare_mc_input` from bundle BYTES; the epistemic /
     aleatoric drivers consume ONLY this object — they carry no paths, no
-    handles, no registry access (exposure freeze by construction)."""
+    handles, no registry access (exposure freeze by construction).
+
+    N01 C1 — RECORDS CUSTODY. The object retains the CUSTODY-CHECKED RAW
+    BYTES of the eight MC_HANDOFF_* files, and `records` is DERIVED from
+    them inside `__post_init__`, every single time an instance is built.
+    There is no construction path that installs a caller's record mapping:
+    a supplied one is declare-and-verify (it must reproduce the bytes'
+    canonical digest) and is then REPLACED by the bytes-derived mapping.
+    The numerical authority is therefore the bytes, not any live object,
+    and the identity digest covers the parsed content."""
     trial_id: str
     authorized_commit: str
     file_sha256: Mapping             # name -> hex digest (exact set)
-    records: Mapping                 # (engine, scenario) -> {date: record}
+    handoff_bytes: Mapping           # name -> RAW custody-checked bytes
     day_sequences: Mapping           # channel -> ordered tuple of dates
     traded_day_sets: Mapping         # channel -> frozenset of dates
     seeds: tuple
@@ -194,6 +353,73 @@ class PreparedMCInput:
     method_digest: str               # sha256 over frozen method sources
     authorization_snapshot: Mapping  # injected at build; deeply frozen
     calendar: TemplateCalendar
+    # DERIVED, never authoritative-from-the-caller. `None` is the normal
+    # value at construction; anything else is declare-and-verify.
+    records: Mapping | None = None   # (engine, scenario) -> {date: record}
+    records_digest: str | None = None
+
+    def __post_init__(self):
+        # --- custody link 1: raw bytes -> the pinned per-file digests ---
+        if not isinstance(self.file_sha256, Mapping):
+            raise MCInputError("custody_authority_missing",
+                               "file_sha256 is not a mapping")
+        if not isinstance(self.handoff_bytes, Mapping):
+            raise MCInputError("records_custody_shape",
+                               "handoff_bytes is not a mapping")
+        names = set(self.handoff_bytes)
+        if names != HANDOFF_FILE_SET:
+            raise MCInputError(
+                "records_custody_source_keyset",
+                f"missing={sorted(HANDOFF_FILE_SET - names)} "
+                f"extra={sorted(names - HANDOFF_FILE_SET)}")
+        held = {}
+        for name in sorted(names):
+            raw = self.handoff_bytes[name]
+            if not isinstance(raw, (bytes, bytearray)):
+                raise MCInputError("records_custody_source_not_bytes",
+                                   f"{name}: {type(raw).__name__}")
+            raw = bytes(raw)                      # immutable copy
+            got = hashlib.sha256(raw).hexdigest()
+            want = self.file_sha256.get(name)
+            if not isinstance(want, str) or not _HEX64_RE.match(want):
+                raise MCInputError(
+                    "records_custody_bytes_unpinned",
+                    f"{name}: file_sha256 carries {want!r} — the records "
+                    "source bytes are not pinned by the identity")
+            if got != want:
+                raise MCInputError(
+                    "records_custody_bytes_mismatch",
+                    f"{name}: retained bytes hash {got[:12]} != pinned "
+                    f"{want[:12]} — the record source is not the file the "
+                    "custody battery certified")
+            held[name] = raw
+        object.__setattr__(self, "handoff_bytes", MappingProxyType(held))
+
+        # --- custody link 2: those bytes -> the parsed record content ---
+        derived = records_from_handoff_bytes(self.handoff_bytes)
+        derived_digest = records_canonical_digest(derived)
+        if self.records is not None:
+            # declare-and-verify: a caller MAY hand over the mapping it
+            # parsed, but only if it is the SAME content the custody
+            # bytes yield. The R2.3 attack (identity fields copied,
+            # records swapped) dies exactly here.
+            got_digest = records_canonical_digest(self.records)
+            if got_digest != derived_digest:
+                raise MCInputError(
+                    "records_custody_content_mismatch",
+                    f"supplied records digest {got_digest[:12]} != "
+                    f"{derived_digest[:12]} re-parsed from the "
+                    "custody-checked handoff bytes")
+        if self.records_digest is not None and \
+                self.records_digest != derived_digest:
+            raise MCInputError(
+                "records_custody_digest_mismatch",
+                f"declared records_digest "
+                f"{str(self.records_digest)[:12]} != "
+                f"{derived_digest[:12]} re-derived from the bytes")
+        # the LIFECYCLE reads the bytes-derived mapping, never a caller's
+        object.__setattr__(self, "records", derived)
+        object.__setattr__(self, "records_digest", derived_digest)
 
 
 def _unfreeze(node):
@@ -214,11 +440,19 @@ def prepared_digest(prepared: "PreparedMCInput") -> str:
     day_id + cal_offset + the complete first_month_offsets, the complete
     day sequences and traded sets per channel, and the canonicalised
     authorization snapshot. Two calendars of equal length but different
-    dates/offsets produce different digests."""
+    dates/offsets produce different digests.
+
+    N01 C1: the preimage now also binds the RECORDS — their canonical
+    full-field content digest and the complete engine/scenario/date key
+    index — on top of the raw handoff FILE digests already carried by
+    `file_sha256`. Before this, two prepared inputs that disagreed about
+    every number the lifecycles consume could share one identity."""
     ident = {
         "trial_id": prepared.trial_id,
         "authorized_commit": prepared.authorized_commit,
         "file_sha256": dict(prepared.file_sha256),
+        "records_digest": prepared.records_digest,
+        "record_keys": records_key_index(prepared.records),
         "seeds": list(prepared.seeds),
         "k_per_seed": prepared.k_per_seed,
         "method_digest": prepared.method_digest,
@@ -537,26 +771,12 @@ def _prepare_mc_input_impl(bundle: Mapping[str, bytes], *,
                            "S0_REPORT governance disagrees with registry "
                            "custody snapshot")
 
-    # (4) engine/scenario/platform axis — exact
-    records: dict = {}
-    for e in ENGINES:
-        for s in SCENARIOS:
-            name = f"MC_HANDOFF_{e}_{s}.jsonl"
-            rows: dict = {}
-            for i, line in enumerate(bundle[name].decode("utf-8")
-                                     .splitlines()):
-                if not line.strip():
-                    continue
-                rec = _parse_record(json.loads(line), name, i)
-                if rec.engine != e or rec.cost_scenario != s:
-                    raise MCInputError("axis_violation",
-                                       f"{name}:{i} carries "
-                                       f"{rec.engine}/{rec.cost_scenario}")
-                if rec.trade_date in rows:
-                    raise MCInputError("duplicate_record_date",
-                                       f"{name}:{rec.trade_date}")
-                rows[rec.trade_date] = rec       # FrozenTradePath (deep)
-            records[(e, s)] = MappingProxyType(rows)
+    # (4) engine/scenario/platform axis — exact. N01 C1: the records are
+    # parsed from the SAME custody-checked bytes the prepared input will
+    # RETAIN, through the SAME parser the cold replay re-runs.
+    handoff_bytes = MappingProxyType(
+        {name: bytes(bundle[name]) for name in HANDOFF_FILES})
+    records = dict(records_from_handoff_bytes(handoff_bytes))
     # (6b, review H3) cross-file record-set consistency: every one of the
     # eight (engine, scenario) files must carry EXACTLY the same trade-date
     # key set — a scenario-selective omission silently becomes a no-trade
@@ -588,10 +808,31 @@ def _prepare_mc_input_impl(bundle: Mapping[str, bytes], *,
         raise MCInputError("crn_scope_violation",
                            str(seed_manifest.get("crn_scope")))
 
-    # (6)+(7) date order and TP/FP disjointness per theta channel
+    # (6)+(7) date order and TP/FP disjointness per theta channel, PLUS
+    # (N01 C6) the day-universe ENGINEERING EQUALITY.
+    #
+    # Producer-side fact (S0 §5/App A as implemented in itsf.s0.study, not
+    # a method choice re-made here): `is_direction_tradeable` IS the oracle
+    # candidate predicate; `_partition` splits the tradeable population
+    # EXHAUSTIVELY into `y_cont >= θ` / `y_cont < θ` with no third bucket;
+    # the atomic records are built for EVERY constructible day, both
+    # engines, every scenario, TP and FP alike; and each θ's tp/fp lists
+    # are filtered to that SAME traded set. Therefore, in any sealed
+    # bundle:
+    #
+    #     for every θ:   set(tp) | set(fp)  ==  ref_dates       (BOTH ways)
+    #     for every θ:   set(tp) & set(fp)  ==  {}
+    #     across θ:      the (tp | fp) population is ONE set
+    #
+    # This is a completeness property the seal must satisfy, not an option.
+    # A violation is a SEALED-INPUT INTEGRITY FAILURE: it refuses here, in
+    # the prepare battery, before any supplement, any exposure and any
+    # research output — and it never "picks another universe and carries
+    # on".
     oracle = report.get("oracle_daily", {})
     day_sequences: dict = {}
     traded: dict = {}
+    theta_population: dict = {}
     if not isinstance(oracle, dict) or not oracle:
         raise MCInputError("day_universe_missing", "oracle_daily absent")
     for theta, node in oracle.items():
@@ -619,9 +860,49 @@ def _prepare_mc_input_impl(bundle: Mapping[str, bytes], *,
         missing_tp = sorted(set(tp) - ref_dates)
         if missing_tp:
             raise MCInputError("tp_day_without_record",
-                               f"{theta}: {missing_tp[:3]}")
+                               f"{theta}: {len(missing_tp)} of "
+                               f"{len(tp)} tp days lack a record: "
+                               f"{missing_tp[:3]}")
+        # C6 (i) — the SAME obligation on the FP side. It was never
+        # checked: an FP day without a record is silently a no-trade day
+        # in every world that draws it, which biases every path metric
+        # downward while the day universe still claims the day exists.
+        missing_fp = sorted(set(fp) - ref_dates)
+        if missing_fp:
+            raise MCInputError("fp_day_without_record",
+                               f"{theta}: {len(missing_fp)} of "
+                               f"{len(fp)} fp days lack a record: "
+                               f"{missing_fp[:3]}")
         day_sequences[theta] = ordered
         traded[theta] = frozenset(tp)
+        theta_population[theta] = frozenset(set(tp) | set(fp))
+
+    # C6 (iii) — cross-θ population identity. Checked BEFORE the
+    # record-side half of the equality so a genuine θ-population drift
+    # surfaces under its OWN code instead of being reported as one θ's
+    # unclassified records.
+    populations = {frozenset(p) for p in theta_population.values()}
+    if len(populations) > 1:
+        sizes = {th: len(p) for th, p in sorted(theta_population.items())}
+        sample = sorted(set().union(*populations)
+                        - set().intersection(*populations))
+        raise MCInputError(
+            "theta_population_drift",
+            f"θ channels disagree about the day population {sizes}; "
+            f"{len(sample)} day(s) appear in some channels only: "
+            f"{sample[:3]}")
+    # C6 (ii) — the other half of the equality: every record day must be
+    # CLASSIFIED by the oracle. A record with no tp/fp class is a day the
+    # bundle can trade but the day universe never accounted for, i.e. the
+    # producer's exhaustive TP/FP partition did not hold.
+    for theta, population in sorted(theta_population.items()):
+        unclassified = sorted(ref_dates - population)
+        if unclassified:
+            raise MCInputError(
+                "record_without_oracle_class",
+                f"{theta}: {len(unclassified)} of {len(ref_dates)} record "
+                f"days are in neither tp_days nor fp_days: "
+                f"{unclassified[:3]}")
 
     # (8) realized-count reconciliation — records vs report manifest counts
     counts = report.get("mc_handoff_manifest", {}).get("counts", {})
@@ -668,6 +949,10 @@ def _prepare_mc_input_impl(bundle: Mapping[str, bytes], *,
         trial_id=str(snap["trial_id"]),
         authorized_commit=str(snap["authorized_commit"]),
         file_sha256=MappingProxyType(dict(sha)),
+        # N01 C1: the RAW custody-checked record bytes travel with the
+        # prepared input, and `records` is re-derived from them inside
+        # __post_init__ (the mapping below is declare-and-verify only).
+        handoff_bytes=handoff_bytes,
         records=MappingProxyType(records),
         day_sequences=MappingProxyType(day_sequences),
         traded_day_sets=MappingProxyType(traded),
@@ -730,6 +1015,52 @@ def lifecycle_config_for(platform: str):
                                 sizing_policy=PRIMARY_POLICY)
 
 
+# ---------------------------------------------------------------------------
+# C4 — lane S2' authoritative fact-verification seam (consumer side)
+# ---------------------------------------------------------------------------
+# The production chain's ONE fact-verification entry, owned by lane S2' in
+# `itsf.mc.platforms.authoritative`:
+#
+#     verify_event_stream(events, *, engine, platform) -> None
+#         first violation raises AuthoritativeFactError(code, detail);
+#         success returns None and NEVER a statistic.
+#
+# It is called UNCONDITIONALLY in `_run_path_atom` — after the lifecycle
+# has run, before any fact is reduced. There is no caller flag, no config
+# and no receipt that can skip it.
+AUTHORITATIVE_VERIFIER_NAME = "verify_event_stream"
+# CROSS-LANE JOIN STATE. The consumer ships NO stand-in: a local
+# re-implementation would be a SECOND interpretation of the platform's
+# facts, which is the exact defect the single-adapter rule exists to
+# prevent. This flag was written while lane S2' was still in flight; the
+# entry has since landed, so the join is CLOSED and an absent verifier is
+# now a hard refusal rather than a tolerated pending state.
+AUTHORITATIVE_VERIFIER_REQUIRED = True
+
+
+def _verify_event_stream(events: Sequence, *, engine: str,
+                         platform: str) -> None:
+    """Call lane S2's verifier on an emitted event stream.
+
+    Resolved by NAME at call time so the join is observable: the wiring
+    exists whether or not the symbol does, and `AuthoritativeFactError`
+    propagates untouched (it is lane S2's vocabulary, not ours — swallowing
+    or re-wrapping it would hide which fact failed)."""
+    from itsf.mc.platforms import authoritative as _auth
+    verify = getattr(_auth, AUTHORITATIVE_VERIFIER_NAME, None)
+    if verify is None:
+        if AUTHORITATIVE_VERIFIER_REQUIRED:
+            raise MCInputError(
+                "authoritative_verifier_absent",
+                f"itsf.mc.platforms.authoritative."
+                f"{AUTHORITATIVE_VERIFIER_NAME} is required but absent — "
+                "the consumer refuses rather than running unverified "
+                "event streams")
+        return None                       # PENDING lane S2' (see above)
+    verify(events, engine=engine, platform=platform)
+    return None
+
+
 def _run_path_atom(prepared: PreparedMCInput, *, platform: str,
                    engine: str, scenario: str, channel: str,
                    world: Sequence[str], world_index: int,
@@ -752,6 +1083,9 @@ def _run_path_atom(prepared: PreparedMCInput, *, platform: str,
     window = days[phase_offset:]
     paths = _paths_for_world(prepared, world, channel, engine, scenario)
     res = orch.run_lifecycle(cfg, days, paths, start_offset=phase_offset)
+    # C4: lane S2's single fact-verification entry, UNCONDITIONALLY, on
+    # every emitted stream, before a single fact is reduced.
+    _verify_event_stream(res.events, engine=engine, platform=platform)
     facts = mc_atoms.path_facts_from_events(res.events, engine=engine,
                                             platform=platform)
     # WINDOW-scoped offered/ambiguous counts. The R2.3 code counted over
@@ -1137,6 +1471,13 @@ def run_observation_set(prepared: PreparedMCInput, *, run_label: str,
     same arguments sees IDENTICAL worlds by construction."""
     if platform not in PLATFORMS:
         raise MCInputError("axis_violation", platform)
+    # N01 C1 — the records custody chain is proven BEFORE the first
+    # lifecycle of EVERY execution, forward run and replay alike. A
+    # prepared input whose live record mapping is not what its
+    # custody-checked bytes yield cannot run at all, so a forged input
+    # cannot "pass on both sides" by being handed to both.
+    verify_records_custody_chain(
+        prepared, where=f"{run_label}/{platform}|{engine}/{scenario}")
     if (engine, scenario) not in prepared.records:
         raise MCInputError("axis_violation", f"{engine}|{scenario}")
     support = tuple(prepared.calendar.first_month_offsets)
@@ -1805,6 +2146,8 @@ def prepared_identity_bytes(prepared: PreparedMCInput) -> bytes:
         "trial_id": prepared.trial_id,
         "authorized_commit": prepared.authorized_commit,
         "file_sha256": dict(prepared.file_sha256),
+        "records_digest": prepared.records_digest,
+        "record_keys": records_key_index(prepared.records),
         "seeds": list(prepared.seeds),
         "k_per_seed": prepared.k_per_seed,
         "method_digest": prepared.method_digest,
@@ -1821,11 +2164,146 @@ def prepared_identity_bytes(prepared: PreparedMCInput) -> bytes:
     return json.dumps(ident, sort_keys=True).encode("utf-8")
 
 
+def verify_records_custody_chain(prepared: PreparedMCInput, *,
+                                 where: str = "") -> dict:
+    """Prove that FOUR things are one chain, and return the witness.
+
+      link 1  raw handoff FILE BYTES -> sha256, which must equal the
+              `file_sha256` entry the prepared identity hashes;
+      link 2  those same bytes, RE-PARSED -> the records canonical
+              content digest;
+      link 3  that digest must be the one INSIDE the serialised prepared
+              identity preimage (read back out of the bytes, not off the
+              live attribute), and the preimage must hash to
+              `prepared_digest`;
+      link 4  the mapping the LIFECYCLE will actually read
+              (`prepared.records`) must be that same content.
+
+    Any break refuses with its own code. This is the check that makes
+    "the replay re-derived the records" a verifiable claim rather than a
+    comment."""
+    prefix = f"{where}: " if where else ""
+    # link 1 + 2 — from the bytes, never from the live mapping
+    reparsed = records_from_handoff_bytes(prepared.handoff_bytes)
+    for name in sorted(HANDOFF_FILE_SET):
+        got = hashlib.sha256(prepared.handoff_bytes[name]).hexdigest()
+        want = prepared.file_sha256.get(name)
+        if got != want:
+            raise MCInputError(
+                "records_custody_bytes_mismatch",
+                f"{prefix}{name}: source bytes hash {got[:12]} != "
+                f"identity-pinned {str(want)[:12]}")
+    reparsed_digest = records_canonical_digest(reparsed)
+    # link 3 — read the identity back OUT of the serialised preimage
+    raw_identity = prepared_identity_bytes(prepared)
+    identity = json.loads(raw_identity.decode("utf-8"))
+    if identity.get("records_digest") != reparsed_digest:
+        raise MCInputError(
+            "records_custody_identity_mismatch",
+            f"{prefix}prepared identity carries records_digest "
+            f"{str(identity.get('records_digest'))[:12]} != "
+            f"{reparsed_digest[:12]} re-parsed from the custody bytes")
+    if identity.get("record_keys") != records_key_index(reparsed):
+        raise MCInputError(
+            "records_custody_identity_mismatch",
+            f"{prefix}prepared identity's engine/scenario/date key index "
+            "disagrees with the re-parsed records")
+    pdig = hashlib.sha256(raw_identity).hexdigest()
+    if pdig != prepared_digest(prepared):
+        raise MCInputError(
+            "prepared_identity_bytes_unstable",
+            f"{prefix}the pinned prepared bytes do not reproduce the "
+            "prepared digest")
+    # link 4 — what the lifecycle reads
+    live_digest = records_canonical_digest(prepared.records)
+    if live_digest != reparsed_digest:
+        raise MCInputError(
+            "records_custody_content_mismatch",
+            f"{prefix}the records mapping the lifecycle would read "
+            f"({live_digest[:12]}) is not the content the custody bytes "
+            f"yield ({reparsed_digest[:12]})")
+    return {
+        "handoff_sha256": {n: prepared.file_sha256[n]
+                           for n in sorted(HANDOFF_FILE_SET)},
+        "records_digest": reparsed_digest,
+        "prepared_identity_records_digest": identity["records_digest"],
+        "prepared_digest": pdig,
+        "atom_records_digest": live_digest,
+    }
+
+
+def replay_prepared_from_custody_bytes(prepared: PreparedMCInput
+                                       ) -> PreparedMCInput:
+    """Build a NEW prepared input for the cold replay by RE-PARSING the
+    records out of the custody-held raw handoff bytes.
+
+    The replay input takes its numerical authority from EXACTLY ONE
+    place: those immutable bytes, whose sha256 is pinned inside the
+    prepared identity. It never takes it from
+      * the live `records` mapping the caller handed in (the R2.3 defect:
+        the same live object was passed straight back, so a forged trace
+        replayed against its own forgery),
+      * anything reverse-engineered from the forward observations, or
+      * a records snapshot the ReplaySpec merely DECLARES (a declared
+        digest is checked against this rebuild, never trusted as its
+        source).
+
+    The rebuilt object is then required to carry the SAME identity as the
+    original — same prepared digest, same records digest — so a rebuild
+    that differs in any bound field refuses instead of quietly replaying
+    a different world."""
+    if not isinstance(prepared, PreparedMCInput):
+        raise MCInputError("prepared_authority_missing",
+                           f"{type(prepared).__name__} is not a "
+                           "PreparedMCInput")
+    verify_records_custody_chain(prepared, where="forward input")
+    replay = PreparedMCInput(
+        trial_id=prepared.trial_id,
+        authorized_commit=prepared.authorized_commit,
+        file_sha256=MappingProxyType(dict(prepared.file_sha256)),
+        handoff_bytes=MappingProxyType(dict(prepared.handoff_bytes)),
+        day_sequences=MappingProxyType(dict(prepared.day_sequences)),
+        traded_day_sets=MappingProxyType(dict(prepared.traded_day_sets)),
+        seeds=tuple(prepared.seeds),
+        k_per_seed=prepared.k_per_seed,
+        method_digest=prepared.method_digest,
+        authorization_snapshot=prepared.authorization_snapshot,
+        calendar=TemplateCalendar(
+            days=tuple(prepared.calendar.days),
+            first_month_offsets=tuple(
+                prepared.calendar.first_month_offsets)),
+        # records: DERIVED inside __post_init__ from the bytes above. No
+        # value is passed, so no caller mapping can reach the replay.
+        records=None, records_digest=None)
+    if replay.records is prepared.records:          # pragma: no cover
+        raise MCInputError(
+            "cold_replay_records_aliased",
+            "the replay input shares the forward run's records object — "
+            "it must be re-parsed, not aliased")
+    if replay.records_digest != prepared.records_digest:
+        raise MCInputError(
+            "cold_replay_records_digest_mismatch",
+            f"re-parsed records {str(replay.records_digest)[:12]} != "
+            f"forward records {str(prepared.records_digest)[:12]}")
+    if prepared_digest(replay) != prepared_digest(prepared):
+        raise MCInputError(
+            "cold_replay_prepared_binding_mismatch",
+            "the rebuilt replay input does not reproduce the forward "
+            "prepared digest")
+    verify_records_custody_chain(replay, where="replay input")
+    return replay
+
+
 @dataclass(frozen=True, slots=True)
 class ReplaySpec:
     """The COMPLETE cold-start specification of ONE observation set. It
     carries no statistic and no conclusion — only what is needed to
-    re-execute the run from scratch."""
+    re-execute the run from scratch.
+
+    `records_digest` is a BINDING, not a source: the replay re-derives
+    the records from the custody bytes and REQUIRES the declared digest
+    to match. A caller who rewrites it (or who rewrites it together with
+    a swapped live mapping) is refused, never followed."""
     run_label: str
     platform: str
     engine: str
@@ -1837,9 +2315,12 @@ class ReplaySpec:
     lifecycle_config_digest: str
     rng_spec: str
     method_version: str
+    records_digest: str | None = None
 
     @staticmethod
-    def from_observations(obs: ObservationSet) -> "ReplaySpec":
+    def from_observations(obs: ObservationSet, *,
+                          records_digest: str | None = None
+                          ) -> "ReplaySpec":
         return ReplaySpec(
             run_label=obs.run_label, platform=obs.platform,
             engine=obs.engine, scenario=obs.scenario,
@@ -1848,23 +2329,38 @@ class ReplaySpec:
             prepared_digest=obs.prepared_digest,
             lifecycle_config_digest=obs.lifecycle_config_digest,
             rng_spec=mc_atoms.RNG_SPEC,
-            method_version=mc_atoms.METHOD_VERSION)
+            method_version=mc_atoms.METHOD_VERSION,
+            records_digest=records_digest)
 
 
 def cold_replay_observation_set(prepared: PreparedMCInput,
                                 spec: ReplaySpec) -> ObservationSet:
     """Re-execute ONE observation set from a COLD START.
 
-    Cold start = the identity is re-derived from the PINNED prepared
-    bytes, the config digest is re-derived from the LIVE frozen modules,
-    the RNG spec and method version are re-checked, the world table is
-    rebuilt from (prepared, seed, B, block, length), and every lifecycle
-    is run again. Nothing from the forward run is reused."""
+    Cold start = the RECORDS are re-parsed from the custody-checked raw
+    handoff bytes into a NEW prepared object, the identity is re-derived
+    from the PINNED prepared bytes, the config digest is re-derived from
+    the LIVE frozen modules, the RNG spec and method version are
+    re-checked, the world table is rebuilt from (prepared, seed, B,
+    block, length), and every lifecycle is run again. Nothing from the
+    forward run is reused — in particular NOT its records mapping, which
+    the R2.3 implementation handed straight back to
+    `run_observation_set`."""
     if type(spec) is not ReplaySpec:
         raise MCInputError("cold_replay_spec_invalid",
                            f"{type(spec).__name__} is not a ReplaySpec")
+    # N01 C1 — BEFORE any lifecycle executes: rebuild the numerical
+    # authority from the custody bytes and prove the four-link chain.
+    replay_input = replay_prepared_from_custody_bytes(prepared)
+    if spec.records_digest is not None and \
+            spec.records_digest != replay_input.records_digest:
+        raise MCInputError(
+            "cold_replay_records_digest_mismatch",
+            f"spec declares records {str(spec.records_digest)[:12]} != "
+            f"{str(replay_input.records_digest)[:12]} re-parsed from the "
+            "custody bytes")
     cold_digest = hashlib.sha256(
-        prepared_identity_bytes(prepared)).hexdigest()
+        prepared_identity_bytes(replay_input)).hexdigest()
     if cold_digest != prepared_digest(prepared):
         raise MCInputError(
             "prepared_identity_bytes_unstable",
@@ -1892,8 +2388,11 @@ def cold_replay_observation_set(prepared: PreparedMCInput,
             f"{spec.run_label}: spec carries "
             f"{spec.lifecycle_config_digest[:12]} != live "
             f"{want_cfg[:12]}")
+    # EXECUTE ON THE REBUILT INPUT — the whole point of C1: the lifecycles
+    # consume records that were re-parsed from custody-checked bytes in
+    # THIS call, not the mapping the caller is holding.
     return run_observation_set(
-        prepared, run_label=spec.run_label, platform=spec.platform,
+        replay_input, run_label=spec.run_label, platform=spec.platform,
         engine=spec.engine, scenario=spec.scenario,
         channel=spec.theta_channel, B=spec.B,
         master_seed=spec.master_seed)
@@ -1988,6 +2487,11 @@ def cold_replay_evidence(prepared: PreparedMCInput,
     is no parameter on this module's seal entry that takes one, so a
     receipt rewritten to be "all green" cannot skip a single replay."""
     legal = tuple(prepared.calendar.first_month_offsets)
+    # N01 C1 — the four-link records custody witness, computed ONCE up
+    # front (and again inside every per-set rebuild). It is a DESCRIPTION
+    # in the receipt; nothing reads it back as permission.
+    records_chain = verify_records_custody_chain(prepared,
+                                                 where="replay evidence")
     comparisons = {}
     config_digests = {}
     for run in runs:
@@ -1999,7 +2503,8 @@ def cold_replay_evidence(prepared: PreparedMCInput,
                     "legal_phase_support_not_from_prepared",
                     f"{key}: trace claims {tuple(obs.legal_phase_support)}"
                     f" but the prepared calendar enumerates {legal}")
-            spec = ReplaySpec.from_observations(obs)
+            spec = ReplaySpec.from_observations(
+                obs, records_digest=prepared.records_digest)
             replayed = cold_replay_observation_set(prepared, spec)
             cmp = compare_atom_tables(obs, replayed)
             if not cmp["key_set_equal"] or cmp["mismatches"]:
@@ -2020,6 +2525,7 @@ def cold_replay_evidence(prepared: PreparedMCInput,
         "prepared_digest": prepared_digest(prepared),
         "prepared_identity_bytes_sha256": hashlib.sha256(
             prepared_identity_bytes(prepared)).hexdigest(),
+        "records_custody_chain": records_chain,
         "legal_phase_support": list(legal),
         "lifecycle_config_digests": config_digests,
         "n_sets_replayed": len(comparisons),

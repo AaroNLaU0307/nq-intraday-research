@@ -66,10 +66,29 @@ class _StubEvent:
             setattr(self, k, v)
 
 
-def _stub(**over):
-    kw = dict(day_net_usd=10.0, account_generation=0, requested_n=1,
-              traded_n=1, cap_applied=False, payout_gross=0.0,
-              qualifying_day=None, over_budget=None)
+def _status_for(engine: str, traded_n: int) -> str:
+    """INDEPENDENT ORACLE of the legal `over_budget_status` token, written
+    out here from the frozen scope rather than imported from production:
+
+      no position          -> NOT_APPLICABLE_NO_TRADE (no referent)
+      E1 with a position   -> NOT_APPLICABLE (MC SS3 scopes the
+                              over-budget disclosure to E2)
+      E2 with a position   -> PENDING_RULING (defined, predicate unruled)
+    """
+    if not isinstance(traded_n, int) or traded_n <= 0:
+        return "NOT_APPLICABLE_NO_TRADE"
+    return "NOT_APPLICABLE" if engine == "E1" else "PENDING_RULING"
+
+
+def _stub(*, engine="E1", **over):
+    """A stub event that is LEGAL for `engine`. `phase` defaults to
+    'evaluation' (a phase with no qualifying-day concept), so
+    `qualifying_day=None` is the correct fact there."""
+    traded = over.get("traded_n", 1)
+    kw = dict(day_net_usd=10.0, phase="evaluation", account_generation=0,
+              requested_n=1, traded_n=1, cap_applied=False,
+              payout_gross=0.0, qualifying_day=None, over_budget=None,
+              over_budget_status=_status_for(engine, traded))
     kw.update(over)
     return _StubEvent(**kw)
 
@@ -237,7 +256,7 @@ def test_adapter_positive_counts_from_authoritative_fields_only():
               cap_applied=True),
         _stub(day_net_usd=0.0, traded_n=0, requested_n=0),
         _stub(day_net_usd=160.0, traded_n=1, requested_n=1,
-              qualifying_day=True, payout_gross=500.0),
+              phase="funded", qualifying_day=True, payout_gross=500.0),
     ]
     facts = A.path_facts_from_events(events, engine="E1",
                                      platform="topstep")
@@ -255,7 +274,7 @@ def test_qualifying_days_is_not_a_rederived_threshold_count():
     """Lane S2's documented trap: a Topstep XFA payout-request day can
     clear $150 and still NOT be a qualifying day. The adapter must take
     the platform's own flag, so the two counts legitimately differ."""
-    events = [_stub(day_net_usd=900.0, qualifying_day=False,
+    events = [_stub(day_net_usd=900.0, phase="xfa", qualifying_day=False,
                     payout_gross=800.0)]
     facts = A.path_facts_from_events(events, engine="E1",
                                      platform="topstep")
@@ -265,8 +284,10 @@ def test_qualifying_days_is_not_a_rederived_threshold_count():
 
 @pytest.mark.parametrize("field", A.SEAM_REQUIRED_FIELDS)
 def test_absent_platform_fact_refuses_and_never_falls_back(field):
-    kw = {"day_net_usd": 10.0, "account_generation": 0, "requested_n": 1,
-          "traded_n": 1, "cap_applied": False, "payout_gross": 0.0}
+    kw = {"day_net_usd": 10.0, "phase": "evaluation",
+          "account_generation": 0, "requested_n": 1, "traded_n": 1,
+          "cap_applied": False, "payout_gross": 0.0,
+          "over_budget_status": "NOT_APPLICABLE"}
     kw.pop(field)
     with pytest.raises(A.MCInputError) as exc:
         A.path_facts_from_events([_StubEvent(**kw)], engine="E1",
@@ -318,11 +339,213 @@ def test_e1_carrying_an_over_budget_boolean_refuses():
 
 def test_e2_without_a_ruled_predicate_yields_pending_never_zero():
     facts = A.path_facts_from_events(
-        [_stub(over_budget=None,
+        [_stub(engine="E2", over_budget=None,
                over_budget_status="PENDING_RULING")],
         engine="E2", platform="topstep")
     assert facts["e2_over_budget_days"] is A.PENDING_RULING
     assert facts["e2_over_budget_days"] != 0
+
+
+# --- C3: the E2 over_budget boundary, gated at the ADAPTER ----------------
+
+def test_e2_boolean_over_budget_never_reaches_a_formal_count():
+    """C3 BASELINE COUNTEREXAMPLE (measured before this node): a legally
+    constructed event stream whose `over_budget` was set to True after
+    construction — `AccountEvent` is a MUTABLE dataclass — produced
+    `e2_over_budget_days = 2` as a FORMAL COUNT, walking straight past
+    PENDING_RULING. The producer's construction-time refusal cannot see
+    a post-construction mutation; the consumer now refuses on its own."""
+    events = [_stub(engine="E2", over_budget=True,
+                    over_budget_status="PENDING_RULING"),
+              _stub(engine="E2", over_budget=True,
+                    over_budget_status="PENDING_RULING")]
+    with pytest.raises(A.MCInputError) as exc:
+        A.path_facts_from_events(events, engine="E2", platform="topstep")
+    assert exc.value.code == "platform_facts_e2_over_budget_boolean_unruled"
+
+
+def test_a_real_account_event_mutated_after_construction_is_refused():
+    """The exact attack shape: build a LEGAL production AccountEvent (the
+    producer's own type, its own __post_init__), then flip the field."""
+    from itsf.contracts import AccountEvent, OverBudgetStatus
+    ev = AccountEvent(day="2026-08-03", phase="evaluation", balance=50000.0,
+                      floor=48000.0, day_net_usd=10.0,
+                      account_generation=0, requested_n=1, traded_n=1,
+                      over_budget_status=OverBudgetStatus.PENDING_RULING)
+    # legal today
+    facts = A.path_facts_from_events([ev], engine="E2", platform="topstep")
+    assert facts["e2_over_budget_days"] is A.PENDING_RULING
+    ev.over_budget = True                      # the mutation the type allows
+    with pytest.raises(A.MCInputError) as exc:
+        A.path_facts_from_events([ev], engine="E2", platform="topstep")
+    assert exc.value.code == "platform_facts_e2_over_budget_boolean_unruled"
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_duck_typed_e2_boolean_is_refused_in_both_polarities(value):
+    """A False is refused as loudly as a True: 'measured, never exceeded'
+    is exactly the reading PENDING_RULING exists to forbid."""
+    with pytest.raises(A.MCInputError) as exc:
+        A.path_facts_from_events(
+            [_stub(engine="E2", over_budget=value,
+                   over_budget_status="PENDING_RULING")],
+            engine="E2", platform="topstep")
+    assert exc.value.code == "platform_facts_e2_over_budget_boolean_unruled"
+
+
+@pytest.mark.parametrize("engine,over,code", [
+    # status says "no position" while the event traded
+    ("E2", {"traded_n": 1, "requested_n": 1,
+            "over_budget_status": "NOT_APPLICABLE_NO_TRADE"},
+     "platform_facts_over_budget_status_inconsistent"),
+    # E2 traded day claiming the permanent E1 absence
+    ("E2", {"traded_n": 1, "over_budget_status": "NOT_APPLICABLE"},
+     "platform_facts_over_budget_status_inconsistent"),
+    # no-trade day claiming the unruled predicate
+    ("E2", {"traded_n": 0, "requested_n": 0,
+            "over_budget_status": "PENDING_RULING"},
+     "platform_facts_over_budget_status_inconsistent"),
+    # E1 traded day claiming the E2 unruled state
+    ("E1", {"traded_n": 1, "over_budget_status": "PENDING_RULING"},
+     "platform_facts_over_budget_status_inconsistent"),
+    # the typed status is mandatory, not optional
+    ("E2", {"over_budget_status": None},
+     "platform_facts_over_budget_status_absent"),
+])
+def test_status_value_combination_is_checked_independently(engine, over,
+                                                           code):
+    with pytest.raises(A.MCInputError) as exc:
+        A.path_facts_from_events([_stub(engine=engine, **over)],
+                                 engine=engine, platform="topstep")
+    assert exc.value.code == code
+
+
+def test_missing_over_budget_status_attribute_refuses_too():
+    kw = {"day_net_usd": 10.0, "phase": "evaluation",
+          "account_generation": 0, "requested_n": 1, "traded_n": 1,
+          "cap_applied": False, "payout_gross": 0.0}
+    with pytest.raises(A.MCInputError) as exc:
+        A.path_facts_from_events([_StubEvent(**kw)], engine="E2",
+                                 platform="topstep")
+    assert exc.value.code == "platform_facts_over_budget_status_absent"
+
+
+def test_a_flipped_ruling_does_not_silently_start_accepting_booleans(
+        monkeypatch):
+    """FORWARD RED LINE. If Aaron flips OVER_BUDGET_PREDICATE_RULED, this
+    adapter must REFUSE until a new explicit predicate implementation
+    lands — it may never inherit a boolean meaning nobody wrote down."""
+    from itsf import contracts
+    monkeypatch.setattr(contracts, "OVER_BUDGET_PREDICATE_RULED", True)
+    with pytest.raises(A.MCInputError) as exc:
+        A.path_facts_from_events(
+            [_stub(engine="E2", over_budget=True,
+                   over_budget_status="PENDING_RULING")],
+            engine="E2", platform="topstep")
+    assert exc.value.code == "platform_facts_over_budget_ruling_changed"
+    # ... and even an honest UNRULED-shaped stream refuses under the flip,
+    # because the pinned consumption rule below it is stale by definition
+    with pytest.raises(A.MCInputError) as exc:
+        A.path_facts_from_events(
+            [_stub(engine="E2", over_budget_status="PENDING_RULING")],
+            engine="E2", platform="topstep")
+    assert exc.value.code == "platform_facts_over_budget_ruling_changed"
+    # E1 is untouched: its absence is permanent, not ruling-dependent
+    assert A.path_facts_from_events(
+        [_stub(engine="E1")], engine="E1",
+        platform="topstep")["e2_over_budget_days"] is A.NOT_APPLICABLE
+
+
+def test_the_pinned_ruling_constant_is_still_false():
+    """PIN: this whole consumption rule is written for the UNRULED state.
+    If this assertion ever fails, the adapter's E2 branch must be
+    re-implemented deliberately, not adjusted."""
+    from itsf import contracts
+    assert contracts.OVER_BUDGET_PREDICATE_RULED is False
+    assert A.expected_over_budget_token("E2", 1) == "PENDING_RULING"
+    assert A.expected_over_budget_token("E2", 0) == "NOT_APPLICABLE_NO_TRADE"
+    assert A.expected_over_budget_token("E1", 1) == "NOT_APPLICABLE"
+    assert A.expected_over_budget_token("E1", 0) == "NOT_APPLICABLE_NO_TRADE"
+
+
+def test_an_empty_e2_stream_is_pending_not_a_measured_zero():
+    """An accumulator initialised to 0 would report "measured, never
+    exceeded" for a path that observed nothing at all."""
+    facts = A.path_facts_from_events([], engine="E2", platform="topstep")
+    assert facts["e2_over_budget_days"] is A.PENDING_RULING
+    assert facts["event_days"] == 0
+
+
+# --- C2 layer 4: the adapter reads the PHASE ------------------------------
+
+@pytest.mark.parametrize("phase", ["funded", "xfa"])
+@pytest.mark.parametrize("qual", [None, "__absent__"])
+def test_qualifying_day_absent_on_a_qualifying_phase_refuses(phase, qual):
+    """C2-L4 BASELINE COUNTEREXAMPLE (measured before this node): an xfa
+    day with day_net_usd=10.0 and qualifying_day=None was silently
+    skipped and reduced to `qualifying_days = 0` — a hard zero
+    manufactured from a missing fact."""
+    over = {"phase": phase, "day_net_usd": 10.0}
+    if qual is None:
+        over["qualifying_day"] = None
+        ev = _stub(**over)
+    else:
+        ev = _stub(**over)
+        del ev.qualifying_day
+    with pytest.raises(A.MCInputError) as exc:
+        A.path_facts_from_events([ev], engine="E1", platform="topstep")
+    assert exc.value.code == "platform_facts_qualifying_absent"
+
+
+@pytest.mark.parametrize("phase", ["evaluation", "combine", "dead", "done"])
+@pytest.mark.parametrize("value", [True, False])
+def test_qualifying_day_on_a_non_qualifying_phase_refuses(phase, value):
+    """Both polarities: a True invents a qualifying day, a False disguises
+    "the ruleset has no such concept" as "measured, did not qualify"."""
+    with pytest.raises(A.MCInputError) as exc:
+        A.path_facts_from_events([_stub(phase=phase, qualifying_day=value)],
+                                 engine="E1", platform="topstep")
+    assert exc.value.code == "platform_facts_qualifying_phase_mismatch"
+
+
+def test_qualifying_phases_come_from_the_frozen_contract_not_a_literal():
+    from itsf import contracts
+    assert contracts.QUALIFYING_PHASES == frozenset({"funded", "xfa"})
+    # the adapter follows the frozen set: shrink it and the previously
+    # legal funded day becomes a phase-mismatch, not a silent skip.
+    facts = A.path_facts_from_events(
+        [_stub(phase="funded", qualifying_day=True)], engine="E1",
+        platform="topstep")
+    assert facts["qualifying_days"] == 1
+
+
+def test_phase_is_a_required_seam_field():
+    assert "phase" in A.SEAM_REQUIRED_FIELDS
+    with pytest.raises(A.MCInputError) as exc:
+        A.path_facts_from_events([_stub(phase=None)], engine="E1",
+                                 platform="topstep")
+    assert exc.value.code == "platform_facts_absent"
+    with pytest.raises(A.MCInputError) as exc:
+        A.path_facts_from_events([_stub(phase=7)], engine="E1",
+                                 platform="topstep")
+    assert exc.value.code == "platform_facts_malformed"
+
+
+def test_qualifying_days_positive_path_still_counts_the_platform_counter():
+    """POSITIVE (anti over-tightening): a legal mixed stream still
+    counts exactly the platform's own increments."""
+    events = [_stub(phase="evaluation", qualifying_day=None),
+              _stub(phase="funded", day_net_usd=400.0, qualifying_day=True),
+              _stub(phase="funded", day_net_usd=20.0, qualifying_day=False),
+              _stub(phase="xfa", day_net_usd=900.0, qualifying_day=True,
+                    payout_gross=100.0),
+              _stub(phase="dead", traded_n=0, requested_n=0,
+                    day_net_usd=0.0, qualifying_day=None)]
+    facts = A.path_facts_from_events(events, engine="E1",
+                                     platform="topstep")
+    assert facts["qualifying_days"] == 2
+    assert facts["days_profit_ge_150"] == 2      # 400 and 900
+    assert facts["event_days"] == 5
 
 
 def test_adapter_refuses_unknown_axes():
@@ -333,6 +556,20 @@ def test_adapter_refuses_unknown_axes():
         assert exc.value.code == "atom_axis_violation"
 
 
+# The EXEMPT set, with a reason each. Everything else in itsf.mc is a
+# CONSUMER and must go through `atoms.path_facts_from_events`.
+SEAM_EXEMPT = {
+    "atoms.py": "the single consumer-side adapter itself",
+    "orchestrator.py": "producer: assembles the emitted event stream",
+    "account.py": "producer: sizing/limit state the facts describe",
+    # N01 C4: lane S2' owns the production fact-verification entry
+    # (`verify_event_stream`). It is the PRODUCER-SIDE fact OWNER, so its
+    # reads are definitions, not a second interpretation — without this
+    # exemption the pin would fire on the verifier itself.
+    "authoritative.py": "producer: lane S2' fact owner / verifier",
+}
+
+
 def test_only_the_adapter_reads_platform_authoritative_fields():
     """AST PIN: no module outside `atoms.path_facts_from_events` may
     touch the seam fields — a second reader is a second (divergent)
@@ -340,8 +577,7 @@ def test_only_the_adapter_reads_platform_authoritative_fields():
     seam = set(A.SEAM_REQUIRED_FIELDS) | set(A.SEAM_TRISTATE_FIELDS)
     offenders = []
     for path in (REPO / "src" / "itsf" / "mc").rglob("*.py"):
-        if path.name in ("atoms.py", "orchestrator.py", "account.py",
-                         "authoritative.py") or "platforms" in path.parts:
+        if path.name in SEAM_EXEMPT or "platforms" in path.parts:
             continue                      # producer lane S2 + the adapter
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
@@ -350,6 +586,20 @@ def test_only_the_adapter_reads_platform_authoritative_fields():
     assert offenders == [], (
         "platform-authoritative day facts read outside the single "
         f"adapter: {offenders}")
+
+
+def test_the_seam_exemption_set_is_justified_and_closed():
+    """The exemption list is PINNED: every entry names a producer-side
+    fact owner (or the adapter itself) and carries a reason. Adding one
+    is a reviewed change — an exemption is how a second interpretation
+    would sneak back in."""
+    assert set(SEAM_EXEMPT) == {"atoms.py", "orchestrator.py",
+                                "account.py", "authoritative.py"}
+    for name, reason in SEAM_EXEMPT.items():
+        assert isinstance(reason, str) and len(reason) > 15, name
+    # the S2' fact owner exists and lives on the producer side
+    auth = REPO / "src" / "itsf" / "mc" / "platforms" / "authoritative.py"
+    assert auth.exists()
 
 
 # ===========================================================================
@@ -752,6 +1002,124 @@ def test_percentile_matches_the_type7_specification(values, q, want):
     `a + (b - a) * t` with `h = (n-1) * q/100`."""
     assert A.percentile_linear(list(values), q) == pytest.approx(
         want, abs=1e-12)
+
+
+# --- C5: percentile numerical compatibility (independent numpy oracle) ----
+
+def _numpy_percentile(values, q):
+    """INDEPENDENT ORACLE: numpy's own type-7 'linear' implementation.
+    Nothing here calls the production reducer to build an expectation."""
+    import numpy as np
+    return float(np.percentile(np.asarray(values, dtype=float), q,
+                               method="linear"))
+
+
+@pytest.mark.parametrize("q", [5, 50, 95])
+@pytest.mark.parametrize("values", [
+    (5.0,),                                        # n == 1
+    (1.0, 2.0),                                    # even, tiny
+    (1.0, 2.0, 3.0),                               # odd
+    (-4.0, -1.0, 0.0, 3.5),                        # signed
+    (-1e9, -1.0, 0.0, 1.0, 1e9),                   # magnitudes
+    (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7),           # odd, binary-inexact
+    (1e-9, 2e-9, 3.0000001e-9, 4e-9, 5e-9, 6e-9,   # even, subnormal-ish
+     7e-9, 8e-9),
+    tuple(float(i) * 1.0000000001 for i in range(101)),   # large n
+])
+def test_percentile_is_bitwise_equal_to_numpy(values, q):
+    """C5: `==` on floats, NOT approx. The claim being made about the two
+    reducers is BITWISE agreement, so the estimator must reproduce
+    numpy's evaluation order exactly, including the t >= 0.5 branch."""
+    got = A.percentile_linear(sorted(values), q)
+    assert got == _numpy_percentile(sorted(values), q)
+
+
+def test_percentile_is_bitwise_equal_to_numpy_on_random_samples():
+    """Randomised sweep over n, sign and magnitude — every case bitwise."""
+    import random
+    rnd = random.Random(20260815)
+    mismatches = []
+    for _ in range(600):
+        n = rnd.choice([1, 2, 3, 4, 5, 7, 8, 13, 40, 101])
+        scale = rnd.choice([1e-6, 1.0, 1e3, 1e7])
+        vals = sorted(rnd.uniform(-scale, scale) for _ in range(n))
+        for q in (5, 50, 95):
+            if A.percentile_linear(vals, q) != _numpy_percentile(vals, q):
+                mismatches.append((n, q, vals[:3]))
+    assert mismatches == []
+
+
+def test_the_single_expression_form_is_the_measured_defect():
+    """PROBE / MUTATION: turn the second branch OFF (the R2.3 form) and
+    the numpy agreement must BREAK — otherwise this test proves nothing
+    and the branch could be deleted unnoticed. The measured failure lies
+    ENTIRELY in the t >= 0.5 half."""
+    import math
+    import random
+
+    def single_expression(sorted_values, q):
+        n = len(sorted_values)
+        if n == 1:
+            return float(sorted_values[0])
+        h = (n - 1) * (float(q) / 100.0)
+        lo, hi = math.floor(h), math.ceil(h)
+        if lo == hi:
+            return float(sorted_values[int(h)])
+        t = h - lo
+        a, b = float(sorted_values[lo]), float(sorted_values[hi])
+        return a + (b - a) * t                     # <- the deleted defect
+
+    rnd = random.Random(4242)
+    broken_lo = broken_hi = seen_hi = 0
+    for _ in range(400):
+        n = rnd.choice([2, 3, 4, 5, 7, 8, 13, 40, 101])
+        vals = sorted(rnd.uniform(-1e4, 1e4) for _ in range(n))
+        for q in (5, 50, 95):
+            h = (n - 1) * (q / 100.0)
+            lo, hi = math.floor(h), math.ceil(h)
+            if lo == hi:
+                continue
+            t = h - lo
+            want = _numpy_percentile(vals, q)
+            bad = single_expression(vals, q) != want
+            if t >= 0.5:
+                seen_hi += 1
+                broken_lo += 0
+                broken_hi += int(bad)
+            else:
+                broken_lo += int(bad)
+            assert A.percentile_linear(vals, q) == want
+    assert seen_hi > 0
+    assert broken_hi > 0, "the mutation must break numpy agreement"
+    assert broken_lo == 0, "the defect is confined to the t >= 0.5 branch"
+
+
+def test_hot_and_cold_percentiles_are_bitwise_equal_but_not_shared_code():
+    """The two reducers agree BITWISE while sharing no helper: the cold
+    reducer imports nothing from itsf (pinned in
+    tests/test_mc_cold_replay.py::test_cold_reducer_imports_nothing_from
+    _itsf), so equality here is agreement about a SPECIFICATION."""
+    import random
+
+    from itsf.mc import cold_reducer as CR
+    rnd = random.Random(99)
+    for _ in range(200):
+        n = rnd.choice([1, 2, 3, 6, 9, 25])
+        vals = sorted(rnd.uniform(-1e5, 1e5) for _ in range(n))
+        for q in (5, 50, 95):
+            assert A.percentile_linear(vals, q) == \
+                CR._quantile_linear(list(vals), q)
+    assert A.percentile_linear is not CR._quantile_linear
+
+
+def test_mean_sd_se_carry_the_pending_n_d2_provenance_note():
+    """The numpy->pure-float migration changed ULP-level behaviour of
+    these three estimators. This node does NOT re-change them; the note
+    must stay until Aaron ratifies (master plan N-D2)."""
+    for fn in (A.mean_of, A.sample_sd, A.stderr_of):
+        doc = fn.__doc__ or ""
+        assert "N-D2" in doc, fn.__name__
+        assert "ratification" in doc, fn.__name__
 
 
 @pytest.mark.parametrize("got,expected,ok", [

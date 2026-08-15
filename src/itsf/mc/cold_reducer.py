@@ -29,7 +29,14 @@ Specification it re-implements (transcribed, not imported):
   - within-world SE : sqrt(sum((x-mean)^2)/(n-1)) / sqrt(n), same order;
   - between-world SD: sample SD (ddof=1) of the world means in ASCENDING
                       WORLD order;
-  - quantiles       : type-7 linear, evaluated as a + (b - a) * t.
+  - quantiles       : type-7 linear with h = (n-1) * q/100, evaluated in
+                      the TWO-BRANCH order the specification fixes —
+                      `a + (b - a) * t` for t < 0.5 and
+                      `b - (b - a) * (1 - t)` for t >= 0.5 (N01 C5). The
+                      branch point is part of the spec because the claim
+                      being made is BITWISE agreement, not "same
+                      estimator"; a single-expression form disagrees in
+                      the last ULP on every t >= 0.5 sample.
 
 Any disagreement with the production reducer is a REFUSAL to seal
 (`reducer_disagreement`), never a reconciliation.
@@ -135,6 +142,11 @@ def _absent_aware_sum(rows: list, name: str):
 
 
 def _quantile_linear(values_sorted: list, q: float) -> float:
+    """Type-7 linear quantile in the SPECIFIED two-branch evaluation
+    order (see the module docstring). Transcribed from the specification,
+    independently of the production implementation: the branch point at
+    t == 0.5 and both expressions are written out here again rather than
+    imported, which is the whole point of the second reducer."""
     n = len(values_sorted)
     if n == 0:
         raise ColdReducerError("cold_trace_empty", "empty sample")
@@ -148,7 +160,9 @@ def _quantile_linear(values_sorted: list, q: float) -> float:
     t = h - lo
     a = float(values_sorted[lo])
     b = float(values_sorted[hi])
-    return a + (b - a) * t
+    if t < 0.5:
+        return a + (b - a) * t
+    return b - (b - a) * (1.0 - t)
 
 
 def _mean(values: list) -> float:

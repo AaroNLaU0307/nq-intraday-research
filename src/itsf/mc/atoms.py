@@ -42,6 +42,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Iterable, Mapping, Sequence
 
+from itsf import contracts as _contracts
 from itsf.mc import orchestrator as _orch
 
 # --- 1. frozen axes / versions ---------------------------------------------
@@ -588,21 +589,78 @@ def digest_of_digests(table: Mapping[str, str]) -> str:
 
 # The platform-authoritative day fields lane S2 emits on AccountEvent.
 # NOTHING outside this adapter may read them (import-graph/AST pinned in
-# tests/test_mc_atoms.py).
-SEAM_REQUIRED_FIELDS = ("day_net_usd", "account_generation",
+# tests/test_mc_atoms.py; the PRODUCER side — the platform state machines,
+# the orchestrator, the account layer and platforms/authoritative.py — owns
+# the facts and is exempt).
+#
+# N01 C2 LAYER 4: `phase` joined the required set. The adapter reads the
+# phase because the qualifying-day tri-state is only meaningful RELATIVE to
+# it: on a phase whose frozen ruleset HAS a qualifying-day concept
+# (contracts.QUALIFYING_PHASES = {funded, xfa}) a `None` is not "no
+# qualifying day", it is a MISSING FACT, and silently counting it as 0 is
+# exactly the defect this layer closes.
+SEAM_REQUIRED_FIELDS = ("day_net_usd", "phase", "account_generation",
                         "requested_n", "traded_n", "cap_applied")
 # `qualifying_day` and `over_budget` are TRI-STATE by lane S2's design
 # (None means "this ruleset has no such concept" / "the predicate is
-# unruled"), so their absence is never a refusal — it is a fact with a
-# typed meaning. `over_budget_status` carries WHICH kind of None.
+# unruled"), so their absence is never a blanket refusal — it is a fact
+# with a typed meaning, and WHICH None is legal depends on the phase
+# (qualifying_day) and on the engine + traded state + the frozen ruling
+# constant (over_budget). `over_budget_status` carries WHICH kind of None.
 SEAM_TRISTATE_FIELDS = ("qualifying_day", "over_budget",
                         "over_budget_status")
+
+# --- C3: the CONSUMER-SIDE E2 over-budget gate (independent second gate) ---
+#
+# Producer side (lane S2, contracts.AccountEvent.__post_init__) already
+# refuses an emitted boolean while `contracts.OVER_BUDGET_PREDICATE_RULED`
+# is False. That check lives at CONSTRUCTION time and a duck-typed event —
+# or a legally constructed `AccountEvent` mutated afterwards, which is
+# trivially possible because the dataclass is NOT frozen — walks straight
+# past it. This adapter therefore re-derives the whole combination
+# (ruling constant x engine x traded state x status token x value) from
+# scratch, per event, and NEVER trusts construction.
+#
+# The pinned consumption rule while the predicate is UNRULED:
+#   E2 + traded     -> over_budget is None      AND status == PENDING_RULING
+#   E2 + no trade   -> over_budget is None      AND status ==
+#                                                  NOT_APPLICABLE_NO_TRADE
+#   E1 + traded     -> over_budget is None      AND status == NOT_APPLICABLE
+#   E1 + no trade   -> over_budget is None      AND status ==
+#                                                  NOT_APPLICABLE_NO_TRADE
+#   ANY E2 boolean  -> REFUSED. It may never enter a formal count.
+#
+# FUTURE RULING (read this before touching the branch below): if Aaron ever
+# flips OVER_BUDGET_PREDICATE_RULED to True, this adapter must NOT start
+# accepting booleans by itself — the flip refuses with
+# `platform_facts_over_budget_ruling_changed` until a NEW, EXPLICIT
+# predicate implementation lands here together with its own tests. A ruling
+# says the quantity is now defined; it does not say what THIS adapter
+# should count, and inheriting a boolean silently would reopen exactly the
+# forgery surface the typed absence was built to close.
+E2_UNRULED_TOKEN = "PENDING_RULING"
+NO_TRADE_TOKEN = "NOT_APPLICABLE_NO_TRADE"
+E1_TRADED_TOKEN = "NOT_APPLICABLE"
 
 _MISSING = object()
 
 
 def _seam_get(event, name: str):
     return getattr(event, name, _MISSING)
+
+
+def expected_over_budget_token(engine: str, traded_n: int) -> str:
+    """The ONLY legal `over_budget_status` token for (engine, traded state)
+    while the predicate is unruled.
+
+    Transcribed from the frozen scope (MC SS3 scopes the over-budget
+    disclosure to E2; a day with no position has no referent at all), NOT
+    imported from the producer's mapping — the two lanes must agree by
+    SPECIFICATION, so a producer-side drift is DETECTABLE here instead of
+    being inherited."""
+    if traded_n <= 0:
+        return NO_TRADE_TOKEN
+    return E1_TRADED_TOKEN if engine == "E1" else E2_UNRULED_TOKEN
 
 
 def path_facts_from_events(events: Sequence, *, engine: str,
@@ -624,12 +682,46 @@ def path_facts_from_events(events: Sequence, *, engine: str,
     documents as wrong (a Topstep XFA payout-request day clearing $150 is
     NOT a qualifying day under frozen MC SS4.2). The separate
     `days_profit_ge_150` metric is the literal threshold count and is
-    never presented as the qualifying-day count."""
+    never presented as the qualifying-day count.
+
+    N01 C2 LAYER 4 — the adapter reads the PHASE. On a phase whose frozen
+    ruleset defines qualifying days at all (contracts.QUALIFYING_PHASES),
+    a non-boolean `qualifying_day` is a MISSING FACT and refuses
+    (`platform_facts_qualifying_absent`); on every other phase a value
+    would invent a concept the ruleset does not have
+    (`platform_facts_qualifying_phase_mismatch`). The R2.3 adapter did
+    neither: it skipped a `None` silently, so a funded/xfa day with a real
+    $10 net and an unemitted flag was counted as a hard zero.
+
+    N01 C3 — the E2 over-budget combination is re-derived here per event
+    (see the module block above `expected_over_budget_token`): no boolean
+    may enter a formal count while the predicate is unruled, and the
+    ruling constant itself is checked rather than assumed."""
     if engine not in ENGINES:
         raise MCInputError("atom_axis_violation", f"engine={engine!r}")
     if platform not in PLATFORMS:
         raise MCInputError("atom_axis_violation",
                            f"platform={platform!r}")
+    # C3 gate 1 — the RULING CONSTANT, read LIVE from the frozen source of
+    # truth (never copied into a literal here, which could drift out of
+    # agreement in the dangerous direction). While it is False no boolean
+    # is consumable; when it flips, THIS code is stale by construction and
+    # says so instead of quietly inheriting a meaning nobody wrote down.
+    ruled = _contracts.OVER_BUDGET_PREDICATE_RULED
+    if not isinstance(ruled, bool):
+        raise MCInputError(
+            "platform_facts_over_budget_ruling_malformed",
+            f"contracts.OVER_BUDGET_PREDICATE_RULED={ruled!r} is not a "
+            "bool — the consumption rule cannot be evaluated")
+    if ruled and engine == "E2":
+        raise MCInputError(
+            "platform_facts_over_budget_ruling_changed",
+            "OVER_BUDGET_PREDICATE_RULED flipped to True: the E2 "
+            "over-budget consumption rule pinned in this adapter was "
+            "written for the UNRULED state and may not be extended by "
+            "default. A new explicit predicate implementation plus its "
+            "own tests must land here before any boolean is counted")
+    qualifying_phases = _contracts.QUALIFYING_PHASES
 
     executed = 0
     payouts = 0
@@ -637,8 +729,9 @@ def path_facts_from_events(events: Sequence, *, engine: str,
     ge150 = 0
     qualifying = 0
     cap_hits = 0
+    # C3: kept ONLY as a tripwire (see the tail of this function). Nothing
+    # can increment it while the predicate is unruled.
     over_budget_days = 0
-    over_budget_observed = True
     prev_generation = None
 
     for i, ev in enumerate(events):
@@ -689,14 +782,40 @@ def path_facts_from_events(events: Sequence, *, engine: str,
             raise MCInputError("platform_facts_malformed",
                                f"event {i}: cap_applied={cap!r}")
 
+        phase = _seam_get(ev, "phase")
+        if not isinstance(phase, str) or not phase:
+            raise MCInputError("platform_facts_malformed",
+                               f"event {i}: phase={phase!r}")
+
+        # C2 LAYER 4 — the qualifying-day tri-state is judged AGAINST the
+        # phase, never skipped. `None` on a funded/xfa day is a missing
+        # fact, not a zero; a value on any other phase invents a concept.
         qual = _seam_get(ev, "qualifying_day")
-        if qual is not _MISSING and qual is not None:
+        qual_present = qual is not _MISSING and qual is not None
+        if qual_present and not isinstance(qual, bool):
+            raise MCInputError("platform_facts_malformed",
+                               f"event {i}: qualifying_day={qual!r}")
+        if phase in qualifying_phases:
             if not isinstance(qual, bool):
-                raise MCInputError("platform_facts_malformed",
-                                   f"event {i}: qualifying_day={qual!r}")
+                raise MCInputError(
+                    "platform_facts_qualifying_absent",
+                    f"event {i}: phase={phase!r} has a frozen "
+                    f"qualifying-day rule but qualifying_day="
+                    f"{'absent' if qual is _MISSING else repr(qual)} is "
+                    "not a bool — a non-boolean here is a MISSING FACT "
+                    "and counting it as 0 would understate the "
+                    "platform's own counter")
             if qual:
                 qualifying += 1
+        elif qual_present:
+            raise MCInputError(
+                "platform_facts_qualifying_phase_mismatch",
+                f"event {i}: phase={phase!r} has no frozen qualifying-day "
+                f"concept (frozen set {sorted(qualifying_phases)}) yet "
+                f"carries qualifying_day={qual!r}; both True and False "
+                "would manufacture a fact the ruleset does not define")
 
+        # --- C3: the E2 over-budget combination, re-derived per event ---
         ob = _seam_get(ev, "over_budget")
         status = _seam_get(ev, "over_budget_status")
         status_token = (None if status is _MISSING or status is None
@@ -706,25 +825,46 @@ def path_facts_from_events(events: Sequence, *, engine: str,
                 "platform_facts_malformed",
                 f"event {i}: over_budget_status={status_token!r} is not "
                 f"a known absence token {sorted(ABSENT_BY_TOKEN)}")
-        if engine == "E1":
-            if ob is not _MISSING and ob is not None:
+        # gate 2 — the TYPED status is mandatory, on every event of every
+        # engine. Without it there is no statement about WHY the boolean
+        # is absent, and "absent" would be indistinguishable from
+        # "measured, never exceeded".
+        if status_token is None:
+            raise MCInputError(
+                "platform_facts_over_budget_status_absent",
+                f"event {i}: over_budget_status is "
+                f"{'absent' if status is _MISSING else 'None'} — the "
+                "typed E2 over-budget state is mandatory (engine="
+                f"{engine}, traded_n={trd})")
+        # gate 3 — the status must be the one the (engine, traded state)
+        # combination allows. An event that says PENDING_RULING on a
+        # no-trade day, or NOT_APPLICABLE on an E2 traded day, is
+        # incoherent evidence whichever side produced it.
+        want_token = expected_over_budget_token(engine, trd)
+        if status_token != want_token:
+            raise MCInputError(
+                "platform_facts_over_budget_status_inconsistent",
+                f"event {i}: engine={engine} traded_n={trd} requires "
+                f"over_budget_status={want_token!r}, got "
+                f"{status_token!r}")
+        # gate 4 — the VALUE. No engine may carry a boolean today; the E1
+        # and E2 refusals keep their distinct codes because they say
+        # different things (E1: permanently out of scope; E2: defined but
+        # unruled).
+        if ob is not _MISSING and ob is not None:
+            if engine == "E1":
                 raise MCInputError(
                     "platform_facts_engine_semantics",
                     f"event {i}: E1 carries over_budget={ob!r}; the "
                     "frozen MC SS3 over-budget disclosure is E2-scoped, "
                     "so an E1 boolean would manufacture evidence")
-        else:
-            if ob is _MISSING or ob is None:
-                # UNRULED, not zero. Whatever the per-day status says, the
-                # per-path COUNT cannot be formed without the predicate,
-                # so the whole quantity stays typed-absent (a 0 here would
-                # read downstream as "measured, never exceeded budget").
-                over_budget_observed = False
-            elif not isinstance(ob, bool):
-                raise MCInputError("platform_facts_malformed",
-                                   f"event {i}: over_budget={ob!r}")
-            elif ob:
-                over_budget_days += 1
+            raise MCInputError(
+                "platform_facts_e2_over_budget_boolean_unruled",
+                f"event {i}: E2 carries over_budget={ob!r} while "
+                "OVER_BUDGET_PREDICATE_RULED is False. MC SS3 mandates "
+                "the disclosure but defines no predicate, so a boolean "
+                "has no agreed meaning and MUST NOT enter a formal "
+                f"count (status={status_token!r} says PENDING_RULING)")
 
         gross = getattr(ev, "payout_gross", 0.0)
         if isinstance(gross, bool) or not isinstance(gross, (int, float)):
@@ -742,12 +882,26 @@ def path_facts_from_events(events: Sequence, *, engine: str,
         if cap:
             cap_hits += 1
 
+    # C3 — the per-path quantity. E1 has no budget concept at all; E2 has
+    # one but no predicate, so the count is TYPED-ABSENT unconditionally.
+    # It is NOT derived from an accumulator: an accumulator initialised to
+    # 0 turns an EMPTY E2 event stream into a formal "0 over-budget days"
+    # (measured, never exceeded) without a single observation, which is
+    # the same forgery in a different disguise.
     if engine == "E1":
         e2_days = NOT_APPLICABLE
-    elif over_budget_observed:
-        e2_days = over_budget_days
     else:
         e2_days = PENDING_RULING
+    if over_budget_days:                                  # pragma: no cover
+        # unreachable: gate 4 refuses every boolean, so nothing can
+        # increment the accumulator. Kept as a tripwire — if a future
+        # ruled-predicate implementation starts counting, it must ALSO
+        # revisit the typed-absence decision above rather than leaving a
+        # counted value stranded here.
+        raise MCInputError(
+            "platform_facts_over_budget_count_stranded",
+            f"{over_budget_days} counted over-budget day(s) were formed "
+            "while the quantity is reported as typed-absent")
 
     return MappingProxyType({
         "event_days": len(events),
@@ -965,14 +1119,29 @@ def check_key_grid(atoms: Sequence[SimulationPathObservation], *, B: int,
 # --- 9. reductions (THE single derivation of every downstream number) ------
 
 def percentile_linear(sorted_values: Sequence[float], q: float) -> float:
-    """Type-7 / numpy-'linear' quantile evaluated as `a + (b - a) * t`.
+    """Type-7 / numpy-'linear' quantile, in numpy's EVALUATION ORDER.
 
     Written in plain float arithmetic (not numpy) ON PURPOSE: the
     independent cold reducer implements the SAME specification without
-    sharing a line of code, and the two must agree BITWISE. numpy's
-    internal `_lerp` switches to `b - (b - a) * (1 - t)` for t >= 0.5,
-    which no independent reimplementation can be expected to reproduce
-    bit-for-bit."""
+    sharing a line of code, and the two must agree BITWISE.
+
+    N01 C5 — the estimator was always type-7; what moved is the
+    FLOATING-POINT EVALUATION ORDER, which is part of the specification
+    the moment "bitwise" is claimed. numpy's `_lerp` is a two-branch
+    function:
+
+        t <  0.5 :  a + (b - a) * t
+        t >= 0.5 :  b - (b - a) * (1 - t)
+
+    (the second branch keeps the result monotone and exact at t == 1).
+    The R2.3 single-expression form disagreed with `numpy.percentile(...,
+    method="linear")` in the last ULP on EVERY t >= 0.5 sample — the
+    measured failure mode, reproduced in
+    tests/test_mc_atoms.py::test_percentile_is_bitwise_equal_to_numpy.
+    Both branches are transcribed here from that specification; the cold
+    reducer transcribes the same two branches independently, and the two
+    implementations still share no helper (double-reducer independence
+    contract, unchanged)."""
     n = len(sorted_values)
     if n == 0:
         raise MCInputError("epistemic_samples_invalid", "empty sample")
@@ -983,15 +1152,27 @@ def percentile_linear(sorted_values: Sequence[float], q: float) -> float:
     hi = math.ceil(h)
     if lo == hi:
         return float(sorted_values[int(h)])
-    frac = h - lo
+    t = h - lo
     a = float(sorted_values[lo])
     b = float(sorted_values[hi])
-    return a + (b - a) * frac
+    if t < 0.5:
+        return a + (b - a) * t
+    return b - (b - a) * (1.0 - t)
 
 
 def mean_of(values: Sequence[float]) -> float:
     """Arithmetic mean, summed in the GIVEN order (the order is part of
-    the spec so the two reducers agree bitwise)."""
+    the spec so the two reducers agree bitwise).
+
+    NUMERICAL PROVENANCE (N-D2, pending Aaron's ratification): the R2.3
+    implementation delegated to `numpy.mean` (pairwise summation); this
+    is a canonicalised pure-float sequential sum. The ESTIMATOR FAMILY is
+    unchanged — same quantity, same definition — but the ULP-level result
+    can differ from the numpy era (measured on synthetic samples: 27-48%
+    not bit-identical to `numpy.mean`, the rate depending on the sample
+    family, the discrepancy always at ULP magnitude). Not re-litigated in
+    this node: the implementation stays as-is and the behaviour change is
+    logged for Aaron's retrospective ratification (master plan N-D2)."""
     n = len(values)
     if n == 0:
         raise MCInputError("epistemic_samples_invalid", "empty sample")
@@ -1017,6 +1198,15 @@ def stderr_of(values: Sequence[float]) -> float:
       n == 1  ZERO by definition of the ddof-1 estimator: a single
               observation has no within-set variation to estimate. This
               is a real measured value, not an absence, and it stays 0.0.
+
+    NUMERICAL PROVENANCE (N-D2, pending Aaron's ratification): same story
+    as `mean_of` — the numerical implementation moved from numpy to a
+    canonicalised pure float accumulation at R2.3/N01, the estimator
+    family did not change, and the ULP-level behaviour change (measured
+    on synthetic samples: 16-31% not bit-identical to `numpy.std(ddof=1)
+    / sqrt(n)`, rate sample-family dependent, always at ULP magnitude)
+    awaits Aaron's retrospective ratification. NOT silently re-changed in
+    this node.
     """
     n = len(values)
     if n == 0:
@@ -1038,7 +1228,16 @@ def sample_sd(values: Sequence[float]) -> float:
 
     Same two-case discipline as `stderr_of`: n == 0 is UNDEFINED and
     refuses (a zero between-world SD is the numerator of rule (d) and
-    must never be manufactured from nothing); n == 1 is a genuine 0.0."""
+    must never be manufactured from nothing); n == 1 is a genuine 0.0.
+
+    NUMERICAL PROVENANCE (N-D2, pending Aaron's ratification): the
+    numerical implementation moved from numpy to a canonicalised pure
+    float accumulation at R2.3/N01; the estimator family (ddof=1 sample
+    SD) is unchanged and the ULP-level behaviour change (measured on
+    synthetic samples: 18-33% not bit-identical to `numpy.std(ddof=1)`,
+    rate sample-family dependent, always at ULP magnitude) awaits
+    Aaron's retrospective ratification. NOT silently re-changed in this
+    node."""
     n = len(values)
     if n == 0:
         raise MCInputError(
