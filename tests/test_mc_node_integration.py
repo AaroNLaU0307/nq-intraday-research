@@ -375,3 +375,133 @@ def test_account_module_emits_factless_events_by_construction():
     assert "run_account" not in consumer_src, (
         "the production atom producer must not route through the legacy "
         "factless simulator")
+
+
+# =============================================================================
+# F. Cross-lane surface pins (boundary-repair round)
+#
+# Lane S2' explicitly asked the main agent to own the ENGINES/PLATFORMS pin:
+# the platform layer deliberately does NOT import `atoms` (that would make the
+# producer depend on the consumer it feeds), so the two vocabularies agree by
+# specification with nothing but this file watching them.
+# =============================================================================
+
+def test_engine_and_platform_vocabularies_agree_across_lanes():
+    """`authoritative.verify_event_stream` takes engine/platform labels and
+    refuses unknown ones; `atoms.path_facts_from_events` does the same with
+    its OWN copies of those tuples. A rename or reordering on either side
+    would silently split the two layers' idea of what a valid axis is."""
+    from itsf.mc.platforms import authoritative as auth
+    assert tuple(auth.ENGINES) == tuple(A.ENGINES)
+    assert tuple(auth.PLATFORMS) == tuple(A.PLATFORMS)
+    # ... and neither is empty, so the assertion above cannot pass vacuously
+    assert auth.ENGINES and auth.PLATFORMS
+
+
+def test_defence_in_depth_code_overlap_is_exactly_the_pinned_set():
+    """Five invariants are enforced at BOTH the AccountEvent type and the
+    stream verifier, deliberately sharing a code string: the code names the
+    VIOLATED INVARIANT, not the layer that caught it. That is defence in
+    depth, not a collision — but it has a cost worth pinning: a shared code
+    (raised as the same `AuthoritativeFactError` from both layers) means a
+    refusal alone cannot prove WHICH layer held. Lane S1' therefore proves
+    the verifier is on the production path structurally (an AST pin on the
+    call site plus a spy asserting one call per lifecycle), never by
+    observing a code.
+
+    This pins the overlap SET so a future code reused for a DIFFERENT rule
+    at the other layer — a real collision — shows up as a diff here."""
+    from itsf.mc.platforms import authoritative as auth
+    type_codes = set(C.DAY_FACT_REJECTION_CODES)
+    stream_codes = set(auth.AUTH_REJECTION_CODES)
+    assert type_codes and stream_codes, "a code vocabulary is empty"
+    assert type_codes & stream_codes == {
+        "day_net_usd_not_finite",
+        "over_budget_status_not_typed",
+        "qualifying_day_absent_on_qualifying_phase",
+        "qualifying_day_not_bool",
+        "traded_n_exceeds_requested_n",
+    }, sorted(type_codes & stream_codes)
+    # the adapter layer keeps its own namespace: no atom/seam code may
+    # collide with either of the two above (a third layer sharing a string
+    # would make "the adapter refused" unprovable the same way).
+    adapter_codes = {c for c in dir(A) if c.startswith("platform_facts_")}
+    assert not (adapter_codes & (type_codes | stream_codes))
+
+
+def test_verify_event_stream_matches_the_declared_cross_lane_interface():
+    """The main agent pinned this signature before either lane started; S1'
+    calls it and S2' implements it. It must stay a GATE — returning a value
+    would let a caller treat its output as evidence."""
+    import inspect
+    from itsf.mc.platforms import authoritative as auth
+    sig = inspect.signature(auth.verify_event_stream)
+    assert list(sig.parameters) == ["events", "engine", "platform"]
+    assert sig.parameters["engine"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert sig.parameters["platform"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert sig.return_annotation in (None, "None")
+
+
+# =============================================================================
+# G. The join — both lanes' REAL code on one production path
+#
+# Each lane proved its own half: S1' spied the verifier call and AST-pinned
+# the call site; S2' proved the verifier's rules in isolation. Only here do
+# a real platform stream, the real verifier and the real atom reduction run
+# as one unit, so a seam that type-checks but disagrees semantically fails.
+# =============================================================================
+
+def test_the_production_join_refuses_a_tampered_fact_end_to_end():
+    """Mutate ONE authoritative fact on the events a real lifecycle emits,
+    exactly where the production path would consume them, and the run must
+    refuse — never reduce the tampered stream into atoms.
+
+    `AccountEvent` is a mutable dataclass (the orchestrator relabels
+    `ev.day` by design), so construction-time validation cannot be the last
+    word; this is the property that makes the stream verifier load-bearing
+    rather than decorative."""
+    from itsf.mc.platforms import authoritative as auth
+    days = _template_days(40)
+    res = orch.run_lifecycle(orch.LifecycleConfig(platform="topstep"),
+                             days, _paths(days, 900.0))
+    # the untampered stream is accepted — so the refusals below are caused
+    # by the tamper, not by an unrelated defect in the fixture
+    auth.verify_event_stream(res.events, engine="E1", platform="topstep")
+
+    qualifying = [e for e in res.events if e.qualifying_day is not None]
+    assert qualifying, "fixture produced no qualifying-phase event to tamper"
+    original = qualifying[0].qualifying_day
+    qualifying[0].qualifying_day = None          # C2: silent-zero attempt
+    with pytest.raises(C.AuthoritativeFactError):
+        auth.verify_event_stream(res.events, engine="E1", platform="topstep")
+    with pytest.raises(mcc.MCInputError):
+        A.path_facts_from_events(res.events, engine="E1", platform="topstep")
+    qualifying[0].qualifying_day = original
+
+    traded = [e for e in res.events if e.traded_n > 0]
+    assert traded, "fixture produced no traded day to tamper"
+    traded[0].over_budget = True                 # C3: unruled predicate
+    with pytest.raises(C.AuthoritativeFactError):
+        auth.verify_event_stream(res.events, engine="E2", platform="topstep")
+    with pytest.raises(mcc.MCInputError):
+        A.path_facts_from_events(res.events, engine="E2", platform="topstep")
+
+
+def test_day_universe_equality_codes_exist_and_the_fixture_satisfies_them():
+    """C6 landed three refusal codes for the sealed-input integrity
+    equality. This pins that they are reachable names AND that this file's
+    own production-shaped bundle satisfies the equality — if the fixture
+    ever drifted out of the producer's own construction, every other test
+    in this file would be exercising an impossible sealed input."""
+    prepared = _prepare()
+    ref = frozenset(prepared.records[("E1", "Base")])
+    unions = set()
+    for channel, seq in prepared.day_sequences.items():
+        assert frozenset(seq) == ref, channel
+        unions.add(frozenset(seq))
+    assert len(unions) == 1, "theta channels disagree on the day universe"
+    src = (pathlib.Path(__file__).resolve().parents[1] / "src" / "itsf"
+           / "mc" / "consumer.py").read_text(encoding="utf-8")
+    for code in ("fp_day_without_record", "theta_population_drift",
+                 "record_without_oracle_class"):
+        assert code in src, code

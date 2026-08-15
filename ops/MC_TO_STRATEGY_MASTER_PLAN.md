@@ -29,9 +29,14 @@ CODEX_ROLE=INDEPENDENT_REVIEW_AND_FINAL_ACCEPTANCE
 
 ---
 
-## 2. 基线事实（执行起点，PHASE A 实测）
+## 2. 基线事实
 
-| 项 | 值 |
+> **本表是"OPUS5 master 执行首段（N-PLAN/N01/N02）的起点"快照，非现势 HEAD。**
+> 现势 HEAD 与逐节点状态见 §10 节点台账；两者冲突时**以 §10 为准**。
+> 本轮（N01_N02_BOUNDARY_REPAIR）起点 HEAD=`ec55ac869aa33205ef9c30b5a00a20a02f715ae4`，
+> 起点测试地板=3118。
+
+| 项 | 值（首段起点） |
 |---|---|
 | HEAD | `a9148f1f141b4ac421a8aa6d08f1539c315caaf9` |
 | 工作树 | clean（0 porcelain） |
@@ -40,7 +45,7 @@ CODEX_ROLE=INDEPENDENT_REVIEW_AND_FINAL_ACCEPTANCE
 | exposure sha256 前缀 | `382182bf`；累计 researcher exposure=1575 |
 | S0-T001 封存 | 14 文件，run==archive 逐字节全等 |
 | attestation sha256 | `d839b965…41805`（== 代码 pin `ATTESTATION_SHA256_PINNED`） |
-| 测试地板 | `MIN_COLLECTED_TESTS=2761`（双 pin：scripts/s0_real_run.py＋tests/test_s0_runner.py） |
+| 测试地板 | `MIN_COLLECTED_TESTS=2761`（首段起点值；N01 已重钉 3118，见 §10） |
 | MC_EXECUTED / SUPPLEMENT_EXECUTED / STRATEGY_BUILD_STARTED | NO / NO / NO |
 | S0 verdict 现势 | `INCONCLUSIVE_PENDING_MC`；`RECOMMENDATION=HOLD_FOR_SPECIFIC_MISSING_EVIDENCE` |
 | M 轴 | IR-29a：有限穷尽支撑豁免加倍；`DOUBLING_AXES={B,K}` |
@@ -75,8 +80,9 @@ CODEX_ROLE=INDEPENDENT_REVIEW_AND_FINAL_ACCEPTANCE
 | 节点 | 依赖 | 内容 | 权限 | 数据面 | 状态 |
 |---|---|---|---|---|---|
 | N-PLAN | — | 本文件＋doc-only commit | 工程 | none | **DONE** |
-| N01 | — | 统一原子＋冷重放（PHASE D 除 D5） | 工程 | synthetic | — |
-| N02 | — | 平台权威事件（D5） | 工程＋Codex 验收 | synthetic | — |
+| N01 | — | 统一原子＋冷重放（PHASE D 除 D5） | 工程 | synthetic | **LANDED_WITH_BOUNDARY_REPAIR** |
+| N02 | — | 平台权威事件（D5） | 工程＋Codex 验收 | synthetic | **LANDED_WITH_BOUNDARY_REPAIR** |
+| N01_N02_BOUNDARY_REPAIR | N01,N02 | C1 records custody／C2 qualifying ⟺／C3 E2 pending 消费闸／C4 生产链严格验证／C5 percentile 位兼容／C6 day-universe 等式／C7 格式与文档 | 工程 | synthetic | 见 §10 |
 | N00 | — | Round-4 权威文本入库＋三状态裁定 | **Aaron** | none | **BLOCKED_ON_AARON** |
 | N-D1 | — | 决策批 1（七项，见 §5） | **Aaron** | none | **BLOCKED_ON_AARON** |
 | N03 | N-D1 | supplement authority 加固（C3 四层绑定） | 工程 | none | — |
@@ -117,14 +123,26 @@ Round-4 已锁定的策略 Primary"，而 Codex 审核述 `PRIMARY_SELECTED=NO`�
 candidate-specific 策略代码；两候选不得被模糊记成一个 raw variant。
 
 ### N-D1 — 决策批 1（阻断 N03/N04/N05/N09）
-1. supplement day-universe 定义：A=`∪θ(tp∪fp)`／B=八文件 `ref_dates` 结构总体；
-   只出计数的关系探针是否获准、如何计 exposure。
-2. supplement registry 批 1 事件词汇／字段／状态转移。
-3. MC-DS-S001 是否 formal trial。
-4. MC-DS `STARTED`、post-start failure 与重试记账。
-5. supplement ledger／exposure quantity。
-6. output root 与 `supplements\` 创建授权。
-7. late-after-reveal 显著披露措辞。
+
+> **已移除的原第 1 项（supplement day-universe A/B/C 三选一＋计数探针）**：经
+> producer 侧核实，它不是方法选择而是**生产强制的工程等式**——
+> `is_direction_tradeable ≡ oracle_candidate`（study.py:335-343）；`_partition`
+> 在 tradeable 上按 `y_cont≥θ`/`<θ` 穷尽二分、无第三桶（:346-355）；records 对
+> 每个 engine×scenario 遍历同一 `usable`（:663-671）；每 θ 的 tp/fp 都过滤到同一
+> `traded_set`（:697-699）＋守恒布尔（:715-716）。故
+> `ref_dates = traded_set = 每θ(tp∪fp)` 且跨 θ 恒等，A/B/C 命名的是**同一集合**，
+> 计数探针不需要。该等式改由 consumer 在 prepare 阶段强制（C6），违反＝
+> sealed-input integrity failure，fail-closed，不得"改选另一个 universe 继续"。
+> 此项**不再需要 Aaron 裁定**，也不产生任何 exposure 决策。
+
+1. supplement registry 批 1 事件词汇／字段／状态转移（含 P2/P4/P6 行模板、
+   失败族语义、S001→S002 id 转移事件——完整候选见决策包）。
+2. MC-DS-S001 是否 formal trial（**开放，未预填**）。
+3. MC-DS `STARTED` 消耗何种序列、post-start failure 与重试记账。
+4. supplement ledger 形态／exposure quantity 口径。
+5. output root 与 `supplements\` 创建授权。
+6. late-after-reveal 显著披露措辞与落点。
+7. 后续精确执行授权语句的边界。
 
 ### N-D2 — 决策批 2（方法；须落 MC1.x Addendum／Evidence Resolution，非仅纪要）
 - **feasibility 三门分别定义**：payout 门（平台 payout/cycle 原子；量词；截尾
@@ -140,7 +158,7 @@ candidate-specific 策略代码；两候选不得被模糊记成一个 raw varia
 - 其他：θ0.3 完整报告规模；IR-28c 真实重放 vs 近似；**fixed-world 选择**
   （单个预注册 world／P5-P50-P95 邻近集合／不选而报告全部 world 条件切片）；
   late-phase bias 披露；历史 feasibility 文档勘误批准。
-- **N01/N02 执行中新发现（2026-08-15 追加，三项）**：
+- **N01/N02 执行中新发现（2026-08-15 追加，五项；后两项为边界修复轮登记）**：
   1. **E2 `over_budget` 谓词未定义**。冻结文本（MC §3/§6）**要求披露**
      `P(realised_loss > 预算)` 与 `P(intraday_adverse_loss > 预算)`，却从未定义
      per-day 布尔指哪一个、损失基准（每合约 vs 仓位）、预算基准（policy budget
@@ -155,7 +173,34 @@ candidate-specific 策略代码；两候选不得被模糊记成一个 raw varia
      `tests/test_mc_node_integration.py::test_checkpoint0_statistic_is_insulated
      _from_layer1_accounting`）。改冻结层的数字属 Aaron 裁定；本轮未改，权威累加器
      与旧口径并存以使差额可测。
-  3. **生产规模从未被执行过**（诚实披露，非本轮造成）。全部逻辑测试在 B=2/M=2；
+  3. **mean/SD/SE 数值实现待追认**（N01 引入，边界修复轮登记，未裁）：
+     ```
+     MEAN_SD_SE_NUMERICAL_IMPLEMENTATION_STATUS=PENDING_AARON_RATIFICATION
+     ESTIMATOR_FAMILY_UNCHANGED=YES
+     ULP_LEVEL_BEHAVIOR_CHANGED_FROM_R2_3=YES
+     MC_RUN_AUTHORIZED=NO
+     ```
+     事实：N01 把统计核整体从 numpy 迁至规范化纯 float（为使独立 cold reducer 可
+     逐位复核）。实测非逐位率 `mean_of` vs `np.mean` 47.8%、`sample_sd` 33.2%、
+     `stderr_of` 30.6%，全部 ULP 级（max_rel ≤ 1.7e-12），**估计量族未变**。
+     percentile 已在边界修复轮恢复 NumPy-linear 逐位行为（双分支求值序，两套实现
+     各自独立复刻），故不在此项内。**结构性事实**：mean/SD 的 numpy 位兼容
+     *诚实不可达*——numpy 的 pairwise 求和序是非契约的内部实现，无法写成两份独立
+     实现都能复现的书面规范；故"完整恢复 R2.3 位连续性"任何方案都做不到。
+     生产规模从未执行 ⇒ 无任何已封存数字被改变。裁定归 Aaron（追认或另定）。
+  4. **C1 custody 链的生产规模开销**（边界修复轮引入，实测外推，**非方法裁定**
+     但影响真实 MC 的可行性预算，须 Aaron/Codex 知悉）：records 现由 custody
+     校验过的 handoff 字节确定，冷重放**重新解析**而非复用调用方对象。实测
+     synthetic 三档外推到生产（8 个 `MC_HANDOFF_*` 合计 91.6 MB，取自封存
+     attestation 的 size 表）：新增常驻 **+91.6 MB/prepared**（只留 handoff 字节，
+     刻意不留 349 MB 的 `S0_REPORT.json`）；一次全量重解析 ≈ **8 s**、一次
+     records 规范摘要 ≈ **24 s**（流式灌 hash，峰值仅 6–12 KB）；一次
+     `cold_replay_observation_set` = 4 次全量解析 + ~7 次摘要 ≈ **2.5–3.5 分钟**；
+     40 个 observation set ⇒ **约 100–140 分钟纯 custody 开销**；重放峰值内存
+     ≈ **0.9 GB**（修复前 ≈ 0.28 GB）。**未做缓存**——缓存会破坏 "cold" 语义。
+     若需压缩开销，安全方向是按文件切分 records 摘要以支持增量验证，
+     **而不是跳过重解析**。是否接受该预算、或要求增量方案，归 Aaron/Codex。
+  5. **生产规模从未被执行过**（诚实披露，非本轮造成）。全部逻辑测试在 B=2/M=2；
      任何只在 B=1000 或 M=21 显形的缺陷（浮点累加顺序、type-7 分位边界、
      内存/耗时）在本仓库任何地方都未被执行。注意 R2.3 的"生产规模"夹具是用
      已删除的 `from_world_means` **伪造的摘要**，同样从未真跑——本轮把这条缺口

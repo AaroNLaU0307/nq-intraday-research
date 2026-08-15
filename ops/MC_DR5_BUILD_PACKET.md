@@ -326,7 +326,7 @@ STRATEGY_BUILD_STARTED=NO
 
 | 门 | 冻结依据 | 派生候选（Aaron 择定/另定） | 归类 |
 |---|---|---|---|
-| payout 路径可行 | Lucid：`qualifying_days_required=5`＋`qualifying_day_min_profit_usd=$150`（每次 payout 后重计）；Topstep XFA：`≥3 交易日（每日≥1笔）＋ largest_winning_day/total ≤ 0.40` | 认知层世界中**模拟内实际实现 payout** 的世界占比 ≥X%（X∈{25,50}）——或最低要求：≥1 次实现（当前 `payout_realized_share>0` 即此读法） | GO 必需 |
+| payout 路径可行 | Lucid：`qualifying_days_required=5`＋`qualifying_day_min_profit_usd=$150`（每次 payout 后重计）；Topstep XFA：~~`≥3 交易日（每日≥1笔）＋ largest_winning_day/total ≤ 0.40`~~ **【勘误 → §14.7】本行 Topstep 参数取自 `payout_paths.consistency`（sensitivity 路径），Primary 生命周期 `topstep_50k_stdpurchase_xfastd_nodll` 用的是 standard 路径＝5 盈利日×每日净利 ≥$150** | 认知层世界中**模拟内实际实现 payout** 的世界占比 ≥X%（X∈{25,50}）——或最低要求：≥1 次实现（当前 `payout_realized_share>0` 即此读法） | GO 必需 |
 | 频率可行 | 同上（5 达标日/周期与 ≥3 日/周期是频率的冻结下界来源） | 月均可交易日 ≥ 派生下界：Lucid 周期内可达 5×$150 日（≈月均 ≥5 个交易机会才可能）；Topstep ≥3 | GO 必需 |
 | 整数仓位可行 | MC §3 `n = min(floor(budget/anchor), 档位, absolute_max)`；n=0 跳过计数为冻结输出 | n=0 跳过率 ≤Y%（Y 无冻结值——**纯 Aaron 裁量**，候选 25/50 仅为区间示例并如实标注为非推导值） | GO 必需 |
 
@@ -429,11 +429,11 @@ output_root: <真实输出根路径>
 | 频率 | 周期内 `days_profit_ge_150`≥5 的世界占比 ≥X% | 5×$150 为冻结派生；X 为裁量 |
 | 整数仓位 | n=0 跳过率 ≤Y%（候选 25/50 仅为区间示例，非推导值） | **纯裁量** |
 
-**Topstep XFA（冻结参数：≥3 交易日（每日≥1 笔）＋ largest_winning_day/total ≤0.40）**
+**Topstep XFA** ~~（冻结参数：≥3 交易日（每日≥1 笔）＋ largest_winning_day/total ≤0.40）~~ **【勘误 → §14.7】该括号内为 `payout_paths.consistency`（sensitivity）路径参数；Primary 冻结路径是 standard ＝ 5 盈利日 × 每日净利 ≥$150**
 
 | 门 | 候选阈值 | 性质 |
 |---|---|---|
-| payout 路径 | 同 Lucid 读法，consistency 0.40 约束下的实现占比 | 0.40 为冻结派生；占比阈值裁量 |
+| payout 路径 | 同 Lucid 读法（standard 路径：5 盈利日×$150）；~~consistency 0.40 约束下的实现占比~~【勘误 → §14.7】 | 5×$150 为冻结派生；占比阈值裁量 |
 | 频率 | 周期内 winning_days≥3 的世界占比 ≥X% | 3 为冻结派生；X 为裁量 |
 | 整数仓位 | 同 Lucid | **纯裁量** |
 
@@ -557,3 +557,26 @@ CHECKPOINT0_VERDICT_REACHABLE=NO
 MC_EXECUTED=NO ／ SUPPLEMENT_EXECUTED=NO ／ STRATEGY_BUILD_STARTED=NO
 NEXT=N00（Round-4 权威文本）＋N-D1（决策批 1）——均 BLOCKED_ON_AARON
 ```
+
+
+### 14.7 历史文档勘误指针（事实修正，非方法裁定）
+
+**Topstep Primary payout 路径参数**：§12.3 与 §13.6 把 `≥3 交易日＋0.40
+consistency` 写成 Primary 冻结参数——**错误**。冻结事实（三处独立证据）：
+
+| 证据 | 内容 |
+|---|---|
+| `gate1/platform_params.yaml:258-266` | XFA 两条路径二选一：`standard.qualifying="5 个盈利日，每日净利 ≥ $150"`；`consistency.qualifying="≥3 交易日（每日≥1笔）＋ largest_winning_day/total ≤ 0.40"` |
+| `MC_METHOD_SPEC.md` §2.5 decision_roles | Primary 生命周期 = `topstep_50k_stdpurchase_xfastd_nodll`（**xfastd = standard**）；`topstep_50k_stdpurchase_xfaconsistency_nodll` 列在 `secondary_sensitivity` |
+| `src/itsf/mc/platforms/topstep.py:61-62` | 生产代码常量 `XFA_QUALIFYING_DAY_MIN_NET_USD = 150.0`、`XFA_QUALIFYING_DAYS_REQUIRED = 5`；XFA 生命周期**无任何 0.40 consistency 规则** |
+
+即：**生产代码自始正确，错的只有 packet 文档**。故本勘误是纯文档修正、零代码改动，
+两处已加内联删除线与指针。0.40 与 ≥3 日只属 `xfaconsistency × P2` 敏感性通道，
+永不进 Primary 门。**完整的 feasibility 决策包重述仍归 N-D2 裁定后的 N07 节点**
+（本节只更正事实错误，不重开任何方法选择）。
+
+**§13.3 逐指标状态表已被超越**：该表（`winning_days`="台账逐日余额差"、
+`contract_cap_hits`/`e2_over_budget_days`=PENDING_ENGINEERING）反映 R2.3 状态。
+N02 之后以代码内 `FEASIBILITY_METRICS_STATUS` 为准——`winning_days` 现由平台
+权威 `day_net_usd` 发射（不再是余额差）、`contract_cap_hits` 已 COMPUTED、
+`e2_over_budget_days` 为 DECISION_REQUIRED（谓词未裁，见 §14.5-1）。

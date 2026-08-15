@@ -60,51 +60,31 @@ N18-C / N18-I 两条路径均以 N00 完成为前置。
 
 # N-D1 — 决策批 1（阻断 N03 / N04 / N05 / N09）
 
-## 项 1 — supplement day-universe 定义（**样本总体定义，最重量级**）
+## 项 1 —（已移除）supplement day-universe 定义
 
-### 1.1 机械事实（源码核实，未读任何封存数值）
-
-| 事实 | 出处 |
-|---|---|
-| `ref_dates` = 八个 `MC_HANDOFF_{engine}_{scenario}.jsonl` 的 trade_date 键集；八文件键集必须**完全相同**，否则拒 `record_set_drift_across_files` | `consumer.py:556-560` |
-| `day_sequences[θ]` = 逐 θ 的 `sorted(tp_days ∪ fp_days)`，取自 `S0_REPORT.json` 的 `oracle_daily.{θ}.day_universe` | `consumer.py:583-612` |
-| **`tp_days ⊆ ref_dates` 被强制**（`tp_day_without_record`） | `consumer.py:610-613` |
-| **`fp_days ⊆ ref_dates` 未被任何检查强制** | 同上（只检查 tp） |
-| GRID 分层抽样要求 strata 覆盖 `set(d_tp) ∪ set(d_fp)`（**逐 θ**）；**缺键抛错、多余键被容忍** | `gridmix.py:508`＋`gridmix.py:180`；池只由这两个集合构成 `gridmix.py:519-520` |
-| θ 通道之间 TP/FP 划分**不同**（同一日可在 θ=0.3 为 TP、在 θ=0.5 为 FP） | 冻结 θ 语义（S0 §7）＋报告结构 |
-
-### 1.2 三个选项
-
-| 选项 | 定义 | 机械后果 |
-|---|---|---|
-| **A** | `∪θ (tp_days ∪ fp_days)`（oracle day universe 的 θ 并集） | 恰好等于重放所需的最小充分集；生成的结构标签最少（盲式姿态最强）；θ-依赖 |
-| **B** | `ref_dates`（八文件记录集结构全池） | θ-无关、面向未来（任何新 θ 或重分类都已覆盖）；但**存在风险**：若有 FP 日不在 `ref_dates`（代码未强制），B 缺该日 strata → 重放时 gridmix 抛错 |
-| **C** | `A ∪ B`（并集） | 在 A、B 两种真实关系下都安全（多余键被 gridmix 容忍）；生成的标签最多；掩盖 A/B 差异本身 |
-
-### 1.3 附带请求：结构性关系探针（是否获准）
-
-可运行一个**只输出计数、不输出任何日期或研究值**的机械探针，回答：
-`|A|`、`|B|`、`|A\B|`、`|B\A|`（四个整数）。
-- 若 `|A\B| == 0` → A ⊆ B 成立，选 B 无缺键风险。
-- 该探针需读取封存 `S0_REPORT.json` 与八个 handoff 文件的**键结构**（不读数值）。
-- **Aaron 需裁定**：(a) 是否获准运行；(b) 四个计数本身如何计 exposure
-  （工程建议：quantity=0 交叉引用行，理由=纯结构计数、零候选关系被查看，
-  与 IR-28d 先例同口径——**建议，非裁定**）。
-
-### 1.4 工程建议（**非裁定**）
-
-倾向 **A**：它精确等于冻结重放契约所需（gridmix 的 `all_dates` 就是逐 θ 的
-`tp∪fp`），最小化生成的结构信息，符合盲式补充封存的初衷。若 Aaron 希望消除
-FP 覆盖风险且不介意多生成标签，**C** 是安全兜底。**B 单独选用需先跑 1.3 探针
-确认 `|A\B| == 0`**，否则有真实的重放缺键风险。
-
-```
-N-D1.1_RULING=<A|B|C>
-N-D1.1_PROBE_AUTHORIZED=<YES|NO>
-N-D1.1_PROBE_EXPOSURE=<记账口径>
-```
-
----
+> **本项已从 Aaron 决策批撤回：它不是方法选择，是生产强制的工程等式。**
+>
+> 上一轮我把它作为 A/B/C 三选一＋计数探针呈交，那是**把工程事实误呈为治理
+> 选择**。经 producer 侧（`src/itsf/s0/study.py`）核实：
+> `is_direction_tradeable ≡ oracle_candidate`（:335-343）；`_partition` 在
+> tradeable 上按 `y_cont ≥ θ` / `< θ` **穷尽二分**，浮点全序无第三桶
+> （:346-355）；records 对**每个** engine×scenario 遍历同一个 `usable` 列表
+> （:663-671，注释原文 "EVERY constructible day, both engines, every scenario
+> (TP and FP alike)"）；每 θ 的 `tp_days`/`fp_days` 都过滤到同一个 `traded_set`
+> （:697-699），封存报告并自带守恒布尔 `constructible_equals_tp_plus_fp`
+> （:715-716）。
+>
+> 因此 `ref_dates = traded_set = 每θ(tp_days ∪ fp_days)`，且跨 θ 并集恒等——
+> A/B/C 命名的是**同一个集合**，计数探针（`|A\B|` 等四个整数）也不需要，
+> 因为 `|A\B| = 0` 由构造保证。
+>
+> **改由代码强制**（边界修复轮 C6）：consumer 在 prepare 阶段逐 θ 验证
+> `set(tp) ∪ set(fp) == ref_dates` 与 `set(tp) ∩ set(fp) == ∅`，并验证所有 θ
+> 的并集相同；八 handoff 文件 exact-key-set 检查保留。任何不一致＝
+> **sealed-input integrity failure**，在 supplement 构建或运行前 fail-closed，
+> **不允许改选另一个 universe 继续**，不产生 exposure 或研究输出。
+>
+> 本项**无需 Aaron 裁定**，也不再需要任何 exposure 决策。
 
 ## 项 2 — supplement registry 批 1 事件词汇／字段／状态转移
 
@@ -117,15 +97,20 @@ CONSUMED_BY_GRID_REPLAY`，失败族 `ATTEMPT_FAILURE / FAILED / SUPERSEDED`）�
 | # | 事件 | 行形状（模板，占位符未填，**模板≠授权**） |
 |---|---|---|
 | P1 | `SUPPLEMENT_PROPOSED` | `\| <n> \| <UTC> \| **SUPPLEMENT_PROPOSED** \| <commit40> \| main agent \| [MC-DS-S001] 依 IR-29b Option B 提案；schema mc_day_strata_supplement.v1；本行非授权 \|` |
-| P2 | `SUPPLEMENT_EXECUTION_AUTHORIZED` | Aaron 逐字发送执行语句（模板见 `ops/MC_DR5_BUILD_PACKET.md` §13.5）；registry 行 note = 该语句逐字 |
+| P2 | `SUPPLEMENT_EXECUTION_AUTHORIZED` | `\| <n> \| <UTC> \| **SUPPLEMENT_EXECUTION_AUTHORIZED** \| <commit40> \| Aaron \| [MC-DS-S001] <Aaron 逐字发送的执行语句全文，模板见 BUILD_PACKET §13.5> \|`（actor **必须**为 Aaron，镜像 RUN_AUTHORIZED 先例 registry:24,30,35；编号行非 `+` 行） |
 | P3 | `SUPPLEMENT_RUN_STARTED` | `\| + \| <UTC> \| SUPPLEMENT_RUN_STARTED \| <commit7> \| main agent (mc_ds_runner) \| [MC-DS-S001] atomic start; structural access begins \|` |
-| P4 | `SUPPLEMENT_SEALED` | `\| + \| <UTC> \| SUPPLEMENT_SEALED \| <commit7> \| … \| [MC-DS-S001] sealed sha256=<64hex>; rows_digest=<64hex>; day_universe_digest=<64hex>; n_rows=<int>; archive=<状态> \|` |
+| P4 | `SUPPLEMENT_SEALED` | `\| + \| <UTC> \| SUPPLEMENT_SEALED \| <commit7> \| main agent (mc_ds_runner) \| [MC-DS-S001] sealed sha256=<64hex>; rows_digest=<64hex>; day_universe_digest=<64hex>; source_input_sha256=<64hex>; method_version=<str>; n_rows=<int>; archive=<archive_ok\|archive_failed:<code>> \|` |
 | P5 | `SUPPLEMENT_INDEPENDENTLY_VERIFIED` | `\| <n> \| <UTC> \| **SUPPLEMENT_INDEPENDENTLY_VERIFIED** \| <commit40> \| <verifier> \| [MC-DS-S001] 二次重导 rows_digest 复现=YES; headline replay identity=PASS(<n>格); attestation sha=<64hex> \|` |
-| P6 | `SUPPLEMENT_CONSUMED_BY_GRID_REPLAY` | 由 MC runner 在 K 证据装配时追加 |
-| F1/F2/F3 | `SUPPLEMENT_ATTEMPT_FAILURE` / `SUPPLEMENT_FAILED` / `SUPPLEMENT_SUPERSEDED` | 镜像既有 `PRE_RUN_ATTEMPT_FAILURE`（registry:27,31）与 `RUN_AUTHORIZATION_SUPERSEDED`（:28,32）语法 |
+| P6 | `SUPPLEMENT_CONSUMED_BY_GRID_REPLAY` | `\| + \| <UTC> \| SUPPLEMENT_CONSUMED_BY_GRID_REPLAY \| <commit7> \| main agent (mc_runner) \| [MC-DS-S001] consumed by <MC run id>; prepared_digest=<64hex>; supplement sha256=<64hex>; K=<int> \|`（由 MC runner 在 K 证据装配时追加；**前置**＝P5 在场且无后继 F3） |
+| F1 | `SUPPLEMENT_ATTEMPT_FAILURE`（pre-start，零消耗） | `\| + \| <UTC> \| SUPPLEMENT_ATTEMPT_FAILURE \| <commit7> \| main agent (mc_ds_runner) \| [MC-DS-S001] stage <A_PRECHECK\|B_DERIVE\|C_BUILD> gate '<gate_name>': <ErrClass> (incident <INC-12hex>; nothing consumed; artifacts in <attempts dir>) \|`（镜像 registry:27,31；**supplement 专属 stage/gate 词表须与 N04 runner 同批固定**） |
+| F2 | `SUPPLEMENT_FAILED`（post-start） | `\| + \| <UTC> \| SUPPLEMENT_FAILED \| <commit7> \| main agent (mc_ds_runner) \| [MC-DS-S001] post-start failure at <stage>: <ErrClass> (incident <INC-12hex>; residue preserved at <run dir>; NOT deleted) \|` |
+| F2v | `SUPPLEMENT_VERIFICATION_FAILED`（P4 之后、P5 之前独立验证失败） | `\| <n> \| <UTC> \| **SUPPLEMENT_VERIFICATION_FAILED** \| <commit40> \| <verifier> \| [MC-DS-S001] <rederivation_mismatch\|headline_replay_mismatch\|s0_sealed_bytes_moved>: <detail>; sealed artifact NOT deleted; supersession required \|`（**新增**：原模板集缺此转移，SEALED→INDEPENDENTLY_VERIFIED 的失败分支此前只能推断） |
+| F3 | `SUPPLEMENT_SUPERSEDED` | `\| <n> \| <UTC> \| **SUPPLEMENT_SUPERSEDED** \| <commit40> \| main agent（Aaron 批复 <doc>） \| [MC-DS-S001] supersedes_event_sequence: <n>; superseded_supplement_id: MC-DS-S001; superseded_commit: <commit40>; reason_code: <code>; incident_id: <INC-12hex>; successor_supplement_id: MC-DS-S002 \|`（镜像 registry:28,32；**须明示 supersede 的对象**——是 P2 授权还是 supplement id 本身，两者语义不同，请 Aaron 指定） |
+| T1 | `SUPPLEMENT_ID_TRANSFER`（S001→S002） | `\| <n> \| <UTC> \| **SUPPLEMENT_PROPOSED** \| <commit40> \| main agent \| [MC-DS-S002] successor of MC-DS-S001 (superseded at event <n>, reason <code>); schema mc_day_strata_supplement.v1; id 永不重用; 本行非授权 \|`（**新增**：原模板集在项 4.3 引入 S002 却无 id 转移事件；后继件须重走完整 P2 授权） |
 
 ```
 N-D1.2_RULING=<逐项批准/修改/否决>
+ALL_VALUES_STATUS=PROPOSED / AARON_DECISION_REQUIRED   # 本表任何一行都不是已批准语法
 ```
 
 ---
@@ -173,7 +158,10 @@ N-D1.4_RULING=<四点逐条>
 2. EXPOSURE_LEDGER 是否追加 **quantity=0** 行（工程建议：追加，IR-28d 先例格式
    `EXPOSURE_LEDGER.md:15`；累计维持 1575 不变）。
 3. 该行的**结构性数据访问**定性：day strata 是结构标签、非 outcome
-   （`outcome_seen=NO`、`formal_trial=NO`、`quantity=0`）——请确认此定性。
+   （`outcome_seen=NO`、`quantity=0`）——请确认此定性。
+   **注意**：台账行里的 `formal_trial=` 字段值**不在本项预填**，它由
+   **N-D1.3 的裁定**决定（此前本包在此处预嵌了 `formal_trial=NO`，与项 3 的
+   开放 `YES|NO` 相冲突，已撤回）。
 
 ```
 N-D1.5_RULING=<三点逐条>
