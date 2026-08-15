@@ -1028,6 +1028,15 @@ FACT_TRADED_EXCEEDS_REQUESTED = "traded_n_exceeds_requested_n"
 FACT_NEGATIVE_CONTRACTS = "negative_contract_count"
 FACT_CAP_FLAG_INCONSISTENT = "cap_applied_without_clamp"
 FACT_QUALIFYING_PHASE_MISMATCH = "qualifying_day_true_on_nonqualifying_phase"
+# The OTHER direction of the same biconditional (N02 boundary repair C2): a
+# qualifying phase whose fact layer is live MUST carry a real bool. A None
+# there says "this ruleset has no qualifying-day concept" about a ruleset
+# that has one — i.e. it silently deletes qualifying days from every
+# downstream count instead of reporting False.
+FACT_QUALIFYING_MISSING = "qualifying_day_absent_on_qualifying_phase"
+# Tri-state means None | True | False and nothing else: a 0/1/"yes" would
+# pass `is not None` and then be counted as truthy by every consumer.
+FACT_QUALIFYING_NOT_BOOL = "qualifying_day_not_bool"
 FACT_DAY_NET_NOT_FINITE = "day_net_usd_not_finite"
 FACT_NEGATIVE_GENERATION = "account_generation_negative"
 FACT_OVER_BUDGET_UNRULED = "over_budget_emitted_without_ruling"
@@ -1036,9 +1045,34 @@ FACT_OVER_BUDGET_STATUS_TYPE = "over_budget_status_not_typed"
 DAY_FACT_REJECTION_CODES = frozenset({
     FACT_TRADED_EXCEEDS_REQUESTED, FACT_NEGATIVE_CONTRACTS,
     FACT_CAP_FLAG_INCONSISTENT, FACT_QUALIFYING_PHASE_MISMATCH,
+    FACT_QUALIFYING_MISSING, FACT_QUALIFYING_NOT_BOOL,
     FACT_DAY_NET_NOT_FINITE, FACT_NEGATIVE_GENERATION,
     FACT_OVER_BUDGET_UNRULED, FACT_OVER_BUDGET_STATUS_TYPE,
 })
+
+
+def fact_layer_active(day_net_usd, account_generation) -> bool:
+    """Is this event's PRODUCTION authoritative fact layer live?
+
+    THE migration boundary, defined in exactly one place and shared by the
+    construction-time validator and the stream verifier
+    (itsf.mc.platforms.authoritative.verify_event_stream):
+
+      * `day_net_usd is None` is the migration marker — the event predates
+        the fact layer or came from a non-production helper
+        (itsf.mc.account.run_account), so the fact-layer rules do not
+        apply and legacy defaults stay legal;
+      * once BOTH `day_net_usd` and `account_generation` are present the
+        event claims to be a production fact-layer emission, and every
+        fact-layer rule is enforced in full — no partial credit.
+
+    Deliberately NOT "any one field is set": an event carrying a day net
+    but no generation is a malformed production event, and the stream
+    verifier rejects it under `account_generation_missing`. Widening the
+    activation predicate to `or` would make that event fail two rules and
+    report the less specific one first.
+    """
+    return day_net_usd is not None and account_generation is not None
 
 
 class AuthoritativeFactError(ValueError):
@@ -1081,9 +1115,21 @@ class AccountEvent:
     # same-day trading result.
     # None == this event predates / opts out of the fact layer.
     day_net_usd: float | None = None
-    # TRI-STATE. Exact rule, machine-enforced below and re-verified by
-    # itsf.mc.platforms.authoritative.check_event_facts:
-    #   non-None  <=>  phase in QUALIFYING_PHASES ({funded, xfa})
+    # TRI-STATE. Exact rule, machine-enforced BOTH WAYS in __post_init__ and
+    # independently re-verified by
+    # itsf.mc.platforms.authoritative.verify_event_stream (the dataclass is
+    # mutable, so construction-time enforcement alone is bypassable):
+    #   phase in QUALIFYING_PHASES ({funded, xfa})  <=>  value is a bool
+    #     ->  a bool on evaluation / combine / dead / done is refused
+    #         (FACT_QUALIFYING_PHASE_MISMATCH): True invents a qualifying
+    #         day, False disguises "concept does not exist" as "measured,
+    #         did not qualify";
+    #     ->  a None on funded / xfa is refused (FACT_QUALIFYING_MISSING)
+    #         whenever contracts.fact_layer_active(...) holds: it deletes a
+    #         real qualifying day from every downstream count.
+    #   The <= direction is CONDITIONAL on the fact layer being live, and
+    #   only on that: a legacy/migration event (`day_net_usd is None`) keeps
+    #   the neutral default. The => direction is UNCONDITIONAL.
     #   value     ==   the PLATFORM'S OWN qualifying-day counter incremented
     #                  for this day (single source of truth), never a
     #                  re-derived "day_net >= threshold" comparison.
@@ -1124,21 +1170,50 @@ class AccountEvent:
             raise AuthoritativeFactError(
                 FACT_CAP_FLAG_INCONSISTENT,
                 f"traded_n={self.traded_n} requested_n={self.requested_n}")
-        if (self.qualifying_day is not None
-                and self.phase not in QUALIFYING_PHASES):
-            # Both directions are refused: a True on a phase with no
-            # qualifying concept invents a qualifying day, and a False there
-            # disguises "concept does not exist" as "measured, did not
-            # qualify" — the exact misread the tri-state exists to prevent.
-            raise AuthoritativeFactError(
-                FACT_QUALIFYING_PHASE_MISMATCH,
-                f"phase={self.phase!r} qualifying_day={self.qualifying_day!r}")
+        # Field-level well-formedness FIRST: the qualifying biconditional
+        # below keys off `fact_layer_active(day_net_usd, account_generation)`,
+        # so a NaN net or a negative generation must report its own specific
+        # code instead of being shadowed by the tri-state rule.
         if self.day_net_usd is not None and not math.isfinite(self.day_net_usd):
             raise AuthoritativeFactError(
                 FACT_DAY_NET_NOT_FINITE, repr(self.day_net_usd))
         if self.account_generation is not None and self.account_generation < 0:
             raise AuthoritativeFactError(
                 FACT_NEGATIVE_GENERATION, repr(self.account_generation))
+        # --- qualifying_day: the BICONDITIONAL, both directions ------------
+        if (self.qualifying_day is not None
+                and not isinstance(self.qualifying_day, bool)):
+            # Tri-state is None | True | False. A 0/1/"" would satisfy every
+            # `is not None` test downstream and then be counted as a truthy
+            # qualifying day (or a measured False) that no platform emitted.
+            raise AuthoritativeFactError(
+                FACT_QUALIFYING_NOT_BOOL,
+                f"qualifying_day={self.qualifying_day!r} "
+                f"(type {type(self.qualifying_day).__name__})")
+        if (self.qualifying_day is not None
+                and self.phase not in QUALIFYING_PHASES):
+            # A True on a phase with no qualifying concept invents a
+            # qualifying day, and a False there disguises "concept does not
+            # exist" as "measured, did not qualify" — the exact misread the
+            # tri-state exists to prevent.
+            raise AuthoritativeFactError(
+                FACT_QUALIFYING_PHASE_MISMATCH,
+                f"phase={self.phase!r} qualifying_day={self.qualifying_day!r}")
+        if (self.qualifying_day is None
+                and self.phase in QUALIFYING_PHASES
+                and fact_layer_active(self.day_net_usd,
+                                      self.account_generation)):
+            # The reverse direction, previously unenforced anywhere: a live
+            # funded/XFA fact-layer day whose tri-state is None claims the
+            # ruleset has no qualifying-day concept. It has one, so this
+            # silently drops the day from every qualifying count instead of
+            # reporting a measured False.
+            raise AuthoritativeFactError(
+                FACT_QUALIFYING_MISSING,
+                f"phase={self.phase!r} has a qualifying-day ruleset and the "
+                f"fact layer is live (day_net_usd={self.day_net_usd!r}, "
+                f"account_generation={self.account_generation!r}); emit "
+                "True|False from the platform's own counter, never None")
         if self.over_budget is not None and not OVER_BUDGET_PREDICATE_RULED:
             raise AuthoritativeFactError(
                 FACT_OVER_BUDGET_UNRULED,

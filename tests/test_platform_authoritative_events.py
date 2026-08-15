@@ -23,12 +23,14 @@ SYNTHETIC ONLY: conftest generators; no real market data, no research values.
 """
 from __future__ import annotations
 
+import inspect
 import re
 from pathlib import Path
 
 import pytest
 from conftest import make_trade_path
 
+from itsf import contracts as C
 from itsf.contracts import (DAY_FACT_REJECTION_CODES,
                             FACT_CAP_FLAG_INCONSISTENT,
                             FACT_DAY_NET_NOT_FINITE,
@@ -36,11 +38,13 @@ from itsf.contracts import (DAY_FACT_REJECTION_CODES,
                             FACT_NEGATIVE_GENERATION,
                             FACT_OVER_BUDGET_STATUS_TYPE,
                             FACT_OVER_BUDGET_UNRULED,
+                            FACT_QUALIFYING_MISSING,
+                            FACT_QUALIFYING_NOT_BOOL,
                             FACT_QUALIFYING_PHASE_MISMATCH,
                             FACT_TRADED_EXCEEDS_REQUESTED,
                             OVER_BUDGET_PREDICATE_RULED, QUALIFYING_PHASES,
                             AccountEvent, AuthoritativeFactError,
-                            OverBudgetStatus)
+                            OverBudgetStatus, fact_layer_active)
 from itsf.mc import orchestrator as orch
 from itsf.mc.platforms import authoritative as auth
 from itsf.mc.platforms.lucid import (QUALIFYING_DAY_MIN_USD,
@@ -655,7 +659,23 @@ def test_a_fabricated_over_budget_boolean_is_refused_at_construction():
 # ==========================================================================
 
 def _ev(**kw):
+    """A MIGRATION-STATE event by default (no day_net_usd) — the legacy
+    shape the fact-layer rules deliberately do not reach."""
     base = dict(day="d", phase="xfa", balance=0.0, floor=0.0)
+    base.update(kw)
+    return AccountEvent(**base)
+
+
+def _fact_ev(**kw):
+    """A minimal event with a LIVE production fact layer.
+
+    `qualifying_day=False` is not decoration: phase 'xfa' has a qualifying
+    ruleset, so under the C2 biconditional a live fact layer there MUST
+    carry a bool. Constructing this without it is itself a refusal, which
+    `test_c2_reverse_direction_*` pins."""
+    base = dict(day="d", phase="xfa", balance=0.0, floor=0.0,
+                day_net_usd=0.0, account_generation=0, qualifying_day=False,
+                over_budget_status=OverBudgetStatus.NOT_APPLICABLE_NO_TRADE)
     base.update(kw)
     return AccountEvent(**base)
 
@@ -690,9 +710,9 @@ def test_stream_checker_rejects_missing_facts():
 
 
 def test_stream_checker_rejects_generation_regression_and_jumps():
-    a = _ev(day="a", day_net_usd=0.0, account_generation=5)
-    b = _ev(day="b", day_net_usd=0.0, account_generation=4)
-    c = _ev(day="c", day_net_usd=0.0, account_generation=9)
+    a = _fact_ev(day="a", account_generation=5)
+    b = _fact_ev(day="b", account_generation=4)
+    c = _fact_ev(day="c", account_generation=9)
     assert auth.AUTH_GENERATION_NOT_MONOTONE in {
         v.code for v in auth.check_event_facts([a, b])}
     assert auth.AUTH_GENERATION_JUMP in {
@@ -705,27 +725,25 @@ def test_stream_checker_rejects_missing_generation_and_bad_states():
     codes = {v.code for v in auth.check_event_facts([miss])}
     assert codes == {auth.AUTH_GENERATION_MISSING}
 
-    no_status = _ev(day_net_usd=0.0, account_generation=0)
-    assert auth.AUTH_OVER_BUDGET_STATE in {
+    no_status = _ev(day_net_usd=0.0, account_generation=0,
+                    qualifying_day=False)
+    assert auth.AUTH_OVER_BUDGET_STATUS_MISSING in {
         v.code for v in auth.check_event_facts([no_status])}
 
-    ok = _ev(day_net_usd=0.0, account_generation=0,
-             over_budget_status=OverBudgetStatus.NOT_APPLICABLE_NO_TRADE)
+    ok = _fact_ev()
     assert auth.check_event_facts([ok]) == []
     ok.over_budget = True                     # post-construction bypass
-    assert auth.AUTH_OVER_BUDGET_STATE in {
+    assert auth.AUTH_OVER_BUDGET_VALUE_UNRULED in {
         v.code for v in auth.check_event_facts([ok])}
 
 
 def test_stream_checker_rejects_tristate_and_cap_flag_violations():
-    ev = _ev(day_net_usd=0.0, account_generation=0,
-             over_budget_status=OverBudgetStatus.NOT_APPLICABLE_NO_TRADE)
+    ev = _fact_ev()
     ev.phase = "combine"
     ev.qualifying_day = False                 # post-construction bypass
     assert auth.AUTH_QUALIFYING_TRISTATE in {
         v.code for v in auth.check_event_facts([ev])}
-    ev2 = _ev(day_net_usd=0.0, account_generation=0,
-              over_budget_status=OverBudgetStatus.NOT_APPLICABLE_NO_TRADE)
+    ev2 = _fact_ev()
     ev2.cap_applied = True                    # traded_n == requested_n == 0
     assert auth.AUTH_CAP_FLAG in {
         v.code for v in auth.check_event_facts([ev2])}
@@ -733,11 +751,25 @@ def test_stream_checker_rejects_tristate_and_cap_flag_violations():
 
 def test_all_stream_rejection_codes_are_registered_and_strict_raises():
     assert auth.AUTH_REJECTION_CODES == {
-        auth.AUTH_FACTS_MISSING, auth.AUTH_GENERATION_MISSING,
+        auth.AUTH_FACTS_MISSING, auth.AUTH_DAY_NET_NOT_FINITE,
+        auth.AUTH_GENERATION_MISSING, auth.AUTH_GENERATION_MALFORMED,
         auth.AUTH_GENERATION_NOT_MONOTONE, auth.AUTH_GENERATION_JUMP,
-        auth.AUTH_DAY_NET_INVARIANT, auth.AUTH_QUALIFYING_TRISTATE,
-        auth.AUTH_OVER_BUDGET_STATE, auth.AUTH_CAP_FLAG,
+        auth.AUTH_QUALIFYING_TRISTATE, auth.AUTH_QUALIFYING_MISSING,
+        auth.AUTH_QUALIFYING_NOT_BOOL,
+        auth.AUTH_CONTRACT_COUNT_MALFORMED,
+        auth.AUTH_TRADED_EXCEEDS_REQUESTED, auth.AUTH_CAP_FLAG,
+        auth.AUTH_OVER_BUDGET_VALUE_UNRULED,
+        auth.AUTH_OVER_BUDGET_VALUE_NOT_BOOL,
+        auth.AUTH_OVER_BUDGET_STATUS_MISSING,
+        auth.AUTH_OVER_BUDGET_STATUS_TYPE,
+        auth.AUTH_OVER_BUDGET_STATUS_MISMATCH,
+        auth.AUTH_DAY_NET_INVARIANT,
+        auth.AUTH_PHASE_UNKNOWN, auth.AUTH_PHASE_PLATFORM_MISMATCH,
+        auth.AUTH_ENGINE_UNKNOWN, auth.AUTH_PLATFORM_UNKNOWN,
     }
+    # every code is a distinct, stable string (an accidental alias would
+    # make two different defects indistinguishable to lane S1')
+    assert len(auth.AUTH_REJECTION_CODES) == 22
     with pytest.raises(auth.AuthoritativeStreamError) as ei:
         auth.check_event_facts(
             [AccountEvent(day="x", phase="xfa", balance=0.0, floor=0.0)],
@@ -758,13 +790,10 @@ def test_orchestrator_refuses_an_event_without_the_fact_layer(monkeypatch):
 
 
 def test_cross_check_helper_declines_across_generations():
-    a = _ev(day="a", balance=100.0, day_net_usd=0.0, account_generation=0,
-            over_budget_status=OverBudgetStatus.NOT_APPLICABLE_NO_TRADE)
-    b = _ev(day="b", balance=999.0, day_net_usd=0.0, account_generation=1,
-            over_budget_status=OverBudgetStatus.NOT_APPLICABLE_NO_TRADE)
+    a = _fact_ev(day="a", balance=100.0)
+    b = _fact_ev(day="b", balance=999.0, account_generation=1)
     assert auth.day_net_cross_check(a, b) is None        # boundary: N/A
-    c = _ev(day="c", balance=150.0, day_net_usd=50.0, account_generation=0,
-            over_budget_status=OverBudgetStatus.NOT_APPLICABLE_NO_TRADE)
+    c = _fact_ev(day="c", balance=150.0, day_net_usd=50.0)
     assert auth.day_net_cross_check(a, c) == pytest.approx(0.0)
 
 
@@ -900,3 +929,535 @@ def test_facts_are_deterministic_across_repeated_runs():
                           e.cap_applied, e.over_budget,
                           e.over_budget_status) for e in r.events]
         assert key(a) == key(b), name
+
+
+# ==========================================================================
+# 11. C2 — the qualifying_day BICONDITIONAL (N02 boundary repair)
+#
+# The pre-repair rule was ONE-WAY: only "qualifying_day is not None on a
+# non-qualifying phase" was refused. The reverse — a live funded/XFA fact
+# layer emitting None — was unenforced at construction, at the orchestrator
+# gate and in the stream checker alike, while contracts.py's comment claimed
+# the biconditional was "machine-enforced". These tests pin both directions
+# and the migration boundary that bounds them.
+#
+# ORACLE: the rule is restated here from the frozen ruleset inventory (only
+# Lucid funded and Topstep XFA define a qualifying day at all), never by
+# calling the production validator.
+# ==========================================================================
+
+NON_QUALIFYING_PHASES = ("evaluation", "combine", "dead", "done")
+
+
+@pytest.mark.parametrize("phase", NON_QUALIFYING_PHASES)
+@pytest.mark.parametrize("value", [True, False])
+def test_c2_forward_direction_bool_on_nonqualifying_phase_is_refused(phase,
+                                                                     value):
+    """=> direction, UNCONDITIONAL (holds for legacy events too): a phase
+    with no qualifying-day ruleset may never carry a bool. False is as bad
+    as True — it reads downstream as "measured, did not qualify"."""
+    with pytest.raises(AuthoritativeFactError) as ei:
+        AccountEvent(day="d", phase=phase, balance=0.0, floor=0.0,
+                     qualifying_day=value)
+    assert ei.value.code == FACT_QUALIFYING_PHASE_MISMATCH
+    # and again with the fact layer live, so the repair cannot have made the
+    # unconditional direction accidentally conditional
+    with pytest.raises(AuthoritativeFactError) as ei2:
+        AccountEvent(day="d", phase=phase, balance=0.0, floor=0.0,
+                     qualifying_day=value, day_net_usd=0.0,
+                     account_generation=0)
+    assert ei2.value.code == FACT_QUALIFYING_PHASE_MISMATCH
+
+
+@pytest.mark.parametrize("phase", sorted(QUALIFYING_PHASES))
+def test_c2_reverse_direction_none_on_qualifying_phase_is_refused(phase):
+    """<= direction: THE hole this node closes. funded / xfa with a live
+    fact layer must carry a real bool; None claims the ruleset has no
+    qualifying-day concept and deletes the day from every count."""
+    with pytest.raises(AuthoritativeFactError) as ei:
+        AccountEvent(day="d", phase=phase, balance=0.0, floor=0.0,
+                     day_net_usd=0.0, account_generation=0,
+                     qualifying_day=None)
+    assert ei.value.code == FACT_QUALIFYING_MISSING
+    assert FACT_QUALIFYING_MISSING in DAY_FACT_REJECTION_CODES
+    # both bools are accepted (the rule refuses ABSENCE, not a value)
+    for value in (True, False):
+        ok = AccountEvent(day="d", phase=phase, balance=0.0, floor=0.0,
+                          day_net_usd=0.0, account_generation=0,
+                          qualifying_day=value)
+        assert ok.qualifying_day is value
+
+
+@pytest.mark.parametrize("phase", sorted(QUALIFYING_PHASES))
+def test_c2_legacy_migration_event_stays_compatible(phase):
+    """COMPATIBILITY BOUNDARY: `day_net_usd is None` is the migration
+    marker (itsf.mc.account.run_account still emits such events), so the
+    reverse direction must NOT reach it. Partial facts do not activate the
+    layer either — that shape is a malformed PRODUCTION event and the
+    stream verifier names it `account_generation_missing`, a strictly more
+    specific diagnosis than "qualifying day missing"."""
+    legacy = AccountEvent(day="d", phase=phase, balance=1.0, floor=0.0)
+    assert legacy.qualifying_day is None
+    assert fact_layer_active(legacy.day_net_usd,
+                             legacy.account_generation) is False
+    # generation alone does not activate it
+    half = AccountEvent(day="d", phase=phase, balance=1.0, floor=0.0,
+                        account_generation=0)
+    assert half.qualifying_day is None
+    # day_net alone does not either
+    other_half = AccountEvent(day="d", phase=phase, balance=1.0, floor=0.0,
+                              day_net_usd=0.0)
+    assert other_half.qualifying_day is None
+    assert auth.check_event_facts([legacy], require_facts=False) == []
+
+
+@pytest.mark.parametrize("value", [1, 0, "True", 1.0])
+def test_c2_qualifying_day_must_be_a_real_bool(value):
+    """Tri-state means None | True | False. A truthy int satisfies every
+    `is not None` guard downstream and is then counted as a qualifying
+    day the platform never reported."""
+    with pytest.raises(AuthoritativeFactError) as ei:
+        AccountEvent(day="d", phase="xfa", balance=0.0, floor=0.0,
+                     day_net_usd=0.0, account_generation=0,
+                     qualifying_day=value)
+    assert ei.value.code == FACT_QUALIFYING_NOT_BOOL
+
+
+def test_c2_real_producer_bool_flipped_to_none_is_refused_by_verify_event_stream():
+    """THE mutable-dataclass argument, executed. A REAL producer stream is
+    emitted, then one funded day's qualifying bool is set to None AFTER
+    construction — exactly the bypass __post_init__ cannot see. The stream
+    verifier must still refuse, because it re-derives the rule from the
+    object the consumer will actually read."""
+    res = run_scenario("lucid_payout_halt")
+    auth.verify_event_stream(res.events, engine="E1", platform="lucid")
+
+    targets = [e for e in res.events if e.phase in QUALIFYING_PHASES]
+    assert targets, "scenario emitted no qualifying-phase day"
+    assert all(isinstance(e.qualifying_day, bool) for e in targets)
+    victim = targets[0]
+    victim.qualifying_day = None              # post-construction bypass
+    with pytest.raises(AuthoritativeFactError) as ei:
+        auth.verify_event_stream(res.events, engine="E1", platform="lucid")
+    assert ei.value.code == auth.AUTH_QUALIFYING_MISSING
+    assert victim.day in str(ei.value)
+
+    victim.qualifying_day = False             # restored -> accepted again
+    assert auth.verify_event_stream(res.events, engine="E1",
+                                    platform="lucid") is None
+
+
+def test_c2_real_producer_bool_moved_to_a_nonqualifying_day_is_refused():
+    """The mirror bypass: move a bool onto a day whose ruleset has no
+    qualifying concept (here the Topstep Combine)."""
+    res = run_scenario("topstep_payout_no_halt")
+    auth.verify_event_stream(res.events, engine="E1", platform="topstep")
+    victim = [e for e in res.events if e.phase == "combine"][0]
+    victim.qualifying_day = False             # post-construction bypass
+    with pytest.raises(AuthoritativeFactError) as ei:
+        auth.verify_event_stream(res.events, engine="E1", platform="topstep")
+    assert ei.value.code == auth.AUTH_QUALIFYING_TRISTATE
+
+
+def test_c2_every_production_event_satisfies_the_biconditional():
+    """Sweep: over the whole battery the emitted tri-state IS the
+    biconditional, checked here by an independent restatement rather than
+    by calling the verifier."""
+    seen_bool = seen_none = 0
+    for name in BATTERY:
+        res = run_scenario(name)
+        for e in res.events:
+            live = fact_layer_active(e.day_net_usd, e.account_generation)
+            assert live, f"{name}/{e.day}: production event without facts"
+            if e.phase in QUALIFYING_PHASES:
+                assert isinstance(e.qualifying_day, bool), (name, e.day)
+                seen_bool += 1
+            else:
+                assert e.qualifying_day is None, (name, e.day)
+                seen_none += 1
+    # both arms are actually exercised (a vacuous sweep proves nothing)
+    assert seen_bool > 0 and seen_none > 0
+
+
+# ==========================================================================
+# 12. C4 — `verify_event_stream`, the production-chain fact gate
+#
+# ORACLE DISCIPLINE: `_valid_stream()` below is hand-built with arithmetic
+# done in this file (balance 100 -> 150 on a +50 day, no payout, so the
+# identity residual is 50 - ((150 - 100) + 0) = 0). Every negative is that
+# stream with ONE field mutated, so the expected code follows from the rule
+# text, never from running the production reducer.
+# ==========================================================================
+
+def _valid_stream():
+    """Two adjacent same-generation XFA days on a Topstep/E2 run.
+
+    day 'a': idle           net 0.0, balance 100.0, traded 0
+    day 'b': 1 micro, +50   net 50.0, balance 150.0, traded 1 of 1 requested
+    identity on the pair: 50.0 - ((150.0 - 100.0) + 0.0) == 0.0
+    """
+    a = AccountEvent(day="a", phase="xfa", balance=100.0, floor=0.0,
+                     day_net_usd=0.0, account_generation=0,
+                     qualifying_day=False, requested_n=0, traded_n=0,
+                     cap_applied=False,
+                     over_budget_status=OverBudgetStatus.NOT_APPLICABLE_NO_TRADE)
+    b = AccountEvent(day="b", phase="xfa", balance=150.0, floor=0.0,
+                     day_net_usd=50.0, account_generation=0,
+                     qualifying_day=False, requested_n=1, traded_n=1,
+                     cap_applied=False,
+                     over_budget_status=OverBudgetStatus.PENDING_RULING)
+    return [a, b]
+
+
+def _set(field, value):
+    def mutate(stream):
+        setattr(stream[1], field, value)
+    return mutate
+
+
+def _set_first(field, value):
+    def mutate(stream):
+        setattr(stream[0], field, value)
+    return mutate
+
+
+# One negative per stable code. Turning OFF the corresponding rule in
+# `_iter_violations` makes exactly the matching row red (mutation probe).
+STREAM_NEGATIVES = [
+    (auth.AUTH_FACTS_MISSING, _set("day_net_usd", None)),
+    (auth.AUTH_DAY_NET_NOT_FINITE, _set("day_net_usd", float("nan"))),
+    (auth.AUTH_DAY_NET_NOT_FINITE, _set("day_net_usd", float("inf"))),
+    (auth.AUTH_GENERATION_MISSING, _set("account_generation", None)),
+    (auth.AUTH_GENERATION_MALFORMED, _set("account_generation", -1)),
+    (auth.AUTH_GENERATION_MALFORMED, _set("account_generation", 1.0)),
+    (auth.AUTH_GENERATION_NOT_MONOTONE, _set_first("account_generation", 3)),
+    (auth.AUTH_GENERATION_JUMP, _set("account_generation", 2)),
+    (auth.AUTH_QUALIFYING_TRISTATE, _set("phase", "done")),
+    (auth.AUTH_QUALIFYING_MISSING, _set("qualifying_day", None)),
+    (auth.AUTH_QUALIFYING_NOT_BOOL, _set("qualifying_day", 1)),
+    (auth.AUTH_CONTRACT_COUNT_MALFORMED, _set("traded_n", -1)),
+    (auth.AUTH_CONTRACT_COUNT_MALFORMED, _set("requested_n", "1")),
+    (auth.AUTH_TRADED_EXCEEDS_REQUESTED, _set("traded_n", 2)),
+    (auth.AUTH_CAP_FLAG, _set("requested_n", 3)),        # clamp NOT reported
+    (auth.AUTH_CAP_FLAG, _set("cap_applied", True)),     # clamp NOT real
+    (auth.AUTH_CAP_FLAG, _set("cap_applied", "yes")),
+    (auth.AUTH_OVER_BUDGET_VALUE_UNRULED, _set("over_budget", False)),
+    (auth.AUTH_OVER_BUDGET_VALUE_UNRULED, _set("over_budget", True)),
+    (auth.AUTH_OVER_BUDGET_STATUS_MISSING, _set("over_budget_status", None)),
+    (auth.AUTH_OVER_BUDGET_STATUS_TYPE,
+     _set("over_budget_status", "PENDING_RULING")),
+    (auth.AUTH_OVER_BUDGET_STATUS_MISMATCH,
+     _set("over_budget_status", OverBudgetStatus.NOT_APPLICABLE)),
+    (auth.AUTH_OVER_BUDGET_STATUS_MISMATCH,
+     _set("over_budget_status", OverBudgetStatus.NOT_APPLICABLE_NO_TRADE)),
+    (auth.AUTH_DAY_NET_INVARIANT, _set("balance", 999.0)),
+    (auth.AUTH_DAY_NET_INVARIANT, _set("payout_gross", 25.0)),
+    (auth.AUTH_PHASE_UNKNOWN, _set("phase", "live")),
+    (auth.AUTH_PHASE_PLATFORM_MISMATCH, _set("phase", "funded")),
+]
+
+
+def test_verify_event_stream_accepts_the_hand_built_valid_stream():
+    """No false positives: the whole rule set is satisfiable, and the gate
+    returns None rather than any derived quantity."""
+    assert auth.verify_event_stream(_valid_stream(), engine="E2",
+                                    platform="topstep") is None
+    assert auth.check_event_facts(_valid_stream(), engine="E2",
+                                  platform="topstep") == []
+
+
+@pytest.mark.parametrize("code,mutate", STREAM_NEGATIVES,
+                         ids=[f"{c}-{i}" for i, (c, _m)
+                              in enumerate(STREAM_NEGATIVES)])
+def test_verify_event_stream_refuses_one_defect_per_stable_code(code, mutate):
+    stream = _valid_stream()
+    mutate(stream)
+    with pytest.raises(AuthoritativeFactError) as ei:
+        auth.verify_event_stream(stream, engine="E2", platform="topstep")
+    assert ei.value.code == code
+    assert code in auth.AUTH_REJECTION_CODES
+
+
+def test_verify_event_stream_refuses_unknown_engine_and_platform_labels():
+    """The labels are part of the fact, not decoration: a typo would make
+    the engine-scoped over-budget rule silently inapplicable."""
+    with pytest.raises(AuthoritativeFactError) as ei:
+        auth.verify_event_stream(_valid_stream(), engine="E3",
+                                 platform="topstep")
+    assert ei.value.code == auth.AUTH_ENGINE_UNKNOWN
+    with pytest.raises(AuthoritativeFactError) as ei2:
+        auth.verify_event_stream(_valid_stream(), engine="E2",
+                                 platform="apex")
+    assert ei2.value.code == auth.AUTH_PLATFORM_UNKNOWN
+    assert auth.ENGINES == ("E1", "E2")
+    assert auth.PLATFORMS == ("lucid", "topstep")
+
+
+def test_verify_event_stream_refuses_a_non_bool_over_budget_once_ruled(
+        monkeypatch):
+    """FORWARD GUARD ONLY — this test does NOT rule the E2 over-budget
+    predicate and defines nothing (that is Aaron's call, master plan
+    N-D2). It exercises the type guard that becomes load-bearing the day
+    the flag flips, so the flip cannot land an untyped value."""
+    stream = _valid_stream()
+    stream[1].over_budget = "yes"
+    monkeypatch.setattr(C, "OVER_BUDGET_PREDICATE_RULED", True)
+    with pytest.raises(AuthoritativeFactError) as ei:
+        auth.verify_event_stream(stream, engine="E2", platform="topstep")
+    assert ei.value.code == auth.AUTH_OVER_BUDGET_VALUE_NOT_BOOL
+    # and the unruled refusal is what fires while the flag is False
+    monkeypatch.setattr(C, "OVER_BUDGET_PREDICATE_RULED", False)
+    with pytest.raises(AuthoritativeFactError) as ei2:
+        auth.verify_event_stream(stream, engine="E2", platform="topstep")
+    assert ei2.value.code == auth.AUTH_OVER_BUDGET_VALUE_UNRULED
+
+
+@pytest.mark.parametrize("engine,traded,expected", [
+    ("E1", 0, OverBudgetStatus.NOT_APPLICABLE_NO_TRADE),
+    ("E2", 0, OverBudgetStatus.NOT_APPLICABLE_NO_TRADE),
+    ("E1", 3, OverBudgetStatus.NOT_APPLICABLE),
+    ("E2", 3, OverBudgetStatus.PENDING_RULING),
+])
+def test_over_budget_status_applicability_conditions(engine, traded,
+                                                     expected):
+    """The three applicability conditions, restated from frozen MC SS3
+    (the disclosure is E2-scoped; a day with no position has no budget
+    draw to compare) — the verifier's oracle, not a copy of the emission
+    helper."""
+    assert auth.expected_over_budget_status(engine, traded) is expected
+
+
+def test_engine_scoped_status_rule_catches_a_swapped_engine():
+    """An E2 run whose days report the E1 status would erase the mandated
+    disclosure from the whole path atom."""
+    stream = _valid_stream()
+    # the stream is internally consistent for E2 ...
+    assert auth.verify_event_stream(stream, engine="E2",
+                                    platform="topstep") is None
+    # ... and therefore MUST be refused when replayed as E1
+    with pytest.raises(AuthoritativeFactError) as ei:
+        auth.verify_event_stream(stream, engine="E1", platform="topstep")
+    assert ei.value.code == auth.AUTH_OVER_BUDGET_STATUS_MISMATCH
+
+
+# --------------------------------------------------------------------------
+# 12b. the day-net identity: its applicability conditions, one by one
+# --------------------------------------------------------------------------
+
+def test_identity_skip_S1_stream_head_has_no_predecessor():
+    """(S1) The first event carries an arbitrary opening balance that no
+    event can explain; the pair does not exist yet. Everything INSIDE the
+    day is still checked."""
+    head = _valid_stream()[:1]
+    head[0].balance = 12_345.0                # unexplained by its own net
+    assert auth.verify_event_stream(head, engine="E2",
+                                    platform="topstep") is None
+    assert auth.day_net_identity_applies(None, head[0]) is False
+
+
+def test_identity_skip_S2_generation_change_and_only_that():
+    """(S2) A generation bump marks a balance RESET, so the difference is a
+    phantom and the identity must not be applied. The skip is bounded: the
+    SAME jump inside one generation is refused."""
+    ok = _valid_stream()
+    ok[1].balance = 99_999.0
+    ok[1].account_generation = 1              # a declared reset boundary
+    assert auth.day_net_identity_applies(ok[0], ok[1]) is False
+    assert auth.verify_event_stream(ok, engine="E2",
+                                    platform="topstep") is None
+
+    bad = _valid_stream()
+    bad[1].balance = 99_999.0                 # same jump, no boundary
+    assert auth.day_net_identity_applies(bad[0], bad[1]) is True
+    with pytest.raises(AuthoritativeFactError) as ei:
+        auth.verify_event_stream(bad, engine="E2", platform="topstep")
+    assert ei.value.code == auth.AUTH_DAY_NET_INVARIANT
+
+
+def test_identity_skip_S3_legacy_event_is_unreachable_in_production():
+    """(S3) The legacy skip exists only for the mixed-stream inspection
+    form. Under `verify_event_stream` a factless event is refused BEFORE a
+    pair can be formed, so S3 can never be used to dodge the identity."""
+    mixed = _valid_stream()
+    mixed[0].day_net_usd = None
+    assert auth.day_net_identity_applies(mixed[0], mixed[1]) is False
+    with pytest.raises(AuthoritativeFactError) as ei:
+        auth.verify_event_stream(mixed, engine="E2", platform="topstep")
+    assert ei.value.code == auth.AUTH_FACTS_MISSING
+    # the collecting form tolerates it and still checks everything else
+    assert auth.check_event_facts(mixed, require_facts=False, engine="E2",
+                                  platform="topstep") == []
+
+
+def test_identity_is_a_hard_refusal_not_a_downgradeable_warning():
+    """PROBE: the residual is not exposed as an advisory number anywhere on
+    the production path — the only production entry point RAISES."""
+    bad = _valid_stream()
+    bad[1].day_net_usd = bad[1].balance - bad[0].balance + 1.0   # off by $1
+    with pytest.raises(AuthoritativeFactError):
+        auth.verify_event_stream(bad, engine="E2", platform="topstep")
+    # and the tolerance really is representation-error-sized
+    edge = _valid_stream()
+    edge[1].day_net_usd = 50.0 + auth.CROSS_CHECK_TOL_USD / 2.0
+    assert auth.verify_event_stream(edge, engine="E2",
+                                    platform="topstep") is None
+
+
+def test_balance_mutation_site_inventory_is_pinned():
+    """PROBE / structural — the evidence behind "no other skip exists".
+
+    The identity's domain argument enumerates every way a sim balance can
+    move: a trading settlement folded into `day_net_usd`, the payout gross
+    deduction carried by `payout_gross`, or a reset to a start constant
+    (which bumps the generation). A NEW mutation site makes this red until
+    it is classified against one of those three."""
+    sites = {}
+    for rel in ("src/itsf/mc/platforms/lucid.py",
+                "src/itsf/mc/platforms/topstep.py"):
+        src = (REPO / rel).read_text(encoding="utf-8")
+        sites[rel] = sorted(re.findall(
+            r"self\.balance\s*(\+=|-=|=)\s*([A-Za-z_][A-Za-z_0-9]*)", src))
+    assert sites == {
+        "src/itsf/mc/platforms/lucid.py": [
+            ("+=", "day_net"),              # trading settlement -> day_net_usd
+            ("-=", "gross"),                # payout -> payout_gross
+            ("=", "START_BALANCE_USD"),     # ctor reset -> generation bump
+            ("=", "START_BALANCE_USD"),     # _enter_funded -> generation bump
+            ("=", "breach_settlement"),     # R1 same-day -> day_net_usd
+        ],
+        "src/itsf/mc/platforms/topstep.py": [
+            ("+=", "day_net"),              # XFA trading -> day_net_usd
+            ("+=", "day_pnl"),              # Combine trading -> day_net_usd
+            ("-=", "payout_gross"),         # payout -> payout_gross
+            ("=", "COMBINE_START_BALANCE_USD"),   # reset -> generation bump
+            ("=", "XFA_START_BALANCE_USD"),       # reset -> generation bump
+            ("=", "breach_settlement"),           # R1 same-day -> day_net_usd
+            ("=", "breach_settlement"),
+        ],
+    }
+
+
+# --------------------------------------------------------------------------
+# 12c. the production sweep + the seam contract lane S1' codes against
+# --------------------------------------------------------------------------
+
+ENGINE_OF = {"lucid_e2_engine": "E2"}
+
+
+def test_verify_event_stream_accepts_the_whole_production_battery():
+    """The gate must be satisfiable by every real producer path, or it is
+    a denial-of-service on the consumer rather than a guard."""
+    for name in BATTERY:
+        platform = BATTERY[name][0]
+        engine = ENGINE_OF.get(name, "E1")
+        res = run_scenario(name)
+        assert res.events, name
+        assert auth.verify_event_stream(res.events, engine=engine,
+                                        platform=platform) is None, name
+
+
+@pytest.mark.parametrize("platform", ["lucid", "topstep"])
+@pytest.mark.parametrize("anchor", [1.0, 25.0, 100.0, 150.0, 10_000.0])
+@pytest.mark.parametrize("pnl", [900.0, 150.0, 0.0, -400.0])
+def test_cap_biconditional_holds_across_a_sizing_sweep(platform, anchor, pnl):
+    """THE risk the `<=` half of rule 4 carries: `cap_applied` is False on a
+    day that traded less than it requested for a reason OTHER than the
+    position cap (a policy skip), and the biconditional then refuses a
+    legitimate run.
+
+    It cannot happen on the production path, and this sweep holds that
+    mechanically rather than by reading. `_n_for_day` returns
+    (floor(budget/anchor), min(that, cap)), so traded < requested requires
+    cap < requested, which requires cap > 0 — and whenever a platform cap
+    is 0 the orchestrator's guards make requested_n 0 as well. The anchor
+    grid spans cap-bound days (anchor 1), exact-fit days and n == 0 skips
+    (anchor 10000)."""
+    days = tdays(40)
+    paths = {t.day_id: day_path(t.day_id, pnl, anchor=anchor) for t in days}
+    res = run_lifecycle(LifecycleConfig(platform=platform), days, paths)
+    assert res.events
+    assert auth.verify_event_stream(res.events, engine="E1",
+                                    platform=platform) is None
+    # independent restatement of the same biconditional
+    for e in res.events:
+        assert e.cap_applied is (e.traded_n < e.requested_n), (
+            f"{platform}/{anchor}/{pnl} day {e.day}: cap_applied="
+            f"{e.cap_applied} traded_n={e.traded_n} "
+            f"requested_n={e.requested_n}")
+
+
+def test_cap_biconditional_sweep_is_not_vacuous():
+    """The sweep above proves nothing unless it actually reaches both arms:
+    real cap hits AND real zero-traded days."""
+    days = tdays(40)
+    clamped = run_lifecycle(
+        LifecycleConfig(platform="lucid"), days,
+        {t.day_id: day_path(t.day_id, 10.0, anchor=1.0) for t in days})
+    assert any(e.cap_applied for e in clamped.events)
+    assert any(e.traded_n > 0 for e in clamped.events)
+    skipped = run_lifecycle(
+        LifecycleConfig(platform="lucid"), days,
+        {t.day_id: day_path(t.day_id, 10.0, anchor=10_000.0) for t in days})
+    assert any(e.traded_n == 0 for e in skipped.events)
+    assert all(not e.cap_applied for e in skipped.events)
+    assert skipped.skips_n0 > 0
+
+
+def test_verify_event_stream_signature_is_the_cross_lane_contract():
+    """Lane S1' calls this by keyword in `_run_path_atom`; a signature
+    change is a breaking change and must fail here first."""
+    sig = inspect.signature(auth.verify_event_stream)
+    assert list(sig.parameters) == ["events", "engine", "platform"]
+    assert sig.parameters["events"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
+    for name in ("engine", "platform"):
+        p = sig.parameters[name]
+        assert p.kind is inspect.Parameter.KEYWORD_ONLY, name
+        assert p.default is inspect.Parameter.empty, name
+    assert sig.return_annotation == "None"
+
+
+def test_platform_phase_inventory_is_complete_and_reachable():
+    """Every allowed phase belongs to exactly the platform(s) that can emit
+    it; a phase in neither set would make the platform check vacuous, and a
+    phase in the wrong set would let a wiring error through."""
+    assert set(auth.ALLOWED_PHASES) == orch._ALLOWED_PHASES
+    union = set().union(*auth.PLATFORM_PHASES.values())
+    assert union == set(auth.ALLOWED_PHASES)
+    assert set(auth.PLATFORM_PHASES) == set(auth.PLATFORMS)
+    observed = {"lucid": set(), "topstep": set()}
+    for name in BATTERY:
+        res = run_scenario(name)
+        observed[BATTERY[name][0]].update(e.phase for e in res.events)
+    for platform, phases in observed.items():
+        assert phases <= auth.PLATFORM_PHASES[platform], platform
+        assert phases, platform
+
+
+def test_check_event_facts_stays_available_as_the_collecting_form():
+    """Backwards compatibility for the whole-list callers; production
+    semantics remain `verify_event_stream`'s."""
+    stream = _valid_stream()
+    stream[1].qualifying_day = None           # one defect
+    stream[1].traded_n = 5                    # a second, independent one
+    codes = [v.code for v in auth.check_event_facts(stream, engine="E2",
+                                                    platform="topstep")]
+    assert codes == [auth.AUTH_QUALIFYING_MISSING,
+                     auth.AUTH_TRADED_EXCEEDS_REQUESTED]
+    # ... while the production gate stops at the FIRST one
+    with pytest.raises(AuthoritativeFactError) as ei:
+        auth.verify_event_stream(stream, engine="E2", platform="topstep")
+    assert ei.value.code == auth.AUTH_QUALIFYING_MISSING
+
+
+def test_verify_event_stream_is_a_pure_gate():
+    """It returns None, always — a verifier that returned a number would
+    become a quiet second definition of the facts it checks."""
+    assert auth.verify_event_stream([], engine="E1", platform="lucid") is None
+    res = run_scenario("lucid_simple")
+    assert auth.verify_event_stream(res.events, engine="E1",
+                                    platform="lucid") is None
+    src = (REPO / "src" / "itsf" / "mc" / "platforms"
+           / "authoritative.py").read_text("utf-8")
+    body = src.split("def verify_event_stream")[1].split("\ndef ")[0]
+    assert "return None" in body
+    assert "sum(" not in body and "len(" not in body
