@@ -153,8 +153,14 @@ def _rebuild(prep, **claim):
     the RIGHT reason: at 54ab7f2 the three provenance fields do not
     exist, so every forgery below degenerates into an honest copy and
     the seal path lets it through to the feasibility gate — which is
-    precisely the finding."""
-    names = {f.name for f in dataclasses.fields(prep)}
+    precisely the finding.
+
+    `init=False` fields are excluded: `battery_receipt` (the factory
+    boundary) is not a constructor parameter at all, which is the whole
+    point of it — see `test_mc_battery_boundary`. Every forgery below
+    therefore arrives at the seal receipt-less, and is refused by the
+    B-PROV check that fires FIRST for its particular claim."""
+    names = {f.name for f in dataclasses.fields(prep) if f.init}
     kwargs = {n: getattr(prep, n) for n in names
               if n not in ("records", "records_digest")}
     kwargs.update({k: v for k, v in claim.items() if k in names})

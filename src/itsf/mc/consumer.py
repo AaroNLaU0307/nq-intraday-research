@@ -354,7 +354,25 @@ class PreparedMCInput:
     production attestation's product were indistinguishable objects with
     identical identities, so the seal had nothing to check. They are
     MANDATORY fields — a prepared input with no declared provenance is
-    not constructible, which is what closes the hand-assembled path."""
+    not constructible, which is what closes the hand-assembled path.
+
+    THE FACTORY BOUNDARY (this round). B-PROV made the custody ROOT
+    decisive but left the object's ORIGIN undecided: every field above
+    is a public constructor parameter, so a caller who supplies a
+    provenance triple and a digest table consistent with the attestation
+    obtains a seal-admissible object the ten-check battery never touched
+    — and may then choose `method_digest`, `seeds`, `k_per_seed`,
+    `day_sequences`, `traded_day_sets`, `calendar` and
+    `authorization_snapshot` freely, because nothing downstream
+    re-derives them. `battery_receipt` closes that: it is NOT an init
+    parameter, it can only be minted by the battery, and it BINDS the
+    prepared identity, so `PreparedMCInput(...)` and
+    `dataclasses.replace(prepared, ...)` both yield objects the seal
+    refuses. Construction itself stays public and unchanged — the
+    ten-check battery's refusal codes are still reachable by tests, and
+    the cold replay still rebuilds a prepared input from custody bytes;
+    what is no longer reachable is SEAL ADMISSIBILITY without the
+    battery."""
     trial_id: str
     authorized_commit: str
     file_sha256: Mapping             # name -> hex digest (exact set)
@@ -376,6 +394,19 @@ class PreparedMCInput:
     # value at construction; anything else is declare-and-verify.
     records: Mapping | None = None   # (engine, scenario) -> {date: record}
     records_digest: str | None = None
+    # NOT an init parameter and never a caller's to supply: the ONLY
+    # writer is `_issue_battery_receipt`, which the completed battery
+    # calls on its own product. `dataclasses.replace` skips init=False
+    # fields, so a replaced object is receipt-LESS by construction — a
+    # no-op replace included.
+    #
+    # `default_factory`, not a plain default, is REQUIRED here: with
+    # `slots=True` the dataclass machinery deletes class-level defaults,
+    # and an `init=False` field with a plain default is read from
+    # exactly that deleted class attribute — the combination leaves the
+    # slot unset and every access raises AttributeError.
+    battery_receipt: "BatteryReceipt | None" = _dc.field(
+        init=False, repr=False, compare=False, default_factory=lambda: None)
 
     def __post_init__(self):
         # --- custody link 0a (B-PROV): the provenance triple is well
@@ -529,6 +560,244 @@ def prepared_digest(prepared: "PreparedMCInput") -> str:
     }
     return hashlib.sha256(
         json.dumps(ident, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# THE FACTORY BOUNDARY: a typed, unforgeable BATTERY RECEIPT
+#
+# The question B-PROV could not answer. `_assert_seal_provenance` proves
+# WHICH custody authority a prepared input claims, and re-derives that
+# authority from code pins so the claim cannot be a copied string. It
+# does not — and with a public dataclass constructor cannot — prove that
+# the object in front of it is the OUTPUT of `_prepare_mc_input_impl`.
+# Given a bundle and an attestation that agree (the production case, and
+# any production-LIKE test case), a caller could hand-assemble a prepared
+# input, or `dataclasses.replace` a genuine one, choose the
+# battery-DERIVED fields at will, and be stopped only by the UNRELATED
+# feasibility gate. "Stopped by an unrelated gate" is not a refusal.
+#
+# What a receipt has to be, to be worth anything:
+#   (a) UNFORGEABLE — not a caller-supplied boolean or string. Minting
+#       one requires a module-private capability that no instance
+#       retains, so holding a genuine receipt does not let a caller make
+#       a second one;
+#   (b) BOUND — it carries the digests of every battery-derived
+#       component AND the prepared identity, so a receipt lifted off a
+#       genuine object and grafted onto a mutated one fails to verify;
+#   (c) NON-DECLARABLE THROUGH `__init__` — see `PreparedMCInput`'s
+#       `battery_receipt` field: `init=False` means neither the public
+#       constructor nor `dataclasses.replace` can carry one across.
+# ---------------------------------------------------------------------------
+
+BATTERY_RECEIPT_SCHEMA = "mc_battery_receipt.v1"
+# The battery-derived components the receipt binds, each digested on its
+# OWN canonical preimage. Deliberately not reduced to the single prepared
+# digest (which would bind the same facts): a mismatch must be able to
+# NAME the component that moved instead of reporting "identity changed".
+BATTERY_RECEIPT_COMPONENTS = (
+    "authorization_snapshot", "bundle_file_sha256", "calendar",
+    "day_sequences", "method_digest", "provenance", "record_keys",
+    "records_digest", "seeds_k_crn", "traded_day_sets", "trial_commit")
+
+
+class _BatteryCapability:
+    """Module-private construction capability for `BatteryReceipt`.
+
+    ONE instance exists, created at import time, and it is passed to
+    exactly one call site (`_issue_battery_receipt`). It is never stored
+    on an instance — `BatteryReceipt.__post_init__` drops it the moment
+    it has been checked — so a caller holding a genuine receipt cannot
+    read the token back out and mint another."""
+    __slots__ = ()
+
+
+_BATTERY_CAPABILITY = _BatteryCapability()
+
+
+def _battery_component_digests(prepared: "PreparedMCInput") -> dict:
+    """Digest each battery-DERIVED component of a prepared input.
+
+    Every field `_prepare_mc_input_impl` derives appears in exactly one
+    component; `handoff_bytes` does not need one because `__post_init__`
+    already pins those bytes to `file_sha256` bit for bit, and `records`
+    / `records_digest` are re-derived from those same bytes on every
+    construction."""
+    parts = {
+        "trial_commit": {"trial_id": prepared.trial_id,
+                         "authorized_commit": prepared.authorized_commit},
+        "provenance": {
+            "source_artifact_id": prepared.source_artifact_id,
+            "source_artifact_sha256": prepared.source_artifact_sha256,
+            "test_only": prepared.test_only},
+        "bundle_file_sha256": dict(prepared.file_sha256),
+        "records_digest": prepared.records_digest,
+        "record_keys": records_key_index(prepared.records),
+        "method_digest": prepared.method_digest,
+        "seeds_k_crn": {"seeds": list(prepared.seeds),
+                        "k_per_seed": prepared.k_per_seed,
+                        "crn_scope": CRN_SCOPE_FROZEN},
+        "day_sequences": {ch: list(seq) for ch, seq in
+                          sorted(prepared.day_sequences.items())},
+        "traded_day_sets": {ch: sorted(days) for ch, days in
+                            sorted(prepared.traded_day_sets.items())},
+        "calendar": {
+            "days": [[d.day_id, d.cal_offset]
+                     for d in prepared.calendar.days],
+            "first_month_offsets": list(
+                prepared.calendar.first_month_offsets)},
+        "authorization_snapshot": _unfreeze(
+            prepared.authorization_snapshot),
+    }
+    if set(parts) != set(BATTERY_RECEIPT_COMPONENTS):
+        raise MCInputError(
+            "battery_receipt_component_set_drift",
+            f"{sorted(set(parts) ^ set(BATTERY_RECEIPT_COMPONENTS))}")
+    return {name: hashlib.sha256(
+        json.dumps({"component": name, "value": value},
+                   sort_keys=True).encode("utf-8")).hexdigest()
+        for name, value in parts.items()}
+
+
+@dataclass(frozen=True, slots=True)
+class BatteryReceipt:
+    """TYPED PROOF that the ten-check battery produced a prepared input.
+
+    Issued ONCE, by `_issue_battery_receipt`, at the end of
+    `_prepare_mc_input_impl`. It records the certifying authority's own
+    identity and the digest of every battery-derived component, plus the
+    prepared identity in both its forms (the digest and the sha256 of
+    the pinned preimage bytes the cold replay starts from).
+
+    It is a CERTIFICATE, not an input: nothing reads a field of it as
+    permission. `verify_battery_receipt` recomputes every component from
+    the live object and compares — a receipt that says "all good" over
+    an object that has since changed is exactly what refuses."""
+    capability: object
+    schema: str
+    authority_source_artifact_id: str
+    authority_source_artifact_sha256: str
+    authority_test_only: bool
+    authority_trial_id: str
+    authority_authorized_commit: str
+    component_digests: Mapping
+    prepared_digest: str
+    prepared_identity_sha256: str
+
+    def __post_init__(self):
+        if self.capability is not _BATTERY_CAPABILITY:
+            raise MCInputError(
+                "battery_receipt_capability_required",
+                "a battery receipt is ISSUED by the prepare battery; it "
+                "cannot be constructed, copied or `dataclasses.replace`d "
+                "by a caller")
+        # the token never survives on an instance — see _BatteryCapability
+        object.__setattr__(self, "capability", None)
+        if self.schema != BATTERY_RECEIPT_SCHEMA:
+            raise MCInputError("battery_receipt_malformed",
+                               f"schema={self.schema!r}")
+        digests = dict(self.component_digests)
+        if set(digests) != set(BATTERY_RECEIPT_COMPONENTS):
+            raise MCInputError(
+                "battery_receipt_malformed",
+                f"component set {sorted(digests)} != "
+                f"{sorted(BATTERY_RECEIPT_COMPONENTS)}")
+        for name, value in sorted(digests.items()):
+            if not isinstance(value, str) or not _HEX64_RE.match(value):
+                raise MCInputError("battery_receipt_malformed",
+                                   f"component {name}={value!r}")
+        for name in ("prepared_digest", "prepared_identity_sha256"):
+            value = getattr(self, name)
+            if not isinstance(value, str) or not _HEX64_RE.match(value):
+                raise MCInputError("battery_receipt_malformed",
+                                   f"{name}={value!r}")
+        if type(self.authority_test_only) is not bool:
+            raise MCInputError(
+                "battery_receipt_malformed",
+                f"authority_test_only carries "
+                f"{type(self.authority_test_only).__name__}")
+        object.__setattr__(self, "component_digests",
+                           MappingProxyType(digests))
+
+
+def _issue_battery_receipt(prepared: "PreparedMCInput",
+                           authority: "CustodyAuthority"
+                           ) -> "BatteryReceipt":
+    """Mint the receipt and ATTACH it. The ONLY caller is
+    `_prepare_mc_input_impl`, after all ten checks have passed."""
+    receipt = BatteryReceipt(
+        capability=_BATTERY_CAPABILITY,
+        schema=BATTERY_RECEIPT_SCHEMA,
+        authority_source_artifact_id=str(authority.source_artifact_id),
+        authority_source_artifact_sha256=str(
+            authority.source_artifact_sha256),
+        authority_test_only=bool(authority.test_only),
+        authority_trial_id=str(authority.trial_id),
+        authority_authorized_commit=str(authority.authorized_commit),
+        component_digests=_battery_component_digests(prepared),
+        prepared_digest=prepared_digest(prepared),
+        prepared_identity_sha256=hashlib.sha256(
+            prepared_identity_bytes(prepared)).hexdigest())
+    object.__setattr__(prepared, "battery_receipt", receipt)
+    return receipt
+
+
+def verify_battery_receipt(prepared: "PreparedMCInput") -> "BatteryReceipt":
+    """Prove the prepared input in hand IS the battery's product, and
+    still carries the content the battery certified.
+
+    Two machine-distinguishable refusals:
+      `seal_prepared_not_battery_validated` — no receipt at all (the
+          public constructor and `dataclasses.replace` both land here);
+      `seal_battery_receipt_mismatch`       — a receipt that does not
+          describe THIS object (a genuine receipt grafted onto a mutated
+          one, or an object mutated after its receipt was issued).
+
+    Every component is recomputed from the live object; the receipt is
+    never consulted for a value, only compared against."""
+    receipt = getattr(prepared, "battery_receipt", None)
+    if type(receipt) is not BatteryReceipt:
+        raise MCInputError(
+            "seal_prepared_not_battery_validated",
+            "the prepared input carries no battery receipt — it was not "
+            "produced by the ten-check prepare battery (a hand-built "
+            "object, or a `dataclasses.replace` of a genuine one)")
+    if receipt.schema != BATTERY_RECEIPT_SCHEMA:
+        raise MCInputError("seal_battery_receipt_mismatch",
+                           f"receipt schema {receipt.schema!r}")
+    live = _battery_component_digests(prepared)
+    for name in BATTERY_RECEIPT_COMPONENTS:
+        want = receipt.component_digests.get(name)
+        if want != live[name]:
+            raise MCInputError(
+                "seal_battery_receipt_mismatch",
+                f"the prepared input's {name} is not what the battery "
+                f"certified ({str(want)[:12]} != {live[name][:12]})")
+    if receipt.prepared_digest != prepared_digest(prepared):
+        raise MCInputError(
+            "seal_battery_receipt_mismatch",
+            f"receipt binds prepared digest "
+            f"{receipt.prepared_digest[:12]} != "
+            f"{prepared_digest(prepared)[:12]}")
+    identity_sha = hashlib.sha256(
+        prepared_identity_bytes(prepared)).hexdigest()
+    if receipt.prepared_identity_sha256 != identity_sha:
+        raise MCInputError(
+            "seal_battery_receipt_mismatch",
+            f"receipt binds identity bytes "
+            f"{receipt.prepared_identity_sha256[:12]} != "
+            f"{identity_sha[:12]}")
+    if (receipt.authority_source_artifact_id != prepared.source_artifact_id
+            or receipt.authority_source_artifact_sha256
+            != prepared.source_artifact_sha256
+            or receipt.authority_test_only is not prepared.test_only
+            or receipt.authority_trial_id != prepared.trial_id
+            or receipt.authority_authorized_commit
+            != prepared.authorized_commit):
+        raise MCInputError(
+            "seal_battery_receipt_mismatch",
+            "the receipt's certifying authority is not the authority the "
+            "prepared input claims")
+    return receipt
 
 
 # ---------------------------------------------------------------------------
@@ -698,7 +967,11 @@ def prepare_mc_input(bundle: Mapping[str, bytes], *,
     CustodyAuthority(test_only=False) has NO production entry, and a
     synchronized attestation+bundle+manifest rewrite still fails against
     the code pin. The frozen-window calendar is built here (no injection
-    seam). Tests use `prepare_mc_input_for_tests`."""
+    seam). Tests use `prepare_mc_input_for_tests`.
+
+    This is also the ONLY production route to a seal-admissible prepared
+    input: the battery receipt that `verify_battery_receipt` demands is
+    minted at the end of `_prepare_mc_input_impl` and nowhere else."""
     authority = load_custody_authority_from_attestation(
         attestation_bytes=attestation_bytes)
     return _prepare_mc_input_impl(bundle,
@@ -1004,7 +1277,7 @@ def _prepare_mc_input_impl(bundle: Mapping[str, bytes], *,
     # RECURSIVELY frozen (R2 PHASE F).
     frozen_snap = _deep_freeze(
         json.loads(json.dumps(dict(authorization_snapshot))))
-    return PreparedMCInput(
+    prepared = PreparedMCInput(
         trial_id=str(snap["trial_id"]),
         authorized_commit=str(snap["authorized_commit"]),
         file_sha256=MappingProxyType(dict(sha)),
@@ -1028,6 +1301,12 @@ def _prepare_mc_input_impl(bundle: Mapping[str, bytes], *,
         source_artifact_id=str(custody_authority.source_artifact_id),
         source_artifact_sha256=str(custody_authority.source_artifact_sha256),
         test_only=bool(custody_authority.test_only))
+    # THE FACTORY BOUNDARY. The receipt is minted HERE and nowhere else,
+    # on the far side of all ten checks, so "this object came out of the
+    # battery" stops being a comment and becomes a verifiable fact the
+    # seal can re-check (see `verify_battery_receipt`).
+    _issue_battery_receipt(prepared, custody_authority)
+    return prepared
 
 
 def _validate_calendar(cal: TemplateCalendar) -> None:
@@ -2370,6 +2649,17 @@ def replay_prepared_from_custody_bytes(prepared: PreparedMCInput
             "cold_replay_prepared_binding_mismatch",
             "the rebuilt replay input does not reproduce the forward "
             "prepared digest")
+    # FACTORY BOUNDARY, replay side. The rebuild is a direct
+    # construction, so without this it would arrive at the seal
+    # receipt-less and the seal would refuse its OWN replay. The receipt
+    # is CARRIED, never minted: an input that had none still has none
+    # afterwards, so the replay cannot launder an un-battery-validated
+    # object into a validated one. Carrying is sound because every
+    # component the receipt binds is also bound into the prepared digest,
+    # and the two digests were just proven equal above.
+    if getattr(prepared, "battery_receipt", None) is not None:
+        object.__setattr__(replay, "battery_receipt",
+                           prepared.battery_receipt)
     verify_records_custody_chain(replay, where="replay input")
     return replay
 
@@ -2632,7 +2922,11 @@ def _assert_seal_provenance(prepared: PreparedMCInput) -> CustodyAuthority:
          attestation's custody root;
       5. the per-file digest table vs the attestation's OWN table — the
          check a copied source string cannot survive, because reproducing
-         it requires the sealed bundle's actual bytes.
+         it requires the sealed bundle's actual bytes;
+      6. the BATTERY RECEIPT — that this object is the ten-check
+         battery's own product and still carries the content the battery
+         certified. (1)-(5) identify the custody authority; only (6)
+         answers whether the battery ran at all.
 
     (2)+(3) are string comparisons against constants; (4)+(5) re-read and
     re-parse the attestation through the SAME constructor the production
@@ -2679,6 +2973,23 @@ def _assert_seal_provenance(prepared: PreparedMCInput) -> CustodyAuthority:
             "seal_custody_table_mismatch",
             f"{len(differing)} of {len(BUNDLE_EXACT_SET)} bundle digests "
             f"disagree with the attestation table: {differing[:3]}")
+    # (6) THE FACTORY BOUNDARY — and only now. (1)-(5) answer "which
+    # authority certified this input"; they cannot answer "did the
+    # ten-check battery actually run", because every field they read is
+    # a public constructor parameter. Given a bundle and an attestation
+    # that agree, a hand-built object or a `dataclasses.replace` of a
+    # genuine one satisfies all five and then carries whatever
+    # `method_digest` / `seeds` / `k_per_seed` / `day_sequences` /
+    # `traded_day_sets` / `calendar` / `authorization_snapshot` its
+    # author chose — reaching the feasibility gate as if it were sound.
+    #
+    # Ordering inside this function is deliberate: the five specific
+    # checks stay FIRST so a forged source string, a foreign trial or a
+    # substituted digest table each keeps its own precise code, and the
+    # receipt check is the catch-all underneath them. It is still well
+    # ahead of the reduction, so a battery failure can never be reported
+    # as the feasibility gate's DECISION_REQUIRED.
+    verify_battery_receipt(prepared)
     return authority
 
 
@@ -2713,6 +3024,17 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
     provenance failure can never again be reported as "the feasibility
     decision is missing".
 
+    THE FACTORY BOUNDARY — the same call now also verifies the BATTERY
+    RECEIPT (`verify_battery_receipt`), which is what makes "the
+    ten-check battery produced this object" a checkable fact rather than
+    an assumption. A hand-built `PreparedMCInput` or a
+    `dataclasses.replace` of a genuine one reaches this point looking
+    perfectly provenanced and is refused HERE, under
+    `seal_prepared_not_battery_validated` or
+    `seal_battery_receipt_mismatch` — still ahead of the feasibility
+    gate, so the old "it stopped at feasibility" outcome can no longer
+    be mistaken for a refusal.
+
     Structurally unreachable today: the reduction refuses at the
     feasibility gate (DECISION_REQUIRED), convergence refuses at K —
     every refusal is the honest missing decision, not a gap."""
@@ -2739,10 +3061,12 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
                 _assert_config_digest(r, layer="seal",
                                       where=f"{run.run_label}:{r.platform}"
                                             f"/{r.engine}/{r.scenario}")
-    # B-PROV: the custody root, re-verified against the code pins. Before
-    # the reduction, so a provenance failure never surfaces as the
-    # feasibility gate's DECISION_REQUIRED.
+    # B-PROV: the custody root, re-verified against the code pins, AND
+    # the factory boundary: the battery receipt, re-verified against the
+    # live object. Before the reduction, so neither failure can ever
+    # surface as the feasibility gate's DECISION_REQUIRED.
     _assert_seal_provenance(prepared)
+    battery_receipt = prepared.battery_receipt
     reduction = _reduce_primary_from_base(base)
     convergence_from_evidence(base, doubled_by_axis, seed_runs,
                               prepared=prepared)
@@ -2752,7 +3076,11 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
         raise MCInputError("prepared_digest_instability",
                            f"{digest_before[:12]} -> {digest_after[:12]}")
     return {
-        "schema": "mc_verdict_inputs.v4",
+        # v5: the seal candidate now RECORDS the battery receipt it
+        # verified (digests only — no research value enters here), so a
+        # reader can see WHICH battery product was sealed rather than
+        # taking the seal's word that one existed.
+        "schema": "mc_verdict_inputs.v5",
         "trial_id": prepared.trial_id,
         "authorized_commit": prepared.authorized_commit,
         "method_digest": prepared.method_digest,
@@ -2764,6 +3092,17 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
         "trace_digests": base.trace_digests(),
         "trace_digest_of_digests": base.trace_digest_of_digests(),
         "cold_replay_receipt": replay_receipt,
+        "battery_receipt": {
+            "schema": battery_receipt.schema,
+            "authority_source_artifact_id":
+                battery_receipt.authority_source_artifact_id,
+            "authority_source_artifact_sha256":
+                battery_receipt.authority_source_artifact_sha256,
+            "authority_test_only": battery_receipt.authority_test_only,
+            "prepared_digest": battery_receipt.prepared_digest,
+            "prepared_identity_sha256":
+                battery_receipt.prepared_identity_sha256,
+            "component_digests": dict(battery_receipt.component_digests)},
         "primary": {
             cid: {"p5_cons": v.p5_cons, "median_cons": v.median_cons,
                   "median_stress": v.median_stress, "p95_cons": v.p95_cons,
