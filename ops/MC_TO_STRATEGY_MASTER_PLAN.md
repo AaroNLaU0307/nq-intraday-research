@@ -395,3 +395,87 @@ commit。**未**开始 N03/N04/N05，**未**执行 MC／supplement／策略研�
 **未**产生任何 registry／exposure／READY／授权／运行事件，**未**创建任何
 输出目录或探针。下一步取决于 Aaron 对 N00 三字段与 N-D1 全部选项的逐字批准；
 在此之前全部相关节点 fail-closed。
+
+
+---
+
+## 12. `CURRENT_RECOVERY_ANCHOR_AFTER_ND1_RATIFICATION`（现势恢复锚；本节编号最高，与上文冲突处以本节为准）
+
+> 本节**只追加**。§1–§11 一字未删、未改写。§11 仍是 factory-boundary Stage I
+> 之后的锚；本节续承 N-D1 批准与 N03/N04/N05 工程段。
+
+### 12.1 Aaron 的 N-D1 裁决（已生效）
+
+```
+ND1_PROFILE_RATIFIED=YES
+APPROVED_PROFILE_ID=ND1_RECOMMENDED_PROFILE_R1
+APPROVED_PROFILE_SHA256=0a08319a408f068ce4c92f93c2c4c39e409937dddfd0ef9f7af43618c70b50a5
+APPROVAL_BINDS_DOC_HEAD=803d99162d0a018ae5a3b44273601d98d9439d50
+RATIFICATION_RECORD=ops/ND1_PROFILE_RATIFICATION.md
+```
+
+批准的是**语法与治理定义**，不是任何一次执行（记录 §4 逐条列出八个 `=NO`）。
+
+### 12.2 本段 commit 链（40 位全长，机械取自 git）
+
+| 角色 | commit |
+|---|---|
+| N-D1 ratification record（doc-only） | `652ce301eecf115451ef9225e242478bb03e560e` |
+| N04 runner ＋ 共享 contract | `a963199bfd4995ffbf81a6cdc61117df37864029` |
+| N03 supplement authority | `f7aab7331354acdc9c09da355899a33818c20266` |
+| N05 registry grammar/parser | `de3b6c61a754f9e28169f2cf45d39cc873a22dc7` |
+
+### 12.3 现势节点状态
+
+```
+N00=BLOCKED_MISSING_AUTHORITY_ARTIFACTS_AND_AARON_STATE_RULING
+N-D1=RATIFIED（profile R1）
+N03=IMPLEMENTED
+N04=IMPLEMENTED_DEFAULT_REFUSE
+N05=IMPLEMENTED
+N06=AWAITING_FRESH_SOL_EXACT_TREE_VERIFICATION
+N-D2=NOT_STARTED
+N09=BLOCKED（另需 Aaron P2 精确授权）
+P6_IMPLEMENTED=NO（归 N-D3）
+MC_EXECUTED=NO
+SUPPLEMENT_EXECUTED=NO
+STRATEGY_BUILD_STARTED=NO
+REGISTRY_EVENTS_APPENDED=NO
+EXPOSURE_EVENTS_APPENDED=NO
+REAL_DIRECTORIES_CREATED=NO
+REAL_DATA_READ=NO
+CHECKPOINT0_VERDICT_REACHABLE=NO
+S0_VERDICT=INCONCLUSIVE_PENDING_MC
+```
+
+不变（本段零改动）：registry `ee9da33f…`、exposure `382182bf…`
+（累计 1575）、attestation `d839b965…41805`、S0-T001 封存 14 文件
+run==archive 全等、两个 `supplements\` 目录仍不存在。
+
+### 12.4 交给 N06（fresh Sol）的已披露残留
+
+1. **builder 边界未闭合**：N03 关的是 `build_day_strata_supplement` 两个
+   决定性参数的**来源**，不是 builder 本身——手搭 `(expected_day_set,
+   binding)` 仍可造出合法 supplement。形态同 `c5c819b` 修掉的
+   factory-boundary 缺陷（construction 公开、只关 seal admissibility）。
+   当前无生产 caller，故不可达；已用两条 invariant 钉住
+   （`tests/test_mc_supplement_integration.py` §6）。硬化方向＝让 builder
+   要求一个 authority，属受审代码改动，本轮未做。
+2. **TP∩FP 在 authority 投影内结构性不可达**：`traded_day_sets` 只存每 θ 的
+   TP（`consumer.py:1209`），FP 由 population − TP 派生。检查保留并做了源码
+   钉；disjointness 在 overlap 真能存在的那一层（prepare 电池
+   `tp_fp_overlap`）测试。
+3. **同数换日无专属码**：现落在 `fp_day_without_record`。测试先断言计数相等
+   再断言该码，故"仅计数检查会漏"是被证明的。
+4. **N05 两个 guard 级码不可经 registry 文本到达**
+   （`multiple_live_p2_after_p2s`、`p3_without_live_p2`），按 guard 测试。
+5. **N05 若干派生规则**（F3 bracket id 须等于 `superseded_supplement_id`；
+   T1 bracket id 开启后继链；P5 记录失败验证即拒；P5/F2v actor 不得是产出
+   会话；live P2 被其 P3 消费）——packet 蕴含但未逐字写明，待 N06 复核。
+6. **§D.3.2 两处 predecessor/successor 不对称**（P3 缺 A1 后继、P3 缺 F1
+   前置），按"二对一"读法实现并在声明处记录，待 Aaron 裁定是否回改文档。
+
+### 12.5 停止点
+
+本段止于工程候选。**不得**开始 N09、N-D2、MC 或策略 build；每一次真实执行
+仍需 Aaron 单独的、绑定完整 40 位 commit 的精确授权语句。

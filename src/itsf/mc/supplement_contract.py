@@ -190,26 +190,43 @@ _SPECS = (
               ("supplement_id", "ir_basis", "schema",
                "non_authorization_disclaimer"),
               (), ("P2", "F3"), False),
+    # MODELLING NOTE, not a reconciliation. §D.3.2 P2 says
+    # `PERMITTED_PREDECESSOR=P1 | P2S`, and T1 is ALSO a P1-token row
+    # (§D.3.2 T1: "复用 P1 词，不新增词表条目"), so the document's "P1"
+    # already covers a successor registration. `T1` appears here only
+    # because THIS module splits one token into two short ids to keep the
+    # successor-registration fields distinguishable.
     EventSpec("P2", "SUPPLEMENT_EXECUTION_AUTHORIZED", NUMBERED, ACTOR_AARON,
               ("supplement_id", "authorized_commit_40hex", "output_root",
                "verbatim_authorization_sentence"),
-              ("P1", "P2S"), ("P3", "F1", "F3"), False),
+              ("P1", "P2S", "T1"), ("P3", "F1", "F3"), False),
     EventSpec("P2S", "SUPPLEMENT_EXECUTION_AUTHORIZATION_SUPERSEDED",
               NUMBERED, ACTOR_AARON_OR_MAIN_AGENT,
               ("supplement_id", "supersedes_event_sequence",
                "superseded_authorized_commit", "reason_code", "incident_id",
                "successor_authorized_commit", "same_id_reauthorization"),
               ("F1",), ("P2",), False, incident_required=True),
-    # RECONCILED, DISCLOSED. §D.3.2 P3 lists `PERMITTED_SUCCESSOR=P4 | F2`,
+    # RECONCILED, DISCLOSED — TWO omissions on this one event, same class.
+    #
+    # (a) SUCCESSORS. §D.3.2 P3 lists `PERMITTED_SUCCESSOR=P4 | F2`,
     # but §D.3.3's diagram draws `P3 -> A1` on the archive_failed branch and
     # §D.3.2 A1 declares `PERMITTED_PREDECESSOR=P3`. Two of the three
     # ratified statements put A1 after P3; the third omits it. Taking the
     # omission literally would make A1 UNREACHABLE — reintroducing exactly
     # the unreachable-branch defect rounds 2 and 3 removed. Implemented as
     # {P4, A1, F2} and reported to Aaron rather than reconciled silently.
+    #
+    # (b) PREDECESSORS. §D.3.2 P3 lists `PERMITTED_PREDECESSOR=P2`, while
+    # §D.3.2 F1 lists `P3` among its successors ("commit 未变化，且原 P2
+    # 仍 live → P3") and §D.3.3 draws that edge. Again two statements
+    # against one omission; taking the omission literally would make the
+    # same-commit pre-start retry unreachable. Implemented as {P2, F1}:
+    # F1 is the immediate PREDECESSOR ROW, P2 remains the AUTHORIZING row,
+    # and the `live_authorization_unique` gate still requires that P2 to
+    # be live at the retry.
     EventSpec("P3", "SUPPLEMENT_RUN_STARTED", UNNUMBERED, ACTOR_RUNNER,
               ("supplement_id", "atomic_start_marker"),
-              ("P2",), ("P4", "A1", "F2"), False),
+              ("P2", "F1"), ("P4", "A1", "F2"), False),
     EventSpec("P4", "SUPPLEMENT_SEALED", UNNUMBERED, ACTOR_RUNNER,
               ("supplement_id", "sealed_sha256", "rows_digest",
                "day_universe_digest", "source_input_sha256",

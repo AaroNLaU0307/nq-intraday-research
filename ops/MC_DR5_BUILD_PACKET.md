@@ -682,3 +682,50 @@ candidate-specific strategy build 不得开工。清单见决策包
 零生产代码改动（`src/`、runner、registry parser、supplement 工具均未触碰）；
 零 registry／exposure／READY／授权／运行事件；零封存件改动；零目录创建；
 零探针；零研究结果值读取；未 push、未 tag、未 amend。
+
+
+---
+
+## 16.【现势节（N-D1 批准 ＋ N03/N04/N05 工程段之后，2026-08-20）——本节编号最高，与上文全部章节冲突处以本节为准】
+
+授权：Aaron 逐字发送 `AARON_ND1_PROFILE_RATIFICATION_V1` 三行批准
+（profile `ND1_RECOMMENDED_PROFILE_R1`，sha256 `0a08319a…`，绑定 doc head
+`803d991…`），并另行授权在该 profile 下实现 N03/N04/N05、以 synthetic／
+test-only 数据完成测试、形成工程候选后停止等待 fresh Sol N06。
+
+### 16.1 现势
+
+```
+ND1_PROFILE_RATIFIED=YES
+RATIFICATION_RECORD=ops/ND1_PROFILE_RATIFICATION.md
+N03=IMPLEMENTED（src/itsf/mc/supplement_authority.py）
+N04=IMPLEMENTED_DEFAULT_REFUSE（src/itsf/mc/supplement_runner.py）
+N05=IMPLEMENTED（src/itsf/mc/supplement_registry.py）
+SHARED_CONTRACT=src/itsf/mc/supplement_contract.py（主代理独占；两车道只读）
+F1_GATE_NAME_ENUM=CLOSED（23 gates；由 runner 实际 gate 机械导出并逐项钉死）
+ARCHIVE_FAILURE_POLICY=A（P4 需 local_seal_ok AND archive_ok）
+PARTIAL_RECOVERY=MODIFY（branch C rename-then-retry；branch E rename-then-refuse；silent delete 禁止）
+P6_IMPLEMENTED=NO（归 N-D3，按名拒绝）
+```
+
+### 16.2 §13.5 授权模板的现势读法（取代 §15.5）
+
+§15.5 说该模板"在 N-D1 批准前语法上也无处落地"。**语法现已落地**：
+registry 词表、parser 与 resolver 均已实现，`SUPPLEMENT_EXECUTION_AUTHORIZED`
+行现在**可以**被解析并绑定。但模板本身**仍不构成授权**，且当前 registry 中
+**零** supplement 事件行——`resolve_supplement_chain` 对真实 registry 解析
+**干净**（`problem=""`）并得到 **0 个 live 授权**，`run_supplement_production`
+因此确定性拒绝。这是"正确的理由不被授权"，不是"解析失败所以拒绝"。
+
+### 16.3 本轮明确未做
+
+零真实数据读取；零 supplement／MC／策略执行；零 registry／exposure 事件；
+零封存件改动；零目录创建（两个 `supplements\` 子树仍不存在）；零写探针；
+未 push、未 tag、未 amend。测试地板双 pin 由 3380 机械重钉为 3725。
+
+### 16.4 残留（完整清单见主计划 §12.4，交 N06）
+
+最重要一条：**N03 关的是 builder 两个决定性参数的来源，不是 builder 本身**。
+`build_day_strata_supplement` 仍公开接受手搭的 `(expected_day_set, binding)`。
+形态与 `c5c819b` 修掉的 factory-boundary 缺陷同类。当前无生产 caller，已用两条
+invariant 钉住；硬化属受审代码改动，本轮未做。
