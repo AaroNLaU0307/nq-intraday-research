@@ -7,7 +7,8 @@ PREPARED_FROM_HEAD=c5c819beb5c13e52bcd7ca974a4e40787684b10f
 DECISION_STATUS=PROPOSED_NOT_EFFECTIVE
 STATUS=AWAITING_AARON_RULING
 NOTHING_HEREIN_IS_APPROVED=YES
-CURRENT_SECTION=§D（2026-08-20 现势修正；与上文冲突处以 §D 为准）
+CURRENT_SECTION=§D + §D.9（2026-08-20；与上文冲突处以编号最高者为准）
+RATIFICATION_BLOCK_CURRENT=AARON_ND1_RATIFICATION_BLOCK_V2（§D.9；V1 已作废）
 FIRST_DRAFTED_FROM_HEAD=ba7fa4a（N-PLAN 之后；历史，非现势）
 ```
 
@@ -325,7 +326,7 @@ fail-closed，**不允许"改选另一个 universe 继续"**，不产生 exposur
 
 上一版把该恒等式记为"待 N03 强制验证"。**机械事实是：它已在现势 HEAD
 `c5c819b` 的 prepare 电池中强制执行**，位置 `src/itsf/mc/consumer.py:1148-1240`，
-六个专属拒绝码：
+**八个**专属拒绝码：
 
 ```
 day_universe_missing        day_sequence_not_ascending   tp_fp_overlap
@@ -385,18 +386,37 @@ ZERO_LIVE=NOT_AUTHORIZED；>1_LIVE=FAIL_CLOSED；任何链缺陷=FAIL_CLOSED
 （`src/itsf/mc/day_strata_supplement.py:103-122`）无条件拒绝，并且**明确拒绝
 best-effort 解析**：registry 文本里植入一个同名 token 会被**点名**并照样拒绝。
 
-### D.3.1 全局语法规则（提案）
+### D.3.1 全局语法规则（提案；**只含无争议的格式约束**）
+
+> **单一权威原则（本轮修订的核心）**：每一项治理选择**只能有一个**权威字段。
+> 上一版把五项**有争议的治理选择**混进了全局规则，同时又在批准块里给它们
+> 各自的 `APPROVED_ND1_*` 字段——Aaron 因此可以填出一份形式完整、语义自相
+> 矛盾的批准块。本节现在**只保留格式约束**。
 
 ```
 SUPPLEMENT_ID_PATTERN=^MC-DS-S[0-9]{3}$
 FIRST_ID=MC-DS-S001
-ID_NEVER_REUSED=YES
-POST_START_RETRY_USES_NEW_ID=YES
-PRESTART_COMMIT_CHANGE_REQUIRES_REAUTH=YES
-NUMBERED_EVENTS_SHARE_GLOBAL_REGISTRY_SEQUENCE=YES
-RUNNER_STAGE_AND_GATE_TOKENS=CLOSED_ENUMS
+ROW_SHAPE=以 '|' 起止，strip 后恰好 6 cell：(seq, utc, event, commit, actor, note)
+COMMIT_WIDTH_BY_ROW_CLASS=NUMBERED:40-hex ／ UNNUMBERED:7-hex
+CLOSED_TOKEN_ENUM_REQUIREMENT=YES
+  （stage / gate_name / failure_code / reason_code / archive_code 全部须为闭合枚举）
 UNKNOWN_OR_DUPLICATE_FIELDS=REFUSE
+CHAIN_DEFECT=REFUSE_WHOLE_RESOLUTION
 ```
+
+**已从全局规则移出的五项（唯一权威见右列，全局规则不再重复陈述）**：
+
+| 被移出的旧行 | 唯一权威字段 |
+|---|---|
+| `NUMBERED_EVENTS_SHARE_GLOBAL_REGISTRY_SEQUENCE` | `APPROVED_ND1_SUPPLEMENT_SEQUENCE_NAMESPACE` |
+| `PRESTART_COMMIT_CHANGE_REQUIRES_REAUTH` | `APPROVED_ND1_PRESTART_COMMIT_CHANGE_REAUTH` |
+| `POST_START_RETRY_USES_NEW_ID` | `APPROVED_ND1_POSTSTART_FAILURE_NEW_ID` |
+| `ID_NEVER_REUSED` | **派生量**，不单独批准——见 §D.9.2 派生表 |
+| supersede 的对象 | `APPROVED_ND1_SUPERSEDE_TARGET` |
+
+**派生量不是可批准字段**：`ID_REUSE_POLICY` 与 `SUCCESSOR_REGISTRATION_REQUIRED`
+由上述权威字段机械推导（§D.9.2）。任何试图单独批准派生量的填法，按
+`INCONSISTENT_COMBINATION=NOT_EFFECTIVE_AND_FAIL_CLOSED` 处理。
 
 **编号 vs 不编号（沿用既有实史形态，须 Aaron 确认）**：
 
@@ -442,10 +462,74 @@ COMMIT_FIELD=40-hex
 REQUIRED_FIELDS=[supplement_id, authorized_commit_40hex, output_root, verbatim_authorization_sentence]
 VERBATIM_SENTENCE=§13.5 模板逐字（三字段齐全，缺一即无效）
 ROW_COMMIT_CELL_MUST_EQUAL_SENTENCE_COMMIT=YES（镜像 IR-25 fixture 7）
-PERMITTED_PREDECESSOR=P1（同 supplement_id）
+PERMITTED_PREDECESSOR=P1 | P2S（同 supplement_id）
 PERMITTED_SUCCESSOR=P3 | F1 | F3
 TERMINAL=NO
 INCIDENT_FIELD=N/A
+LIVE_UNIQUENESS=同一 supplement_id 任一时刻至多一个 live P2
+  （live = 已发射且未被 P2S 精确 supersede，且其 id 未被 F3 报废）
+```
+
+> **P2 有两个合法前置。** `P1` 是首次授权；`P2S` 是 pre-start 修复改变了
+> commit 之后的**重新授权**（§D.3.2 P2S）。上一版只写 `P1`，于是
+> `PRESTART_COMMIT_CHANGE_REQUIRES_REAUTH=YES` 在状态机里**无路可走**——
+> F1 之后只能去 P3 或 F3，同一 id 永远拿不到新的 P2。本轮补齐。
+
+**P2S `SUPPLEMENT_EXECUTION_AUTHORIZATION_SUPERSEDED`（pre-start 重新授权；本轮新增）**
+
+```
+TOKEN=SUPPLEMENT_EXECUTION_AUTHORIZATION_SUPERSEDED
+SHORT_ID=P2S
+NUMBERED=YES
+COMMIT_FIELD=40-hex
+ACTOR=Aaron，或 main agent（后者**必须**在 note 内逐字引用 Aaron 的
+      supersession 批复出处 <doc>；无逐字出处即非法行）
+REQUIRED_FIELDS=[supplement_id,
+                 supersedes_event_sequence(int),
+                 superseded_authorized_commit(40hex),
+                 reason_code([A-Z0-9_]+),
+                 incident_id(INC-<12hex>),
+                 successor_authorized_commit(40hex),
+                 same_id_reauthorization(YES)]
+NOTE_SHAPE=
+  [<supplement_id>] supersedes_event_sequence: <int>;
+  superseded_authorized_commit: <40hex>; reason_code: <CODE>;
+  incident_id: INC-<12hex>; successor_authorized_commit: <40hex>;
+  same_id_reauthorization: YES; Aaron 批复: <doc>
+PERMITTED_PREDECESSOR=F1（同 supplement_id；必须存在一条 live P2 作为 supersede 目标）
+PERMITTED_SUCCESSOR=P2（携带 successor_authorized_commit）
+TERMINAL=NO
+EFFECT_1=被指向的旧 P2 立即**不再 live**
+EFFECT_2=supplement_id **不报废**（这正是 P2S 与 F3 的分界）
+EFFECT_3=不消耗、不产生任何 exposure；pre-start 语义不变
+FORBIDDEN=P2S 不得用于 post-start failure、verification failure 或放弃 id
+          ——那三种情形一律走 F3
+```
+
+**P2S ≠ F3（务必分清）**
+
+| | P2S | F3 |
+|---|---|---|
+| 处理什么 | pre-start 修复改变了 commit | 放弃 id / post-start failure / verification failure |
+| supplement_id | **保留**，同 id 重新授权 | 按 `APPROVED_ND1_SUPERSEDE_TARGET` 处理（可能永久报废） |
+| 后继 | 同 id 的新 P2 | T1 后继件登记 → 新 id 的 P2' |
+| 前置 | F1 | F2 \| F2v \| Aaron 主动放弃 |
+| 是否要求新 id | 否 | 由 `APPROVED_ND1_POSTSTART_FAILURE_NEW_ID` 决定 |
+
+**parser 对 P2S 的 fail-closed 义务**（与 §D.3.5 同批实现）：
+
+```
+P2S_NO_TARGET_P2=REFUSE                 # supersedes_event_sequence 指不到 P2 行
+P2S_TARGET_NOT_LIVE=REFUSE              # 目标 P2 已被别的 P2S 或 F3 处理
+P2S_TARGET_AMBIGUOUS=REFUSE             # 同序号多行
+P2S_FORWARD_REFERENCE=REFUSE            # P2S 必须出现在被 supersede 的行之后
+P2S_COMMIT_MISMATCH=REFUSE              # superseded_authorized_commit != 目标行 commit
+P2S_SUPPLEMENT_ID_MISMATCH=REFUSE       # P2S 的 id != 目标 P2 的 id
+P2S_DUPLICATE_SUPERSEDE=REFUSE          # 同一目标被 supersede 两次
+P2S_SUCCESSOR_EQUALS_SUPERSEDED=REFUSE  # 新旧 commit 相同 => 根本没有 commit 变化
+P2S_WITHOUT_PRECEDING_F1=REFUSE         # 未失败就"重新授权"
+P2S_AFTER_P3=REFUSE                     # 已越过 pre-start 分界
+MULTIPLE_LIVE_P2_AFTER_P2S=REFUSE
 ```
 
 **P3 `SUPPLEMENT_RUN_STARTED`**
@@ -476,10 +560,70 @@ REQUIRED_FIELDS=[supplement_id, sealed_sha256(64hex), rows_digest(64hex),
                  day_universe_digest(64hex), source_input_sha256(64hex),
                  method_version, n_rows(int),
                  archive(archive_ok|archive_failed:<code>)]
+ARCHIVE_CODE_ENUM=CLOSED（由 `ArchiveReport.status` 的失败码集派生；须与 N04 同批固定）
 PERMITTED_PREDECESSOR=P3
-PERMITTED_SUCCESSOR=P5 | F2v
+PERMITTED_SUCCESSOR=**取决于 `APPROVED_ND1_ARCHIVE_FAILURE_POLICY`，见 §D.3.7**
+  政策 A：P4 只在 local_seal_ok AND archive_ok 时发射；
+          archive 失败 → A1 `SUPPLEMENT_ARCHIVE_FAILED`（P4 不发射）
+  政策 B：P4 可携带 archive_failed；后继由 B 的状态机决定（须 Aaron 补全）
 TERMINAL=NO
 INCIDENT_FIELD=N/A
+```
+
+**A1 `SUPPLEMENT_ARCHIVE_FAILED`（政策 A 专用；本轮新增）**
+
+```
+TOKEN=SUPPLEMENT_ARCHIVE_FAILED
+NUMBERED=NO（'+' 行）
+ACTOR=main agent (mc_ds_runner)
+COMMIT_FIELD=7-hex
+REQUIRED_FIELDS=[supplement_id, local_seal_sha256(64hex), archive_code,
+                 incident_id(INC-<12hex>), local_seal_immutable(YES),
+                 archive_root_attempted]
+LOCAL_SEAL_REMAINS_IMMUTABLE=YES（本地封存件**永不**重写、重生成或删除）
+P5_ALLOWED=NO
+PERMITTED_PREDECESSOR=P3
+PERMITTED_SUCCESSOR=A2 | AX
+ARCHIVE_RETRY_REQUIRES_SEPARATE_EXACT_AUTHORIZATION=YES
+TERMINAL=NO
+INCIDENT_FIELD=incident_id（必填）
+```
+
+**A2 `SUPPLEMENT_ARCHIVE_RECOVERED`（政策 A 专用；本轮新增）**
+
+```
+TOKEN=SUPPLEMENT_ARCHIVE_RECOVERED
+NUMBERED=YES（治理事件：需要 Aaron 的独立归档重试授权作为前提）
+ACTOR=main agent（note 内逐字引用 Aaron 的归档重试授权出处 <doc>）
+COMMIT_FIELD=40-hex
+REQUIRED_FIELDS=[supplement_id, recovery_authorization_doc,
+                 source_and_archive_exact_inventory_match(YES),
+                 per_file_sha256_match(YES), n_files(int),
+                 local_seal_sha256_unchanged(YES), incident_id(INC-<12hex>)]
+REQUIRES=source_and_archive_exact_inventory_match
+LOCAL_ARTIFACT_REWRITTEN=NO（重试只写 archive 侧；本地封存件字节不变，须复核）
+PERMITTED_PREDECESSOR=A1
+PERMITTED_SUCCESSOR=P5
+TERMINAL=NO
+INCIDENT_FIELD=incident_id（必填；沿用 A1 的 incident）
+```
+
+**AX `SUPPLEMENT_ARCHIVE_PERMANENTLY_FAILED`（政策 A 的终局分支；本轮新增）**
+
+```
+TOKEN=SUPPLEMENT_ARCHIVE_PERMANENTLY_FAILED
+NUMBERED=YES
+ACTOR=main agent（Aaron 批复 <doc>）
+COMMIT_FIELD=40-hex
+REQUIRED_FIELDS=[supplement_id, archive_code, attempts_count(int),
+                 incident_id(INC-<12hex>), aaron_ruling_doc,
+                 local_seal_sha256(64hex), local_seal_immutable(YES)]
+PERMITTED_PREDECESSOR=A1
+PERMITTED_SUCCESSOR=F3（该 id 的补充件不得进入 P5，故不得被后续消费）
+TERMINAL=YES（对该 id 的成功路径）
+P5_ALLOWED=NO
+GRID_REPLAY_CONSUMPTION_ALLOWED=NO
+INCIDENT_FIELD=incident_id（必填）
 ```
 
 **P5 `SUPPLEMENT_INDEPENDENTLY_VERIFIED`**
@@ -511,9 +655,13 @@ STAGE_ENUM=CLOSED: {A_PRECHECK, B_DERIVE, C_BUILD}
 GATE_NAME_ENUM=CLOSED（**须与 N04 runner 同批固定；当前为空集——未定义即不得发射**）
 CONSUMPTION=nothing consumed
 PERMITTED_PREDECESSOR=P2
-PERMITTED_SUCCESSOR=P3（修复后重试，同 id）| F3
+PERMITTED_SUCCESSOR=
+  P3   —— 仅当 commit **未**变化且原 P2 仍 live（直接重试，同 id）
+  P2S  —— 当 commit **已**变化（走 §D.3.2 P2S 重新授权，再 P2 → P3）
+  F3   —— 放弃该 id
 RETRY_ID=同 id 可复用（pre-start 未消耗任何东西）
-REAUTH_ON_COMMIT_CHANGE=YES（见 §D.4.2）
+REAUTH_ON_COMMIT_CHANGE=由 `APPROVED_ND1_PRESTART_COMMIT_CHANGE_REAUTH` 唯一决定；
+  若裁 YES 则 F1→P2S→P2 为**唯一**合法路径，F1→P3 在 commit 变化时非法
 TERMINAL=NO
 INCIDENT_FIELD=incident_id（必填）
 ```
@@ -595,15 +743,43 @@ PERMITTED_SUCCESSOR=P2（后继件**必须重走完整 P2 授权**）
 ID_REUSE=FORBIDDEN
 ```
 
-### D.3.3 状态机（提案）
+### D.3.3 状态机（提案；**每条边都有唯一合法路径**）
+
+下图按 §D.9 推荐组合（`PRESTART_COMMIT_CHANGE_REAUTH=YES`、
+`POSTSTART_FAILURE_NEW_ID=YES`、`ARCHIVE_FAILURE_POLICY=A`）展开。
+Aaron 若改任一权威字段，对应分支按 §D.9.2 派生表重导。
 
 ```
-P1 → P2 → P3 → P4 → P5              成功路径（N-D1 到 P5 为止）
-     └→ F1 → P3                     pre-start 失败，同 id 重试
-             └→ F3                  放弃
-          P3 └→ F2  → F3 → T1 → P2' post-start 失败，必须换 id
-          P4 └→ F2v → F3 → T1 → P2' 独立验证失败，封存件不删
+成功主线
+  P1 → P2 → P3 → P4 → P5                     archive_ok；P5 是 N-D1 的合法终态
+
+pre-start 失败（P3 之前；零消耗）
+  P2 → F1 ─┬─ commit 未变化，且原 P2 仍 live ──────────────→ P3
+           ├─ commit 已变化 ──→ P2S ──→ P2(new commit) ───→ P3
+           └─ 放弃该 id ──────────────────────────────────→ F3
+
+post-start 失败（P3 之后；残骸永不删除）
+  P3 → F2 → F3 → T1 → P2'（新 id，必须重走完整授权）
+
+归档分支（政策 A）
+  P3 ─┬─ archive_ok ─────→ P4 ─┬─→ P5
+      │                        └─→ F2v → F3 → T1 → P2'
+      └─ archive_failed ──→ A1 ─┬─→ A2 ──→ P5      （恢复；须独立归档重试授权）
+                                └─→ AX ──→ F3      （永久失败；终局，禁止进 P5）
 ```
+
+**四个终态，各自明确**：
+
+| 终态 | 含义 | 该 id 还能被 GRID replay 消费吗 |
+|---|---|---|
+| `P5` | 封存 + 归档 + 独立验证全过 | 可以（但登记事件属 N-D3，见 §D.3.4） |
+| `F3` | id 被 supersede/放弃 | 不可以 |
+| `AX → F3` | 归档永久失败 | **不可以**（本地封存件保留为证据，但不入证据链） |
+| （无 P5） | 任何未达 P5 的中间态 | 不可以 |
+
+**不存在的边（parser 须拒绝）**：`F1 → P2`（不经 P2S 就换 commit）、
+`A1 → P5`（跳过归档恢复）、`A1 → P4`、`AX → A2`、`P2S → P3`（不经新 P2）、
+`P3 → P2S`（已越过 pre-start 分界）、`F2 → P3`（post-start 就地重试）。
 
 ### D.3.4 明确留给 N-D3 的事项（**不得偷偷塞进 N-D1**）
 
@@ -630,6 +806,103 @@ UNNUMBERED_ROW_WITH_INTEGER_SEQ=REFUSE
 ILLEGAL_TRANSITION=REFUSE
 MULTIPLE_LIVE_P2_FOR_ONE_ID=REFUSE
 ANY_CHAIN_DEFECT=REFUSE_WHOLE_RESOLUTION（不得只忽略坏行）
+```
+
+**P2S 专属拒绝码**：见 §D.3.2 的 P2S 块（11 条，此处不重复陈述，避免第二
+份权威）。
+
+**归档分支专属拒绝码（政策 A）**：
+
+```
+P4_WITH_ARCHIVE_FAILED_UNDER_POLICY_A=REFUSE   # 政策 A 下 P4 只在 archive_ok 时合法
+A1_WITHOUT_LOCAL_SEAL_DIGEST=REFUSE
+A1_ARCHIVE_CODE_OUTSIDE_CLOSED_ENUM=REFUSE
+A2_WITHOUT_PRECEDING_A1=REFUSE
+A2_WITHOUT_RECOVERY_AUTHORIZATION_DOC=REFUSE
+A2_INVENTORY_MISMATCH_CLAIMED_OK=REFUSE        # 声称 match 但逐文件 sha 表不全
+A2_LOCAL_SEAL_DIGEST_CHANGED=REFUSE            # 归档重试改动了本地封存件
+AX_WITHOUT_PRECEDING_A1=REFUSE
+AX_WITHOUT_AARON_RULING_DOC=REFUSE
+P5_AFTER_A1_WITHOUT_A2=REFUSE                  # 跳过归档恢复直接独立验证
+P5_AFTER_AX=REFUSE
+ANY_ARCHIVE_EVENT_UNDER_POLICY_B_WITHOUT_B_STATE_MACHINE=REFUSE
+```
+
+### D.3.7 归档失败生命周期（**上一版缺失，本轮补齐；两个完整方案，不预选**）
+
+上一版 P4 同时允许 `archive=archive_ok` 与 `archive=archive_failed:<code>`，
+但状态机只写 `P4→P5|F2v`。于是四个问题无解：archive 失败时能否进 P5？归档
+重试要不要单独授权？重试会不会动本地封存件？永久失败怎么终局？
+
+**机械背景（非提案）**：`archive_sealed_run` 从不为单文件问题抛异常，而是
+返回 `status="archive_failed"` 的 `ArchiveReport`；它**从不改动 runs_dir**，
+每一个字节都写在 `archive_root` 之下；`archive_root/<name>/` 已存在时它拒绝
+覆盖（`runinfra.py:1619-1656`）。所以"重试只写 archive 侧"在实现上是成立的，
+但"允许重试"本身是治理选择。
+
+#### 方案 A（工程推荐）——封存 = 本地封存成功 **且** 归档成功
+
+```
+P4_SUPPLEMENT_SEALED_REQUIRES=local_seal_ok AND archive_ok
+```
+
+本地 seal 成功但 archive 失败时：
+
+```
+TOKEN=SUPPLEMENT_ARCHIVE_FAILED                       （事件 A1，语法见 §D.3.2）
+LOCAL_SEAL_REMAINS_IMMUTABLE=YES
+P5_ALLOWED=NO
+ARCHIVE_RETRY_REQUIRES_SEPARATE_EXACT_AUTHORIZATION=YES
+```
+
+恢复成功后：
+
+```
+TOKEN=SUPPLEMENT_ARCHIVE_RECOVERED                    （事件 A2）
+REQUIRES=source_and_archive_exact_inventory_match
+PERMITTED_SUCCESSOR=P5
+```
+
+永久失败：
+
+```
+TOKEN=SUPPLEMENT_ARCHIVE_PERMANENTLY_FAILED           （事件 AX）
+PERMITTED_SUCCESSOR=F3
+P5_ALLOWED=NO
+GRID_REPLAY_CONSUMPTION_ALLOWED=NO
+```
+
+**A 的四个硬约束**：① 不得重写或重新生成本地 sealed artifact——重试只写
+archive 侧，且 A2 必须复核本地 digest 未变；② 归档重试需要 Aaron 的**单独**
+精确授权（原 P2 授权不覆盖它）；③ archive 失败期间 `P5_ALLOWED=NO`，因此该
+补充件不可能被后续消费；④ AX 之后该 id 的成功路径终止，本地封存件作为证据
+保留但不入证据链。
+
+**A 的代价**：一次纯运维故障（磁盘满、目标已存在）会把整条链挡在 P5 之前，
+需要 Aaron 再发一次授权。这是刻意的——"证据存在两份"是 S0 既有纪律
+（`ops/OUTPUT_ROOTS_READINESS_CHECKLIST.md` 全项已签），A 不为运维便利降低它。
+
+#### 方案 B（备选）——允许 P4 携带 `archive_failed`
+
+若 Aaron 选 B，**必须**同时给出下列全部答案，否则 B 的批准无效
+（`ANY_ARCHIVE_EVENT_UNDER_POLICY_B_WITHOUT_B_STATE_MACHINE=REFUSE`）：
+
+```
+B1  P5 是否只验证本地 seal（archive 不在独立验证范围内）？        =UNRESOLVED
+B2  归档恢复是否为独立运维分支（不进 supplement 状态机）？        =UNRESOLVED
+    若是：它用什么事件登记？谁是 actor？需要授权吗？
+B3  archive 未恢复的补充件，何时才允许被 GRID replay 消费？       =UNRESOLVED
+    （选项：允许 / 禁止 / 仅在 N-D3 另行裁定后允许）
+B4  永久 archive failure 的终局状态是什么？该 id 是否报废？       =UNRESOLVED
+B5  单副本证据与 Charter 数据治理"第二副本"纪律的关系如何披露？   =UNRESOLVED
+```
+
+本包**不代填** B1–B5。工程侧对 B 的意见：B 把"证据只有一份"变成一个可以
+悄悄通过的状态，而 A 把它变成一个必须被看见的状态。
+
+```
+RECOMMENDED_ND1_ARCHIVE_FAILURE_POLICY=A
+APPROVED_ND1_ARCHIVE_FAILURE_POLICY=UNRESOLVED        # A | B（B 须附 B1-B5 全部答案）
 ```
 
 ### D.3.6 已知弱点（诚实披露，供 Aaron 一并裁定）
@@ -723,9 +996,9 @@ ND1_POSTSTART_FAILURE_NEW_ID=UNRESOLVED
 ### D.5.2 推荐（提案，未实现）
 
 ```
-ND1_PARTIAL_RECOVERY_RULE=MODIFY
-DIVERGENT_PARTIAL_ACTION=RENAME_TO_.partial.divergent.<incident_id>
-SILENT_DELETE=FORBIDDEN
+RECOMMENDED_ND1_PARTIAL_RECOVERY_RULE=MODIFY
+RECOMMENDED_DIVERGENT_PARTIAL_ACTION=RENAME_TO_.partial.divergent.<incident_id>
+RECOMMENDED_SILENT_DELETE=FORBIDDEN（派生量；见 §D.9.2，不单独批准）
 IMPLEMENTATION_STATUS=NOT_STARTED
 ```
 
@@ -787,11 +1060,18 @@ ND1_SUPPLEMENT_DIRECTORY_NAME=UNRESOLVED
 ### D.6.4 推荐项（提案；三件事各自独立授权）
 
 ```
-ND1_OUTPUT_ROOT_OPTION=A
-ND1_CREATE_TWO_EMPTY_SUPPLEMENTS_DIRECTORIES=PROPOSED
-ND1_WRITE_PROBE_AUTHORIZED=NO
-ND1_SUPPLEMENT_EXECUTION_AUTHORIZED=NO
+RECOMMENDED_ND1_OUTPUT_ROOT_OPTION=A
+RECOMMENDED_ND1_FUTURE_DIRECTORY_POLICY=REUSE_EXISTING_ROOTS_WITH_supplements_SUBTREE
+RECOMMENDED_ND1_WRITE_PROBE_AUTHORIZED=NO
+RECOMMENDED_ND1_SUPPLEMENT_EXECUTION_AUTHORIZED=NO
+SEPARATE_DIRECTORY_CREATION_AUTHORIZATION_STILL_REQUIRED=YES   # 不变量，非可选项
 ```
+
+> **上一版字段名 `ND1_CREATE_TWO_EMPTY_SUPPLEMENTS_DIRECTORIES` 已废弃。**
+> 它读起来像"批准即创建"。批准 N-D1 **不创建任何目录**：它只确定未来一旦
+> 获得单独授权时，目录应当长成什么样。字段改名为
+> `ND1_FUTURE_DIRECTORY_POLICY`，并恒带
+> `SEPARATE_DIRECTORY_CREATION_AUTHORIZATION_STILL_REQUIRED=YES`。
 
 **目录创建、写探针、执行是三次独立授权，不得合并**。本轮未创建任何目录、
 未写任何探针、未执行任何东西（已机械核实两个 `supplements\` 目录均不存在）。
@@ -822,125 +1102,39 @@ MC-DS-S001 生成于 S0-T001 揭盲（2026-08-14）**之后**。该事实必须�
 `grid_authority="SUPPLEMENTAL_POST_REVEAL:MC-DS-S001"`。
 
 ```
-ND1_DISCLOSURE_CONTENT=PROPOSED
-ND1_DISCLOSURE_PLACEMENTS=PROPOSED
+RECOMMENDED_ND1_DISCLOSURE_CONTENT=ADOPT_SEVEN_POINTS_AS_WRITTEN
+RECOMMENDED_ND1_DISCLOSURE_PLACEMENTS=ADOPT_FOUR_PLACEMENTS_AS_WRITTEN
 ND1_DISCLOSURE_WORDING_BY_AARON=UNRESOLVED   # 措辞是否须 Aaron 亲拟
 ```
 
-## §D.8 — `AARON_ND1_RATIFICATION_BLOCK_V1`（逐字批准块）
+## §D.8 — `AARON_ND1_RATIFICATION_BLOCK_V1`（**已作废；正文已移除，勿签**）
 
 ```
 AARON_ND1_RATIFICATION_BLOCK_V1
-STATUS=PROPOSED_NOT_EFFECTIVE
-EFFECTIVE_ONLY_IF=Aaron 在后续消息中主动逐字批准本块并填写全部 APPROVED_* 字段
-NOT_APPROVAL=[本执行提示词, 本文件的生成或修订, Aaron 要求准备决策包,
-              Aaron 阅读本文件或终报, 任何 RECOMMENDED_* 行, 任何"工程建议",
-              任何读起来像条件同意的措辞, 沉默或未反对]
-AMBIGUOUS_PERMISSION=取限制性读法并停止（QROS §12）
-
-# ---- 1. registry grammar（§D.3）----------------------------------------
-RECOMMENDED_GRAMMAR_GLOBAL_RULES=ADOPT_AS_WRITTEN
-APPROVED_GRAMMAR_GLOBAL_RULES=UNRESOLVED          # ADOPT_AS_WRITTEN | MODIFY | REJECT
-RECOMMENDED_GRAMMAR_P1_PROPOSED=ADOPT_AS_WRITTEN
-APPROVED_GRAMMAR_P1_PROPOSED=UNRESOLVED
-RECOMMENDED_GRAMMAR_P2_EXECUTION_AUTHORIZED=ADOPT_AS_WRITTEN
-APPROVED_GRAMMAR_P2_EXECUTION_AUTHORIZED=UNRESOLVED
-RECOMMENDED_GRAMMAR_P3_RUN_STARTED=ADOPT_AS_WRITTEN
-APPROVED_GRAMMAR_P3_RUN_STARTED=UNRESOLVED
-RECOMMENDED_GRAMMAR_P4_SEALED=ADOPT_AS_WRITTEN
-APPROVED_GRAMMAR_P4_SEALED=UNRESOLVED
-RECOMMENDED_GRAMMAR_P5_INDEPENDENTLY_VERIFIED=ADOPT_AS_WRITTEN
-APPROVED_GRAMMAR_P5_INDEPENDENTLY_VERIFIED=UNRESOLVED
-RECOMMENDED_GRAMMAR_F1_ATTEMPT_FAILURE=ADOPT_AS_WRITTEN
-APPROVED_GRAMMAR_F1_ATTEMPT_FAILURE=UNRESOLVED
-RECOMMENDED_GRAMMAR_F2_FAILED=ADOPT_AS_WRITTEN
-APPROVED_GRAMMAR_F2_FAILED=UNRESOLVED
-RECOMMENDED_GRAMMAR_F2V_VERIFICATION_FAILED=ADOPT_AS_WRITTEN
-APPROVED_GRAMMAR_F2V_VERIFICATION_FAILED=UNRESOLVED
-RECOMMENDED_GRAMMAR_F3_SUPERSEDED=ADOPT_AS_WRITTEN
-APPROVED_GRAMMAR_F3_SUPERSEDED=UNRESOLVED
-RECOMMENDED_GRAMMAR_T1_SUCCESSOR_REGISTRATION=ADOPT_AS_WRITTEN
-APPROVED_GRAMMAR_T1_SUCCESSOR_REGISTRATION=UNRESOLVED
-RECOMMENDED_GRAMMAR_STATE_MACHINE=ADOPT_AS_WRITTEN
-APPROVED_GRAMMAR_STATE_MACHINE=UNRESOLVED
-RECOMMENDED_GRAMMAR_PARSER_FAIL_CLOSED_RULES=ADOPT_AS_WRITTEN
-APPROVED_GRAMMAR_PARSER_FAIL_CLOSED_RULES=UNRESOLVED
-RECOMMENDED_F1_GATE_NAME_ENUM=DEFER_TO_N04（与 runner 同批固定）
-APPROVED_F1_GATE_NAME_ENUM=UNRESOLVED
-
-RECOMMENDED_ND1_SUPERSEDE_TARGET=SUPERSEDES_SUPPLEMENT_ID_ITSELF
-APPROVED_ND1_SUPERSEDE_TARGET=UNRESOLVED    # 1 | 2 | 3（见 §D.3.2 F3）
-
-RECOMMENDED_ND1_PARSER_MALFORMED_ROW_POLICY=B_REFUSE
-APPROVED_ND1_PARSER_MALFORMED_ROW_POLICY=UNRESOLVED         # A | B
-
-# ---- 2. trial / exposure 记账（§D.4）------------------------------------
-RECOMMENDED_ND1_FORMAL_TRIAL=NO
-APPROVED_ND1_FORMAL_TRIAL=UNRESOLVED                        # YES(+编号) | NO
-RECOMMENDED_ND1_STARTED_CONSUMES_GLOBAL_RUN_SEQUENCE=NO
-APPROVED_ND1_STARTED_CONSUMES_GLOBAL_RUN_SEQUENCE=UNRESOLVED
-RECOMMENDED_ND1_STARTED_CONSUMES_EXPOSURE_SLOT=NO
-APPROVED_ND1_STARTED_CONSUMES_EXPOSURE_SLOT=UNRESOLVED
-RECOMMENDED_ND1_SUPPLEMENT_SEQUENCE_NAMESPACE=GLOBAL
-APPROVED_ND1_SUPPLEMENT_SEQUENCE_NAMESPACE=UNRESOLVED       # GLOBAL | SEPARATE
-RECOMMENDED_ND1_PRESTART_COMMIT_CHANGE_REAUTH=YES
-APPROVED_ND1_PRESTART_COMMIT_CHANGE_REAUTH=UNRESOLVED
-RECOMMENDED_ND1_POSTSTART_FAILURE_NEW_ID=YES
-APPROVED_ND1_POSTSTART_FAILURE_NEW_ID=UNRESOLVED
-
-# ---- 3. supplement ledger 与 exposure 行（原项 5）------------------------
-RECOMMENDED_ND1_SUPPLEMENT_LEDGER_CREATE=YES
-APPROVED_ND1_SUPPLEMENT_LEDGER_CREATE=UNRESOLVED
-RECOMMENDED_ND1_EXPOSURE_ROW_QUANTITY_ZERO=YES
-APPROVED_ND1_EXPOSURE_ROW_QUANTITY_ZERO=UNRESOLVED
-RECOMMENDED_ND1_STRUCTURAL_ACCESS_CHARACTERISATION=STRUCTURAL_LABEL_NOT_OUTCOME
-APPROVED_ND1_STRUCTURAL_ACCESS_CHARACTERISATION=UNRESOLVED
-LEDGER_ROW_FORMAL_TRIAL_FIELD=<N-D1.3_AARON_RULING>   # 永不预填
-
-# ---- 4. .partial 失败证据（§D.5）----------------------------------------
-RECOMMENDED_ND1_PARTIAL_RECOVERY_RULE=MODIFY
-APPROVED_ND1_PARTIAL_RECOVERY_RULE=UNRESOLVED               # KEEP | MODIFY
-RECOMMENDED_DIVERGENT_PARTIAL_ACTION=RENAME_TO_.partial.divergent.<incident_id>
-APPROVED_DIVERGENT_PARTIAL_ACTION=UNRESOLVED
-RECOMMENDED_SILENT_DELETE=FORBIDDEN
-APPROVED_SILENT_DELETE=UNRESOLVED
-IMPLEMENTATION_STATUS=NOT_STARTED
-
-# ---- 5. 输出根（§D.6）---------------------------------------------------
-RECOMMENDED_ND1_OUTPUT_ROOT_OPTION=A
-APPROVED_ND1_OUTPUT_ROOT_OPTION=UNRESOLVED                  # A | B
-RECOMMENDED_ND1_SUPPLEMENT_DIRECTORY_NAME=OPTION_2_ID_UNDERSCORE_UTC
-APPROVED_ND1_SUPPLEMENT_DIRECTORY_NAME=UNRESOLVED           # 1 | 2
-RECOMMENDED_ND1_CREATE_TWO_EMPTY_SUPPLEMENTS_DIRECTORIES=PROPOSED
-APPROVED_ND1_CREATE_TWO_EMPTY_SUPPLEMENTS_DIRECTORIES=UNRESOLVED
-RECOMMENDED_ND1_WRITE_PROBE_AUTHORIZED=NO
-APPROVED_ND1_WRITE_PROBE_AUTHORIZED=UNRESOLVED
-RECOMMENDED_ND1_SUPPLEMENT_EXECUTION_AUTHORIZED=NO
-APPROVED_ND1_SUPPLEMENT_EXECUTION_AUTHORIZED=UNRESOLVED
-
-# ---- 6. post-reveal 披露（§D.7）----------------------------------------
-RECOMMENDED_ND1_DISCLOSURE_CONTENT=ADOPT_SEVEN_POINTS_AS_WRITTEN
-APPROVED_ND1_DISCLOSURE_CONTENT=UNRESOLVED
-RECOMMENDED_ND1_DISCLOSURE_PLACEMENTS=ADOPT_FOUR_PLACEMENTS_AS_WRITTEN
-APPROVED_ND1_DISCLOSURE_PLACEMENTS=UNRESOLVED
-RECOMMENDED_ND1_DISCLOSURE_WORDING_BY_AARON=YES
-APPROVED_ND1_DISCLOSURE_WORDING_BY_AARON=UNRESOLVED
-
-# ---- 7. 后续精确执行授权语句的边界（master plan §5 N-D1 第 7 项）--------
-RECOMMENDED_ND1_EXECUTION_SENTENCE_BINDS=[supplement_id, 40hex_commit, output_root]
-APPROVED_ND1_EXECUTION_SENTENCE_BINDS=UNRESOLVED
-RECOMMENDED_ND1_EXECUTION_SENTENCE_ONE_RUN_ONLY=YES
-APPROVED_ND1_EXECUTION_SENTENCE_ONE_RUN_ONLY=UNRESOLVED
-RECOMMENDED_ND1_EXECUTION_SENTENCE_EXPIRES_ON_COMMIT_CHANGE=YES
-APPROVED_ND1_EXECUTION_SENTENCE_EXPIRES_ON_COMMIT_CHANGE=UNRESOLVED
-
-# ---- 生效边界（无论上面怎么填都成立）------------------------------------
-RATIFICATION_DOES_NOT_AUTHORIZE=[MC 执行, supplement 执行, 策略 build,
-                                 真实数据读取, 目录创建, 写探针,
-                                 registry/exposure 事件追加, N00 的候选定义]
-EACH_EXECUTION_STILL_NEEDS=Aaron 单独的、绑定完整 40 位 commit 的精确授权语句
-END_AARON_ND1_RATIFICATION_BLOCK_V1
+STATUS=SUPERSEDED_DO_NOT_SIGN
+SUPERSEDED_BY=AARON_ND1_RATIFICATION_BLOCK_V2（§D.9.4）
+SUPERSEDED_REASON=DUPLICATE_AUTHORITY+PRESTART_REAUTH_PATH_OPEN+ARCHIVE_LIFECYCLE_MISSING
+VERBATIM_TEXT_RECOVERABLE_AT=git commit b0d4f86f0e14671fc7eebb17e7ae4588a122bf87
+                             （路径 ops/DECISION_PACKET_N00_AND_ND1.md §D.8）
 ```
+
+作废原因（三项，详见 §D.9 开头的对照表）：
+
+1. `APPROVED_GRAMMAR_GLOBAL_RULES` 一次性批准了四项治理选择，而同一份块里
+   又给这四项各自的 `APPROVED_ND1_*` 字段——**重复权威**，可以填出形式完整
+   而语义矛盾的批准块；
+2. `PRESTART_COMMIT_CHANGE_REQUIRES_REAUTH=YES` 在状态机中**无路可走**
+   （F1 之后只能到 P3 或 F3，同一 id 拿不到新 P2）；
+3. P4 允许 `archive_failed` 却**没有任何后继定义**。
+
+**正文为什么不原样留在这里**：V1 的字段表里含有 `APPROVED_GRAMMAR_GLOBAL_RULES`、
+`APPROVED_SILENT_DELETE`、`APPROVED_DIVERGENT_PARTIAL_ACTION`、
+`ND1_CREATE_TWO_EMPTY_SUPPLEMENTS_DIRECTORIES` 等**已被本轮取消的竞争性字段名**。
+把它们逐字留在同一份文件里，等于把"每项选择只有一个权威字段"这条原则又打开一个
+缺口——有人可以从作废块里复制出一个仍然读得通的字段。逐字文本并未丢失：它在
+git 的 `b0d4f86` 提交里，那才是本仓库的不可变记录层。
+
+**唯一可签署的块是 §D.9.4 的 `AARON_ND1_RATIFICATION_BLOCK_V2`。**
 
 ### D.8.1 配套的 N00 批准块（与 N-D1 分开，不可合并）
 
@@ -960,7 +1154,7 @@ END_AARON_N00_STATE_RULING_BLOCK_V1
 ### D.8.2 批准之后的精确下一步顺序（**仅为路线，不是授权**）
 
 ```
-若 AARON_ND1_RATIFICATION_BLOCK_V1 获批：
+若 AARON_ND1_RATIFICATION_BLOCK_V2（§D.9.4）获批：
   N03  supplement authority 加固（C3 四层绑定 ＋ 把 §D.2.2 恒等式绑定到
        supplement 路径，复用 consumer.py 的同一批拒绝码）           工程，无数据面
   N04  supplement runner（默认拒绝；F1 的 gate_name 闭合枚举在此固定；
@@ -972,3 +1166,263 @@ END_AARON_N00_STATE_RULING_BLOCK_V1
   → 之后才轮到 N-D2 / N09；N09 另需 Aaron 的 P2 精确授权
 N03/N04/N05 三者均**不**触碰真实数据、**不**创建目录、**不**追加 registry 事件。
 ```
+
+---
+
+## §D.9 — 跨字段一致性、推荐 profile、`AARON_ND1_RATIFICATION_BLOCK_V2`
+
+```
+SECTION_D9_IS_CURRENT=YES
+SUPERSEDES=§D.8 的 AARON_ND1_RATIFICATION_BLOCK_V1
+DECISION_STATUS=PROPOSED_NOT_EFFECTIVE
+NOTHING_IN_SECTION_D9_IS_APPROVED=YES
+```
+
+上一版批准块有三个缺陷，本节逐条修掉：
+
+| 缺陷 | 后果 | 本节的修法 |
+|---|---|---|
+| `APPROVED_GRAMMAR_GLOBAL_RULES` 一次性批准了四项治理选择，而后面又给它们各自的字段 | Aaron 可以填出**形式完整、语义矛盾**的批准块 | §D.3.1 只留格式约束；每项选择只剩**一个**权威字段；派生量显式标注为不可批准（§D.9.2） |
+| `PRESTART_COMMIT_CHANGE_REQUIRES_REAUTH=YES` 在状态机里无路可走 | 同一 id 在 F1 之后永远拿不到新 P2 | 新增 P2S 事件与 `F1 → P2S → P2` 路径（§D.3.2、§D.3.3） |
+| P4 允许 `archive_failed` 但无后继定义 | 归档失败后能否进 P5、要不要重新授权、如何终局，全部无答案 | 新增 A1/A2/AX 与两个完整方案（§D.3.7） |
+
+### D.9.1 跨字段一致性规则（**批准块的生效条件，不是建议**）
+
+```
+RATIFICATION_VALID_ONLY_IF=ALL_APPROVED_FIELDS_FILLED_AND_CROSS_FIELD_CONSISTENT
+INCONSISTENT_COMBINATION=NOT_EFFECTIVE_AND_FAIL_CLOSED
+```
+
+即：只要下列任一依赖不满足，**整份批准块不生效**，相关节点维持 fail-closed。
+不存在"部分生效"——半份语法比没有语法更危险。
+
+```
+C1  APPROVED_ND1_SUPPLEMENT_SEQUENCE_NAMESPACE=GLOBAL
+    ⇒ 全部 numbered supplement 行使用既有全局递增整数序列（现已用到 13），
+      与 S0 事件共享同一编号空间，不另立平行序列。
+
+C2  APPROVED_ND1_SUPPLEMENT_SEQUENCE_NAMESPACE=SEPARATE
+    ⇒ 必须同时提供完整的独立序列规范：parser 规则、唯一性规则、排序规则、
+      崩溃后的恢复规则（如何判定"下一个编号"）。四者缺一 ⇒ 该选择无效。
+
+C3  APPROVED_ND1_PRESTART_COMMIT_CHANGE_REAUTH=YES
+    ⇒ 必须同时 APPROVED_GRAMMAR_P2S=ADOPT_AS_WRITTEN（或带完整替代文本的
+      MODIFY），且状态机含 F1 → P2S → P2(new commit) → P3。
+      不得只保留"需要重新授权"这句散文而无事件与转移。
+
+C4  APPROVED_ND1_POSTSTART_FAILURE_NEW_ID=YES
+    ⇒ F2 之后的唯一合法路径是 F3 → T1 → P2'（新 id 重走完整授权）。
+      同时要求 APPROVED_GRAMMAR_F3 与 APPROVED_GRAMMAR_T1 均已采纳。
+
+C5  APPROVED_ND1_POSTSTART_FAILURE_NEW_ID=NO
+    ⇒ 必须附一份完整、无歧义的**同 id 重试状态机**：残骸如何处置、旧
+      P2 授权是否仍 live、是否需要新授权、重试次数上限、如何与
+      `.partial` 规则协同。缺任一项 ⇒ 该选择无效。
+
+C6  SUPERSEDE_TARGET / ID_REUSE / SUCCESSOR_REGISTRATION 三者必须互洽：
+      APPROVED_ND1_SUPERSEDE_TARGET=2（supersede id 本身）
+        ⇒ ID_REUSE_POLICY=NEVER 且 SUCCESSOR_REGISTRATION_REQUIRED=YES(T1)
+      APPROVED_ND1_SUPERSEDE_TARGET=1（只 supersede P2 授权）
+        ⇒ 与 APPROVED_ND1_POSTSTART_FAILURE_NEW_ID=YES **冲突**
+          （只废授权而保留 id，就不可能强制换 id）⇒ 组合无效
+      APPROVED_ND1_SUPERSEDE_TARGET=3（两行分记）
+        ⇒ F3 必须拆成两个事件且各自有独立的前置/后继定义（须附文本）
+    详见 §D.9.2 派生表。
+
+C7  任何合法组合下，同一 supplement_id 在任一时刻**至多一个 live P2**。
+    P2S 使旧 P2 立即失去 live 身份；F3 使整条链终止。
+    parser 侧对应 MULTIPLE_LIVE_P2_FOR_ONE_ID / MULTIPLE_LIVE_P2_AFTER_P2S。
+
+C8  任何 `MODIFY` 选择必须携带**完整替代文本**。只写 `MODIFY` 而不给文本
+    的字段视为未填 ⇒ 整块不生效。
+
+C9  APPROVED_ND1_ARCHIVE_FAILURE_POLICY=B
+    ⇒ 必须同时给出 §D.3.7 的 B1–B5 全部答案。缺任一项 ⇒ 该选择无效。
+
+C10 APPROVED_ND1_PARTIAL_RECOVERY_RULE=MODIFY
+    ⇒ 必须填 APPROVED_ND1_PARTIAL_MODIFY_TEXT（分支 E 与分支 C 的处置各自
+      写明）。选 KEEP 时该字段留 N/A，且须知悉：分支 E 仍会删除本次刚写的
+      字节（§D.5.1 事实表不变）。
+```
+
+### D.9.2 派生量表（**不是可批准字段**）
+
+下列值由权威字段机械推导。Aaron **不填**它们；任何单独填写视为矛盾组合。
+
+| 派生量 | 由谁决定 | 推荐组合下的取值 |
+|---|---|---|
+| `ID_REUSE_POLICY` | `SUPERSEDE_TARGET` + `POSTSTART_FAILURE_NEW_ID` | `NEVER_AFTER_START`（pre-start 同 id 仍可重试） |
+| `SUCCESSOR_REGISTRATION_REQUIRED` | `SUPERSEDE_TARGET` | `YES`（T1 必需） |
+| `P2_PERMITTED_PREDECESSOR` | `PRESTART_COMMIT_CHANGE_REAUTH` | `P1 \| P2S` |
+| `F1_PERMITTED_SUCCESSOR` | `PRESTART_COMMIT_CHANGE_REAUTH` | `P3（commit 未变）\| P2S（commit 变）\| F3` |
+| `P4_PERMITTED_SUCCESSOR` | `ARCHIVE_FAILURE_POLICY` | `P5 \| F2v`（A 下 P4 仅在 archive_ok 发射） |
+| `P5_REACHABILITY_AFTER_ARCHIVE_FAILURE` | `ARCHIVE_FAILURE_POLICY` | `仅经 A2`；`AX 之后不可达` |
+| `SILENT_DELETE_FORBIDDEN` | `PARTIAL_RECOVERY_RULE` | `MODIFY ⇒ YES`；`KEEP ⇒ NO（分支 E 仍删）` |
+| `NUMBERED_ROW_SEQ_SOURCE` | `SUPPLEMENT_SEQUENCE_NAMESPACE` | 既有全局序列 |
+
+### D.9.3 推荐 profile（一次性填法；**仍不是批准**）
+
+为减少手填数十个字段的出错面，下面给出一份满足 §D.9.1 全部依赖的自洽组合。
+Aaron 可以整份采纳，也可以提交一份完整修改版 profile。
+
+```
+BEGIN_ND1_RECOMMENDED_PROFILE_R1
+PROFILE_ID=ND1_RECOMMENDED_PROFILE_R1
+PROFILE_FIELD_PREFIX=RECOMMENDED_（本块内每一行都是提案值；块内不存在任何已批准值）
+PROFILE_STATUS=PROPOSED_NOT_EFFECTIVE
+RECOMMENDED_GRAMMAR_FORMAT_RULES=ADOPT_AS_WRITTEN
+RECOMMENDED_GRAMMAR_P1=ADOPT_AS_WRITTEN
+RECOMMENDED_GRAMMAR_P2=ADOPT_AS_WRITTEN
+RECOMMENDED_GRAMMAR_P2S=ADOPT_AS_WRITTEN
+RECOMMENDED_GRAMMAR_P3=ADOPT_AS_WRITTEN
+RECOMMENDED_GRAMMAR_P4=ADOPT_AS_WRITTEN
+RECOMMENDED_GRAMMAR_P5=ADOPT_AS_WRITTEN
+RECOMMENDED_GRAMMAR_A1=ADOPT_AS_WRITTEN
+RECOMMENDED_GRAMMAR_A2=ADOPT_AS_WRITTEN
+RECOMMENDED_GRAMMAR_AX=ADOPT_AS_WRITTEN
+RECOMMENDED_GRAMMAR_F1=ADOPT_AS_WRITTEN
+RECOMMENDED_GRAMMAR_F2=ADOPT_AS_WRITTEN
+RECOMMENDED_GRAMMAR_F2V=ADOPT_AS_WRITTEN
+RECOMMENDED_GRAMMAR_F3=ADOPT_AS_WRITTEN
+RECOMMENDED_GRAMMAR_T1=ADOPT_AS_WRITTEN
+RECOMMENDED_GRAMMAR_STATE_MACHINE=ADOPT_AS_WRITTEN
+RECOMMENDED_GRAMMAR_PARSER_FAIL_CLOSED_RULES=ADOPT_AS_WRITTEN
+RECOMMENDED_F1_GATE_NAME_ENUM=DEFER_TO_N04
+RECOMMENDED_ND1_PARSER_MALFORMED_ROW_POLICY=B_REFUSE
+RECOMMENDED_ND1_SUPPLEMENT_SEQUENCE_NAMESPACE=GLOBAL
+RECOMMENDED_ND1_PRESTART_COMMIT_CHANGE_REAUTH=YES
+RECOMMENDED_ND1_POSTSTART_FAILURE_NEW_ID=YES
+RECOMMENDED_ND1_SUPERSEDE_TARGET=2_SUPERSEDES_SUPPLEMENT_ID_ITSELF
+RECOMMENDED_ND1_ARCHIVE_FAILURE_POLICY=A
+RECOMMENDED_ND1_FORMAL_TRIAL=NO
+RECOMMENDED_ND1_STARTED_CONSUMES_GLOBAL_RUN_SEQUENCE=NO
+RECOMMENDED_ND1_STARTED_CONSUMES_EXPOSURE_SLOT=NO
+RECOMMENDED_ND1_SUPPLEMENT_LEDGER_CREATE=YES
+RECOMMENDED_ND1_EXPOSURE_ROW_QUANTITY_ZERO=YES
+RECOMMENDED_ND1_STRUCTURAL_ACCESS_CHARACTERISATION=STRUCTURAL_LABEL_NOT_OUTCOME
+RECOMMENDED_ND1_PARTIAL_RECOVERY_RULE=MODIFY
+RECOMMENDED_ND1_PARTIAL_MODIFY_TEXT=BRANCH_E_RENAME_TO_.partial.divergent.<incident_id>;BRANCH_C_RENAME_THEN_ALLOW_RETRY
+RECOMMENDED_ND1_OUTPUT_ROOT_OPTION=A
+RECOMMENDED_ND1_SUPPLEMENT_DIRECTORY_NAME=2_ID_UNDERSCORE_UTC
+RECOMMENDED_ND1_FUTURE_DIRECTORY_POLICY=REUSE_EXISTING_ROOTS_WITH_supplements_SUBTREE
+RECOMMENDED_ND1_WRITE_PROBE_AUTHORIZED=NO
+RECOMMENDED_ND1_SUPPLEMENT_EXECUTION_AUTHORIZED=NO
+RECOMMENDED_ND1_DISCLOSURE_CONTENT=ADOPT_SEVEN_POINTS_AS_WRITTEN
+RECOMMENDED_ND1_DISCLOSURE_PLACEMENTS=ADOPT_FOUR_PLACEMENTS_AS_WRITTEN
+RECOMMENDED_ND1_DISCLOSURE_WORDING_BY_AARON=YES
+RECOMMENDED_ND1_EXECUTION_SENTENCE_BINDS=supplement_id+40hex_commit+output_root
+RECOMMENDED_ND1_EXECUTION_SENTENCE_ONE_RUN_ONLY=YES
+RECOMMENDED_ND1_EXECUTION_SENTENCE_EXPIRES_ON_COMMIT_CHANGE=YES
+PROFILE_CONTAINS_NO_EXECUTION_AUTHORIZATION=YES
+PROFILE_CREATES_NO_DIRECTORY=YES
+PROFILE_APPENDS_NO_REGISTRY_OR_EXPOSURE_EVENT=YES
+END_ND1_RECOMMENDED_PROFILE_R1
+```
+
+**规范化与摘要口径**（可被任何冷读者重算）：
+
+```
+CANONICAL_BYTES=BEGIN 与 END 两行之间的行（不含这两行），LF 结尾，UTF-8，逐行原样
+PROFILE_SHA256=0a08319a408f068ce4c92f93c2c4c39e409937dddfd0ef9f7af43618c70b50a5
+```
+
+**一致性自检**（本 profile 对 §D.9.1 逐条）：C1 满足（GLOBAL）；C2 不适用；
+C3 满足（P2S 已采纳）；C4 满足（NEW_ID=YES 且 F3/T1 已采纳）；C5 不适用；
+C6 满足（SUPERSEDE_TARGET=2 ⇒ ID_REUSE=NEVER_AFTER_START、T1 必需，且与
+NEW_ID=YES 相容）；C7 满足（P2S/F3 各自使旧 P2 失效）；C8 满足
+（唯一的 MODIFY 带完整文本）；C9 不适用（选 A）；C10 满足。
+
+### D.9.4 `AARON_ND1_RATIFICATION_BLOCK_V2`
+
+```
+AARON_ND1_RATIFICATION_BLOCK_V2
+STATUS=PROPOSED_NOT_EFFECTIVE
+SUPERSEDES=AARON_ND1_RATIFICATION_BLOCK_V1（§D.8，已作废，勿签）
+RATIFICATION_VALID_ONLY_IF=ALL_APPROVED_FIELDS_FILLED_AND_CROSS_FIELD_CONSISTENT
+INCONSISTENT_COMBINATION=NOT_EFFECTIVE_AND_FAIL_CLOSED
+EFFECTIVE_ONLY_IF=Aaron 在后续消息中主动逐字批准本块
+NOT_APPROVAL=[本执行提示词, 本文件的生成或修订, Aaron 要求准备决策包,
+              Aaron 阅读本文件或终报, 任何 RECOMMENDED_* 行, 任何"工程建议",
+              profile 的存在, 任何读起来像条件同意的措辞, 沉默或未反对]
+AMBIGUOUS_PERMISSION=取限制性读法并停止（QROS §12）
+
+# ==== 路线 1：整份采纳推荐 profile（三行即可）==========================
+APPROVED_PROFILE_ID=UNRESOLVED          # ND1_RECOMMENDED_PROFILE_R1 | <自拟 profile id>
+APPROVED_PROFILE_SHA256=UNRESOLVED      # 64hex，须等于 §D.9.3 的 PROFILE_SHA256
+APPROVAL_BINDS_DOC_HEAD=UNRESOLVED      # 40hex，由 Aaron 在后续消息中填写
+
+# ==== 路线 2：逐字段填写（与路线 1 二选一，不得混填）====================
+# 语法采纳（每事件一行）
+APPROVED_GRAMMAR_FORMAT_RULES=UNRESOLVED          # ADOPT_AS_WRITTEN | MODIFY(+文本) | REJECT
+APPROVED_GRAMMAR_P1=UNRESOLVED
+APPROVED_GRAMMAR_P2=UNRESOLVED
+APPROVED_GRAMMAR_P2S=UNRESOLVED
+APPROVED_GRAMMAR_P3=UNRESOLVED
+APPROVED_GRAMMAR_P4=UNRESOLVED
+APPROVED_GRAMMAR_P5=UNRESOLVED
+APPROVED_GRAMMAR_A1=UNRESOLVED
+APPROVED_GRAMMAR_A2=UNRESOLVED
+APPROVED_GRAMMAR_AX=UNRESOLVED
+APPROVED_GRAMMAR_F1=UNRESOLVED
+APPROVED_GRAMMAR_F2=UNRESOLVED
+APPROVED_GRAMMAR_F2V=UNRESOLVED
+APPROVED_GRAMMAR_F3=UNRESOLVED
+APPROVED_GRAMMAR_T1=UNRESOLVED
+APPROVED_GRAMMAR_STATE_MACHINE=UNRESOLVED
+APPROVED_GRAMMAR_PARSER_FAIL_CLOSED_RULES=UNRESOLVED
+APPROVED_F1_GATE_NAME_ENUM=UNRESOLVED             # DEFER_TO_N04 | <闭合枚举文本>
+APPROVED_ND1_PARSER_MALFORMED_ROW_POLICY=UNRESOLVED   # A | B
+
+# 治理选择（每项唯一权威；派生量见 §D.9.2，不在此填）
+APPROVED_ND1_SUPPLEMENT_SEQUENCE_NAMESPACE=UNRESOLVED   # GLOBAL | SEPARATE(+C2 四项文本)
+APPROVED_ND1_PRESTART_COMMIT_CHANGE_REAUTH=UNRESOLVED   # YES(⇒C3) | NO
+APPROVED_ND1_POSTSTART_FAILURE_NEW_ID=UNRESOLVED        # YES(⇒C4) | NO(⇒C5 附状态机)
+APPROVED_ND1_SUPERSEDE_TARGET=UNRESOLVED                # 1 | 2 | 3（见 C6）
+APPROVED_ND1_ARCHIVE_FAILURE_POLICY=UNRESOLVED          # A | B(+B1-B5 全部答案)
+
+# trial / exposure 记账
+APPROVED_ND1_FORMAL_TRIAL=UNRESOLVED                    # YES(+编号) | NO
+APPROVED_ND1_STARTED_CONSUMES_GLOBAL_RUN_SEQUENCE=UNRESOLVED
+APPROVED_ND1_STARTED_CONSUMES_EXPOSURE_SLOT=UNRESOLVED
+APPROVED_ND1_SUPPLEMENT_LEDGER_CREATE=UNRESOLVED
+APPROVED_ND1_EXPOSURE_ROW_QUANTITY_ZERO=UNRESOLVED
+APPROVED_ND1_STRUCTURAL_ACCESS_CHARACTERISATION=UNRESOLVED
+LEDGER_ROW_FORMAL_TRIAL_FIELD=<N-D1.3_AARON_RULING>     # 永不预填
+
+# .partial 失败证据
+APPROVED_ND1_PARTIAL_RECOVERY_RULE=UNRESOLVED           # KEEP | MODIFY(⇒C10)
+APPROVED_ND1_PARTIAL_MODIFY_TEXT=UNRESOLVED             # MODIFY 时必填；KEEP 时填 N/A
+
+# 输出根（批准不创建任何目录）
+APPROVED_ND1_OUTPUT_ROOT_OPTION=UNRESOLVED              # A | B
+APPROVED_ND1_SUPPLEMENT_DIRECTORY_NAME=UNRESOLVED       # 1 | 2
+APPROVED_ND1_FUTURE_DIRECTORY_POLICY=UNRESOLVED
+SEPARATE_DIRECTORY_CREATION_AUTHORIZATION_STILL_REQUIRED=YES
+APPROVED_ND1_WRITE_PROBE_AUTHORIZED=UNRESOLVED
+APPROVED_ND1_SUPPLEMENT_EXECUTION_AUTHORIZED=UNRESOLVED
+
+# post-reveal 披露
+APPROVED_ND1_DISCLOSURE_CONTENT=UNRESOLVED
+APPROVED_ND1_DISCLOSURE_PLACEMENTS=UNRESOLVED
+APPROVED_ND1_DISCLOSURE_WORDING_BY_AARON=UNRESOLVED
+
+# 未来执行授权语句的边界
+APPROVED_ND1_EXECUTION_SENTENCE_BINDS=UNRESOLVED
+APPROVED_ND1_EXECUTION_SENTENCE_ONE_RUN_ONLY=UNRESOLVED
+APPROVED_ND1_EXECUTION_SENTENCE_EXPIRES_ON_COMMIT_CHANGE=UNRESOLVED
+
+# ==== 生效边界（无论怎么填都成立）=====================================
+RATIFICATION_CREATES_NO_DIRECTORY=YES
+RATIFICATION_DOES_NOT_AUTHORIZE=[MC 执行, supplement 执行, 策略 build,
+                                 真实数据读取, 目录创建, 写探针,
+                                 registry/exposure 事件追加, 归档重试,
+                                 N00 的候选定义]
+EACH_EXECUTION_STILL_NEEDS=Aaron 单独的、绑定完整 40 位 commit 的精确授权语句
+END_AARON_ND1_RATIFICATION_BLOCK_V2
+```
+
+### D.9.5 配套 N00 状态块（不变，与 N-D1 分开，不可合并）
+
+见 §D.8.1 `AARON_N00_STATE_RULING_BLOCK_V1`——本轮未修改，三个字段仍全部
+`UNRESOLVED`，`N00_MISSING_AUTHORITY_CHECKLIST`（§D.1.3）五项仍全部
+`MISSING`。N00 与 N-D1 是两份独立批准，任一份获批都不影响另一份。
