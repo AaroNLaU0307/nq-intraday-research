@@ -21,8 +21,11 @@ shaped is INHERITED verbatim from the frozen sources:
 What this module does NOT do: it never runs a real MC (the public real
 entry refuses deterministically — no MC authorization vocabulary exists in
 the registry yet), never creates output roots or registry events, never
-reads any repository path after the prepared input is built (exposure
-freeze: the computation consumes ONLY the immutable prepared object), and
+lets the COMPUTATION read a repository path after the prepared input is
+built (exposure freeze: the epistemic / aleatoric drivers and the replay
+consume ONLY the immutable prepared object; the sole post-prepare read is
+B-PROV's re-verification of the blind attestation at the seal boundary,
+which is custody metadata carrying zero research values), and
 never invents grid samples — the grid-replay harness is a separate PARTIAL
 item (source matrix R12) and its absence machine-refuses the
 deployable_region layer only, never Checkpoint-0.
@@ -341,7 +344,17 @@ class PreparedMCInput:
     a supplied one is declare-and-verify (it must reproduce the bytes'
     canonical digest) and is then REPLACED by the bytes-derived mapping.
     The numerical authority is therefore the bytes, not any live object,
-    and the identity digest covers the parsed content."""
+    and the identity digest covers the parsed content.
+
+    B-PROV — CUSTODY PROVENANCE. The object also retains the three facts
+    that say WHICH authority certified it (`source_artifact_id`,
+    `source_artifact_sha256`, `test_only`), and `prepared_digest` binds
+    them. Before this they were consumed by the battery and dropped: a
+    TEST_ONLY_SYNTHETIC authority's product and the code-pinned
+    production attestation's product were indistinguishable objects with
+    identical identities, so the seal had nothing to check. They are
+    MANDATORY fields — a prepared input with no declared provenance is
+    not constructible, which is what closes the hand-assembled path."""
     trial_id: str
     authorized_commit: str
     file_sha256: Mapping             # name -> hex digest (exact set)
@@ -353,16 +366,49 @@ class PreparedMCInput:
     method_digest: str               # sha256 over frozen method sources
     authorization_snapshot: Mapping  # injected at build; deeply frozen
     calendar: TemplateCalendar
+    # B-PROV: the certifying authority's OWN provenance, carried through.
+    # `source_artifact_id` is an IDENTIFIER, never a handle — nothing in
+    # this module opens it; the seal compares it against the code pin.
+    source_artifact_id: str
+    source_artifact_sha256: str
+    test_only: bool
     # DERIVED, never authoritative-from-the-caller. `None` is the normal
     # value at construction; anything else is declare-and-verify.
     records: Mapping | None = None   # (engine, scenario) -> {date: record}
     records_digest: str | None = None
 
     def __post_init__(self):
+        # --- custody link 0a (B-PROV): the provenance triple is well
+        # formed. A malformed claim is a refusal, not a coerced value.
+        if type(self.test_only) is not bool:
+            raise MCInputError(
+                "prepared_provenance_malformed",
+                f"test_only carries {type(self.test_only).__name__} — the "
+                "custody provenance must be an explicit bool")
+        if not isinstance(self.source_artifact_id, str) or \
+                not self.source_artifact_id:
+            raise MCInputError(
+                "prepared_provenance_malformed",
+                f"source_artifact_id={self.source_artifact_id!r}")
+        if not isinstance(self.source_artifact_sha256, str) or \
+                not _HEX64_RE.match(self.source_artifact_sha256):
+            raise MCInputError(
+                "prepared_provenance_malformed",
+                f"source_artifact_sha256={self.source_artifact_sha256!r}")
         # --- custody link 1: raw bytes -> the pinned per-file digests ---
         if not isinstance(self.file_sha256, Mapping):
             raise MCInputError("custody_authority_missing",
                                "file_sha256 is not a mapping")
+        # --- custody link 0b (B-PROV): the identity must pin the COMPLETE
+        # sealed bundle, not just the eight files whose bytes are kept.
+        # The loop below only walks HANDOFF_FILE_SET, so an identity
+        # covering 8 of the 14 exact-set members used to be legal — and
+        # the seal's `bundle_file_sha256` table inherited the hole.
+        if set(self.file_sha256) != BUNDLE_EXACT_SET:
+            raise MCInputError(
+                "prepared_bundle_coverage_violation",
+                f"missing={sorted(BUNDLE_EXACT_SET - set(self.file_sha256))} "
+                f"extra={sorted(set(self.file_sha256) - BUNDLE_EXACT_SET)}")
         if not isinstance(self.handoff_bytes, Mapping):
             raise MCInputError("records_custody_shape",
                                "handoff_bytes is not a mapping")
@@ -446,7 +492,13 @@ def prepared_digest(prepared: "PreparedMCInput") -> str:
     full-field content digest and the complete engine/scenario/date key
     index — on top of the raw handoff FILE digests already carried by
     `file_sha256`. Before this, two prepared inputs that disagreed about
-    every number the lifecycles consume could share one identity."""
+    every number the lifecycles consume could share one identity.
+
+    B-PROV: and the CUSTODY PROVENANCE. Before this, the same synthetic
+    bundle certified by a TEST_ONLY_SYNTHETIC authority and by the
+    code-pinned production attestation produced the SAME digest, so no
+    downstream check — including the cold replay, which re-derives the
+    identity from the preimage bytes — could see the difference."""
     ident = {
         "trial_id": prepared.trial_id,
         "authorized_commit": prepared.authorized_commit,
@@ -456,6 +508,13 @@ def prepared_digest(prepared: "PreparedMCInput") -> str:
         "seeds": list(prepared.seeds),
         "k_per_seed": prepared.k_per_seed,
         "method_digest": prepared.method_digest,
+        # B-PROV. Spelled out literally here AND in
+        # `prepared_identity_bytes` — see that function's docstring for
+        # why the two preimages are deliberately not shared.
+        "provenance": {
+            "source_artifact_id": prepared.source_artifact_id,
+            "source_artifact_sha256": prepared.source_artifact_sha256,
+            "test_only": prepared.test_only},
         "day_sequences": {ch: list(seq)
                           for ch, seq in
                           sorted(prepared.day_sequences.items())},
@@ -960,7 +1019,15 @@ def _prepare_mc_input_impl(bundle: Mapping[str, bytes], *,
         k_per_seed=K_PER_SEED_FROZEN,
         method_digest=method_digest,
         authorization_snapshot=frozen_snap,
-        calendar=cal)
+        calendar=cal,
+        # B-PROV: WHICH authority certified this input travels with it.
+        # Copied from the authority the entry point constructed — the
+        # test entry can only ever supply a test_only one, and non-test
+        # authorities exist ONLY inside
+        # `load_custody_authority_from_attestation`.
+        source_artifact_id=str(custody_authority.source_artifact_id),
+        source_artifact_sha256=str(custody_authority.source_artifact_sha256),
+        test_only=bool(custody_authority.test_only))
 
 
 def _validate_calendar(cal: TemplateCalendar) -> None:
@@ -2151,6 +2218,12 @@ def prepared_identity_bytes(prepared: PreparedMCInput) -> bytes:
         "seeds": list(prepared.seeds),
         "k_per_seed": prepared.k_per_seed,
         "method_digest": prepared.method_digest,
+        # B-PROV — the custody provenance travels INSIDE the pinned
+        # bytes the cold replay starts from, not only on the live object.
+        "provenance": {
+            "source_artifact_id": prepared.source_artifact_id,
+            "source_artifact_sha256": prepared.source_artifact_sha256,
+            "test_only": prepared.test_only},
         "day_sequences": {ch: list(seq) for ch, seq in
                           sorted(prepared.day_sequences.items())},
         "traded_day_sets": {ch: sorted(days) for ch, days in
@@ -2272,6 +2345,13 @@ def replay_prepared_from_custody_bytes(prepared: PreparedMCInput
             days=tuple(prepared.calendar.days),
             first_month_offsets=tuple(
                 prepared.calendar.first_month_offsets)),
+        # B-PROV: the provenance is carried across verbatim. It is bound
+        # into the identity, so dropping or altering it here would refuse
+        # at the `cold_replay_prepared_binding_mismatch` check below —
+        # the replay cannot launder a claim.
+        source_artifact_id=prepared.source_artifact_id,
+        source_artifact_sha256=prepared.source_artifact_sha256,
+        test_only=prepared.test_only,
         # records: DERIVED inside __post_init__ from the bytes above. No
         # value is passed, so no caller mapping can reach the replay.
         records=None, records_digest=None)
@@ -2533,6 +2613,75 @@ def cold_replay_evidence(prepared: PreparedMCInput,
     }
 
 
+def _assert_seal_provenance(prepared: PreparedMCInput) -> CustodyAuthority:
+    """B-PROV — the seal boundary re-verifies the prepared input's CUSTODY
+    ROOT against the code pins, and returns the authority it re-derived.
+
+    Retaining the provenance (see `PreparedMCInput`) makes the difference
+    VISIBLE; this makes it DECISIVE. A prepared input reaching the seal
+    must be the product of the production attestation, and "the
+    production attestation" is not a string it may assert about itself:
+
+      1. `test_only` — the TEST_ONLY entry's own product has no business
+         at a seal boundary, however honest it is;
+      2. `source_artifact_id` vs ATTESTATION_PATH — the approved source;
+      3. `source_artifact_sha256` vs ATTESTATION_SHA256_PINNED — the
+         approved source's approved BYTES, pinned in reviewed code;
+      4. trial / commit vs the values PARSED out of those bytes here and
+         now — a prepared input bound to another trial cannot borrow this
+         attestation's custody root;
+      5. the per-file digest table vs the attestation's OWN table — the
+         check a copied source string cannot survive, because reproducing
+         it requires the sealed bundle's actual bytes.
+
+    (2)+(3) are string comparisons against constants; (4)+(5) re-read and
+    re-parse the attestation through the SAME constructor the production
+    prepare entry uses, so the seal and the prepare agree by construction
+    rather than by convention. This is the ONLY repository read on the
+    seal path, it happens AFTER the unconditional cold replay, and it
+    reads custody metadata only — the computation still consumes nothing
+    but the immutable prepared object."""
+    if not isinstance(prepared, PreparedMCInput):
+        raise MCInputError("prepared_authority_missing",
+                           f"{type(prepared).__name__} is not a "
+                           "PreparedMCInput")
+    if prepared.test_only:
+        raise MCInputError(
+            "seal_test_only_prepared_input",
+            "the prepared input was certified by "
+            f"{prepared.source_artifact_id!r} with test_only=True — the "
+            "seal accepts ONLY the production attestation's product")
+    if prepared.source_artifact_id != ATTESTATION_PATH:
+        raise MCInputError(
+            "seal_provenance_source_violation",
+            f"custody source {prepared.source_artifact_id!r} != approved "
+            f"{ATTESTATION_PATH!r}")
+    if prepared.source_artifact_sha256 != ATTESTATION_SHA256_PINNED:
+        raise MCInputError(
+            "seal_provenance_source_digest_violation",
+            f"custody source bytes {prepared.source_artifact_sha256[:12]} "
+            f"!= code-pinned {ATTESTATION_SHA256_PINNED[:12]}")
+    # re-derived HERE, from the pinned document, through the production
+    # constructor — never from anything the caller carried in.
+    authority = load_custody_authority_from_attestation()
+    if prepared.trial_id != authority.trial_id or \
+            prepared.authorized_commit != authority.authorized_commit:
+        raise MCInputError(
+            "seal_trial_commit_attestation_mismatch",
+            f"prepared {prepared.trial_id}/"
+            f"{prepared.authorized_commit[:12]} vs attestation "
+            f"{authority.trial_id}/{authority.authorized_commit[:12]}")
+    if dict(prepared.file_sha256) != dict(authority.file_sha256):
+        differing = sorted(
+            n for n in sorted(BUNDLE_EXACT_SET)
+            if prepared.file_sha256.get(n) != authority.file_sha256.get(n))
+        raise MCInputError(
+            "seal_custody_table_mismatch",
+            f"{len(differing)} of {len(BUNDLE_EXACT_SET)} bundle digests "
+            f"disagree with the attestation table: {differing[:3]}")
+    return authority
+
+
 def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
                                    base: RunEvidence,
                                    doubled_by_axis: Mapping,
@@ -2554,6 +2703,15 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
     and that is the price of the guarantee. There is NO parameter that
     accepts a prior receipt, a `match=True`, or any other caller
     conclusion: the replay cannot be skipped.
+
+    B-PROV — and then, before ANY reduction, the prepared input's custody
+    root is re-verified against the code pins by
+    `_assert_seal_provenance`. Ordering is deliberate: the replay stays
+    unconditional and FIRST (N01 PHASE D3 invariant, pinned by
+    `test_the_cold_replay_runs_before_any_other_refusal`), and the
+    provenance boundary sits ahead of the feasibility gate so a
+    provenance failure can never again be reported as "the feasibility
+    decision is missing".
 
     Structurally unreachable today: the reduction refuses at the
     feasibility gate (DECISION_REQUIRED), convergence refuses at K —
@@ -2581,6 +2739,10 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
                 _assert_config_digest(r, layer="seal",
                                       where=f"{run.run_label}:{r.platform}"
                                             f"/{r.engine}/{r.scenario}")
+    # B-PROV: the custody root, re-verified against the code pins. Before
+    # the reduction, so a provenance failure never surfaces as the
+    # feasibility gate's DECISION_REQUIRED.
+    _assert_seal_provenance(prepared)
     reduction = _reduce_primary_from_base(base)
     convergence_from_evidence(base, doubled_by_axis, seed_runs,
                               prepared=prepared)

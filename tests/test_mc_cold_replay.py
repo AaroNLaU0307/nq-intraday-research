@@ -312,8 +312,8 @@ def test_seal_entry_accepts_no_caller_conclusion(prepared):
 
 def test_an_all_green_receipt_cannot_bypass_the_replay(prepared):
     """PROBE: hand a forged, fully-green receipt to the seal entry — it
-    is not even accepted as an argument, and the same tampered evidence
-    still refuses."""
+    is not even accepted as an argument, and the same evidence still
+    refuses."""
     ev = _evidence(prepared)
     forged = {"schema": "mc_cold_replay_receipt.v1", "n_sets_replayed": 8,
               "comparisons": {}, "all_green": True, "match": True,
@@ -322,10 +322,18 @@ def test_an_all_green_receipt_cannot_bypass_the_replay(prepared):
         mcc.verdict_and_seal_from_evidence(
             prepared, base=ev, doubled_by_axis={}, seed_runs={},
             cold_replay_receipt=forged)          # type: ignore[call-arg]
-    # and the honest call still reaches the frozen decision refusal
+    # B-PROV: the honest call now refuses at the CUSTODY boundary — this
+    # fixture's prepared input came from the TEST_ONLY prepare entry, and
+    # the seal accepts only the production attestation's product. It used
+    # to walk straight past that question into the feasibility gate,
+    # which is the Fable V2 finding. The frozen feasibility refusal is
+    # unchanged and is asserted one layer down, on the reduction.
     with pytest.raises(mcc.MCInputError) as exc:
         mcc.verdict_and_seal_from_evidence(
             prepared, base=ev, doubled_by_axis={}, seed_runs={})
+    assert exc.value.code == "seal_test_only_prepared_input"
+    with pytest.raises(mcc.MCInputError) as exc:
+        mcc._reduce_primary_from_base(ev)
     assert exc.value.code == "feasibility_gate_decision_required"
 
 

@@ -160,7 +160,14 @@ def test_codex_ce2_verdict_path_is_single_source():
     """The seal/verdict path derives Primary quantiles EXCLUSIVELY from
     base.results; the reduction refuses at the unruled feasibility gate
     today (CHECKPOINT0_VERDICT_REACHABLE=NO) — and there is no other
-    callable path (surface scan lives in test_mc_consumer)."""
+    callable path (surface scan lives in test_mc_consumer).
+
+    B-PROV: the SEAL entry now refuses this TEST_ONLY-certified prepared
+    input at the custody boundary before it can reduce anything, so the
+    single-source reduction claim is asserted directly on
+    `_reduce_primary_from_base` — which is where the feasibility gate
+    always lived. Both refusals are checked; neither is a change to the
+    feasibility rule."""
     prepared = _prepare()
     results = {}
     for platform, policy in mcc.PRIMARY_COMBOS:
@@ -178,9 +185,12 @@ def test_codex_ce2_verdict_path_is_single_source():
                            prepared_digest=mcc.prepared_digest(prepared),
                            results=results)
     with pytest.raises(mcc.MCInputError,
-                       match="feasibility_gate_decision_required"):
+                       match="seal_test_only_prepared_input"):
         mcc.verdict_and_seal_from_evidence(
             prepared, base=base, doubled_by_axis={}, seed_runs={})
+    with pytest.raises(mcc.MCInputError,
+                       match="feasibility_gate_decision_required"):
+        mcc._reduce_primary_from_base(base)
 
 
 def test_codex_ce2_foreign_base_evidence_refused():

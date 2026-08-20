@@ -126,6 +126,17 @@ def prepared():
     return _prepare()
 
 
+def _prov(prepared):
+    """B-PROV: the three custody-provenance fields are MANDATORY on
+    `PreparedMCInput` — a prepared input with no declared custody source
+    is not constructible. The hand-built inputs below are probing OTHER
+    refusal codes, so they carry the fixture's own (test_only) provenance
+    verbatim and nothing about what they test changes."""
+    return {"source_artifact_id": prepared.source_artifact_id,
+            "source_artifact_sha256": prepared.source_artifact_sha256,
+            "test_only": prepared.test_only}
+
+
 def _obs(prepared, **over):
     kw = dict(run_label="base", platform="topstep", engine="E1",
               scenario="Conservative", channel=PRIMARY, B=2, master_seed=7)
@@ -306,6 +317,7 @@ def test_c1_regression_4_altered_handoff_bytes_hit_the_custody_gate(
     # (a) construction
     with pytest.raises(mcc.MCInputError) as exc:
         mcc.PreparedMCInput(
+            **_prov(prepared),
             trial_id=prepared.trial_id,
             authorized_commit=prepared.authorized_commit,
             file_sha256=prepared.file_sha256,
@@ -456,6 +468,7 @@ def test_c1_identity_copy_records_swap_attack_is_dead(prepared):
     forged = _prepare(_bundle(pnl=5000.0)).records
     with pytest.raises(mcc.MCInputError) as exc:
         mcc.PreparedMCInput(
+            **_prov(prepared),
             trial_id=prepared.trial_id,
             authorized_commit=prepared.authorized_commit,
             file_sha256=prepared.file_sha256,
@@ -481,6 +494,7 @@ def test_handoff_source_shape_violations_each_have_a_code(prepared, mutate,
                                                           code):
     with pytest.raises(mcc.MCInputError) as exc:
         mcc.PreparedMCInput(
+            **_prov(prepared),
             trial_id=prepared.trial_id,
             authorized_commit=prepared.authorized_commit,
             file_sha256=prepared.file_sha256,
@@ -501,6 +515,7 @@ def test_unpinned_source_bytes_refuse(prepared):
     sha["MC_HANDOFF_E1_Base.jsonl"] = None
     with pytest.raises(mcc.MCInputError) as exc:
         mcc.PreparedMCInput(
+            **_prov(prepared),
             trial_id=prepared.trial_id,
             authorized_commit=prepared.authorized_commit,
             file_sha256=sha, handoff_bytes=prepared.handoff_bytes,
