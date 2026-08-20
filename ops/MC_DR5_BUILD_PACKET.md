@@ -729,3 +729,41 @@ registry 词表、parser 与 resolver 均已实现，`SUPPLEMENT_EXECUTION_AUTHO
 `build_day_strata_supplement` 仍公开接受手搭的 `(expected_day_set, binding)`。
 形态与 `c5c819b` 修掉的 factory-boundary 缺陷同类。当前无生产 caller，已用两条
 invariant 钉住；硬化属受审代码改动，本轮未做。
+
+
+---
+
+## 17.【现势节（N06 HOLD 修复轮之后）——本节编号最高，与上文全部章节冲突处以本节为准】
+
+授权：`START_N06_HOLD_REPAIR_AND_ND1_PROFILE_R2_PROPOSAL`。本轮只修复 N06
+HOLD 列出的工程缺陷、补负向电池、生成 correction-only R2 提案与证据包。
+
+### 17.1 现势
+
+```
+N06_STATUS=HOLD_REPAIRED_AWAITING_FRESH_SOL_STAGE_I
+N06_FINAL_PASS=NO
+N03_AUTHORITY_RUNNER_SEAM=CLOSED
+BUILDER_SEAL_FACTORY_BOUNDARY=CLOSED
+OUTPUT_ROOT_BINDING=CLOSED
+GLOBAL_SEQUENCE_NEXT_VALUE=CLOSED
+NEW_PRODUCTION_MODULE=src/itsf/mc/supplement_production.py（唯一生产路径）
+HERMETIC_CORE_RENAMED=build_day_strata_supplement_test_only / seal_supplement_test_only
+PATH_PLANNER=supplement_runner.plan_supplement_paths（纯函数，零目录创建）
+ND1_PROFILE_R2=PROPOSED_NOT_EFFECTIVE
+```
+
+### 17.2 §16.4 的残留已闭合
+
+§16.4 把「N03 关的是 builder 参数的来源，不是 builder 本身」列为最重要残留，
+并说「硬化属受审代码改动，本轮未做」。**本轮做了**：生产路径改为
+`build_supplement_from_authority` + `seal_supplement_production`，手工 payload
+拒于 `production_not_factory_built`（实测，见 `ops/N06_HOLD_RED_PROOF.md` P3c）。
+§16.4 的该条自此**不再是开放残留**。
+
+### 17.3 本轮明确未做
+
+零真实数据读取；零 supplement／MC／策略执行；零 registry／exposure 事件；
+零封存件改动；零目录创建（两个 `supplements\` 子树仍不存在）；零写探针；
+未 push、未 tag、未 amend。**本轮不是 N06 验收**——验收属 NEW TOP-LEVEL
+SESSION 的 fresh Sol。

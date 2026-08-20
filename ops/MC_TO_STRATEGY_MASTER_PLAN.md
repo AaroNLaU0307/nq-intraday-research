@@ -479,3 +479,85 @@ run==archive 全等、两个 `supplements\` 目录仍不存在。
 
 本段止于工程候选。**不得**开始 N09、N-D2、MC 或策略 build；每一次真实执行
 仍需 Aaron 单独的、绑定完整 40 位 commit 的精确授权语句。
+
+
+---
+
+## 13. `CURRENT_ANCHOR_AFTER_N06_HOLD_REPAIR`（现势恢复锚；本节编号最高，与上文冲突处以本节为准）
+
+> 只追加。§1–§12 一字未删、未改写。
+
+### 13.1 本轮性质
+
+fresh Sol 的 N06 exact-tree 审查判 **HOLD**，列出工程缺陷。本轮**只修复这些
+缺陷、补负向电池、并生成 correction-only 的 `ND1_RECOMMENDED_PROFILE_R2`
+提案**。本轮**不是**验收：N06 仍未通过。
+
+```
+N06_STATUS=HOLD_REPAIRED_AWAITING_FRESH_SOL_STAGE_I
+N06_FINAL_PASS=NO
+```
+
+### 13.2 修复的四条接缝（红证与对照见 `ops/N06_HOLD_RED_PROOF.md`）
+
+1. **N03→N04 接缝原本是反的**：手工伪造 authority 通过全部 `B_DERIVE`，而
+   **真实** authority 被拒（gate 读 `file_sha256_digest`，真实对象暴露
+   `bundle_table_digest`）。现在 `B_DERIVE` 检查**类型**、携带同源
+   `PreparedMCInput`、调用 `verify_supplement_authority`，并对 bundle 摘要与
+   day-universe 恒等式**重新计算**而非读取自述。
+2. **builder/seal factory boundary 未闭合**：手工 `(expected_day_set,
+   binding)` 可造出并封存 supplement。新增 `src/itsf/mc/supplement_production.py`
+   作为**唯一**生产路径：两个决定性参数由 authority 内部派生、调用方传入即拒；
+   产物携带 `init=False` 的 capability-minted receipt；生产 seal 拒绝 Mapping、
+   拒绝无 receipt 产物、拒绝不描述该 payload 的 receipt。hermetic 核心改名为
+   `build_day_strata_supplement_test_only` / `seal_supplement_test_only`。
+3. **output-root 未绑定**：P2 授权的 `output_root` 与实际 `runs_root` 不同、
+   或为相对路径，旧版都接受。现在 gate 做**规范化后精确比较**；新增纯
+   `plan_supplement_paths` 规划器，按已批准的 `<supplement_id>_<UTC>` 派生
+   run/archive 目标，校验 containment、basename 相同、目标不存在、非 reparse。
+   archive 侧由**已批准的 archive root 派生**，不由 P2 字符串替换。
+   规划器**不创建任何目录**。
+4. **registry 未 fail-closed 到位**：13→99 跳号被接受（旧规则只要求「递增」）；
+   计数字段接受负数与零。现在跳号拒于 `supplement_seq_not_next_value`；六个
+   计数字段设下界，拒于 `integer_field_below_minimum`；`output_root` 须非空、
+   绝对、可规范化。
+
+### 13.3 未由工程解决、交 Aaron 的一项
+
+R1 的 §D.3.2 P3 逐事件合同与 §D.3.3 状态图**互相矛盾**（P3 的前置与后继各缺
+一条边）。工程树实现的是图与邻接合同的读法，但该读法**未被任何已批准的
+profile 逐字覆盖**。因此本轮生成 correction-only 的
+`ND1_RECOMMENDED_PROFILE_R2`（决策包 §D.11），只改这两处，其余 47/51 行逐字
+继承 R1。
+
+```
+ND1_PROFILE_R2=PROPOSED_NOT_EFFECTIVE
+R1_STATUS=RATIFIED_AND_STILL_EFFECTIVE（未被 supersede、未被宣称失效）
+AARON_R2_RATIFICATION_REQUIRED=YES
+```
+
+### 13.4 现势节点状态
+
+```
+N00=BLOCKED_MISSING_AUTHORITY_ARTIFACTS_AND_AARON_STATE_RULING
+N-D1=RATIFIED（profile R1）；R2 correction-only 提案待裁
+N03=IMPLEMENTED_AND_HOLD_REPAIRED
+N04=IMPLEMENTED_DEFAULT_REFUSE_AND_HOLD_REPAIRED
+N05=IMPLEMENTED_AND_HOLD_REPAIRED
+N06=HOLD_REPAIRED_AWAITING_FRESH_SOL_STAGE_I
+N-D2=NOT_STARTED
+N09=NOT_STARTED（另需 Aaron P2 精确授权）
+P6_IMPLEMENTED=NO（归 N-D3）
+MC_EXECUTED=NO ／ SUPPLEMENT_EXECUTED=NO ／ STRATEGY_BUILD_STARTED=NO
+REGISTRY_EVENTS_APPENDED=NO ／ EXPOSURE_EVENTS_APPENDED=NO
+REAL_DIRECTORIES_CREATED=NO ／ REAL_DATA_READ=NO
+```
+
+### 13.5 固定后续顺序（不得跳步）
+
+```
+1. Aaron 主动批准或修改 ND1_RECOMMENDED_PROFILE_R2
+2. Opus 只持久化该裁决，工程树不再变化
+3. NEW TOP-LEVEL SESSION，GPT-5.6 Sol XHIGH，正式 N06 exact-tree Stage I
+4. 只有 N06 PASS 之后才进入 N-D2；N09 仍须另行精确执行授权
+```
