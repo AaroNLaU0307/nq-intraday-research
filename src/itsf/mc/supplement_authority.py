@@ -1,6 +1,6 @@
 """N03 — SUPPLEMENT AUTHORITY / CUSTODY BINDING (lane S1).
 
-WHAT THIS CLOSES. `day_strata_supplement.build_day_strata_supplement`
+WHAT THIS CLOSES. `day_strata_supplement.build_day_strata_supplement_test_only`
 takes two arguments that decide what the supplement IS — the sealed day
 universe (`expected_day_set`) and the run binding (`binding`) — and it
 takes them from whatever the caller hands over. A caller who assembles
@@ -477,7 +477,7 @@ class SupplementAuthority:
                 "the declared authority_digest does not describe this "
                 "authority's own fields")
 
-    # --- the two things `build_day_strata_supplement` may be fed --------
+    # --- the two things `build_day_strata_supplement_test_only` may be fed --------
 
     @property
     def expected_day_set(self) -> frozenset:
@@ -706,7 +706,7 @@ def verify_supplement_authority(
 
 def supplement_build_inputs(authority, prepared, *,
                             supplement_id: str = DEFAULT_SUPPLEMENT_ID):
-    """The ONLY sanctioned way to obtain `build_day_strata_supplement`'s
+    """The ONLY sanctioned way to obtain `build_day_strata_supplement_test_only`'s
     `expected_day_set` and `binding`.
 
     Re-verifies the authority against the prepared input FIRST — binding

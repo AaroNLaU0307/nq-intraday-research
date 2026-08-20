@@ -36,7 +36,15 @@ from typing import Mapping
 #: `SUPPLEMENT_ID_PATTERN` (§D.3.1). The id namespace is CLOSED: three
 #: digits, never reused once a run has started (`ID_REUSE_POLICY=
 #: NEVER_AFTER_START`, derived in `ND1_PROFILE_RATIFICATION.md` §6).
-SUPPLEMENT_ID_PATTERN = re.compile(r"^MC-DS-S[0-9]{3}$")
+#: Anchored with \\Z, NOT $. Python's $ also matches immediately
+#: BEFORE a trailing newline, so "MC-DS-S001\\n" satisfied the id
+#: grammar and the newline then travelled into a planned directory
+#: name. An independent adversarial battery against the N06 repair
+#: found it; EVERY anchored pattern in this module and in
+#: `supplement_runner` was swept for the same defect, not just the one
+#: that was reported (session-conventions §10: fixing an instance does
+#: not sweep the class).
+SUPPLEMENT_ID_PATTERN = re.compile(r"^MC-DS-S[0-9]{3}\Z")
 FIRST_SUPPLEMENT_ID = "MC-DS-S001"
 
 #: Row classes. A NUMBERED row consumes the EXISTING global registry
@@ -50,11 +58,11 @@ UNNUMBERED_SEQ_TOKEN = "+"
 #: 40-hex; runner rows carry the 7-hex short hash, mirroring the existing
 #: S0 chain (registry rows 6/9/13 vs the `+` rows beneath them).
 COMMIT_WIDTH = MappingProxyType({NUMBERED: 40, UNNUMBERED: 7})
-HEX40_RE = re.compile(r"^[0-9a-f]{40}$")
-HEX7_RE = re.compile(r"^[0-9a-f]{7}$")
-HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
-INCIDENT_RE = re.compile(r"^INC-[0-9a-f]{12}$")
-REASON_CODE_RE = re.compile(r"^[A-Z0-9_]+$")
+HEX40_RE = re.compile(r"^[0-9a-f]{40}\Z")
+HEX7_RE = re.compile(r"^[0-9a-f]{7}\Z")
+HEX64_RE = re.compile(r"^[0-9a-f]{64}\Z")
+INCIDENT_RE = re.compile(r"^INC-[0-9a-f]{12}\Z")
+REASON_CODE_RE = re.compile(r"^[A-Z0-9_]+\Z")
 
 #: Six-cell row contract, from the EXISTING parser
 #: (`scripts/s0_real_run.py::parse_registry_events`). Restated here so the

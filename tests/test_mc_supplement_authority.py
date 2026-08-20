@@ -775,7 +775,7 @@ def test_a8_a_synchronized_bundle_rewrite_cannot_seat_a_broken_universe(
 
     Only the §D.2.2 identity is broken, and that is enough: the prepare
     battery refuses, so no `PreparedMCInput` exists, so no
-    `SupplementAuthority` can be minted and `build_day_strata_supplement`
+    `SupplementAuthority` can be minted and `build_day_strata_supplement_test_only`
     has no sanctioned source for its two arguments."""
     oracle = _default_oracle()
     for ch in oracle:
@@ -838,7 +838,7 @@ def test_a8_the_broken_object_cannot_reach_the_builder_arguments(
     """And the consequence that actually matters: `supplement_build_inputs`
     — the only sanctioned source of `expected_day_set` and `binding` —
     refuses the same way, so a broken universe never reaches
-    `build_day_strata_supplement`."""
+    `build_day_strata_supplement_test_only`."""
     seqs, tps = _both(*_genuine_universe(test_prepared),
                       add_fp=(UNRECORDED_DAY,))
     forged = _forged_universe(test_prepared, test_bundle, seqs=seqs, tps=tps)
@@ -1011,7 +1011,7 @@ def test_the_authority_feeds_build_day_strata_supplement(authority,
              "vol_stratum": dss.VOL_STRATA[i % len(dss.VOL_STRATA)],
              "event_stratum": dss.EVENT_STRATA[i % len(dss.EVENT_STRATA)]}
             for i, d in enumerate(sorted(expected))]
-    supplement = dss.build_day_strata_supplement(
+    supplement = dss.build_day_strata_supplement_test_only(
         rows, expected_day_set=expected, binding=binding)
     assert supplement["n_rows"] == len(ALL_DAYS)
     assert supplement["binding"] == binding

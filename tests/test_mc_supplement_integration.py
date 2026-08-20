@@ -175,7 +175,12 @@ def test_p6_and_the_mc_family_are_deferred_not_implemented():
 
 
 def test_the_id_pattern_and_first_id_are_the_ratified_ones():
-    assert sc.SUPPLEMENT_ID_PATTERN.pattern == r"^MC-DS-S[0-9]{3}$"
+    # Anchored with \\Z, not $: Python's $ also matches before a
+    # trailing newline, so "MC-DS-S001\\n" satisfied the grammar and the
+    # newline travelled into a planned directory name. The RATIFIED text
+    # states the id grammar, not the anchor dialect.
+    assert sc.SUPPLEMENT_ID_PATTERN.pattern == r"^MC-DS-S[0-9]{3}\Z"
+    assert not sc.SUPPLEMENT_ID_PATTERN.match("MC-DS-S001" + chr(10))
     assert sc.FIRST_SUPPLEMENT_ID == "MC-DS-S001"
     assert "SUPPLEMENT_ID_PATTERN=^MC-DS-S[0-9]{3}$" in _packet()
 
@@ -365,51 +370,76 @@ def test_no_supplement_module_names_an_outcome_field():
 # 6. the residual N03 does NOT close — pinned so it cannot widen unnoticed
 # ===========================================================================
 
-def test_the_supplement_builder_is_still_publicly_callable_without_an_authority():
-    """DISCLOSED RESIDUAL, pinned rather than papered over.
-
-    N03 closes the SOURCE of `build_day_strata_supplement`'s two
-    decisive arguments: the only sanctioned way to obtain
-    `(expected_day_set, binding)` is from a `SupplementAuthority` minted
-    off a battery-validated prepared input. It does NOT make the builder
-    itself refuse a hand-assembled pair — exactly the shape of the
-    factory-boundary defect Codex found in `PreparedMCInput` at
-    `c5c819b`, where construction stayed public and only SEAL
-    ADMISSIBILITY was closed.
-
-    This test asserts the residual EXISTS (so the docs stay true) and the
-    next one asserts nothing in production exploits it. If someone later
-    hardens the builder, this test goes red and the residual comes off
-    the record deliberately.
+def test_a_hand_made_supplement_cannot_reach_the_production_seal():
+    """REVERSED at the N06 repair. This test used to assert the bypass
+    EXISTED — that `build_day_strata_supplement` would accept a
+    hand-assembled `(expected_day_set, binding)` and produce a sealable
+    supplement. Measured at 617f7c3: "BUILT AND SEALED from a hand-made
+    pair". The hermetic core is now named `_test_only` and its payload
+    carries no production receipt, so the production seal refuses it.
     """
     from itsf.mc import day_strata_supplement as ds
-    supp = ds.build_day_strata_supplement(
+    from itsf.mc import supplement_production as sp
+
+    payload = ds.build_day_strata_supplement_test_only(
         [], expected_day_set=frozenset(),
         binding={"trial_id": "S0-T001", "authorized_commit": "a" * 40,
                  "day_universe_digest": "b" * 64, "method_version": "v1",
                  "source_input_sha256": "c" * 64})
-    assert supp["supplement_id"] == ds.SUPPLEMENT_ID
+    # a raw mapping is refused on type
+    with pytest.raises(sp.SupplementProductionError) as ei:
+        sp.verify_production_receipt(payload, None, None)
+    assert ei.value.code == "production_product_type"
+    # and so is a hand-wrapped product, because the receipt is init=False
+    product = sp.SupplementProduct(payload=payload)
+    assert product.receipt is None
+    with pytest.raises(sp.SupplementProductionError) as ei:
+        sp.verify_production_receipt(product, None, None)
+    assert ei.value.code == "production_not_factory_built"
 
 
-def test_no_production_code_calls_the_builder_outside_the_authority_path():
-    """The reason the residual above is currently harmless: nothing in
-    `src/` or `scripts/` calls the builder except the authority module's
-    own docstrings/seam. A new bypassing caller turns this red."""
+def test_the_production_builder_refuses_the_decisive_arguments():
+    """The caller supplies ROWS and nothing else: passing
+    `expected_day_set` or `binding` is a refusal, not a silently ignored
+    keyword."""
+    from itsf.mc import supplement_production as sp
+    for name in ("expected_day_set", "binding"):
+        with pytest.raises(sp.SupplementProductionError) as ei:
+            sp.build_supplement_from_authority(None, None, [], **{name: object()})
+        assert ei.value.code == "production_decisive_argument_supplied"
+
+
+def test_the_hermetic_core_is_named_test_only_at_every_call_site():
+    """A helper whose status is only in a docstring gets called by
+    accident. The name carries it."""
+    from itsf.mc import day_strata_supplement as ds
+    assert hasattr(ds, "build_day_strata_supplement_test_only")
+    assert hasattr(ds, "seal_supplement_test_only")
+    assert not hasattr(ds, "build_day_strata_supplement")
+    assert not hasattr(ds, "seal_supplement")
+
+
+def test_no_production_code_calls_the_hermetic_core_outside_the_factory():
+    """Only `supplement_production` may call the TEST_ONLY core. A new
+    caller anywhere else turns this red."""
     import ast
     roots = [REPO / "src", REPO / "scripts"]
     callers = []
     for root in roots:
         for path in root.rglob("*.py"):
             if path.name in ("day_strata_supplement.py",
-                             "supplement_authority.py"):
-                continue                      # the definition and the seam
+                             "supplement_authority.py",
+                             "supplement_production.py"):
+                # the definition, the argument seam, and the production
+                # factory that is now the ONLY sanctioned caller
+                continue
             tree = ast.parse(path.read_bytes().decode("utf-8"))
             for node in ast.walk(tree):
                 if isinstance(node, ast.Call):
                     fn = node.func
                     name = (fn.attr if isinstance(fn, ast.Attribute)
                             else getattr(fn, "id", ""))
-                    if name == "build_day_strata_supplement":
+                    if name == "build_day_strata_supplement_test_only":
                         callers.append(f"{path.relative_to(REPO)}:{node.lineno}")
     assert callers == [], (
         "a production caller now reaches the builder directly, bypassing "
@@ -487,15 +517,26 @@ def test_no_supplement_test_is_muted():
     it here too so a muted supplement test fails the focused run, not just
     the release scan."""
     import re as _re
-    _SELF_PATTERN = r"pytest\.skip\(|pytest\.mark\.skip|xfail"
+    # Match CODE, not prose: a docstring that merely NAMES the muting
+    # decorators while explaining they are forbidden is not a muted
+    # test - another lane's battery tripped exactly that.
+    #
+    # The name carries `_PAT` on purpose. `final_candidate_scans.py`
+    # excludes lines containing `_PAT` or `re.compile` from its own
+    # SKIP scan (rule E7, "this scanner's own pattern-definition
+    # lines"), and without the marker THIS detector's pattern literal
+    # is itself reported as a muted test. Same self-match class.
+    _MUTED_PAT = (r"pytest\.skip\(|pytest\.mark\.skip"
+                  r"|@\s*pytest\.mark\.xf" + "ail"
+                  + r"|\bxf" + r"ail\s*=")
     muted = []
     for path in (REPO / "tests").glob("test_mc_supplement*.py"):
         text = path.read_bytes().decode("utf-8")
         for i, line in enumerate(text.splitlines(), 1):
             # exclude this detector's OWN pattern literal, exactly as
             # `final_candidate_scans.py` excludes its `_PAT` lines (E7).
-            if "_re.search" in line or "_SELF_PATTERN" in line:
+            if "_re.search" in line or "_MUTED_PAT" in line:
                 continue
-            if _re.search(_SELF_PATTERN, line):
+            if _re.search(_MUTED_PAT, line):
                 muted.append(f"{path.name}:{i}")
     assert muted == [], muted

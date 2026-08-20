@@ -210,6 +210,14 @@ def test_output_root_must_be_declared_by_the_authorization():
         "gate_refused:output_root_declared"
 
 
+def _rooted_ctx(runs, arch, declared=None, **over):
+    """A context whose authorization declares `declared` (default: the
+    real runs_root, i.e. the coherent case)."""
+    p2 = FakeP2(output_root=str(runs if declared is None else declared))
+    return _ctx(runs_root=runs, archive_root=arch,
+                chain=FakeChain(live_authorizations=(p2,)), **over)
+
+
 def test_output_root_structure_gate_writes_nothing(tmp_path):
     """`ND1_WRITE_PROBE_AUTHORIZED=NO`: unlike
     `runinfra.validate_output_roots_operational`, this gate must leave the
@@ -219,10 +227,29 @@ def test_output_root_structure_gate_writes_nothing(tmp_path):
     arch.mkdir()
     before = (sorted(p.name for p in runs.iterdir()),
               sorted(p.name for p in arch.iterdir()))
-    r.GATES["output_root_structure"](_ctx(runs_root=runs, archive_root=arch))
+    r.GATES["output_root_structure"](_rooted_ctx(runs, arch))
     after = (sorted(p.name for p in runs.iterdir()),
              sorted(p.name for p in arch.iterdir()))
     assert before == after == ([], [])
+
+
+def test_output_root_must_be_the_root_the_run_will_actually_use(tmp_path):
+    """N06 repair. At 617f7c3 the gate asked only whether the field was
+    non-empty, so an authorization naming a DIFFERENT root, or a relative
+    one, was accepted while the run used the governed root regardless."""
+    runs, arch, other = tmp_path / "runs", tmp_path / "arch", tmp_path / "other"
+    for d in (runs, arch, other):
+        d.mkdir()
+    r.GATES["output_root_structure"](_rooted_ctx(runs, arch))          # coherent
+    assert _gate_code("output_root_structure",
+                      _rooted_ctx(runs, arch, declared=other)) == \
+        "gate_refused:output_root_structure"
+    assert _gate_code("output_root_structure",
+                      _rooted_ctx(runs, arch, declared="relative/path")) == \
+        "gate_refused:output_root_structure"
+    assert _gate_code("output_root_structure",
+                      _rooted_ctx(runs, arch, declared="")) == \
+        "gate_refused:output_root_structure"
 
 
 def test_output_root_structure_refuses_missing_relative_and_non_dir(tmp_path):
@@ -241,17 +268,44 @@ def test_output_root_structure_refuses_missing_relative_and_non_dir(tmp_path):
         "gate_refused:output_root_structure"
 
 
+STAMP = "20260821T000000Z"
+
+
 def test_subtree_gate_observes_absence_and_never_creates(tmp_path):
     runs, arch = tmp_path / "runs", tmp_path / "arch"
     runs.mkdir()
     arch.mkdir()
-    r.GATES["supplement_subtree_absent"](_ctx(runs_root=runs,
-                                              archive_root=arch))
+    ctx = _rooted_ctx(runs, arch, utc_stamp=STAMP)
+    r.GATES["supplement_subtree_absent"](ctx)
     assert not (runs / "supplements").exists(), \
         "the gate created the subtree it is only allowed to observe"
+    assert not (arch / "supplements").exists()
+    # the EXACT ratified target, not the bare `supplements/<id>` the old
+    # gate looked for — which is why the old check could never have seen
+    # a real collision.
+    (runs / "supplements" / f"{SID}_{STAMP}").mkdir(parents=True)
+    assert _gate_code("supplement_subtree_absent", ctx) == \
+        "gate_refused:supplement_subtree_absent"
+
+
+def test_the_old_bare_id_directory_is_not_what_the_gate_guards(tmp_path):
+    """Pins the defect that made the old gate vacuous: a directory at the
+    UNRATIFIED bare `supplements/<id>` path is not the planned target, so
+    it must NOT block, while the ratified `<id>_<UTC>` one must."""
+    runs, arch = tmp_path / "runs", tmp_path / "arch"
+    runs.mkdir()
+    arch.mkdir()
     (runs / "supplements" / SID).mkdir(parents=True)
+    r.GATES["supplement_subtree_absent"](_rooted_ctx(runs, arch,
+                                                     utc_stamp=STAMP))
+
+
+def test_the_subtree_gate_cannot_run_without_a_stamp(tmp_path):
+    runs, arch = tmp_path / "runs", tmp_path / "arch"
+    runs.mkdir()
+    arch.mkdir()
     assert _gate_code("supplement_subtree_absent",
-                      _ctx(runs_root=runs, archive_root=arch)) == \
+                      _rooted_ctx(runs, arch)) == \
         "gate_refused:supplement_subtree_absent"
 
 
@@ -285,15 +339,38 @@ def test_authority_binding_must_agree_with_the_authorization():
         "gate_refused:custody_authority_binding"
 
 
-@pytest.mark.parametrize("field,gate", [
-    ("file_sha256_digest", "source_bundle_digest"),
-    ("day_universe_digest", "day_universe_identity"),
-    ("method_version", "method_version_pinned"),
-])
-def test_authority_must_carry_each_bound_proof(field, gate):
-    auth = FakeAuthority()
-    setattr(auth, field, "")
-    assert _gate_code(gate, _ctx(authority=auth)) == f"gate_refused:{gate}"
+def test_a_duck_typed_authority_is_refused_at_the_first_b_derive_gate():
+    """THE N06 REPAIR. Measured at 617f7c3, this exact object passed ALL
+    of B_DERIVE while a genuine `SupplementAuthority` was REFUSED at
+    `source_bundle_digest` — the seam read `file_sha256_digest`, which no
+    real authority has. Forgeries in, real objects out. B_DERIVE now
+    checks the TYPE, and every later gate re-derives from the prepared
+    input rather than reading the object's self-report."""
+    assert _gate_code("custody_authority_production", _ctx()) == \
+        "gate_refused:custody_authority_production"
+
+
+def test_no_b_derive_gate_can_be_satisfied_by_a_stand_in():
+    """Not just the first gate: nothing downstream may be reachable with
+    a stand-in either, or a caller could skip straight to the gate that
+    still trusts the object."""
+    for gate in sc.GATE_TABLE["B_DERIVE"]:
+        code = None
+        try:
+            r.GATES[gate](_ctx())
+        except r.SupplementRunnerError as exc:
+            code = exc.code
+        except AttributeError:
+            code = "AttributeError"
+        assert code is not None, f"{gate} accepted a hand-made stand-in"
+
+
+def test_b_derive_refuses_a_missing_prepared_input():
+    """An authority alone proves nothing — the prepared input it was
+    minted off has to be present for anything to be re-derived."""
+    assert _gate_code("custody_authority_production",
+                      _ctx(authority=None, prepared=None)) == \
+        "gate_refused:custody_authority_production"
 
 
 def test_c_build_gates_are_structurally_unreachable_in_this_build():

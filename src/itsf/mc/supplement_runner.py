@@ -50,6 +50,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Callable, Mapping, NoReturn, Sequence
 
+from . import supplement_authority as sa
 from . import supplement_contract as sc
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -99,6 +100,13 @@ class GateContext:
     frozen_hashes_ok: bool | None = None
     chain: object | None = None         # resolved chain (see RESOLVER_SEAM)
     authority: object | None = None     # SupplementAuthority (N03), or None
+    # N06 repair: the authority alone proves nothing — every fact it
+    # carries has to be re-derivable from the SAME prepared input it was
+    # minted off. Without this field the B_DERIVE gates could only read
+    # the authority's own self-report, which is how a hand-made stand-in
+    # passed all of them at 617f7c3.
+    prepared: object | None = None      # PreparedMCInput, or None
+    utc_stamp: str = ""                 # run stamp for the path planner
 
 
 @_dc.dataclass(frozen=True, slots=True)
@@ -115,6 +123,113 @@ def _fail(stage: str, gate: str, error_class: str, detail: str = "") -> NoReturn
         f"gate_refused:{gate}",
         f"stage {stage} gate '{gate}': {error_class}"
         + (f" ({detail})" if detail else ""))
+
+
+# ===========================================================================
+# Output-root path planner (PHASE E) - PURE, creates nothing
+# ===========================================================================
+#
+# Ratified, and therefore not this module's to choose:
+#   ND1_OUTPUT_ROOT_OPTION=A
+#   ND1_SUPPLEMENT_DIRECTORY_NAME=2_ID_UNDERSCORE_UTC
+#   ND1_FUTURE_DIRECTORY_POLICY=REUSE_EXISTING_ROOTS_WITH_supplements_SUBTREE
+#
+# The archive side is DERIVED from the governed archive root, never from
+# the P2 authorization string - otherwise one authorization field could
+# silently redirect where the second copy of the evidence lands.
+
+SUPPLEMENTS_SUBDIR = "supplements"
+UTC_STAMP_RE = re.compile(r"^\d{8}T\d{6}Z\Z")
+
+
+def _norm(p) -> str:
+    """Canonical form for PATH EQUALITY on this platform: absolute, with
+    separators and case normalised. Deliberately NOT `resolve()`, which
+    would follow a junction and hide the very substitution the reparse
+    check below exists to catch."""
+    return os.path.normcase(os.path.abspath(str(p)))
+
+
+def _is_reparse(p: Path) -> bool:
+    try:
+        from itsf.s0.runinfra import _is_reparse_or_symlink
+        return bool(_is_reparse_or_symlink(p))
+    except Exception:                                         # noqa: BLE001
+        return p.is_symlink()
+
+
+def _strictly_under(child: Path, ancestor: Path) -> bool:
+    """Depth-independent containment, the same predicate `runinfra` uses."""
+    c, a = Path(_norm(child)), Path(_norm(ancestor))
+    return c != a and a in c.parents
+
+
+@_dc.dataclass(frozen=True, slots=True)
+class PlannedPaths:
+    """Where a future authorized run WOULD write. Planning is not
+    creating: nothing in this module makes a directory."""
+    supplement_id: str
+    utc_stamp: str
+    dir_name: str
+    runs_target: Path
+    archive_target: Path
+    archive_parent: Path      # what `archive_sealed_run` must be passed
+
+
+def plan_supplement_paths(*, runs_root, archive_root, supplement_id: str,
+                          utc_stamp: str) -> PlannedPaths:
+    """Derive and VALIDATE both targets. Refuses; never creates."""
+    if not sc.SUPPLEMENT_ID_PATTERN.match(supplement_id or ""):
+        raise SupplementRunnerError("plan_supplement_id_pattern",
+                                    repr(supplement_id))
+    if not UTC_STAMP_RE.match(utc_stamp or ""):
+        raise SupplementRunnerError(
+            "plan_utc_stamp_malformed",
+            f"{utc_stamp!r} is not YYYYMMDDTHHMMSSZ")
+    for label, root in (("runs_root", runs_root),
+                        ("archive_root", archive_root)):
+        if root is None or str(root) == "":
+            raise SupplementRunnerError("plan_root_missing", label)
+        p = Path(root)
+        if not p.is_absolute():
+            raise SupplementRunnerError("plan_root_not_absolute",
+                                        f"{label}: {root}")
+        if not p.exists():
+            raise SupplementRunnerError("plan_root_absent", f"{label}: {root}")
+        if not p.is_dir():
+            raise SupplementRunnerError("plan_root_not_a_directory", label)
+        if _is_reparse(p):
+            raise SupplementRunnerError("plan_root_is_reparse_point", label)
+
+    dir_name = f"{supplement_id}_{utc_stamp}"
+    runs_parent = Path(runs_root) / SUPPLEMENTS_SUBDIR
+    archive_parent = Path(archive_root) / SUPPLEMENTS_SUBDIR
+    runs_target = runs_parent / dir_name
+    archive_target = archive_parent / dir_name
+
+    if not _strictly_under(runs_target, Path(runs_root)):
+        raise SupplementRunnerError("plan_target_escapes_root", "runs")
+    if not _strictly_under(archive_target, Path(archive_root)):
+        raise SupplementRunnerError("plan_target_escapes_root", "archive")
+    if runs_target.name != archive_target.name:
+        raise SupplementRunnerError(
+            "plan_basename_divergence",
+            f"{runs_target.name} != {archive_target.name}")
+    if _norm(runs_target) == _norm(archive_target):
+        raise SupplementRunnerError("plan_targets_collide",
+                                    "runs and archive resolve to one path")
+    for label, target in (("runs", runs_target), ("archive", archive_target)):
+        if target.exists():
+            raise SupplementRunnerError("plan_target_exists",
+                                        f"{label}: {target}")
+        parent = target.parent
+        if parent.exists() and _is_reparse(parent):
+            raise SupplementRunnerError("plan_parent_is_reparse_point",
+                                        f"{label}: {parent}")
+    return PlannedPaths(supplement_id=supplement_id, utc_stamp=utc_stamp,
+                        dir_name=dir_name, runs_target=runs_target,
+                        archive_target=archive_target,
+                        archive_parent=archive_parent)
 
 
 # --- A_PRECHECK ------------------------------------------------------------
@@ -216,10 +331,15 @@ def _g_output_root_declared(ctx: GateContext) -> None:
 
 
 def _g_output_root_structure(ctx: GateContext) -> None:
-    """READ-ONLY. `ND1_WRITE_PROBE_AUTHORIZED=NO`, so unlike
-    `runinfra.validate_output_roots_operational` this gate writes NOTHING
-    — no probe file, no directory. It observes existence, type and
-    absoluteness, and refuses on the first violation."""
+    """READ-ONLY, and now BINDING.
+
+    `ND1_WRITE_PROBE_AUTHORIZED=NO`, so this gate still writes nothing -
+    no probe, no directory. What changed at the N06 repair is that the
+    `output_root` Aaron authorized in P2 must be the SAME PATH the runner
+    is actually about to use. At 617f7c3 the gate only asked whether the
+    field was non-empty, so an authorization naming a completely
+    different root - or a relative path - was accepted while the run used
+    the governed root regardless."""
     for label, root in (("runs_root", ctx.runs_root),
                         ("archive_root", ctx.archive_root)):
         if root is None:
@@ -231,24 +351,47 @@ def _g_output_root_structure(ctx: GateContext) -> None:
                   f"{label} is not an absolute path")
         if not p.exists():
             _fail("A_PRECHECK", "output_root_structure", "RunGateError",
-                  f"{label} does not exist — this gate never creates it")
+                  f"{label} does not exist - this gate never creates it")
         if not p.is_dir():
             _fail("A_PRECHECK", "output_root_structure", "RunGateError",
                   f"{label} is not a directory")
+        if _is_reparse(p):
+            _fail("A_PRECHECK", "output_root_structure", "RunGateError",
+                  f"{label} is a symlink/junction/reparse point")
+
+    declared = getattr(_live_p2(ctx.chain), "output_root", "")
+    if not str(declared).strip():
+        _fail("A_PRECHECK", "output_root_structure", "RunGateError",
+              "the authorization names no output root")
+    if not Path(str(declared)).is_absolute():
+        _fail("A_PRECHECK", "output_root_structure", "RunGateError",
+              f"authorized output_root {declared!r} is not absolute")
+    if _norm(declared) != _norm(ctx.runs_root):
+        _fail("A_PRECHECK", "output_root_structure", "RunGateError",
+              f"authorized output_root {declared!r} is not the runs_root "
+              f"this run would use ({ctx.runs_root})")
 
 
 def _g_supplement_subtree_absent(ctx: GateContext) -> None:
-    """OBSERVES; never creates. A pre-existing `supplements/<id>` subtree
-    means a previous attempt already wrote there, which this round has no
-    authorization to touch or overwrite."""
-    for label, root in (("runs_root", ctx.runs_root),
-                        ("archive_root", ctx.archive_root)):
-        if root is None:
-            continue
-        target = Path(root) / "supplements" / ctx.supplement_id
-        if target.exists():
-            _fail("A_PRECHECK", "supplement_subtree_absent", "RunGateError",
-                  f"{label}: {target} already exists — never overwritten")
+    """OBSERVES the EXACT planned targets; never creates anything.
+
+    At 617f7c3 this gate looked for a bare `supplements/<id>` path, which
+    is not the ratified directory name - `ND1_SUPPLEMENT_DIRECTORY_NAME=
+    2_ID_UNDERSCORE_UTC` makes it `<id>_<UTC>` - so the check could never
+    have seen a real collision. It now plans the actual pair and lets the
+    planner refuse an existing target, a reparse point or an escape."""
+    if not ctx.utc_stamp:
+        _fail("A_PRECHECK", "supplement_subtree_absent", "RunGateError",
+              "no UTC stamp supplied; the target directory name is "
+              "<supplement_id>_<UTC> and cannot be planned without it")
+    try:
+        plan_supplement_paths(runs_root=ctx.runs_root,
+                              archive_root=ctx.archive_root,
+                              supplement_id=ctx.supplement_id,
+                              utc_stamp=ctx.utc_stamp)
+    except SupplementRunnerError as exc:
+        _fail("A_PRECHECK", "supplement_subtree_absent", "RunGateError",
+              f"{exc.code}: {exc}")
 
 
 def _g_id_not_retired(ctx: GateContext) -> None:
@@ -260,48 +403,123 @@ def _g_id_not_retired(ctx: GateContext) -> None:
 
 # --- B_DERIVE --------------------------------------------------------------
 
+def _require_real_authority(gate: str, ctx: GateContext):
+    """F4/F5 (adversarial battery). Every B_DERIVE gate re-asserts the
+    EXACT type, not just the first one.
+
+    F4: the gate used `isinstance` while `verify_supplement_authority`
+    uses `type(...) is`, so a `__new__`-built SUBCLASS cleared the gate
+    whose stated job is "type, not shape" and died one gate later.
+    F5: three gates read attributes without any type check at all, so a
+    field-for-field mirror of a real authority was accepted by each of
+    them individually. Stage order hid it; a test that claimed otherwise
+    was overclaiming, which is worse than the hole."""
+    auth = ctx.authority
+    if type(auth) is not sa.SupplementAuthority:
+        _fail("B_DERIVE", gate, "SupplementRunnerError",
+              f"{type(auth).__name__} is not exactly SupplementAuthority — "
+              "a subclass or a field-compatible mirror is not an authority")
+    if ctx.prepared is None:
+        _fail("B_DERIVE", gate, "SupplementRunnerError",
+              "no prepared input supplied — nothing can be re-derived")
+    return auth
+
+
 def _g_custody_authority_production(ctx: GateContext) -> None:
+    """Type, not shape. A field-compatible stand-in is NOT an authority.
+
+    At 617f7c3 this gate read attributes off whatever object it was
+    handed, so a six-field dataclass passed the whole of B_DERIVE while a
+    genuine `SupplementAuthority` was REFUSED (it exposes
+    `bundle_table_digest`, the gate asked for `file_sha256_digest`). The
+    seam was inverted: forgeries in, real objects out."""
     auth = ctx.authority
     if auth is None:
         _fail("B_DERIVE", "custody_authority_production",
               "SupplementRunnerError", "no supplement authority supplied")
-    if getattr(auth, "test_only", True):
+    _require_real_authority("custody_authority_production", ctx)
+    if auth.test_only:
         _fail("B_DERIVE", "custody_authority_production",
               "SupplementRunnerError",
               "a test_only authority may never enter the production path")
+    prepared = ctx.prepared
+    if prepared is None:
+        _fail("B_DERIVE", "custody_authority_production",
+              "SupplementRunnerError",
+              "no prepared input supplied — the authority cannot be "
+              "re-verified against its own source")
+    if getattr(prepared, "test_only", True):
+        _fail("B_DERIVE", "custody_authority_production",
+              "SupplementRunnerError",
+              "a test_only prepared input may never enter production")
 
 
 def _g_custody_authority_binding(ctx: GateContext) -> None:
-    auth, row = ctx.authority, _live_p2(ctx.chain)
+    """Re-verify the authority against the prepared input it claims, and
+    tie both to the authorization row and the running tree."""
+    _require_real_authority("custody_authority_binding", ctx)
+    auth, prepared = ctx.authority, ctx.prepared
+    try:
+        sa.verify_supplement_authority(auth, prepared,
+                                       supplement_id=ctx.supplement_id)
+    except Exception as exc:                                  # noqa: BLE001
+        _fail("B_DERIVE", "custody_authority_binding",
+              type(exc).__name__, str(getattr(exc, "code", exc))[:80])
+    row = _live_p2(ctx.chain)
     want = getattr(row, "authorized_commit", None)
-    got = getattr(auth, "authorized_commit", None)
-    if want and got and want != got:
+    if want and auth.authorized_commit != want:
         _fail("B_DERIVE", "custody_authority_binding", "SupplementRunnerError",
-              f"authority commit {str(got)[:12]} != authorized {str(want)[:12]}")
-    if getattr(auth, "supplement_id", ctx.supplement_id) != ctx.supplement_id:
+              f"authority commit {auth.authorized_commit[:12]} != authorized "
+              f"{str(want)[:12]}")
+    if auth.authorized_commit != ctx.head_commit:
+        _fail("B_DERIVE", "custody_authority_binding", "SupplementRunnerError",
+              f"authority commit {auth.authorized_commit[:12]} != HEAD "
+              f"{ctx.head_commit[:12]}")
+    if auth.supplement_id != ctx.supplement_id:
         _fail("B_DERIVE", "custody_authority_binding", "SupplementRunnerError",
               "authority supplement id differs from the run's")
 
 
 def _g_source_bundle_digest(ctx: GateContext) -> None:
-    if not getattr(ctx.authority, "file_sha256_digest", None):
+    """RECOMPUTE from the prepared input; never read the self-report."""
+    _require_real_authority("source_bundle_digest", ctx)
+    auth, prepared = ctx.authority, ctx.prepared
+    got = sa.bundle_table_digest(prepared.file_sha256)
+    if got != auth.bundle_table_digest:
         _fail("B_DERIVE", "source_bundle_digest", "SupplementRunnerError",
-              "authority carries no bundle digest-table digest")
+              f"recomputed {got[:12]} != authority {auth.bundle_table_digest[:12]}")
 
 
 def _g_day_universe_identity(ctx: GateContext) -> None:
-    """The §D.2.2 structural identity is ENFORCED BY N03 at authority
-    construction; this gate refuses an authority that does not carry the
-    proof, so the runner cannot proceed on an unverified universe."""
-    if not getattr(ctx.authority, "day_universe_digest", None):
+    """Re-run the §D.2.2 enforcement over the prepared input and compare
+    the digest. The authority carrying A digest is not evidence that it
+    carries THIS one."""
+    _require_real_authority("day_universe_identity", ctx)
+    auth, prepared = ctx.authority, ctx.prepared
+    try:
+        identity = sa.enforce_day_universe_identity(prepared)
+    except Exception as exc:                                  # noqa: BLE001
+        _fail("B_DERIVE", "day_universe_identity",
+              type(exc).__name__, str(getattr(exc, "code", exc))[:80])
+    if identity.day_universe_digest != auth.day_universe_digest:
         _fail("B_DERIVE", "day_universe_identity", "SupplementRunnerError",
-              "authority carries no enforced day-universe digest")
+              f"recomputed {identity.day_universe_digest[:12]} != authority "
+              f"{auth.day_universe_digest[:12]}")
+    if identity.n_days != auth.n_days:
+        _fail("B_DERIVE", "day_universe_identity", "SupplementRunnerError",
+              f"day count {identity.n_days} != authority {auth.n_days}")
 
 
 def _g_method_version_pinned(ctx: GateContext) -> None:
-    if not getattr(ctx.authority, "method_version", None):
+    _require_real_authority("method_version_pinned", ctx)
+    auth = ctx.authority
+    if auth.method_version != sa.SUPPLEMENT_METHOD_VERSION:
         _fail("B_DERIVE", "method_version_pinned", "SupplementRunnerError",
-              "authority carries no pinned method version")
+              f"{auth.method_version!r} != pinned "
+              f"{sa.SUPPLEMENT_METHOD_VERSION!r}")
+    if not auth.method_digest:
+        _fail("B_DERIVE", "method_version_pinned", "SupplementRunnerError",
+              "authority carries no method digest")
 
 
 # --- C_BUILD ---------------------------------------------------------------

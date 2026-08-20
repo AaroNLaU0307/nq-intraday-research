@@ -34,7 +34,11 @@ C2 = "89abcdef0123456789abcdef0123456789abcdef"
 C3 = "fedcba9876543210fedcba9876543210fedcba98"
 D64 = "ab" * 32
 INC = "INC-0123456789ab"
-ROOT = "/synthetic/never-created/output-root"
+# A genuinely ABSOLUTE path on this platform that is never created.
+# The previous POSIX-style "/synthetic/..." is NOT absolute under
+# Python 3.13's ntpath (a rooted path with no drive stopped counting
+# as absolute), which the N06 output_root check correctly caught.
+ROOT = r"C:\synthetic\never-created\output-root"
 UTC = "2026-08-20T00:00:00+00:00"
 # archive codes are CONTRACT-OWNED and have already been revised
 # once under this lane; never hardcode them in a fixture.
@@ -312,7 +316,7 @@ def test_numbered_row_with_non_integer_seq_refused():
 def test_supplement_row_must_continue_the_global_sequence():
     reg = Reg(first_seq=5).chain(("P1",))
     reg.add("P2", seq="4")
-    refuse(reg.text(), "supplement_seq_not_increasing")
+    refuse(reg.text(), "supplement_seq_not_next_value")
 
 
 def test_supplement_row_may_not_duplicate_an_existing_sequence():
@@ -750,9 +754,11 @@ def test_t1_superseded_at_event_must_equal_the_f3_sequence():
 
 
 def test_t1_may_not_precede_its_f3():
+    # seq values must now be the NEXT global value (N06 repair), so the
+    # forward reference is expressed as 3 -> 4 rather than 4 -> 5.
     reg = Reg().chain(("P1", "P2", "P3", "F2"))
-    reg.add("T1", SID2, seq="4", fields={"superseded_at_event": "5"})
-    reg.add("F3", seq="5")
+    reg.add("T1", SID2, seq="3", fields={"superseded_at_event": "4"})
+    reg.add("F3", seq="4")
     refuse(reg.text(), "t1_forward_reference")
 
 
@@ -857,9 +863,15 @@ def test_a2_without_recovery_authorization_doc_refused():
 
 
 def test_a2_inventory_claimed_without_a_complete_sha_table_refused():
+    # N06 repair: `n_files: 0` is now refused one layer EARLIER by the
+    # generic integer floor, which subsumes this A2-specific branch for
+    # the zero case. Both refuse; only the code differs. The A2 guard is
+    # retained as defence-in-depth and is disclosed as a third
+    # guard-level code alongside multiple_live_p2_after_p2s and
+    # p3_without_live_p2.
     reg = Reg().chain(("P1", "P2", "P3", "A1"))
     reg.add("A2", fields={"n_files": "0"})
-    refuse(reg.text(), "a2_inventory_mismatch_claimed_ok")
+    refuse(reg.text(), "integer_field_below_minimum")
 
 
 def test_a2_local_seal_digest_changed_refused():

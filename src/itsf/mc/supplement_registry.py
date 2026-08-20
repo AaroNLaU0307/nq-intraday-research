@@ -51,6 +51,7 @@ machinery validates it after the sentence header is matched.
 """
 from __future__ import annotations
 
+import os as _os
 import re
 from types import MappingProxyType
 from typing import Mapping, Sequence
@@ -331,6 +332,14 @@ _HEX40_FIELDS = frozenset({"authorized_commit", "superseded_authorized_commit",
                            "successor_authorized_commit", "superseded_commit"})
 _INT_FIELDS = frozenset({"supersedes_event_sequence", "n_rows", "n_cells",
                          "n_files", "attempts_count", "superseded_at_event"})
+#: N06 repair. Being an integer was the whole check at 617f7c3, so
+#: `n_rows: -5` parsed happily and a sealed row could claim a negative
+#: population. Every one of these counts a thing that exists, so the
+#: floor is 1: a supplement with no rows, an attestation over no cells, an
+#: archive of no files, a zeroth attempt and a reference to event 0 are
+#: all nonsense the chain must refuse rather than record.
+_INT_MIN = {"supersedes_event_sequence": 1, "n_rows": 1, "n_cells": 1,
+            "n_files": 1, "attempts_count": 1, "superseded_at_event": 1}
 _YES_FIELDS = frozenset({"local_seal_immutable", "same_id_reauthorization",
                          "residue_preserved", "supersession_required",
                          "source_and_archive_exact_inventory_match",
@@ -435,7 +444,11 @@ REFUSAL_CODES = frozenset((
     "numbered_row_with_plus_seq",
     "unnumbered_row_with_integer_seq",
     "supplement_seq_not_integer",
-    "supplement_seq_not_increasing",
+    "supplement_seq_not_next_value",
+    "integer_field_below_minimum",
+    "output_root_blank",
+    "output_root_not_absolute",
+    "output_root_not_normalisable",
     "supplement_seq_duplicate",
     "commit_width_mismatch_for_row_class",
     "actor_not_permitted_for_event",
@@ -834,8 +847,32 @@ def _check_field_values(row, short_id, sid, fields) -> Refusal | None:
         if key in _HEX40_FIELDS and not sc.HEX40_RE.match(value):
             return bad("commit_field_not_40hex",
                        f"{key}={value!r} is not a full 40-hex commit")
-        if key in _INT_FIELDS and not re.fullmatch(r"-?[0-9]+", value):
-            return bad("integer_field_not_integer", f"{key}={value!r}")
+        if key in _INT_FIELDS:
+            if not re.fullmatch(r"-?[0-9]+", value):
+                return bad("integer_field_not_integer", f"{key}={value!r}")
+            floor = _INT_MIN.get(key)
+            if floor is not None and int(value) < floor:
+                return bad("integer_field_below_minimum",
+                           f"{key}={value} is below the minimum {floor}")
+        if key == "output_root":
+            # N06 repair. At 617f7c3 any non-empty string was accepted, so
+            # an authorization could name a relative path the runner would
+            # never use. The authorized root is the ONE place the evidence
+            # may land; it has to be a real absolute path.
+            raw = value.strip()
+            if not raw:
+                return bad("output_root_blank",
+                           "the authorization names no output root")
+            if "\x00" in raw:
+                return bad("output_root_not_normalisable",
+                           "output_root contains a null byte")
+            try:
+                normalised = _os.path.normpath(raw)
+            except Exception:                                 # noqa: BLE001
+                return bad("output_root_not_normalisable", f"{raw!r}")
+            if not _os.path.isabs(normalised):
+                return bad("output_root_not_absolute",
+                           f"output_root={raw!r} is not an absolute path")
         if key == "local_seal_sha256_unchanged":
             if value == "NO":
                 return bad("a2_local_seal_digest_changed",
@@ -1160,12 +1197,21 @@ def _check_global_sequence(rows, events) -> Refusal | None:
                            f"sequence {value} is already used by row at "
                            f"line {seen[value]}",
                            seq=row.seq, line_no=row.line_no)
-        if is_supplement and highest is not None and value <= highest:
-            return Refusal("supplement_seq_not_increasing",
-                           f"sequence {value} does not continue the global "
-                           f"increasing registry sequence (highest so far "
-                           f"{highest})",
-                           seq=row.seq, line_no=row.line_no)
+        if is_supplement:
+            # N06 repair. "Increasing" was not enough: at 617f7c3 a
+            # supplement row could follow the existing highest (13) with
+            # 99 and be accepted, leaving 85 phantom slots in a sequence
+            # whose whole job is to make the event chain countable.
+            # `SEQUENCE_NAMESPACE=GLOBAL` means the NEXT value, not merely
+            # a larger one.
+            expected = 1 if highest is None else highest + 1
+            if value != expected:
+                return Refusal(
+                    "supplement_seq_not_next_value",
+                    f"sequence {value} is not the next value of the global "
+                    f"registry sequence (expected {expected}; highest so "
+                    f"far {highest})",
+                    seq=row.seq, line_no=row.line_no)
         seen.setdefault(value, row.line_no)
         highest = value if highest is None else max(highest, value)
     return None

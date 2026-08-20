@@ -20,13 +20,13 @@ machinery only:
     but recommendation is not authorization: execution waits for a future
     NAMED authorization binding the exact candidate commit, the
     supplement id and the output root.
-  * `build_day_strata_supplement` is the PURE hermetic core (no I/O):
+  * `build_day_strata_supplement_test_only` is the PURE hermetic core (no I/O):
     it validates strata rows against the DR-2/DR-6 ruled vocabularies
     and the already-sealed day universe, and refuses ANY row field
     beyond the four structural ones — the BLIND guarantee that no
     P&L / return / oracle / report value can ever ride along
     (§10.3 Option B: "零 outcome 查看可设计为盲式").
-  * `seal_supplement` writes the artifact with the runinfra `.partial`
+  * `seal_supplement_test_only` writes the artifact with the runinfra `.partial`
     staging discipline (stage, byte-verify, atomic `os.replace`), never
     overwrites a differing final file, and treats stale partials as
     refusals unless byte-identical.
@@ -150,7 +150,7 @@ def canonical_json(obj) -> str:
 
 def canonical_rows_digest(rows: Iterable[Mapping]) -> str:
     """sha256 over the canonical JSON of the row list (rows are assumed
-    already validated + sorted — `build_day_strata_supplement` is the
+    already validated + sorted — `build_day_strata_supplement_test_only` is the
     one production caller; exposed so tests can recompute honestly)."""
     payload = [dict(r) for r in rows]
     return hashlib.sha256(
@@ -158,7 +158,7 @@ def canonical_rows_digest(rows: Iterable[Mapping]) -> str:
 
 
 def canonical_supplement_bytes(supplement: Mapping) -> bytes:
-    """The exact bytes `seal_supplement` intends to write."""
+    """The exact bytes `seal_supplement_test_only` intends to write."""
     payload = dict(supplement)
     payload["rows"] = [dict(r) for r in payload["rows"]]
     payload["binding"] = dict(payload["binding"])
@@ -245,10 +245,18 @@ def _validate_row(row, i: int) -> dict:
             "event_stratum": str(row["event_stratum"])}
 
 
-def build_day_strata_supplement(day_rows: Sequence[Mapping], *,
-                                expected_day_set: frozenset,
-                                binding: Mapping) -> dict:
-    """PURE hermetic supplement builder (no I/O; deterministic).
+def build_day_strata_supplement_test_only(day_rows: Sequence[Mapping], *,
+                                          expected_day_set: frozenset,
+                                          binding: Mapping) -> dict:
+    """TEST_ONLY hermetic supplement builder (no I/O; deterministic).
+
+    RENAMED at the N06 repair. This function takes the two arguments
+    that DECIDE what a supplement is from its caller, so anything it
+    returns is unbound to the sealed S0 input. The production path is
+    `supplement_production.build_supplement_from_authority`, which
+    derives both arguments from a `SupplementAuthority` and mints a
+    receipt the production seal requires. A payload from HERE carries
+    no receipt and cannot reach that seal.
 
     Validates every row against the DR-2/DR-6 ruled vocabularies and the
     ALREADY-SEALED day universe (`expected_day_set`, a frozenset carried
@@ -336,7 +344,7 @@ def _validate_supplement_object(supplement: Mapping) -> None:
             f"recomputed {want[:12]}")
 
 
-def seal_supplement(supplement: Mapping, out_dir: Path) -> str:
+def seal_supplement_test_only(supplement: Mapping, out_dir: Path) -> str:
     """Seal the supplement as ``<out_dir>/DAY_STRATA_SUPPLEMENT.json``
     (canonical JSON, sorted keys, utf-8) and return the sha256 of the
     sealed bytes.

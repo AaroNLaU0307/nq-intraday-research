@@ -61,7 +61,7 @@ def _binding() -> dict:
 
 
 def _build(rows=None, expected=None, binding=None) -> dict:
-    return dss.build_day_strata_supplement(
+    return dss.build_day_strata_supplement_test_only(
         rows if rows is not None else _rows(),
         expected_day_set=expected if expected is not None else _expected(),
         binding=binding if binding is not None else _binding())
@@ -78,7 +78,7 @@ def test_build_seal_reread_roundtrip(tmp_path):
     dates = [r["trade_date"] for r in sup["rows"]]
     assert dates == sorted(dates)
     assert all(set(r) == set(dss.ROW_FIELDS) for r in sup["rows"])
-    sha = dss.seal_supplement(sup, tmp_path)
+    sha = dss.seal_supplement_test_only(sup, tmp_path)
     sealed = tmp_path / dss.SUPPLEMENT_FILENAME
     raw = sealed.read_bytes()
     assert hashlib.sha256(raw).hexdigest() == sha
@@ -101,9 +101,9 @@ def test_digest_deterministic_and_input_order_independent():
 
 def test_idempotent_reseal_noop(tmp_path):
     sup = _build()
-    sha1 = dss.seal_supplement(sup, tmp_path)
+    sha1 = dss.seal_supplement_test_only(sup, tmp_path)
     raw1 = (tmp_path / dss.SUPPLEMENT_FILENAME).read_bytes()
-    sha2 = dss.seal_supplement(_build(), tmp_path)   # fresh equal object
+    sha2 = dss.seal_supplement_test_only(_build(), tmp_path)   # fresh equal object
     raw2 = (tmp_path / dss.SUPPLEMENT_FILENAME).read_bytes()
     assert sha1 == sha2
     assert raw1 == raw2
@@ -265,14 +265,14 @@ def test_synchronized_tamper_refused_on_conflict(tmp_path):
     """Mutate a row to another VALID stratum AND recompute rows_digest by
     hand: the tampered object is internally consistent, so only the
     never-overwrite seal boundary can stop it — and does."""
-    dss.seal_supplement(_build(), tmp_path)          # the honest seal
+    dss.seal_supplement_test_only(_build(), tmp_path)          # the honest seal
     tampered = _build()
     rows = [dict(r) for r in tampered["rows"]]
     rows[0]["vol_stratum"] = "T3"                    # valid vocab, wrong fact
     tampered["rows"] = tuple(rows)
     tampered["rows_digest"] = dss.canonical_rows_digest(rows)
     with pytest.raises(dss.SupplementError) as ei:
-        dss.seal_supplement(tampered, tmp_path)
+        dss.seal_supplement_test_only(tampered, tmp_path)
     assert ei.value.code == "supplement_seal_conflict"
     # the honest seal is untouched
     back = json.loads((tmp_path / dss.SUPPLEMENT_FILENAME)
@@ -284,7 +284,7 @@ def test_inconsistent_digest_refused_before_any_write(tmp_path):
     sup = _build()
     sup["rows_digest"] = "0" * 64            # digest no longer matches rows
     with pytest.raises(dss.SupplementError) as ei:
-        dss.seal_supplement(sup, tmp_path)
+        dss.seal_supplement_test_only(sup, tmp_path)
     assert ei.value.code == "supplement_digest_mismatch"
     assert not (tmp_path / dss.SUPPLEMENT_FILENAME).exists()
 
@@ -294,7 +294,7 @@ def test_partial_residue_mismatch_refused(tmp_path):
     partial = tmp_path / (dss.SUPPLEMENT_FILENAME + dss.PARTIAL_SUFFIX)
     partial.write_bytes(b'{"schema": "garbage from a crashed attempt"}')
     with pytest.raises(dss.SupplementError) as ei:
-        dss.seal_supplement(sup, tmp_path)
+        dss.seal_supplement_test_only(sup, tmp_path)
     assert ei.value.code == "supplement_partial_residue"
     assert not (tmp_path / dss.SUPPLEMENT_FILENAME).exists()
     assert partial.exists()                  # debris disclosed, not clobbered
@@ -305,7 +305,7 @@ def test_partial_residue_matching_promoted(tmp_path):
     intended = dss.canonical_supplement_bytes(sup)
     partial = tmp_path / (dss.SUPPLEMENT_FILENAME + dss.PARTIAL_SUFFIX)
     partial.write_bytes(intended)            # crash happened pre-replace
-    sha = dss.seal_supplement(sup, tmp_path)
+    sha = dss.seal_supplement_test_only(sup, tmp_path)
     final = tmp_path / dss.SUPPLEMENT_FILENAME
     assert final.read_bytes() == intended
     assert hashlib.sha256(intended).hexdigest() == sha
