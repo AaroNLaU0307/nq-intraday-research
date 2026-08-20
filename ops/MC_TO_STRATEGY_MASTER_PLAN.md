@@ -277,3 +277,121 @@ Codex 且正是当年 `RUN_AUTHORIZATION_SUPERSEDED` 教训形态。）
 | 2026-08-15 | N02 | `314a2a5` | 见 N01 终态树 | 平台权威日事实（7 字段／7 代边界／三态 qualifying_day／over_budget 类型化缺席）；EV 台账逐值不变；58 新测试。孤立态绿由车道实测（主代理实测的是终态树） |
 | 2026-08-15 | N01 | `9a09164` | **3118 / 0 / 0**（822s，终态树，主代理实测） | 统一原子＋冷重放门＋config digest＋B×M 键集＋迹派生 M 证书＋双 reducer；含唯一一轮修复（类型严格比对／空集拒绝／fail-closed 词汇）；48 项迁移零弱化＋57 变异全命中；floor 2761→3118 双 pin |
 | 2026-08-15 | 决策包 | 本 commit | 未跑（doc-only） | N00＋N-D1 决策包；主计划 N-D2 追加三项；packet §14 现势节。**执行段到此强制停止** |
+| 2026-08-15 | N02_BOUNDARY_REPAIR | `a34b975` | 未单独实测（地板 pin 3118） | 双向 qualifying 规则＋严格 stream verifier（车道 S2 后继） |
+| 2026-08-15 | N01_BOUNDARY_REPAIR | `54798c4` | 未单独实测（地板 pin 3118） | records custody 链、E2 pending 闸、percentile 位兼容（车道 S1 后继） |
+| 2026-08-15 | 集成电池＋治理现势 | `54ab7f2` | 地板 pin 3118→3323 | 主代理集成电池；边界修复轮收口 |
+| 2026-08-20 | B-PROV custody provenance | `b3ac453` | 3336/0/0（builder 自陈；本轮机械核到地板 pin=3336） | custody provenance 穿过电池并在 seal 处重验 |
+| 2026-08-20 | FACTORY_BOUNDARY | `c5c819b` | 3380/0/0（builder 自陈＋Stage I 转录；本轮机械核到地板 pin=3380） | battery receipt 令 direct construction／replace 不再 seal-admissible；**Stage I=PASS** |
+| 2026-08-20 | 治理文档收口 | 本节所在 commit | 未跑全套（doc-only） | Stage I 持久化记录＋三份规划/决策文档现势勘误；**执行段仍强制停止** |
+
+---
+
+## 11. `CURRENT_RECOVERY_ANCHOR_AFTER_FACTORY_STAGE_I`（现势恢复锚；本节编号最高，与上文冲突处以本节为准）
+
+> 本节**只追加**。§1–§10 全部保留原样，未删除、未改写。§2 基线表仍是
+> "首段起点快照"，**不是**现势 HEAD；现势 HEAD 见下表。
+
+### 11.1 commit 锚（40 位全长，机械取自 `git rev-parse`，非凭记忆）
+
+| 角色 | 完整 commit |
+|---|---|
+| R2.3 工程基线（本计划 `BASE_HEAD`） | `a9148f1f141b4ac421a8aa6d08f1539c315caaf9` |
+| 进入 factory-boundary 修复前的后续候选 | `54ab7f28a068a26d71fe0baf5348a7924d9f83d7` |
+| provenance 封印修复（B-PROV） | `b3ac4534486f607242f5758cecbc918cbe2157be` |
+| factory-boundary 修复＋Stage I PASS | `c5c819beb5c13e52bcd7ca974a4e40787684b10f` |
+
+祖先链（`git log a9148f1..c5c819b`，机械核实）：
+`a9148f1 → ba7fa4a → 314a2a5 → 9a09164 → ec55ac8 → a34b975 → 54798c4 →
+54ab7f2 → b3ac453 → c5c819b`。`b3ac453..c5c819b` 恰为 1 个 commit。
+
+### 11.2 测试证据（含证据等级披露）
+
+```
+a9148f1_TEST_FLOOR=2761
+54ab7f2_TEST_FLOOR=3323
+b3ac453_TEST_FLOOR=3336
+c5c819b_TEST_FLOOR=3380
+b3ac453_FULL_SUITE=3336/0/0
+c5c819b_FULL_SUITE=3380/0/0
+c5c819b_STAGE_I=PASS
+```
+
+**证据等级（不得跳过）**：四个 `_TEST_FLOOR` 是本轮在各 commit 上机械读取
+`scripts/s0_real_run.py:56` 与 `tests/test_s0_runner.py:1011` 双 pin 得到的，
+两处逐 commit 一致。两个 `_FULL_SUITE` 是 **builder 自陈**（回执 §5）与
+**Stage I 转录**（`ops/MC_FACTORY_BOUNDARY_STAGE_I.md` §2）共同承载的实跑数字，
+本轮**未重跑**（本轮禁止改生产代码，重跑不产生新信息）；机械可核的只是
+"该 commit 的地板常量等于该数字"。二者不冲突，但**不是同一等级的证据**。
+
+`c5c819b_STAGE_I=PASS` 的完整语义、独立性逐维声明与效力边界见
+`ops/MC_FACTORY_BOUNDARY_STAGE_I.md`——该记录为**转录件**，原始报告字节
+未归档（`ORIGINAL_REPORT_BYTES_ARCHIVED=NO`）。
+
+与 §2 首段起点表的差异**不是矛盾**：§2 记录的是 `a9148f1` 时刻的快照
+（地板 2761），§10 已记 N01 重钉 3118，本节续记 3323→3336→3380。
+
+### 11.3 现势节点状态
+
+```
+N01=ENGINEERING_COMPLETE
+N02=ENGINEERING_COMPLETE
+FACTORY_BOUNDARY=STAGE_I_PASS
+N00=BLOCKED_MISSING_AUTHORITY_ARTIFACTS_AND_AARON_STATE_RULING
+N-D1=PROPOSED_AWAITING_AARON_RATIFICATION
+N03=NOT_STARTED
+N04=NOT_STARTED
+N05=NOT_STARTED
+MC_EXECUTED=NO
+SUPPLEMENT_EXECUTED=NO
+STRATEGY_BUILD_STARTED=NO
+```
+
+同时不变（本轮零改动）：
+
+```
+REGISTRY_SHA256=ee9da33f…（相对 b3ac453 逐字不变）
+EXPOSURE_SHA256=382182bf…（累计 researcher exposure=1575 不变）
+ATTESTATION_SHA256=d839b965…41805（== 代码 pin）
+SEALED_S0_T001=14 文件，run==archive 逐字节全等
+SUPPLEMENTS_DIRECTORIES_EXIST=NO
+NEW_RUN_AUTHORIZATION=NONE
+CHECKPOINT0_VERDICT_REACHABLE=NO
+S0_VERDICT=INCONCLUSIVE_PENDING_MC
+```
+
+### 11.4 N00 的两层区分（**关键，勿合并**）
+
+Aaron 对三个 N00 字段的裁决**只能确定状态**，不能替代缺失的候选定义与矩阵正文：
+
+```
+N00_STATE_RULING_SETTLES=WHETHER_PRIMARY/HYPOTHESIS/WRAPPER_WERE_SELECTED
+N00_STATE_RULING_DOES_NOT_SUPPLY=ROUND4_MATRIX_TEXT_OR_CANDIDATE_DEFINITIONS
+```
+
+即使三字段全部裁为 `YES`，在下列五项全部恢复入库之前，**不得开始任何
+candidate-specific strategy build**：
+
+1. 完整 Round-4 联合矩阵正文；
+2. `Fable continuation` 候选的正式定义；
+3. `Sol failed-break/recapture` 候选的正式定义；
+4. 双方逐格签字或等价的联合锁定证据；
+5. Option C／其他 wrapper 的正式定义，及其 Aaron 状态裁决的来源。
+
+清单化形式见 `ops/DECISION_PACKET_N00_AND_ND1.md` 的
+`N00_MISSING_AUTHORITY_CHECKLIST`。仓库内至今**只有** `STRATEGY_COUNCIL=LOCKED`
+一类状态令牌，无足以实现候选的权威正文（本轮再次机械核实）。
+
+### 11.5 恢复序补丁（§1 的现势读法）
+
+§1 的五步恢复序不变，但第 1 步与第 3 步现应读作：
+
+1. `ops/MC_DR5_BUILD_PACKET.md` 最高编号现势节（现为 **§15**）
+3. 本文件最高编号节（现为 **§11**）＋`ops/MC_FACTORY_BOUNDARY_STAGE_I.md`
+
+### 11.6 停止点（未变更）
+
+本轮为纯治理文档轮：新增 Stage I 持久化记录＋三份文档现势勘误，形成一个
+commit。**未**开始 N03/N04/N05，**未**执行 MC／supplement／策略研究，
+**未**产生任何 registry／exposure／READY／授权／运行事件，**未**创建任何
+输出目录或探针。下一步取决于 Aaron 对 N00 三字段与 N-D1 全部选项的逐字批准；
+在此之前全部相关节点 fail-closed。

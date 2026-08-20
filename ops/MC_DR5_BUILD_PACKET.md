@@ -580,3 +580,105 @@ consistency` 写成 Primary 冻结参数——**错误**。冻结事实（三处
 N02 之后以代码内 `FEASIBILITY_METRICS_STATUS` 为准——`winning_days` 现由平台
 权威 `day_net_usd` 发射（不再是余额差）、`contract_cap_hits` 已 COMPUTED、
 `e2_over_budget_days` 为 DECISION_REQUIRED（谓词未裁，见 §14.5-1）。
+
+
+---
+
+## 15.【现势节（factory-boundary Stage I 之后，2026-08-20）——本节编号最高，与上文全部章节冲突处以本节为准】
+
+授权：治理文档收口轮（纯 doc/governance；**零生产代码改动**）。本节只追加，
+§1–§14 一字未删、未改写。
+
+### 15.1 现势 HEAD 与已闭合的工程段
+
+```
+CURRENT_HEAD=c5c819beb5c13e52bcd7ca974a4e40787684b10f
+CURRENT_HEAD_PARENT=b3ac4534486f607242f5758cecbc918cbe2157be
+WORKTREE=CLEAN
+TAGS_AT_HEAD=NONE（仓库共两枚 tag：mc-freeze-v1、s0-freeze-v1，均不在 HEAD）
+N01=ENGINEERING_COMPLETE
+N02=ENGINEERING_COMPLETE
+FACTORY_BOUNDARY=STAGE_I_PASS
+FACTORY_STAGE_I_DURABLE_RECORD=ops/MC_FACTORY_BOUNDARY_STAGE_I.md
+FACTORY_BOUNDARY_BUILDER_RECEIPT=MC_FACTORY_BOUNDARY_REPAIR_RECEIPT.md
+RECOVERY_ANCHOR=ops/MC_TO_STRATEGY_MASTER_PLAN.md §11
+```
+
+Stage I 记录为**转录件**（`RECORD_TYPE=TRANSCRIBED_EVIDENCE_RECORD`，
+`ORIGINAL_REPORT_BYTES_ARCHIVED=NO`），其独立性按 QROS §2 四维度逐维声明：
+context 有／authorship 有／model-family diversity **有限**（Sol 曾参与制定部分
+验收判据）／empirical 不适用。**Stage I PASS 是工程验收，不是研究或运行授权。**
+
+### 15.2 `HISTORICAL_SUPERSEDED` 指针（读者勿再把下列数字/HEAD 当现势）
+
+| 位置 | 内容 | 状态 |
+|---|---|---|
+| §6 L88-89 | `COLLECTED=2676 PASSED=2676`；`MIN_COLLECTED_TESTS=2676（旧 2615）` | `HISTORICAL_SUPERSEDED` — DR-5 R1 时刻值 |
+| §13.9 L470-471 | `FULL_SUITE=2761 passed`；`MIN_COLLECTED_TESTS 重钉=2714→2761` | `HISTORICAL_SUPERSEDED` — R2.3 时刻值 |
+| §7 | 两个 commit（`3234958` 与"本文件所在 commit"） | `HISTORICAL_SUPERSEDED` — DR-5 R1 时刻 HEAD |
+| §13.1 | 红字证明基线 `a327f1e` | `HISTORICAL` — R2.3 修复前基线，作为历史证据有效 |
+| §14 全节 | N01+N02 首段现势 | 由本节续承；§14.6 的状态块以本节 15.3 为准 |
+
+现势地板与套件（证据等级见主计划 §11.2）：
+
+```
+CURRENT_TEST_FLOOR=3380（scripts/s0_real_run.py:56 ＋ tests/test_s0_runner.py:1011 双 pin，本轮机械核实）
+FULL_SUITE_AT_CURRENT_HEAD=3380/0/0（builder 自陈＋Stage I 转录；本轮未重跑）
+FLOOR_LINEAGE=2615→2676→2714→2761→3118→3323→3336→3380
+```
+
+### 15.3 现势状态块（取代 §14.6）
+
+```
+UNIFIED_ATOM_LAYER=LANDED
+COLD_REPLAY_SEAL_GATE=LANDED
+LIFECYCLE_CONFIG_DIGEST=LANDED
+PLATFORM_AUTHORITATIVE_FACTS=LANDED
+M_SUPPORT_CERTIFICATE=DERIVED_FROM_TRACE
+SEAL_PROVENANCE=B_PROV_LANDED（b3ac453）
+BATTERY_FACTORY_BOUNDARY=LANDED_AND_STAGE_I_PASSED（c5c819b）
+SEAL_CANDIDATE_SCHEMA=mc_verdict_inputs.v5
+FEASIBILITY_GATE=DECISION_REQUIRED
+GRID_REPLAY_STATUS=BLOCKED
+CHECKPOINT0_VERDICT_REACHABLE=NO
+S0_VERDICT=INCONCLUSIVE_PENDING_MC
+MC_EXECUTED=NO
+SUPPLEMENT_EXECUTED=NO
+STRATEGY_BUILD_STARTED=NO
+MC_REGISTRY_EVENTS_APPENDED=NO
+SUPPLEMENT_REGISTRY_EVENTS_APPENDED=NO
+NEW_RUN_AUTHORIZATION=NONE
+SUPPLEMENTS_DIRECTORIES_EXIST=NO
+```
+
+### 15.4 真实阻断（N00 与 N-D1）——不得读成"只差一个签字"
+
+```
+N00=BLOCKED_MISSING_AUTHORITY_ARTIFACTS_AND_AARON_STATE_RULING
+N-D1=PROPOSED_AWAITING_AARON_RATIFICATION
+N03=NOT_STARTED（BLOCKED_ON_N-D1）
+N04=NOT_STARTED（BLOCKED_ON_N-D1）
+N05=NOT_STARTED（BLOCKED_ON_N-D1）
+```
+
+**N00 是两层阻断**：Aaron 的三字段状态裁决**只解决状态**；Round-4 联合矩阵
+正文、两个候选的正式定义、逐格签字、wrapper 定义**至今不在仓库**（本轮再次
+机械核实：只有 `STRATEGY_COUNCIL=LOCKED` 一类状态令牌）。两层都补齐前，
+candidate-specific strategy build 不得开工。清单见决策包
+`N00_MISSING_AUTHORITY_CHECKLIST`。
+
+**N-D1 全部为 `PROPOSED_NOT_EFFECTIVE`**：决策包内的 exact registry grammar、
+输出根语义、`.partial` 规则与 trial/exposure 口径**一律未生效**，
+`authorize_supplement` 与 `authorize_real_mc` 维持确定性拒绝。
+
+### 15.5 §13.5 授权模板的现势读法
+
+§13.5 的 `START_MC_DS_S001_DAY_STRATA_SUPPLEMENT_EXECUTION` 模板**仍不构成
+授权**，且在 N-D1 批准前**语法上也无处落地**（registry 无 supplement 词表、
+无 parser）。决策包已把该模板缺失的完整生命周期语法补全为**提案**，仍待裁。
+
+### 15.6 本轮明确未做
+
+零生产代码改动（`src/`、runner、registry parser、supplement 工具均未触碰）；
+零 registry／exposure／READY／授权／运行事件；零封存件改动；零目录创建；
+零探针；零研究结果值读取；未 push、未 tag、未 amend。
