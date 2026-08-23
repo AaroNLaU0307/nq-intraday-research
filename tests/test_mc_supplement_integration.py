@@ -540,3 +540,61 @@ def test_no_supplement_test_is_muted():
             if _re.search(_MUTED_PAT, line):
                 muted.append(f"{path.name}:{i}")
     assert muted == [], muted
+
+
+# ===========================================================================
+# 9. the anchor class, swept across EVERY module — not just two of them
+# ===========================================================================
+
+ANCHOR_MODULES = ("supplement_contract.py", "supplement_runner.py",
+                  "supplement_registry.py", "supplement_authority.py",
+                  "supplement_production.py", "day_strata_supplement.py")
+
+
+def test_no_validating_anchor_in_any_supplement_module_uses_dollar():
+    r"""The N06 repair swept `$` -> `\Z` in TWO modules and this session
+    CLAIMED the class was swept. It was not: `day_strata_supplement.py`
+    carried three more of exactly the same defect, and a fresh Sol review
+    found them. The earlier guard only reflected over the two modules it
+    knew about, so it could not have caught them either.
+
+    This sweeps every module by SOURCE, so a new one joins the check by
+    existing rather than by being remembered."""
+    import re as _re
+    src_dir = REPO / "src" / "itsf" / "mc"
+    offenders = []
+    for name in ANCHOR_MODULES:
+        path = src_dir / name
+        assert path.exists(), f"{name} missing — the sweep would be vacuous"
+        for i, line in enumerate(
+                path.read_bytes().decode("utf-8").splitlines(), 1):
+            if _re.search(r're\.compile\(r"\^[^"]*\$"\)', line):
+                offenders.append(f"{name}:{i}")
+    assert offenders == [], (
+        "these anchors accept a trailing newline, because Python's `$` also "
+        f"matches before one: {offenders}")
+
+
+def test_every_validating_pattern_rejects_a_trailing_newline():
+    """Behaviour, not source text. Compiled patterns are probed directly,
+    so a pattern that dodges the source check still fails here."""
+    import re as _re
+    from itsf.mc import day_strata_supplement as _ds
+    from itsf.mc import supplement_runner as _run
+    probes = [
+        (sc.SUPPLEMENT_ID_PATTERN, "MC-DS-S001"),
+        (sc.HEX40_RE, "a" * 40),
+        (sc.HEX7_RE, "a" * 7),
+        (sc.HEX64_RE, "c" * 64),
+        (sc.INCIDENT_RE, "INC-0123456789ab"),
+        (sc.REASON_CODE_RE, "SOME_CODE"),
+        (_run.UTC_STAMP_RE, "20260821T000000Z"),
+        (_ds._HEX40, "a" * 40),
+        (_ds._HEX64, "c" * 64),
+        (_ds._ISO_DATE, "2024-01-02"),
+    ]
+    assert len(probes) == 10
+    for pattern, good in probes:
+        assert pattern.match(good), (pattern.pattern, good)
+        for bad in (good + "\n", good + "\r\n", good + "\n" + "X"):
+            assert not pattern.match(bad), (pattern.pattern, repr(bad))

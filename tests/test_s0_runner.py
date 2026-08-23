@@ -1008,7 +1008,7 @@ def test_pytest_gate_floor_is_the_audit_baseline():
     """SA-10 N3: the floor tracks the CURRENT suite, closing the
     silent-collection-drop headroom."""
     mod = real_run_module()
-    assert mod.MIN_COLLECTED_TESTS == 3963
+    assert mod.MIN_COLLECTED_TESTS == 3966
 
 
 # ===========================================================================

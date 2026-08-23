@@ -121,3 +121,80 @@ NUMBERED_ROW_SEQ_SOURCE=既有全局递增序列
 `ND1_RECOMMENDED_PROFILE_R2` → 跨字段检查重跑 → 新 canonical SHA-256 →
 新的 doc-only commit → Aaron 批准 R2 的 id + hash + 精确 doc HEAD。
 不得从参照清单里挑值直接生效，也不得就地改写本记录。
+
+
+---
+
+*仅追加。以下为 R2 的批准记录；上方 R1 的记录一字未改。*
+
+---
+
+## 8. `ND1_RECOMMENDED_PROFILE_R2` 批准记录（2026-08-23）
+
+```
+APPROVED_PROFILE_ID=ND1_RECOMMENDED_PROFILE_R2
+APPROVED_PROFILE_SHA256=a3d40b7ce218294b75265622306bb91fc01081f98a0bacce8f8e86a3d3d8741d
+APPROVAL_BINDS_DOC_HEAD=c56286b684b03d7544db9db16b59b5443182f9e6
+ND1_PROFILE_R2_RATIFICATION=VALID
+R1_STATUS=SUPERSEDED_BY_R2_FOR_P3_ONLY（R1 记录本身仍在，未改写、未宣称无效）
+```
+
+### 8.1 Aaron 的批准（逐字）
+
+Aaron 在 2026-08-23 的消息中主动答复：
+
+```
+批准 R2
+```
+
+**披露（重要，勿省略）**：Aaron 的原话是上面两个字，**不是**三行块本身。
+三行的具体取值（id / sha256 / doc head）是 builder 在上一条消息中呈交、
+Aaron 据以答复"批准 R2"的那一份，逐字如下，此处照录以便任何冷读者核对
+他批准的究竟是哪一组字节：
+
+```
+AARON_ND1_PROFILE_RATIFICATION_V2
+APPROVED_PROFILE_ID=ND1_RECOMMENDED_PROFILE_R2
+APPROVED_PROFILE_SHA256=a3d40b7ce218294b75265622306bb91fc01081f98a0bacce8f8e86a3d3d8741d
+APPROVAL_BINDS_DOC_HEAD=c56286b684b03d7544db9db16b59b5443182f9e6
+```
+
+若 Aaron 认为绑定值应为别的取值，**在本文件末尾追加一行更正即可**，
+不得就地改写本节。
+
+### 8.2 `APPROVAL_BINDS_DOC_HEAD` 的歧义与其解决（builder 判断，非 Aaron 裁定）
+
+决策包 §D.10.2 写"承载该 profile 的那一个 doc commit"，而生效条件行写
+`exact_current_40hex_doc_commit`。两种读法在 R1 那次恰好重合（`803d991`
+既是当时 HEAD 又是最后改动决策包的 commit），所以先例不解歧。
+
+采用"承载 profile 字节的 commit"这一读法，理由是机械的：若取"当前 HEAD"，
+则任何一次**与决策包无关**的 commit 都会使批准失效，该字段将不可用。
+`c56286b` 是决策包最后一次被修改（§D.11 落盘）的 commit。
+
+**因此本轮不修改 `ops/DECISION_PACKET_N00_AND_ND1.md`**——改它会把
+"承载 profile 的 commit"变成另一个 commit，反而毁掉刚刚建立的绑定。
+§D.11.5 的可签署块在决策包里保持 `UNRESOLVED` 原状，与 R1 的 §D.10.1
+完全同形；批准这一事实只活在本记录件里。
+
+### 8.3 机械复核（本会话实测）
+
+| 项 | 结果 |
+|---|---|
+| R2 canonical bytes 重算 SHA-256 | `a3d40b7ce218294b75265622306bb91fc01081f98a0bacce8f8e86a3d3d8741d` |
+| 与批准值比对 | **相等** |
+| `P3_PERMITTED_PREDECESSOR` | `P2\|F1` |
+| `P3_PERMITTED_SUCCESSOR` | `P4\|A1\|F2` |
+| 与代码实现比对 | 相等（`supplement_contract.EVENTS["P3"]`） |
+| C1–C10 | PASS（R2 correction-only，47/51 行逐字继承 R1） |
+
+### 8.4 R2 批准解决了什么，没解决什么
+
+```
+RESOLVED=fresh Sol N06 的 High 项——"实现先于治理批准"。代码实现的 P3 转移
+         规则自此被生效 profile 逐字覆盖。
+NOT_RESOLVED=N06 本身。批准 profile 不是通过验收；候选 HEAD 因本轮改动而
+         变化，须重出 packet，并由**另一个** fresh Sol 会话重做正式 N06。
+STILL_NO=supplement 执行、真实数据读取、目录创建、写探针、registry/exposure
+         追加、MC 执行、策略 build —— 一律未授权。
+```

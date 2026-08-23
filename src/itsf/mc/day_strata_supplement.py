@@ -77,9 +77,14 @@ BINDING_FIELDS = ("trial_id", "authorized_commit", "day_universe_digest",
 # future registry vocabulary — does NOT exist in the grammar today
 SUPPLEMENT_AUTHORIZATION_EVENT = "SUPPLEMENT_EXECUTION_AUTHORIZED"
 
-_HEX40 = re.compile(r"^[0-9a-f]{40}$")
-_HEX64 = re.compile(r"^[0-9a-f]{64}$")
-_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# Anchored with \\Z, not $ — Python's $ also matches before a
+# trailing newline. The N06 repair round swept this class in
+# `supplement_contract` and `supplement_runner` and CLAIMED to have swept
+# the class; it had not — these three were missed, and a fresh Sol N06
+# review found them. The claim was the defect, not just the anchors.
+_HEX40 = re.compile(r"^[0-9a-f]{40}\Z")
+_HEX64 = re.compile(r"^[0-9a-f]{64}\Z")
+_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}\Z")
 
 
 class SupplementError(ValueError):

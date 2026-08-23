@@ -408,7 +408,12 @@ def test_platform_precondition_posix_root_is_not_absolute():
     assert os.name == "nt", f"this battery is pinned to Windows, got {os.name}"
     assert not os.path.isabs("/foo/bar")
     assert os.path.isabs("C:" + SEP + "x")
-    assert sys.version_info >= (3, 11)
+    # Finding 4 (fresh Sol N06): this battery depends on Python 3.13's
+    # ntpath.isabs semantics — a rooted path with no drive stopped
+    # counting as absolute — so `>= (3, 11)` understated the real
+    # contract and three tests fail on 3.12. Pinned here and in
+    # `.python-version`.
+    assert sys.version_info >= (3, 13)
 
 
 def test_ratified_names_are_what_the_code_uses():
