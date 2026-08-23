@@ -7,7 +7,7 @@ WHY_NOT=qros packet is the only producer of a Review Packet v1; it renders
         from a qros-state.yaml this project does not have, and LANE/STAGE
         are DECLARED fields that spec §2.4 says are never inferred.
 PRODUCED_BY=Opus 5 main agent (builder seat) — self-report, not a verification
-GENERATED_AT_HEAD=07dc864653d3154f720ab9960a003f252c1bacd2
+GENERATED_AT_HEAD=5f094cbfd7b54eeb7091e345af10331094e9d4d3
 ARTIFACT_TRANSPORT=durable file in the project directory; SHA256 recorded below
 ```
 
@@ -18,7 +18,30 @@ ARTIFACT_TRANSPORT=durable file in the project directory; SHA256 recorded below
 
 ---
 
-## 0. What changed since the first hand-off
+## 0. Round 2 returned HOLD; this is the round-2 repair candidate
+
+A SECOND fresh Sol session reviewed 17904bf and returned **HOLD** on one
+High: `seal_supplement_production` read the caller's payload several times,
+so a stateful mapping (reachable with nothing private) showed compliant
+rows to every check and rows carrying `pnl` to the serializer --
+`SEAL_RETURNED=YES`, `ROWS_READS=4`, `FORBIDDEN_PNL_SERIALIZED=True`,
+`DECLARED_ROWS_DIGEST_MATCH=False`. Reproduced independently here, then
+repaired: `freeze_payload()` consumes the caller's mapping ONCE at seal
+entry and every check plus the serialization consume that snapshot.
+
+That finding also **refuted a claim I had made** -- that the forgeable
+capability was harmless because "re-derivation catches every lie".
+Re-derivation only holds when the bytes derived from and the bytes used
+are the same. The claim is struck through in place in
+`ops/N06_HOLD_REPAIR_EVIDENCE.md` §3 rather than deleted. Full record:
+`ops/N06_ROUND2_HOLD_REPAIR_EVIDENCE.md`.
+
+Round 2 also independently confirmed all four round-1 closures.
+
+**N06 has NOT passed.** Round 3 belongs to a THIRD fresh Sol session that
+was neither the builder nor either previous reviewer.
+
+## 0b. What changed since the first hand-off
 
 A fresh Sol N06 review returned **HOLD** on the previous candidate and
 raised four findings. All four were confirmed by independent
@@ -96,12 +119,12 @@ does not work around that; it reports it.
 ## 4. Fields that ARE mechanically resolvable
 
 ```
-HEAD                          MECH      07dc864653d3154f720ab9960a003f252c1bacd2
+HEAD                          MECH      5f094cbfd7b54eeb7091e345af10331094e9d4d3
 BASIS                         MECH      HEAD
 WORKTREE                      MECH      CLEAN
 SCOPE_BASE                    SELECTED  617f7c33d20051fd991d74afa7c76716720e385d
 SCOPE_BASE_ORIGIN             MECH      selected  <selector: builder>
-SCOPE_CONTENT_DIGEST          MECH      e833ef7bb95bc03674516215d7d149f5815b9cf1d4b0ea333413689bff90efad
+SCOPE_CONTENT_DIGEST          MECH      517c2ef22e299f794058f59640c9bc3b0a1c7a569e632ccef9759880bb2779f1
 PREREG_REF                    CANON     STUDY_0_PREREGISTRATION.md
 PREREG_SHA256                 MECH      6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132
 SEAL_REVISION                 MECH      c685ebc1ed65e0c6fc9b9b7212a054289d1b37fd  (tag s0-freeze-v1)
@@ -116,7 +139,7 @@ EXPOSURE_CONFLICT             MECH      NO
 S0_ATTESTATION                MECH      sha256 d839b965a35e749f0a9052cc3fb85f9b4032ed5d412043f36ac3349779941805
 ```
 
-### 4.1 FILE_MANIFEST over the selected base (24 paths)
+### 4.1 FILE_MANIFEST over the selected base (26 paths)
 
 | path | sha256 @ HEAD | status |
 |---|---|---|
@@ -125,25 +148,27 @@ S0_ATTESTATION                MECH      sha256 d839b965a35e749f0a9052cc3fb85f9b4
 | `ops/MC_DR5_BUILD_PACKET.md` | `24ddac668ade881e…` | M |
 | `ops/MC_TO_STRATEGY_MASTER_PLAN.md` | `af68429093da40ae…` | M |
 | `ops/N06_HOLD_RED_PROOF.md` | `22ad0408bec397d6…` | A |
-| `ops/N06_HOLD_REPAIR_EVIDENCE.md` | `54ea4be3460d2f6c…` | A |
-| `ops/N06_REVIEW_HANDOFF.md` | `0c984ef9c298c0f1…` | A |
+| `ops/N06_HOLD_REPAIR_EVIDENCE.md` | `6b12ca2a1868f2a6…` | A |
+| `ops/N06_REVIEW_HANDOFF.md` | `271c6036bb2d2c34…` | A |
+| `ops/N06_ROUND2_HOLD_REPAIR_EVIDENCE.md` | `28ab25041bf0b20c…` | A |
+| `ops/N06_ROUND2_SOL_PROMPT.md` | `98ca22f114de79de…` | A |
 | `ops/ND1_PROFILE_RATIFICATION.md` | `cf2c3cb2bdb79b34…` | M |
-| `scripts/s0_real_run.py` | `49ed31cb0c086550…` | M |
+| `scripts/s0_real_run.py` | `2ce3787ecd1afd4c…` | M |
 | `src/itsf/mc/day_strata_supplement.py` | `069659902e50abc3…` | M |
 | `src/itsf/mc/supplement_authority.py` | `2db52ac1f716c07e…` | M |
-| `src/itsf/mc/supplement_contract.py` | `a8f2a64fb0b9344d…` | M |
-| `src/itsf/mc/supplement_production.py` | `b08b8c3e867de0da…` | A |
+| `src/itsf/mc/supplement_contract.py` | `c51d25e58545f7c4…` | M |
+| `src/itsf/mc/supplement_production.py` | `b94466ac6360a1b2…` | A |
 | `src/itsf/mc/supplement_registry.py` | `c1628b51d94a5475…` | M |
 | `src/itsf/mc/supplement_runner.py` | `dca137e6fa2217cc…` | M |
 | `tests/test_mc_day_strata_supplement.py` | `ece6593aa21cf132…` | M |
 | `tests/test_mc_supplement_authority.py` | `6f08afee5a017a11…` | M |
 | `tests/test_mc_supplement_integration.py` | `f6b0ff3bd0280f81…` | M |
 | `tests/test_mc_supplement_paths_battery.py` | `820e06b2c398ecb5…` | A |
-| `tests/test_mc_supplement_provenance_battery.py` | `d2a988fd54eb28c3…` | A |
+| `tests/test_mc_supplement_provenance_battery.py` | `89ffbf9ddc6cc3dd…` | A |
 | `tests/test_mc_supplement_registry.py` | `f950bae560963cb2…` | M |
 | `tests/test_mc_supplement_runner.py` | `3dc719db3f34e8a6…` | M |
 | `tests/test_nd1_profile_r2.py` | `1c8a47832d3a33fc…` | A |
-| `tests/test_s0_runner.py` | `e50cae64f3098272…` | M |
+| `tests/test_s0_runner.py` | `1dd541d01988af83…` | M |
 
 `SCOPE_CONTENT_DIGEST` above is taken over the ordered `(path, sha256)` pairs
 of exactly this manifest, serialized UTF-8/LF, lowercase hex, one pair per
