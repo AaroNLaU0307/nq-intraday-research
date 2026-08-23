@@ -142,24 +142,46 @@ class SupplementProduct:
         return str(self.payload.get("supplement_id", ""))
 
 
-#: Value types a supplement payload may contain. Anything else cannot be
-#: frozen into an inert copy, so it is refused rather than trusted.
-_FREEZABLE_SCALARS = (str, int, float, bool, type(None))
+#: Scalar types a supplement payload may contain, checked by EXACT TYPE.
+#:
+#: N06 ROUND 3, High. This was an `isinstance` tuple, and isinstance admits
+#: subclasses. A `str` subclass whose `__eq__` returns True for everything
+#: passed the rows-digest comparison while `json` serialised its real
+#: value: the seal returned bytes whose declared digest described nothing.
+#: Measured — declared 64 zeros against an actual
+#: 792d1297a4c08a039472504298ebce7bf9db2a4241b98e8eeb0b6f730863dd8f.
+#:
+#: A subclass is REFUSED, never coerced. `str(v)` would call the
+#: attacker's own `__str__`, which is the same defect one layer down.
+_FREEZABLE_SCALARS = frozenset({str, int, float, bool, type(None)})
 
 
 def _freeze_value(value):
-    """Deep, inert copy. Every container is traversed EXACTLY ONCE."""
+    """Deep, inert copy. Every container is traversed EXACTLY ONCE.
+
+    Containers are rebuilt, so a Mapping/Sequence subclass loses its
+    behaviour by construction. Scalars used to be returned BY REFERENCE,
+    which is how a hostile subclass survived the freeze; they must now be
+    exactly a built-in. Keys are checked too — the old `str(k)` invoked a
+    key subclass's own `__str__`."""
     if isinstance(value, Mapping):
-        return MappingProxyType(
-            {str(k): _freeze_value(v) for k, v in list(value.items())})
+        frozen = {}
+        for key, item in list(value.items()):
+            if type(key) is not str:
+                raise SupplementProductionError(
+                    "production_payload_unsupported_type",
+                    f"key {key!r} is {type(key).__name__}, not exactly str")
+            frozen[key] = _freeze_value(item)
+        return MappingProxyType(frozen)
     if isinstance(value, (list, tuple)):
         return tuple(_freeze_value(v) for v in list(value))
-    if isinstance(value, _FREEZABLE_SCALARS):
+    if type(value) in _FREEZABLE_SCALARS:
         return value
     raise SupplementProductionError(
         "production_payload_unsupported_type",
-        f"{type(value).__name__} cannot be frozen; a payload carries "
-        "mappings, sequences and scalars only")
+        f"{type(value).__name__} cannot be frozen into an inert value; a "
+        "payload carries mappings, sequences and EXACT built-in scalars "
+        "only — a subclass can carry hostile comparison behaviour")
 
 
 def freeze_payload(raw) -> Mapping:
@@ -183,13 +205,19 @@ def freeze_payload(raw) -> Mapping:
     same. Freezing here makes them the same by construction — every
     check and the final serialization consume this one snapshot, and the
     caller's object is never read again.
+
+    N06 ROUND 3 — this used to inline `{str(k): _freeze_value(v) ...}`,
+    which meant the TOP level had its own, weaker rule: `str(k)` invoked
+    a key subclass's `__str__`, and only nested mappings got the strict
+    treatment. Found by the round-3 key battery, which passed the seal
+    with a `str` subclass key while the value battery already refused.
+    One rule, one place: delegate to `_freeze_value`.
     """
     if not isinstance(raw, Mapping):
         raise SupplementProductionError(
             "production_payload_type",
             f"payload is {type(raw).__name__}, not a mapping")
-    return MappingProxyType(
-        {str(k): _freeze_value(v) for k, v in list(raw.items())})
+    return _freeze_value(raw)
 
 
 def _components(authority, prepared, payload: Mapping) -> dict:
@@ -262,6 +290,37 @@ def build_supplement_from_authority(authority, prepared, day_rows: Sequence,
     return product
 
 
+def _rebuild_from_rows(authority, prepared, rows, *,
+                       supplement_id: str) -> dict:
+    """Reconstruct, from the ROWS alone, the payload the seal will write.
+
+    N06 ROUND 3. Three review rounds each found the same shape: a value
+    the CALLER supplied took part in a comparison that decided whether to
+    write. Round 1 trusted the authority, round 2 read the payload four
+    times, round 3 put a lying scalar inside the one snapshot. Patching
+    the comparison closes an instance; removing the DECLARATION closes
+    the category — a forged `rows_digest` has nothing to lie to when the
+    seal computes the digest of the bytes it is about to emit.
+
+    Everything decisive is derived here: the day universe and the binding
+    come from the authority, the digest and `n_rows` from the rows."""
+    expected_day_set, binding = _sa.supplement_build_inputs(
+        authority, prepared, supplement_id=supplement_id)
+    try:
+        rebuilt = _ds.build_day_strata_supplement_test_only(
+            rows, expected_day_set=expected_day_set, binding=binding)
+    except _ds.SupplementError as exc:
+        raise SupplementProductionError(
+            "production_rebuild_refused", f"{exc.code}: {exc}") from exc
+    stamped = rebuilt.get("supplement_id", "")
+    if stamped != supplement_id:
+        raise SupplementProductionError(
+            "production_supplement_id_divergence",
+            f"the rebuilt payload is stamped {stamped!r} but the authority "
+            f"is for {supplement_id!r}")
+    return rebuilt
+
+
 def _verify_receipt_against(snapshot: Mapping, receipt, authority,
                             prepared) -> ProductionReceipt:
     """Compare the receipt against ONE already-frozen snapshot."""
@@ -312,19 +371,30 @@ def verify_production_receipt(product, authority, prepared
 def seal_supplement_production(product, out_dir: Path, *, authority,
                                prepared, incident_id: str):
     """PRODUCTION seal. Refuses anything the production builder did not
-    make, then RE-VERIFIES the binding, the day-universe digest and the
-    FULL day set before a byte is staged."""
+    make, RE-DERIVES every decisive fact from the authority, and writes a
+    payload IT rebuilt rather than one the caller handed over."""
     receipt = _product_receipt(product)
-    # THE SINGLE READ. Everything below consumes `payload`; the caller's
-    # object is never touched again, so no later read can differ from the
-    # one the checks saw (N06 round 2).
-    payload = freeze_payload(product.payload)
-    _verify_receipt_against(payload, receipt, authority, prepared)
+    # THE SINGLE READ (N06 round 2), now also NORMALISING (round 3): the
+    # snapshot contains exact built-ins only, so every comparison below is
+    # honest and the caller's object is never touched again.
+    declared = freeze_payload(product.payload)
+    # Against what was DECLARED — this is the "did the factory make this
+    # object" gate, and it keeps its place at the front so a hand-built
+    # product still fails under its own name before anything else is
+    # examined. The load-bearing check is the second one, below.
+    _verify_receipt_against(declared, receipt, authority, prepared)
+    # Shape BEFORE the rebuild. The rebuild would silently drop a stray
+    # top-level key, so without this the extra key would surface later as
+    # a receipt mismatch instead of under its own name.
+    if set(declared) != set(_ds._SUPPLEMENT_FIELDS):
+        raise SupplementProductionError(
+            "production_supplement_object_invalid",
+            f"payload field set {sorted(declared)} is not "
+            f"{sorted(_ds._SUPPLEMENT_FIELDS)}")
 
-    binding = dict(payload["binding"])
+    binding = dict(declared["binding"])
     _, want_binding = _sa.supplement_build_inputs(
-        authority, prepared,
-        supplement_id=str(payload.get("supplement_id", "")))
+        authority, prepared, supplement_id=str(declared.get("supplement_id", "")))
     if binding != dict(want_binding):
         raise SupplementProductionError(
             "production_binding_drift",
@@ -332,7 +402,7 @@ def seal_supplement_production(product, out_dir: Path, *, authority,
     if binding["day_universe_digest"] != authority.day_universe_digest:
         raise SupplementProductionError("production_day_universe_drift",
                                         "day-universe digest moved")
-    rows = payload["rows"]
+    rows = declared["rows"]
     got_days = frozenset(r["trade_date"] for r in rows)
     if got_days != authority.expected_day_set:
         missing = sorted(authority.expected_day_set - got_days)[:3]
@@ -340,22 +410,17 @@ def seal_supplement_production(product, out_dir: Path, *, authority,
         raise SupplementProductionError(
             "production_day_set_drift",
             f"missing={missing} extra={extra}")
-    if payload["rows_digest"] != _ds.canonical_rows_digest(rows):
+    if declared["rows_digest"] != _ds.canonical_rows_digest(rows):
         raise SupplementProductionError("production_rows_digest_drift", "")
 
     # F3 (adversarial battery, High). ORDER MATTERS: the per-row check
     # runs BEFORE `_validate_supplement_object`, because a forbidden row
     # field IS the blind-guarantee violation and deserves its own name.
     # With the order reversed the specific code was dead — F7b, found by
-    # the same battery INSIDE this repair.
-    # F3 (adversarial battery, High). The production seal must not be
-    # WEAKER than the hermetic core it replaced. `seal_supplement_test_only`
-    # re-runs `_validate_supplement_object` at the seal boundary, and that
-    # check IS the blind no-outcome guarantee: it refuses any row key
-    # outside the four structural ones. Without it, a payload whose rows
-    # each carried `"pnl": 12.5` was refused by the TEST-ONLY seal and
-    # SEALED by the production one — measured, not hypothesised. Re-run it
-    # here, on the exact object about to be serialised.
+    # the same battery INSIDE this repair. The production seal must also
+    # not be WEAKER than the hermetic core it replaced: a payload whose
+    # rows each carried `"pnl": 12.5` was refused by the TEST-ONLY seal
+    # and SEALED by the production one — measured, not hypothesised.
     for i, row in enumerate(rows):
         extra = sorted(set(row) - set(_ds.ROW_FIELDS))
         if extra:
@@ -364,14 +429,29 @@ def seal_supplement_production(product, out_dir: Path, *, authority,
                 f"row {i}: {extra} — DAY_STRATA rows carry the four "
                 "structural keys ONLY; an outcome field may never ride "
                 "along (blind guarantee)")
+
+    # N06 ROUND 3. From here nothing the caller declared is load-bearing:
+    # the seal rebuilds the payload from the rows and serialises what IT
+    # built. The receipt is checked against the REBUILT object, so a
+    # receipt can only ever describe the bytes actually written.
+    rebuilt = _rebuild_from_rows(authority, prepared, rows,
+                                 supplement_id=receipt.supplement_id)
+    # Against what will be WRITTEN. This is the load-bearing one: a
+    # receipt can now only ever describe the bytes actually emitted.
+    _verify_receipt_against(rebuilt, receipt, authority, prepared)
+    if dict(declared) != dict(rebuilt):
+        raise SupplementProductionError(
+            "production_payload_drift",
+            "the declared payload is not what the authority and these "
+            "rows rebuild to")
     try:
-        _ds._validate_supplement_object(payload)
+        _ds._validate_supplement_object(rebuilt)
     except _ds.SupplementError as exc:
         raise SupplementProductionError(
             "production_supplement_object_invalid",
             f"{exc.code}: {exc}") from exc
 
-    intended = _ds.canonical_supplement_bytes(payload)
+    intended = _ds.canonical_supplement_bytes(rebuilt)
     action = _run.resolve_partial(Path(out_dir), _ds.SUPPLEMENT_FILENAME,
                                   intended, incident_id=incident_id)
     return action, hashlib.sha256(intended).hexdigest()

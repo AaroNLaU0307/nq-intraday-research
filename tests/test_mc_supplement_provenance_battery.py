@@ -1471,7 +1471,7 @@ def test_x_production_forbidden_row_field_is_reachable_and_named(
     src = Path(sp.__file__).read_text(encoding="utf-8")
     body = src[src.index("def seal_supplement_production"):]
     assert body.index(chr(34) + "production_forbidden_row_field" + chr(34)) < \
-        body.index("_ds._validate_supplement_object(payload)"), (
+        body.index("_ds._validate_supplement_object(rebuilt)"), (
         "the specific blind-guarantee check must run FIRST or it is dead")
 
     out = tmp_path / "seal"
@@ -1903,3 +1903,157 @@ def test_z_a_stable_payload_still_seals_normally(prod, authority, genuine,
     assert b"pnl" not in seen["intended"]
     payload = json.loads(seen["intended"].decode("utf-8"))
     assert payload["rows_digest"] == dss.canonical_rows_digest(payload["rows"])
+
+
+# ---------------------------------------------------------------------------
+# N06 ROUND 3, High — a hostile scalar subclass inside the frozen snapshot,
+# and the redesign that makes the declared payload non-load-bearing.
+# ---------------------------------------------------------------------------
+
+class _LyingStr(str):
+    """Equal to everything it is compared with; serialises as itself.
+
+    The exact object the round-3 reviewer used. `isinstance(v, str)` is
+    True, so the old freeze returned it BY REFERENCE and every comparison
+    downstream asked IT whether it matched."""
+
+    def __eq__(self, other):
+        return True
+
+    def __ne__(self, other):
+        return False
+
+    __hash__ = str.__hash__
+
+
+def _forged_exact(authority, prepared, payload):
+    """A product and receipt of EXACT type, built without either __init__.
+
+    Public API only: `__new__` plus `object.__setattr__`, and receipt
+    components that are public arithmetic (F1/F2)."""
+    product = sp.SupplementProduct.__new__(sp.SupplementProduct)
+    object.__setattr__(product, "payload", payload)
+    object.__setattr__(product, "receipt",
+                       _forged_receipt(authority, prepared, payload))
+    assert type(product) is sp.SupplementProduct
+    return product
+
+
+def test_r3_a_lying_digest_subclass_cannot_seal_bytes(
+        prod, authority, genuine, monkeypatch, tmp_path):
+    """MEASURED BEFORE THE REPAIR, on 2a7374f:
+
+        SEAL_RETURNED=True
+        DECLARED_ROWS_DIGEST=0000...0000  (64 zeros)
+        ACTUAL_ROWS_DIGEST=792d1297a4c08a039472504298ebce7bf9db2a4241b98e
+                           8eeb0b6f730863dd8f
+        DECLARED_MATCH=False
+
+    The seal RETURNED and the bytes it staged declared a digest that
+    described nothing. Two things now stop it: the freeze refuses a
+    subclass outright, and even if one got through, the bytes written are
+    rebuilt by the seal rather than taken from the caller."""
+    payload = dict(genuine.payload)
+    payload["rows"] = tuple(dict(r) for r in genuine.payload["rows"])
+    payload["rows_digest"] = _LyingStr("0" * 64)
+
+    seen = _capture_intended(monkeypatch)
+    out = tmp_path / "seal"
+    out.mkdir()
+    with pytest.raises(sp.SupplementProductionError) as ei:
+        sp.seal_supplement_production(
+            _forged_exact(authority, prod, payload), out,
+            authority=authority, prepared=prod, incident_id=INC)
+    assert ei.value.code == "production_payload_unsupported_type"
+    assert "_LyingStr" in str(ei.value)
+    assert "intended" not in seen, "bytes were staged despite the refusal"
+    assert _listing(out) == []
+
+
+@pytest.mark.parametrize("field", ["vol_stratum", "event_stratum",
+                                   "trade_date"])
+def test_r3_a_lying_scalar_inside_a_row_cannot_seal_bytes(
+        prod, authority, genuine, monkeypatch, tmp_path, field):
+    """The same subclass one layer down. `_validate_row` returns
+    `trade_date` BY REFERENCE and runs `str()` over the two strata, so a
+    hostile value there would clear the vocabulary check by `__eq__` and
+    then be re-encoded by the attacker's own `__str__`."""
+    rows = tuple(dict(r) for r in genuine.payload["rows"])
+    for row in rows:
+        row[field] = _LyingStr(row[field])
+    payload = dict(genuine.payload)
+    payload["rows"] = rows
+
+    seen = _capture_intended(monkeypatch)
+    out = tmp_path / "seal"
+    out.mkdir()
+    with pytest.raises(sp.SupplementProductionError) as ei:
+        sp.seal_supplement_production(
+            _forged_exact(authority, prod, payload), out,
+            authority=authority, prepared=prod, incident_id=INC)
+    assert ei.value.code == "production_payload_unsupported_type"
+    assert "intended" not in seen
+    assert _listing(out) == []
+
+
+def test_r3_a_subclass_KEY_cannot_seal_bytes(
+        prod, authority, genuine, monkeypatch, tmp_path):
+    """Keys were normalised with `str(k)` — which calls a key subclass's
+    own `__str__`. Refused by exact type instead, so no attacker method
+    is ever invoked during the freeze."""
+    payload = {_LyingStr(k) if k == "n_rows" else k: v
+               for k, v in dict(genuine.payload).items()}
+    # The receipt is minted over the CLEAN payload: a lying key breaks
+    # `json.dumps(sort_keys=True)` in the receipt helper itself, and the
+    # freeze runs before receipt verification anyway, so the refusal must
+    # not depend on the receipt matching.
+    product = sp.SupplementProduct.__new__(sp.SupplementProduct)
+    object.__setattr__(product, "payload", payload)
+    object.__setattr__(product, "receipt",
+                       _forged_receipt(authority, prod,
+                                       dict(genuine.payload)))
+
+    seen = _capture_intended(monkeypatch)
+    out = tmp_path / "seal"
+    out.mkdir()
+    with pytest.raises(sp.SupplementProductionError) as ei:
+        sp.seal_supplement_production(
+            product, out, authority=authority, prepared=prod,
+            incident_id=INC)
+    assert ei.value.code == "production_payload_unsupported_type"
+    assert "not exactly str" in str(ei.value)
+    assert "intended" not in seen
+
+
+def test_r3_the_seal_serialises_what_it_rebuilt_not_what_was_declared(
+        prod, authority, genuine, monkeypatch, tmp_path):
+    """The structural property behind the round-3 redesign.
+
+    Three rounds found one shape: a caller-supplied value taking part in
+    a comparison that decided whether to write. The category closes only
+    when the DECLARATION stops being load-bearing — so the bytes staged
+    must equal an independent rebuild from the authority and the rows,
+    computed here without touching the production module."""
+    seen = _capture_intended(monkeypatch)
+    out = tmp_path / "seal"
+    out.mkdir()
+    sp.seal_supplement_production(genuine, out, authority=authority,
+                                  prepared=prod, incident_id=INC)
+
+    expected_days, binding = sa.supplement_build_inputs(
+        authority, prod, supplement_id=authority.supplement_id)
+    independent = dss.build_day_strata_supplement_test_only(
+        [dict(r) for r in genuine.payload["rows"]],
+        expected_day_set=expected_days, binding=binding)
+    assert seen["intended"] == dss.canonical_supplement_bytes(independent)
+
+
+def test_r3_the_written_object_is_the_rebuilt_one(prod):
+    """Guard the rename itself: `canonical_supplement_bytes` must be
+    handed the REBUILT object. Serialising `declared` again would restore
+    the whole round-3 attack surface while every other test still passed."""
+    src = Path(sp.__file__).read_text(encoding="utf-8")
+    body = src[src.index("def seal_supplement_production"):]
+    assert "canonical_supplement_bytes(rebuilt)" in body
+    assert "canonical_supplement_bytes(declared)" not in body
+    assert "canonical_supplement_bytes(payload)" not in body
