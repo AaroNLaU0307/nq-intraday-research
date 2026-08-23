@@ -267,8 +267,19 @@ def build_supplement_from_authority(authority, prepared, day_rows: Sequence,
     sid = supplement_id or authority.supplement_id
     expected_day_set, binding = _sa.supplement_build_inputs(
         authority, prepared, supplement_id=sid)
+    # N06 ROUND 3, second instance — found while probing the round-3
+    # repair, not reported by any review. The hermetic core checks the
+    # DR-2/DR-6 vocabularies with `in` and then re-encodes with `str()`,
+    # so a scalar subclass cleared the vocabulary by lying `__eq__` and
+    # was written as whatever its `__str__` returned: measured
+    # vol_stratum='2099-12-31', IN_VOCAB=False, inside a BUILT product.
+    # The seal already refuses it (production_rebuild_refused), but a
+    # builder that happily makes objects the seal must reject is the same
+    # two-implementations-of-one-rule shape that caused rounds 2 and 3.
+    # Normalise on the way IN, so both ends enforce one rule.
+    rows = _freeze_value(list(day_rows))
     payload = _ds.build_day_strata_supplement_test_only(
-        day_rows, expected_day_set=expected_day_set, binding=binding)
+        rows, expected_day_set=expected_day_set, binding=binding)
     # F6 (adversarial battery, Medium). The hermetic core stamps the
     # module-level `SUPPLEMENT_ID`, which need not be the id the authority
     # was minted for: an authority for MC-DS-S002 produced a payload

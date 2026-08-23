@@ -2057,3 +2057,37 @@ def test_r3_the_written_object_is_the_rebuilt_one(prod):
     assert "canonical_supplement_bytes(rebuilt)" in body
     assert "canonical_supplement_bytes(declared)" not in body
     assert "canonical_supplement_bytes(payload)" not in body
+
+
+def test_r3b_the_builder_refuses_a_hostile_scalar_too(prod, authority):
+    """N06 ROUND 3, second instance — builder side, found by probing.
+
+    `_validate_row` checks the ruled vocabularies with `in` and then
+    re-encodes with `str()`. A subclass that lies in `__eq__` cleared the
+    check and was written as whatever `__str__` returned. Measured on the
+    tree that had already repaired the SEAL:
+
+        BUILT_VOL='2099-12-31'   IN_VOCAB=False
+
+    The seal caught it (`production_rebuild_refused`) because it rebuilds,
+    so nothing could ever be written -- but a builder that produces what
+    the seal must reject is two implementations of one rule, which is
+    exactly what caused rounds 2 and 3."""
+    class _Lying(str):
+        def __eq__(self, other):
+            return True
+
+        def __ne__(self, other):
+            return False
+
+        def __str__(self):
+            return "2099-12-31"
+
+        __hash__ = str.__hash__
+
+    rows = [dict(r) for r in _rows(authority.expected_day_set)]
+    rows[0]["vol_stratum"] = _Lying(rows[0]["vol_stratum"])
+    with pytest.raises(sp.SupplementProductionError) as ei:
+        sp.build_supplement_from_authority(authority, prod, rows)
+    assert ei.value.code == "production_payload_unsupported_type"
+    assert "_Lying" in str(ei.value)
