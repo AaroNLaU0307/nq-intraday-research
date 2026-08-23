@@ -30,7 +30,8 @@ WHY_THIS_MODEL=N06 第四轮 exact-tree 验收；第三轮的 High 已由改设�
 N06 第四轮 exact-tree 验收。
 
 仓库：`C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework`
-候选 HEAD：`<见终报>`
+代码候选 HEAD：`ea610e728386705fa1793051f29e5aaf7d0e2e5a`（handoff 生成于此）
+其后仅有 doc-only commit；工件由**内容哈希**钉定，重算匹配即可开工
 第三轮被验、判 HOLD：`2a7374fc069274eeab2b090f5be84520efda5868`
 第二轮：`17904bf6aef2b11f898e05a7351123af614e6cfd`
 第一轮：`291786aec0a33826516b7b435446780530e46444`
@@ -39,7 +40,7 @@ N06 第四轮 exact-tree 验收。
 
 ```
 ops\N06_REVIEW_HANDOFF.md                72970e94f2a5d2bbc9ec1102c335f3bd9a5d2a9afd7f6edccee736851c7491d3
-ops\N06_ROUND3_HOLD_REPAIR_EVIDENCE.md   <见终报>
+ops\N06_ROUND3_HOLD_REPAIR_EVIDENCE.md   aa07383c4cf19d7a9c28aa072ed722ee16c8807ed50b4c17ad772f67d9db5aec
 ops\N06_ROUND2_HOLD_REPAIR_EVIDENCE.md   28ab25041bf0b20cae1db1c20d0feb8f37a689138655e9aced86bd6faa32e441
 ops\N06_HOLD_REPAIR_EVIDENCE.md          6b12ca2a1868f2a634522cfdfd792fdc777bbbc0b2b0fa8ccd0c3ecabe6690ce
 ops\ND1_PROFILE_RATIFICATION.md          cf2c3cb2bdb79b34498c2a7ebc53344c70ef89f0686466a010ce62431541d05e
