@@ -236,8 +236,16 @@ KNOWN_FAILURES
   ops/N06_HOLD_REPAIR_EVIDENCE.md §3.
 
 KNOWN_ASSUMPTIONS
-  - Module privates are not a security boundary in Python; the boundary that
-    holds is RE-DERIVATION, not the capability object.
+  - RETRACTED at round 3, and it was mine. This line used to read "the
+    boundary that holds is RE-DERIVATION, not the capability object".
+    Round 2 refuted it (re-derivation only holds when the bytes derived
+    from and the bytes used are one snapshot) and round 3 showed the
+    consequence: a str subclass whose __eq__ always returns True passes
+    the re-derived digest comparison while JSON writes its real value.
+    The framing was also wrong in a second way -- the attack needs only
+    PUBLIC __new__ and object.__setattr__, so module privacy was never
+    the question. F1/F2 is NOT a benign residual: composed with the
+    scalar-freeze defect it produces a real sealed-byte violation.
   - R1's §D.3.2 P3 contract contradicts its own state diagram twice; the code
     implements the diagram reading, which NO ratified profile covers
     verbatim until ND1_RECOMMENDED_PROFILE_R2 is ratified.

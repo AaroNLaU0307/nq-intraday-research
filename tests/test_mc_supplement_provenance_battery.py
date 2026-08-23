@@ -65,11 +65,19 @@ near-miss so the refusal stays attributable:
 DISCLOSED RESIDUALS, pinned exactly as measured and NOT repaired:
 
   F1/F2 `__new__` + `object.__setattr__` walks around both capability
-     checks and the receipt components are public arithmetic. Module
-     privates are not a security boundary in Python. The boundary that
-     actually holds is RE-DERIVATION, not the capability - which is why
-     `test_y_every_falsified_fact_refuses_under_its_own_code` exists: a
-     forged authority can only ever restate the truth.
+     checks and the receipt components are public arithmetic.
+     RETRACTED AT ROUND 3: this entry used to argue that the boundary
+     which actually holds is RE-DERIVATION rather than the capability,
+     so a forged authority could only restate the truth. That is false.
+     Round 2 showed re-derivation holds only when the derived-from and
+     the used bytes are ONE snapshot; round 3 showed that even one
+     snapshot is not enough while the snapshot can carry a hostile
+     scalar subclass -- a `str` whose `__eq__` returns True passes the
+     re-derived digest comparison and JSON then writes its real value.
+     F1/F2 is therefore NOT benign: composed with the scalar-freeze
+     defect it yields sealed bytes whose declared digest does not
+     describe their rows. The attack needs only PUBLIC `__new__` and
+     `object.__setattr__`; module privacy was never the question.
   F7 `production_day_universe_drift` is shadowed by
      `production_binding_drift`.
   (F7b and F4b below were REPAIRED in the same round that found them;
