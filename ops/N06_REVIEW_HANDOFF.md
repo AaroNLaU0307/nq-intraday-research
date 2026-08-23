@@ -7,7 +7,7 @@ WHY_NOT=qros packet is the only producer of a Review Packet v1; it renders
         from a qros-state.yaml this project does not have, and LANE/STAGE
         are DECLARED fields that spec §2.4 says are never inferred.
 PRODUCED_BY=Opus 5 main agent (builder seat) — self-report, not a verification
-GENERATED_AT_HEAD=ea610e728386705fa1793051f29e5aaf7d0e2e5a
+GENERATED_AT_HEAD=8b16118fadb5637c161022b793a6c3cf0a7d196d
 ARTIFACT_TRANSPORT=durable file in the project directory; SHA256 recorded below
 ```
 
@@ -137,12 +137,12 @@ does not work around that; it reports it.
 ## 4. Fields that ARE mechanically resolvable
 
 ```
-HEAD                          MECH      ea610e728386705fa1793051f29e5aaf7d0e2e5a
+HEAD                          MECH      8b16118fadb5637c161022b793a6c3cf0a7d196d
 BASIS                         MECH      HEAD
-WORKTREE                      MECH      DIRTY(1 entries)
+WORKTREE                      MECH      CLEAN
 SCOPE_BASE                    SELECTED  617f7c33d20051fd991d74afa7c76716720e385d
 SCOPE_BASE_ORIGIN             MECH      selected  <selector: builder>
-SCOPE_CONTENT_DIGEST          MECH      c1783bced0fdca950827c9a7349e6d00859bd2972f564cb3133967a87344a9f7
+SCOPE_CONTENT_DIGEST          MECH      c3a40f4ff5d822dadee9f2e4703791d169818d805196f847ccb5212db1f8a6ce
 PREREG_REF                    CANON     STUDY_0_PREREGISTRATION.md
 PREREG_SHA256                 MECH      6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132
 SEAL_REVISION                 MECH      c685ebc1ed65e0c6fc9b9b7212a054289d1b37fd  (tag s0-freeze-v1)
@@ -157,7 +157,7 @@ EXPOSURE_CONFLICT             MECH      NO
 S0_ATTESTATION                MECH      sha256 d839b965a35e749f0a9052cc3fb85f9b4032ed5d412043f36ac3349779941805
 ```
 
-### 4.1 FILE_MANIFEST over the selected base (29 paths)
+### 4.1 FILE_MANIFEST over the selected base (31 paths)
 
 | path | sha256 @ HEAD | status |
 |---|---|---|
@@ -168,28 +168,30 @@ S0_ATTESTATION                MECH      sha256 d839b965a35e749f0a9052cc3fb85f9b4
 | `ops/MC_TO_STRATEGY_MASTER_PLAN.md` | `af68429093da40ae…` | M |
 | `ops/N06_HOLD_RED_PROOF.md` | `22ad0408bec397d6…` | A |
 | `ops/N06_HOLD_REPAIR_EVIDENCE.md` | `6b12ca2a1868f2a6…` | A |
-| `ops/N06_REVIEW_HANDOFF.md` | `b72ba14e72bb337b…` | A |
+| `ops/N06_REVIEW_HANDOFF.md` | `72970e94f2a5d2bb…` | A |
 | `ops/N06_ROUND2_HOLD_REPAIR_EVIDENCE.md` | `28ab25041bf0b20c…` | A |
 | `ops/N06_ROUND2_SOL_PROMPT.md` | `98ca22f114de79de…` | A |
+| `ops/N06_ROUND3_HOLD_REPAIR_EVIDENCE.md` | `aa07383c4cf19d7a…` | A |
 | `ops/N06_ROUND3_SOL_PROMPT.md` | `b3cb84ef9523f3ac…` | A |
+| `ops/N06_ROUND4_SOL_PROMPT.md` | `2489d4921f713597…` | A |
 | `ops/ND1_PROFILE_RATIFICATION.md` | `cf2c3cb2bdb79b34…` | M |
 | `ops/ND2_ND3_FABLE_DECISION_PROMPT.md` | `34c598f53227012e…` | A |
-| `scripts/s0_real_run.py` | `d156abdc1386eb63…` | M |
+| `scripts/s0_real_run.py` | `98e4f261095a243c…` | M |
 | `src/itsf/mc/day_strata_supplement.py` | `069659902e50abc3…` | M |
 | `src/itsf/mc/supplement_authority.py` | `2db52ac1f716c07e…` | M |
 | `src/itsf/mc/supplement_contract.py` | `c51d25e58545f7c4…` | M |
-| `src/itsf/mc/supplement_production.py` | `a8f09cad0688a7a8…` | A |
+| `src/itsf/mc/supplement_production.py` | `4ac9a2d62e05bda7…` | A |
 | `src/itsf/mc/supplement_registry.py` | `c1628b51d94a5475…` | M |
 | `src/itsf/mc/supplement_runner.py` | `dca137e6fa2217cc…` | M |
 | `tests/test_mc_day_strata_supplement.py` | `ece6593aa21cf132…` | M |
 | `tests/test_mc_supplement_authority.py` | `6f08afee5a017a11…` | M |
 | `tests/test_mc_supplement_integration.py` | `f6b0ff3bd0280f81…` | M |
 | `tests/test_mc_supplement_paths_battery.py` | `820e06b2c398ecb5…` | A |
-| `tests/test_mc_supplement_provenance_battery.py` | `4cb6cc7f8a693f41…` | A |
+| `tests/test_mc_supplement_provenance_battery.py` | `48776cae2a112a51…` | A |
 | `tests/test_mc_supplement_registry.py` | `f950bae560963cb2…` | M |
 | `tests/test_mc_supplement_runner.py` | `3dc719db3f34e8a6…` | M |
 | `tests/test_nd1_profile_r2.py` | `1c8a47832d3a33fc…` | A |
-| `tests/test_s0_runner.py` | `715a39489cc0fa78…` | M |
+| `tests/test_s0_runner.py` | `b6965949822f5721…` | M |
 
 `SCOPE_CONTENT_DIGEST` above is taken over the ordered `(path, sha256)` pairs
 of exactly this manifest, serialized UTF-8/LF, lowercase hex, one pair per

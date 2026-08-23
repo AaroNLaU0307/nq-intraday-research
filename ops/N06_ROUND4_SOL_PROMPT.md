@@ -30,7 +30,7 @@ WHY_THIS_MODEL=N06 第四轮 exact-tree 验收；第三轮的 High 已由改设�
 N06 第四轮 exact-tree 验收。
 
 仓库：`C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework`
-代码候选 HEAD：`ea610e728386705fa1793051f29e5aaf7d0e2e5a`（handoff 生成于此）
+代码候选 HEAD：`8b161180` 系前缀，完整值见 handoff `HEAD=` 行（handoff 生成于此）
 其后仅有 doc-only commit；工件由**内容哈希**钉定，重算匹配即可开工
 第三轮被验、判 HOLD：`2a7374fc069274eeab2b090f5be84520efda5868`
 第二轮：`17904bf6aef2b11f898e05a7351123af614e6cfd`
@@ -39,7 +39,7 @@ N06 第四轮 exact-tree 验收。
 **动手前逐个重算 SHA-256，任一不匹配即停止并报告**：
 
 ```
-ops\N06_REVIEW_HANDOFF.md                72970e94f2a5d2bbc9ec1102c335f3bd9a5d2a9afd7f6edccee736851c7491d3
+ops\N06_REVIEW_HANDOFF.md                d2e5f804e5d60c917864a442f0b8e225fc00aba333b888987cbd7bbfdef0b305
 ops\N06_ROUND3_HOLD_REPAIR_EVIDENCE.md   aa07383c4cf19d7a9c28aa072ed722ee16c8807ed50b4c17ad772f67d9db5aec
 ops\N06_ROUND2_HOLD_REPAIR_EVIDENCE.md   28ab25041bf0b20cae1db1c20d0feb8f37a689138655e9aced86bd6faa32e441
 ops\N06_HOLD_REPAIR_EVIDENCE.md          6b12ca2a1868f2a634522cfdfd792fdc777bbbc0b2b0fa8ccd0c3ecabe6690ce
@@ -65,7 +65,12 @@ ops\DECISION_PACKET_N00_AND_ND1.md       da64a3d68454e6f129287412f200ea51309ee85
 
 1. **`rebuilt` 与 `declared` 之间还有没有缝**——有没有任何一条路径让写出的
    字节不是 `_rebuild_from_rows` 的产物。
-2. **`_rebuild_from_rows` 自己可否被污染**：`supplement_build_inputs`
+2. **builder 侧同一规则**（本轮末尾自查发现并已修）：`build_supplement_from_authority`
+   曾把 caller 的 rows 直接喂进 hermetic core，`_validate_row` 用 `in` 查词表、
+   再用 `str()` 转码，于是说谎 `__eq__` 过词表、`__str__` 写出
+   `vol_stratum='2099-12-31'`（IN_VOCAB=False）。封印当时已能拒
+   （`production_rebuild_refused`），现在 builder 入口也归一化。请查还有没有第三处。
+3. **`_rebuild_from_rows` 自己可否被污染**：`supplement_build_inputs`
    返回的 binding／day set、`build_day_strata_supplement_test_only` 内部的
    `_validate_row`（它按引用返回 `trade_date`、对两个 strata 调 `str()`）。
 3. **冻结的完备性**：`bool`/`int` 子类、`float` 子类、嵌套三层以上、
@@ -101,7 +106,7 @@ registry fail-closed（next-value 序列、六个整数下界、`output_root` �
 
 ### 四、机械项
 
-全套件与 collect 应为 **3977** 且与双 floor pin 一致；`git diff --check`；
+全套件与 collect 应为 **3978** 且与双 floor pin 一致；`git diff --check`；
 frozen hashes 7/7；registry `ee9da33f…`、exposure `382182bf…`、
 attestation `d839b965…`；S0-T001 run/archive 14 文件逐文件相等；
 两个 `supplements\` 子树不存在；registry 零 `SUPPLEMENT_` 行；
