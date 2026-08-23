@@ -7,7 +7,7 @@ WHY_NOT=qros packet is the only producer of a Review Packet v1; it renders
         from a qros-state.yaml this project does not have, and LANE/STAGE
         are DECLARED fields that spec §2.4 says are never inferred.
 PRODUCED_BY=Opus 5 main agent (builder seat) — self-report, not a verification
-GENERATED_AT_HEAD=5f094cbfd7b54eeb7091e345af10331094e9d4d3
+GENERATED_AT_HEAD=ea610e728386705fa1793051f29e5aaf7d0e2e5a
 ARTIFACT_TRANSPORT=durable file in the project directory; SHA256 recorded below
 ```
 
@@ -18,28 +18,46 @@ ARTIFACT_TRANSPORT=durable file in the project directory; SHA256 recorded below
 
 ---
 
-## 0. Round 2 returned HOLD; this is the round-2 repair candidate
+## 0. Round 3 returned HOLD; this is the round-3 repair candidate
 
-A SECOND fresh Sol session reviewed 17904bf and returned **HOLD** on one
-High: `seal_supplement_production` read the caller's payload several times,
-so a stateful mapping (reachable with nothing private) showed compliant
-rows to every check and rows carrying `pnl` to the serializer --
-`SEAL_RETURNED=YES`, `ROWS_READS=4`, `FORBIDDEN_PNL_SERIALIZED=True`,
-`DECLARED_ROWS_DIGEST_MATCH=False`. Reproduced independently here, then
-repaired: `freeze_payload()` consumes the caller's mapping ONCE at seal
-entry and every check plus the serialization consume that snapshot.
+A THIRD fresh Sol session reviewed 2a7374f and returned **HOLD** on one
+High: `freeze_payload` returned scalars BY REFERENCE after an `isinstance`
+check, so a `str` subclass whose `__eq__` always returns True passed the
+rows-digest comparison while `json` serialized its real value. Measured
+before the repair -- declared 64 zeros against an actual
+`792d1297a4c08a039472504298ebce7bf9db2a4241b98e8eeb0b6f730863dd8f`, seal
+RETURNED, bytes staged. Reproduced here to the same digits before anything
+was changed.
 
-That finding also **refuted a claim I had made** -- that the forgeable
-capability was harmless because "re-derivation catches every lie".
-Re-derivation only holds when the bytes derived from and the bytes used
-are the same. The claim is struck through in place in
-`ops/N06_HOLD_REPAIR_EVIDENCE.md` §3 rather than deleted. Full record:
-`ops/N06_ROUND2_HOLD_REPAIR_EVIDENCE.md`.
+**Three rounds, three Highs, one shape**: a caller-supplied value taking
+part in a comparison that decided whether to write. Round 1 trusted the
+authority object, round 2 read the payload four times, round 3 put a
+hostile scalar inside the single snapshot. Each patch was locally correct
+and the adversary returned through the same door, so this round changes
+the DESIGN rather than the comparison, on Aaron's ruling:
 
-Round 2 also independently confirmed all four round-1 closures.
+  * the seal derives the day universe and binding from the authority,
+    REBUILDS the payload from the rows, and serializes what it built --
+    a forged `rows_digest` has nothing to lie to;
+  * the receipt is verified a second time against the rebuilt object, so
+    a receipt can only describe the bytes actually emitted;
+  * the freeze admits EXACT built-in scalars only. Subclasses are refused,
+    never coerced: `str(v)` would call the attacker's own `__str__`.
 
-**N06 has NOT passed.** Round 3 belongs to a THIRD fresh Sol session that
-was neither the builder nor either previous reviewer.
+Writing the new battery found a second instance of the same defect that
+no reviewer had reached: `freeze_payload` had inlined its own weaker rule
+at the TOP level (`{str(k): ...}`), so a `str` subclass KEY sealed
+cleanly while nested mappings were strict. Mine, and now closed -- one
+rule, one place.
+
+Round 3 also independently confirmed the round-2 closure and re-verified
+every mechanical invariant. Two documents that still carried the
+retracted "RE-DERIVATION holds" claim were corrected; F1/F2 is recorded
+as a component of a real sealed-byte violation, not a benign residual.
+Full record: `ops/N06_ROUND3_HOLD_REPAIR_EVIDENCE.md`.
+
+**N06 has NOT passed.** Round 4 belongs to a FOURTH fresh Sol session that
+was neither the builder nor any previous reviewer.
 
 ## 0b. What changed since the first hand-off
 
@@ -119,12 +137,12 @@ does not work around that; it reports it.
 ## 4. Fields that ARE mechanically resolvable
 
 ```
-HEAD                          MECH      5f094cbfd7b54eeb7091e345af10331094e9d4d3
+HEAD                          MECH      ea610e728386705fa1793051f29e5aaf7d0e2e5a
 BASIS                         MECH      HEAD
-WORKTREE                      MECH      CLEAN
+WORKTREE                      MECH      DIRTY(1 entries)
 SCOPE_BASE                    SELECTED  617f7c33d20051fd991d74afa7c76716720e385d
 SCOPE_BASE_ORIGIN             MECH      selected  <selector: builder>
-SCOPE_CONTENT_DIGEST          MECH      517c2ef22e299f794058f59640c9bc3b0a1c7a569e632ccef9759880bb2779f1
+SCOPE_CONTENT_DIGEST          MECH      c1783bced0fdca950827c9a7349e6d00859bd2972f564cb3133967a87344a9f7
 PREREG_REF                    CANON     STUDY_0_PREREGISTRATION.md
 PREREG_SHA256                 MECH      6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132
 SEAL_REVISION                 MECH      c685ebc1ed65e0c6fc9b9b7212a054289d1b37fd  (tag s0-freeze-v1)
@@ -139,36 +157,39 @@ EXPOSURE_CONFLICT             MECH      NO
 S0_ATTESTATION                MECH      sha256 d839b965a35e749f0a9052cc3fb85f9b4032ed5d412043f36ac3349779941805
 ```
 
-### 4.1 FILE_MANIFEST over the selected base (26 paths)
+### 4.1 FILE_MANIFEST over the selected base (29 paths)
 
 | path | sha256 @ HEAD | status |
 |---|---|---|
 | `.python-version` | `02e735b3dfe1c328…` | A |
 | `ops/DECISION_PACKET_N00_AND_ND1.md` | `da64a3d68454e6f1…` | M |
+| `ops/DECISION_PACKET_ND2_ND3.md` | `7bc92817e045af67…` | A |
 | `ops/MC_DR5_BUILD_PACKET.md` | `24ddac668ade881e…` | M |
 | `ops/MC_TO_STRATEGY_MASTER_PLAN.md` | `af68429093da40ae…` | M |
 | `ops/N06_HOLD_RED_PROOF.md` | `22ad0408bec397d6…` | A |
 | `ops/N06_HOLD_REPAIR_EVIDENCE.md` | `6b12ca2a1868f2a6…` | A |
-| `ops/N06_REVIEW_HANDOFF.md` | `271c6036bb2d2c34…` | A |
+| `ops/N06_REVIEW_HANDOFF.md` | `b72ba14e72bb337b…` | A |
 | `ops/N06_ROUND2_HOLD_REPAIR_EVIDENCE.md` | `28ab25041bf0b20c…` | A |
 | `ops/N06_ROUND2_SOL_PROMPT.md` | `98ca22f114de79de…` | A |
+| `ops/N06_ROUND3_SOL_PROMPT.md` | `b3cb84ef9523f3ac…` | A |
 | `ops/ND1_PROFILE_RATIFICATION.md` | `cf2c3cb2bdb79b34…` | M |
-| `scripts/s0_real_run.py` | `2ce3787ecd1afd4c…` | M |
+| `ops/ND2_ND3_FABLE_DECISION_PROMPT.md` | `34c598f53227012e…` | A |
+| `scripts/s0_real_run.py` | `d156abdc1386eb63…` | M |
 | `src/itsf/mc/day_strata_supplement.py` | `069659902e50abc3…` | M |
 | `src/itsf/mc/supplement_authority.py` | `2db52ac1f716c07e…` | M |
 | `src/itsf/mc/supplement_contract.py` | `c51d25e58545f7c4…` | M |
-| `src/itsf/mc/supplement_production.py` | `b94466ac6360a1b2…` | A |
+| `src/itsf/mc/supplement_production.py` | `a8f09cad0688a7a8…` | A |
 | `src/itsf/mc/supplement_registry.py` | `c1628b51d94a5475…` | M |
 | `src/itsf/mc/supplement_runner.py` | `dca137e6fa2217cc…` | M |
 | `tests/test_mc_day_strata_supplement.py` | `ece6593aa21cf132…` | M |
 | `tests/test_mc_supplement_authority.py` | `6f08afee5a017a11…` | M |
 | `tests/test_mc_supplement_integration.py` | `f6b0ff3bd0280f81…` | M |
 | `tests/test_mc_supplement_paths_battery.py` | `820e06b2c398ecb5…` | A |
-| `tests/test_mc_supplement_provenance_battery.py` | `89ffbf9ddc6cc3dd…` | A |
+| `tests/test_mc_supplement_provenance_battery.py` | `4cb6cc7f8a693f41…` | A |
 | `tests/test_mc_supplement_registry.py` | `f950bae560963cb2…` | M |
 | `tests/test_mc_supplement_runner.py` | `3dc719db3f34e8a6…` | M |
 | `tests/test_nd1_profile_r2.py` | `1c8a47832d3a33fc…` | A |
-| `tests/test_s0_runner.py` | `1dd541d01988af83…` | M |
+| `tests/test_s0_runner.py` | `715a39489cc0fa78…` | M |
 
 `SCOPE_CONTENT_DIGEST` above is taken over the ordered `(path, sha256)` pairs
 of exactly this manifest, serialized UTF-8/LF, lowercase hex, one pair per
@@ -236,16 +257,8 @@ KNOWN_FAILURES
   ops/N06_HOLD_REPAIR_EVIDENCE.md §3.
 
 KNOWN_ASSUMPTIONS
-  - RETRACTED at round 3, and it was mine. This line used to read "the
-    boundary that holds is RE-DERIVATION, not the capability object".
-    Round 2 refuted it (re-derivation only holds when the bytes derived
-    from and the bytes used are one snapshot) and round 3 showed the
-    consequence: a str subclass whose __eq__ always returns True passes
-    the re-derived digest comparison while JSON writes its real value.
-    The framing was also wrong in a second way -- the attack needs only
-    PUBLIC __new__ and object.__setattr__, so module privacy was never
-    the question. F1/F2 is NOT a benign residual: composed with the
-    scalar-freeze defect it produces a real sealed-byte violation.
+  - Module privates are not a security boundary in Python; the boundary that
+    holds is RE-DERIVATION, not the capability object.
   - R1's §D.3.2 P3 contract contradicts its own state diagram twice; the code
     implements the diagram reading, which NO ratified profile covers
     verbatim until ND1_RECOMMENDED_PROFILE_R2 is ratified.
