@@ -4,11 +4,12 @@
 PROMPT_FOR=Fable 5
 WINDOW=NEW_TOP_LEVEL_SESSION
 MUST_NOT_BE=本包作者（Opus builder 会话）／任何 N06 审查会话
-STATUS=DRAFT_AWAITING_PACKET（哈希槽待填）
+STATUS=READY（包已落盘，哈希已填）
 ```
 
-> **前置**：`ops/DECISION_PACKET_ND2_ND3.md` 必须先落盘并记录 SHA256。
-> 本提示词的 `<PACKET_SHA256>` / `<PACKET_HEAD>` 在那之后填入，不得留空发出。
+> 包已落盘于 commit `cb8bef39f358fbeaeef982c3be32d0bc8f5f3e8e`，32 项。
+> 包由**内容哈希**钉定，不由 HEAD 钉定——后续 commit 不影响它，只要重算的
+> SHA256 匹配即可开工。
 
 ---
 
@@ -31,12 +32,17 @@ WHY_THIS_MODEL=对抗审计席定门槛：最不倾向放水的席位来设及�
 
 你被 Aaron 授权，对 N-D2＋N-D3 合并决策包中的全部条目**给出完整裁定方案**。
 
+**先读包的 §2。** 那里有三个发现会改变你对本任务的理解：三个候选阈值在仓库
+里没有出处（你是从零设定，不是追认）；有一份揭盲后文档已就 feasibility 作出
+断言而**你我都不得读**（归 Aaron）；frequency 门在定义上无法对 S0 无知。
+
 **你的裁定是给 Aaron 的一次性批准对象，不自动生效。** 他会整体批准或逐项改。
 因此每一项都必须可独立判读：他不应该需要回头读上下文才能理解某一项在裁什么。
 
 仓库：`C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework`
-包：`ops\DECISION_PACKET_ND2_ND3.md`　SHA256 `<PACKET_SHA256>`
-HEAD：`<PACKET_HEAD>`
+包：`ops\DECISION_PACKET_ND2_ND3.md`
+SHA256 `7bc92817e045af67bd6ebc0077acce63361b298ead1376b9cd5678a76ab2552a`
+落盘 commit `cb8bef39f358fbeaeef982c3be32d0bc8f5f3e8e`（32 项：M15/D2/O4/E3/G8）
 
 动手前重算包的 SHA256，不匹配即停止并报告。**只读仓库，不改任何文件。**
 
