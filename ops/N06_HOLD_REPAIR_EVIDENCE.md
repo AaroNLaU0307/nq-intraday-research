@@ -32,7 +32,22 @@ N06_FINAL_PASS=NO
 
 1. **F1/F2（High，同一类）**：`__new__` ＋ `object.__setattr__` 可绕过 authority 与 receipt 两处 capability 检查，且 receipt 的六个分量摘要是**公开算术**，无需读取任何私有。
    与 `c5c819b` 已记录的残留同类——**Python 模块私有不是安全边界，任何进程内设计都挡不住改写模块内部的调用者**。
-   **真正成立的安全论证是对抗车道自己测出来的**：起作用的边界是**重新推导**，不是 capability——16 项参数化表证明每一个被篡改的事实都在**各自专属的码**上被拒，因此 `__new__` 伪造只能复述真相。本包采纳该表述。
+   ~~**真正成立的安全论证是对抗车道自己测出来的**：起作用的边界是**重新推导**，
+   不是 capability——16 项参数化表证明每一个被篡改的事实都在**各自专属的码**上
+   被拒，因此 `__new__` 伪造只能复述真相。~~
+
+   **【2026-08-23 更正，由 N06 第二轮 fresh Sol 证伪】** 上面这句话是错的，
+   而且是我写的。第二轮实测：一个 exact-type、经公开 `__new__` 构造、携带
+   **状态型 Mapping** 的 product，能让 receipt 复算、day-set、rows-digest 与
+   blind schema 四项检查读到合规 rows，而最终 `canonical_supplement_bytes`
+   读到带 `pnl` 的 rows：`SEAL_RETURNED=YES`、`ROWS_READS=4`、
+   `FORBIDDEN_PNL_SERIALIZED=True`、`DECLARED_ROWS_DIGEST_MATCH=False`。
+   **"重新推导"只有在推导所依据的字节与最终使用的字节是同一份时才成立**——
+   当时它们不是。缺陷不在 capability，在 check 与 use 没有绑定同一快照。
+   已修：`freeze_payload` 在 seal 入口一次性冻结，其后所有检查与序列化只消费
+   该快照（round-2 修复轮）。残留 F1/F2 本身（`__new__` 可绕过 capability）
+   仍然成立，但**不得**再以"重新推导足以兜底"为其定性。
+
 2. **F7**：`production_day_universe_drift` 被 `production_binding_drift` 遮蔽（day-universe digest 是 binding 的成员），死分支，保留为纵深防御。
 3. **F8**：`resolve_partial` 是公开函数并写出制品文件名；「唯一生产路径」是调用图性质，不是制品名的性质。当前无授权、governed root 另需独立目录创建授权，故不可达。
 4. **F9**：`SupplementProduct` 的不可变是**浅**的（行 dict 仍可变）；就地篡改会被 `production_receipt_mismatch` 抓到（双向都有测试）。

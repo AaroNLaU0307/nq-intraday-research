@@ -72,7 +72,11 @@ DISCLOSED RESIDUALS, pinned exactly as measured and NOT repaired:
      forged authority can only ever restate the truth.
   F7 `production_day_universe_drift` is shadowed by
      `production_binding_drift`.
-  F7b `production_forbidden_row_field`, added by the F3 repair, is
+  (F7b and F4b below were REPAIRED in the same round that found them;
+  they are kept here as history, and the tests that pin them now
+  assert the repaired behaviour. They are NOT open residuals.)
+
+  F7b `production_forbidden_row_field`, added by the F3 repair, was
      shadowed by `production_supplement_object_invalid` - same class,
      found in the repair itself.
   F8 `resolve_partial` is public and writes the sealed artifact name.
@@ -1709,3 +1713,185 @@ def test_z_no_supplements_subtree_was_created_under_the_ruled_roots():
         assert not (root / "supplements").exists(), (
             f"{root}/supplements must not exist - directory creation is a "
             "SEPARATE authorization that has not been granted")
+
+
+# ===========================================================================
+# N06 round 2 — TOCTOU: check-and-serialize must read ONE frozen snapshot
+# ===========================================================================
+
+
+class _StatefulRows(tuple):
+    """A rows view that changes AFTER the checks have read it.
+
+    Not a mock of the defect — the defect is that the seal reads
+    `payload["rows"]` more than once, so anything whose reads differ
+    exposes it. `tuple` is subclassed so every isinstance/iteration the
+    production code performs behaves normally.
+    """
+
+
+class _StatefulPayload(dict):
+    """Outer mapping whose `rows` key flips after N reads.
+
+    Reachable with NOTHING private: `SupplementProduct.__new__` plus
+    `object.__setattr__` installs it past `__post_init__`'s
+    `MappingProxyType(dict(...))` copy, and the type stays EXACT so the
+    exact-type guard cannot see it.
+    """
+
+    def __init__(self, base, poisoned_rows, flip_after):
+        super().__init__(base)
+        self._poisoned = poisoned_rows
+        self._flip_after = flip_after
+        self.rows_reads = 0
+
+    def _rows_view(self):
+        self.rows_reads += 1
+        if self.rows_reads > self._flip_after:
+            return self._poisoned
+        return super().__getitem__("rows")
+
+    def __getitem__(self, key):
+        if key == "rows":
+            return self._rows_view()
+        return super().__getitem__(key)
+
+    def items(self):
+        # The freeze reads through `items()`, not `__getitem__`, so a
+        # mapping that only overrode the latter would never fire and the
+        # test would pass for the wrong reason. Attack the real path.
+        return [(k, self._rows_view() if k == "rows" else v)
+                for k, v in super().items()]
+
+
+def _capture_intended(monkeypatch):
+    """Capture the bytes the seal WOULD write, without writing them.
+
+    The governed roots are never touched: `resolve_partial` is replaced,
+    so nothing reaches a filesystem the batteries are forbidden to write.
+    """
+    seen = {}
+
+    def _fake(out_dir, filename, intended, *, incident_id):
+        seen["intended"] = intended
+        return sp._run.PartialAction("promote", detail="captured")
+
+    monkeypatch.setattr(sp._run, "resolve_partial", _fake)
+    return seen
+
+
+def test_z_a_stateful_payload_can_never_seal_bytes_the_checks_never_saw(
+        prod, authority, genuine, monkeypatch, tmp_path):
+    """N06 ROUND 2, High — time-of-check vs time-of-use.
+
+    Before the repair every check passed on ONE view of the rows while
+    the canonical serialization read ANOTHER. Measured then:
+
+        SEAL_RETURNED=YES
+        ROWS_READS=4
+        FORBIDDEN_PNL_SERIALIZED=True
+        DECLARED_ROWS_DIGEST_MATCH=False
+
+    The required post-repair behaviour is a DISJUNCTION, not a refusal:
+    a stateful mapping must either be refused before anything is written,
+    or produce a STABLE snapshot with no forbidden field whose declared
+    `rows_digest` matches its own rows. Both branches are asserted here,
+    and the flip point selects which one is exercised — proving the
+    freeze takes a real view rather than always finding a clean one.
+    """
+    clean = tuple(dict(r) for r in genuine.payload["rows"])
+    poisoned = _StatefulRows(dict(r, pnl=12.5) for r in clean)
+
+    for flip_after, branch in ((3, "late"), (0, "immediate")):
+        payload = _StatefulPayload(dict(genuine.payload), poisoned,
+                                   flip_after=flip_after)
+        product = sp.SupplementProduct.__new__(sp.SupplementProduct)
+        object.__setattr__(product, "payload", payload)
+        object.__setattr__(product, "receipt", genuine.receipt)
+        # the exact-type guard cannot see this, which is the point
+        assert type(product) is sp.SupplementProduct
+
+        seen = _capture_intended(monkeypatch)
+        out = tmp_path / f"seal_{branch}"
+        out.mkdir()
+        try:
+            sp.seal_supplement_production(product, out, authority=authority,
+                                          prepared=prod, incident_id=INC)
+        except sp.SupplementProductionError as exc:
+            # branch (a): refused, and NOTHING was serialized or written
+            assert "intended" not in seen, (
+                f"{branch}: bytes were serialized despite the refusal")
+            assert _listing(out) == [], f"{branch}: the seal wrote something"
+            assert exc.code in ("production_forbidden_row_field",
+                                "production_receipt_mismatch",
+                                "production_rows_digest_drift"), exc.code
+            continue
+
+        # branch (b): sealed — then the bytes must be the stable, clean view
+        body = seen["intended"]
+        assert b"pnl" not in body, (
+            f"{branch}: the forbidden field reached the sealed bytes")
+        payload_out = json.loads(body.decode("utf-8"))
+        assert payload_out["rows_digest"] == \
+            dss.canonical_rows_digest(payload_out["rows"]), (
+            f"{branch}: the declared digest does not describe the sealed rows")
+
+
+def test_z_the_freeze_takes_the_real_view_not_a_convenient_one(
+        prod, authority, genuine, monkeypatch, tmp_path):
+    """If the payload is poisoned from its FIRST read, the freeze must
+    capture the poison and the blind guarantee must refuse it. Otherwise
+    the previous test would pass for the wrong reason."""
+    clean = tuple(dict(r) for r in genuine.payload["rows"])
+    poisoned = _StatefulRows(dict(r, pnl=12.5) for r in clean)
+    payload = _StatefulPayload(dict(genuine.payload), poisoned, flip_after=0)
+    product = sp.SupplementProduct.__new__(sp.SupplementProduct)
+    object.__setattr__(product, "payload", payload)
+    object.__setattr__(product, "receipt", genuine.receipt)
+
+    seen = _capture_intended(monkeypatch)
+    out = tmp_path / "seal"
+    out.mkdir()
+    with pytest.raises(sp.SupplementProductionError) as ei:
+        sp.seal_supplement_production(product, out, authority=authority,
+                                      prepared=prod, incident_id=INC)
+    assert ei.value.code in ("production_forbidden_row_field",
+                             "production_receipt_mismatch")
+    assert "intended" not in seen
+    assert _listing(out) == []
+
+
+def test_z_the_seal_reads_the_payload_exactly_once(prod, authority, genuine,
+                                                   monkeypatch, tmp_path):
+    """The structural fix, stated as a property rather than a diff: the
+    caller's mapping is consumed ONCE, so no later read can differ from
+    the one the checks used."""
+    counter = _StatefulPayload(dict(genuine.payload),
+                               genuine.payload["rows"], flip_after=10**6)
+    product = sp.SupplementProduct.__new__(sp.SupplementProduct)
+    object.__setattr__(product, "payload", counter)
+    object.__setattr__(product, "receipt", genuine.receipt)
+
+    _capture_intended(monkeypatch)
+    out = tmp_path / "seal"
+    out.mkdir()
+    sp.seal_supplement_production(product, out, authority=authority,
+                                  prepared=prod, incident_id=INC)
+    assert counter.rows_reads <= 1, (
+        f"the seal read the caller's rows {counter.rows_reads} times; every "
+        "read past the first is a window for the value to change")
+
+
+def test_z_a_stable_payload_still_seals_normally(prod, authority, genuine,
+                                                 monkeypatch, tmp_path):
+    """The freeze must not break the legitimate path."""
+    seen = _capture_intended(monkeypatch)
+    out = tmp_path / "seal"
+    out.mkdir()
+    action, sha = sp.seal_supplement_production(
+        genuine, out, authority=authority, prepared=prod, incident_id=INC)
+    assert action.action == "promote"
+    assert len(sha) == 64
+    assert b"pnl" not in seen["intended"]
+    payload = json.loads(seen["intended"].decode("utf-8"))
+    assert payload["rows_digest"] == dss.canonical_rows_digest(payload["rows"])

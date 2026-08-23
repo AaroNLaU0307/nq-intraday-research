@@ -37,7 +37,7 @@ THE SHAPE OF THE BOUNDARY
 `seal_supplement_test_only` remain as the hermetic core, renamed so their
 status is unmistakable at every call site. Their product carries no
 receipt and therefore cannot reach the production seal — which is a test
-in `tests/test_mc_supplement_production.py`, not a claim here.
+in `tests/test_mc_supplement_provenance_battery.py`, not a claim here.
 
 NOTHING HERE AUTHORIZES ANYTHING. `SUPPLEMENT_EXECUTION_AUTHORIZED=NO`
 stands; the production entry in `supplement_runner` still refuses before
@@ -142,6 +142,56 @@ class SupplementProduct:
         return str(self.payload.get("supplement_id", ""))
 
 
+#: Value types a supplement payload may contain. Anything else cannot be
+#: frozen into an inert copy, so it is refused rather than trusted.
+_FREEZABLE_SCALARS = (str, int, float, bool, type(None))
+
+
+def _freeze_value(value):
+    """Deep, inert copy. Every container is traversed EXACTLY ONCE."""
+    if isinstance(value, Mapping):
+        return MappingProxyType(
+            {str(k): _freeze_value(v) for k, v in list(value.items())})
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_value(v) for v in list(value))
+    if isinstance(value, _FREEZABLE_SCALARS):
+        return value
+    raise SupplementProductionError(
+        "production_payload_unsupported_type",
+        f"{type(value).__name__} cannot be frozen; a payload carries "
+        "mappings, sequences and scalars only")
+
+
+def freeze_payload(raw) -> Mapping:
+    """Consume the caller's mapping ONCE and return an inert snapshot.
+
+    N06 ROUND 2, High — TIME-OF-CHECK vs TIME-OF-USE. The seal used to
+    read `product.payload["rows"]` several times: once for the receipt
+    components, once for the day set, once for the rows digest, once for
+    the blind schema check, and once more when serializing. A payload
+    reachable with NOTHING private — `SupplementProduct.__new__` plus
+    `object.__setattr__` installs a stateful `dict` subclass past
+    `__post_init__`'s shallow copy, and the type stays EXACT so the
+    exact-type guard cannot see it — returned compliant rows to the
+    checks and rows carrying `"pnl"` to the serializer. Measured before
+    this repair: SEAL_RETURNED=YES, ROWS_READS=4,
+    FORBIDDEN_PNL_SERIALIZED=True, DECLARED_ROWS_DIGEST_MATCH=False.
+
+    That is why "the capability is forgeable but re-derivation still
+    catches every lie" was the WRONG claim, and it was mine: re-derivation
+    only holds when the bytes derived from and the bytes used are the
+    same. Freezing here makes them the same by construction — every
+    check and the final serialization consume this one snapshot, and the
+    caller's object is never read again.
+    """
+    if not isinstance(raw, Mapping):
+        raise SupplementProductionError(
+            "production_payload_type",
+            f"payload is {type(raw).__name__}, not a mapping")
+    return MappingProxyType(
+        {str(k): _freeze_value(v) for k, v in list(raw.items())})
+
+
 def _components(authority, prepared, payload: Mapping) -> dict:
     from .consumer import prepared_digest as _prep_digest
     return {
@@ -212,26 +262,15 @@ def build_supplement_from_authority(authority, prepared, day_rows: Sequence,
     return product
 
 
-def verify_production_receipt(product, authority, prepared
-                              ) -> ProductionReceipt:
-    """Recompute every component from the LIVE objects and compare."""
-    if not isinstance(product, SupplementProduct):
-        raise SupplementProductionError(
-            "production_product_type",
-            f"{type(product).__name__} is not a SupplementProduct; a "
-            "hand-assembled mapping is not a production product")
-    receipt = product.receipt
-    if receipt is None:
-        raise SupplementProductionError(
-            "production_not_factory_built",
-            "this product carries no production receipt — it was hand-built "
-            "or produced by dataclasses.replace")
+def _verify_receipt_against(snapshot: Mapping, receipt, authority,
+                            prepared) -> ProductionReceipt:
+    """Compare the receipt against ONE already-frozen snapshot."""
     if not isinstance(authority, _sa.SupplementAuthority):
         raise SupplementProductionError("production_authority_type",
                                         type(authority).__name__)
     _sa.verify_supplement_authority(authority, prepared,
                                     supplement_id=receipt.supplement_id)
-    want = _components(authority, prepared, product.payload)
+    want = _components(authority, prepared, snapshot)
     for name in RECEIPT_COMPONENTS:
         if receipt.components.get(name) != want[name]:
             raise SupplementProductionError(
@@ -246,17 +285,46 @@ def verify_production_receipt(product, authority, prepared
     return receipt
 
 
+def _product_receipt(product) -> ProductionReceipt:
+    """Type and receipt presence, before anything is read."""
+    if not isinstance(product, SupplementProduct):
+        raise SupplementProductionError(
+            "production_product_type",
+            f"{type(product).__name__} is not a SupplementProduct; a "
+            "hand-assembled mapping is not a production product")
+    receipt = product.receipt
+    if receipt is None:
+        raise SupplementProductionError(
+            "production_not_factory_built",
+            "this product carries no production receipt — it was hand-built "
+            "or produced by dataclasses.replace")
+    return receipt
+
+
+def verify_production_receipt(product, authority, prepared
+                              ) -> ProductionReceipt:
+    """Recompute every component from ONE frozen snapshot and compare."""
+    receipt = _product_receipt(product)
+    return _verify_receipt_against(freeze_payload(product.payload), receipt,
+                                   authority, prepared)
+
+
 def seal_supplement_production(product, out_dir: Path, *, authority,
                                prepared, incident_id: str):
     """PRODUCTION seal. Refuses anything the production builder did not
     make, then RE-VERIFIES the binding, the day-universe digest and the
     FULL day set before a byte is staged."""
-    verify_production_receipt(product, authority, prepared)
-    payload = product.payload
+    receipt = _product_receipt(product)
+    # THE SINGLE READ. Everything below consumes `payload`; the caller's
+    # object is never touched again, so no later read can differ from the
+    # one the checks saw (N06 round 2).
+    payload = freeze_payload(product.payload)
+    _verify_receipt_against(payload, receipt, authority, prepared)
 
     binding = dict(payload["binding"])
     _, want_binding = _sa.supplement_build_inputs(
-        authority, prepared, supplement_id=product.supplement_id)
+        authority, prepared,
+        supplement_id=str(payload.get("supplement_id", "")))
     if binding != dict(want_binding):
         raise SupplementProductionError(
             "production_binding_drift",

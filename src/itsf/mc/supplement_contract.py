@@ -8,7 +8,10 @@ WHAT MAKES THIS AUTHORITATIVE. Every token, row class, commit width,
 required-field list and permitted transition below is transcribed from
 the RATIFIED governance text — `ops/DECISION_PACKET_N00_AND_ND1.md`
 §D.3.1/§D.3.2/§D.3.3/§D.3.5/§D.3.7 as approved by Aaron under
-`ND1_RECOMMENDED_PROFILE_R1` (sha256 0a08319a…, bound to doc head
+`ND1_RECOMMENDED_PROFILE_R2` (sha256 a3d40b7c…, ratified 2026-08-23,
+bound to doc head c56286b…), which corrected R1's two P3
+contradictions and is the profile the P3 edges below now rest on.
+R1 (sha256 0a08319a…, bound to doc head
 803d991…, recorded verbatim in `ops/ND1_PROFILE_RATIFICATION.md`).
 `tests/test_mc_supplement_integration.py` re-derives the token set from
 that document at test time and asserts equality with this module, so a
