@@ -7,7 +7,7 @@ WHY_NOT=qros packet is the only producer of a Review Packet v1; it renders
         from a qros-state.yaml this project does not have, and LANE/STAGE
         are DECLARED fields that spec §2.4 says are never inferred.
 PRODUCED_BY=Opus 5 main agent (builder seat) — self-report, not a verification
-GENERATED_AT_HEAD=c56286b684b03d7544db9db16b59b5443182f9e6
+GENERATED_AT_HEAD=07dc864653d3154f720ab9960a003f252c1bacd2
 ARTIFACT_TRANSPORT=durable file in the project directory; SHA256 recorded below
 ```
 
@@ -17,6 +17,32 @@ ARTIFACT_TRANSPORT=durable file in the project directory; SHA256 recorded below
 > filled in**; `CANON` = verbatim excerpt with a path.
 
 ---
+
+## 0. What changed since the first hand-off
+
+A fresh Sol N06 review returned **HOLD** on the previous candidate and
+raised four findings. All four were confirmed by independent
+recomputation, and all four are now closed:
+
+```
+HIGH    implementation preceded governance approval
+        RESOLVED - Aaron ratified ND1_RECOMMENDED_PROFILE_R2 on 2026-08-23,
+        so the P3 transitions the code implements are now covered verbatim
+        by an in-force profile (ops/ND1_PROFILE_RATIFICATION.md section 8)
+MEDIUM  scope digest did not match the runtime encoding
+        RESOLVED - this file now calls the runtime's own
+        serialize.scope_content_digest; the previous b38505fb... came from a
+        format I invented instead of reading
+LOW     three unswept `$` anchors in day_strata_supplement.py
+        RESOLVED - the earlier round swept two modules and CLAIMED the
+        class, which was false; a cross-module guard now covers all six
+LOW     Python version contract left latent
+        RESOLVED - .python-version = 3.13, and the battery asserts >= 3.13
+```
+
+**N06 itself has NOT passed.** A ratified profile is not an acceptance, and
+this candidate has moved since the review, so the formal N06 must be redone
+by a DIFFERENT fresh Sol session against the new HEAD.
 
 ## 1. Why this is not a Review Packet v1
 
@@ -70,12 +96,12 @@ does not work around that; it reports it.
 ## 4. Fields that ARE mechanically resolvable
 
 ```
-HEAD                          MECH      c56286b684b03d7544db9db16b59b5443182f9e6
+HEAD                          MECH      07dc864653d3154f720ab9960a003f252c1bacd2
 BASIS                         MECH      HEAD
 WORKTREE                      MECH      CLEAN
 SCOPE_BASE                    SELECTED  617f7c33d20051fd991d74afa7c76716720e385d
 SCOPE_BASE_ORIGIN             MECH      selected  <selector: builder>
-SCOPE_CONTENT_DIGEST          MECH      b38505fb01c50371f2bd80d92ecb8ff1a4f2f38029c871736be631628cb1fc5e
+SCOPE_CONTENT_DIGEST          MECH      e833ef7bb95bc03674516215d7d149f5815b9cf1d4b0ea333413689bff90efad
 PREREG_REF                    CANON     STUDY_0_PREREGISTRATION.md
 PREREG_SHA256                 MECH      6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132
 SEAL_REVISION                 MECH      c685ebc1ed65e0c6fc9b9b7212a054289d1b37fd  (tag s0-freeze-v1)
@@ -90,17 +116,20 @@ EXPOSURE_CONFLICT             MECH      NO
 S0_ATTESTATION                MECH      sha256 d839b965a35e749f0a9052cc3fb85f9b4032ed5d412043f36ac3349779941805
 ```
 
-### 4.1 FILE_MANIFEST over the selected base (21 paths)
+### 4.1 FILE_MANIFEST over the selected base (24 paths)
 
 | path | sha256 @ HEAD | status |
 |---|---|---|
+| `.python-version` | `02e735b3dfe1c328…` | A |
 | `ops/DECISION_PACKET_N00_AND_ND1.md` | `da64a3d68454e6f1…` | M |
 | `ops/MC_DR5_BUILD_PACKET.md` | `24ddac668ade881e…` | M |
 | `ops/MC_TO_STRATEGY_MASTER_PLAN.md` | `af68429093da40ae…` | M |
 | `ops/N06_HOLD_RED_PROOF.md` | `22ad0408bec397d6…` | A |
 | `ops/N06_HOLD_REPAIR_EVIDENCE.md` | `54ea4be3460d2f6c…` | A |
-| `scripts/s0_real_run.py` | `0959dc426323ba41…` | M |
-| `src/itsf/mc/day_strata_supplement.py` | `5e6d88c1bcbfb65c…` | M |
+| `ops/N06_REVIEW_HANDOFF.md` | `0c984ef9c298c0f1…` | A |
+| `ops/ND1_PROFILE_RATIFICATION.md` | `cf2c3cb2bdb79b34…` | M |
+| `scripts/s0_real_run.py` | `49ed31cb0c086550…` | M |
+| `src/itsf/mc/day_strata_supplement.py` | `069659902e50abc3…` | M |
 | `src/itsf/mc/supplement_authority.py` | `2db52ac1f716c07e…` | M |
 | `src/itsf/mc/supplement_contract.py` | `a8f2a64fb0b9344d…` | M |
 | `src/itsf/mc/supplement_production.py` | `b08b8c3e867de0da…` | A |
@@ -108,13 +137,13 @@ S0_ATTESTATION                MECH      sha256 d839b965a35e749f0a9052cc3fb85f9b4
 | `src/itsf/mc/supplement_runner.py` | `dca137e6fa2217cc…` | M |
 | `tests/test_mc_day_strata_supplement.py` | `ece6593aa21cf132…` | M |
 | `tests/test_mc_supplement_authority.py` | `6f08afee5a017a11…` | M |
-| `tests/test_mc_supplement_integration.py` | `7a1de0a4a07a07e6…` | M |
-| `tests/test_mc_supplement_paths_battery.py` | `c033805c80fc56a2…` | A |
+| `tests/test_mc_supplement_integration.py` | `f6b0ff3bd0280f81…` | M |
+| `tests/test_mc_supplement_paths_battery.py` | `820e06b2c398ecb5…` | A |
 | `tests/test_mc_supplement_provenance_battery.py` | `d2a988fd54eb28c3…` | A |
 | `tests/test_mc_supplement_registry.py` | `f950bae560963cb2…` | M |
 | `tests/test_mc_supplement_runner.py` | `3dc719db3f34e8a6…` | M |
-| `tests/test_nd1_profile_r2.py` | `b8675ed558934e6e…` | A |
-| `tests/test_s0_runner.py` | `578a7746356bfaae…` | M |
+| `tests/test_nd1_profile_r2.py` | `1c8a47832d3a33fc…` | A |
+| `tests/test_s0_runner.py` | `e50cae64f3098272…` | M |
 
 `SCOPE_CONTENT_DIGEST` above is taken over the ordered `(path, sha256)` pairs
 of exactly this manifest, serialized UTF-8/LF, lowercase hex, one pair per
