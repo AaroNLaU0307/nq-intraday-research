@@ -91,7 +91,7 @@ CODEX_ROLE=INDEPENDENT_REVIEW_AND_FINAL_ACCEPTANCE
 | N06 | N01–N05 | Codex R3 exact-tree 审查 | **Codex** | none | — |
 | N-D2 | N06 | 决策批 2（方法，见 §5） | **Aaron** | none | — |
 | N07 | N-D2 | feasibility 实现（仅已裁形态）＋历史文档勘误 | 工程 | none | — |
-| N08 | N06 | 延后审计窗口（9/12 簇） | 工程 | none | — |
+| ~~N08~~ | ~~N06~~ | ~~延后审计窗口（9/12 簇）~~ | 工程 | none | **DROPPED**（Aaron 本人 2026-08-25，OD-2026-08-25-2；依据 `ops/N00_N08_PROVENANCE_AUDIT_2026-08-25.md`。行保留不删——删掉它，后人就看不见它存在过） |
 | N09 | N04,N05,N06,N-D1＋**Aaron P2 精确授权** | MC-DS-S001 执行封存 | **Aaron** | structural | — |
 | N10 | N09 | 独立验证＋attestation＋pin（两 commit 序列） | 工程＋**Codex** | structural | — |
 | N11 | N07,N10 | GRID/K 接线（GridReplayAuthority＋KReplayEvidence） | 工程 | structural | — |
@@ -815,7 +815,7 @@ MC 运行会打断证明它自己输入合法的那套机制。
 builder 推荐 R2，并**自陈了 R2 自身的弱点**：拒绝是按**调用点**搬家的，而今天
 没有任何代码调用 `mc_registry`，故 R2 若先于 N13 接线落地会留下真实的覆盖空窗。
 
-### 15.7 N08 —— 范围无法重建，须 Aaron
+### 15.7 N08 —— 范围无法重建（**已被 §15.11 取代：Aaron 裁 DROP**）
 
 `ops/N08_SCOPE_UNRESOLVED.md`：「9/12 簇」的出处在仓内检索不到。AI 只能检索，
 不能恢复。**未按任何一种猜测实现。**
@@ -829,7 +829,9 @@ N06=ACCEPTED_WITH_DISCLOSED_RESIDUAL（委托裁定，DELEGATED=YES）
 N-D2/N-D3=RATIFIED（32 项；G1、G8 附修改）
 N07=DONE   N09_MITIGATION=DONE   N12=DONE
 全套件 **4167 passed / 0 failed**（393 s，终态树，主代理实测）
-N08=SCOPE_UNRESOLVED（须 Aaron）
+N08=**DROPPED**（Aaron 本人 2026-08-25，OD-2026-08-25-2）
+N00=KEEP_UNRESOLVED —— 阻断面已澄清：**不**阻断 N09→N17，只阻断
+    N18-C／N18-I 的 candidate-specific build（OD-2026-08-25-3）
 N10=BLOCKED（依赖 N09 的真实执行）
 N11=NOT_IMPLEMENTED —— `GridReplayAuthority` 与 `KReplayEvidence` 全仓不存在
 N13=BLOCKED —— §4 DAG 写 N13 依赖 N11；N11 依赖 N10 依赖 N09，而 N09 需要
@@ -864,8 +866,10 @@ S0-T001 14 文件 run==archive ／ 两个 supplements\ 子树不存在 ／ 零 S
 归 Aaron（不可委托）
   1. 读 ops/S0_T001_RESULT_DECISION_ADDENDUM.md:26 与 EXPOSURE_LEDGER.md:19
      —— 两份都含揭盲 outcome，读它们即污染该 AI 席位
-  2. 找回或宣告丢失 N00 的五份 Round-4 文档
-  3. N08 的「9/12 簇」出处，或重新定义该判据
+  2. Round-4 sealed proposal 原文是否还在手上（在 → 补交路径；不在 → 才轮到
+     FORMALLY_LOST，而宣告丢失本身不解锁任何东西）
+  3. N09 的 P2 —— **但要等执行路径存在、HEAD 稳定之后**（OD-2026-08-25-1）
+  ~~4. N08 的「9/12 簇」出处~~ —— 已于 2026-08-25 裁 DROP，不再欠他任何东西
 
 builder 下一步（不需任何人裁）
   **没有。** 这是本节最重要的一句：N12 之后，DAG 上不存在 builder 可以独立
@@ -878,3 +882,24 @@ builder 下一步（不需任何人裁）
   「builder 下一步＝N13 运行器主体」。核 §4 DAG 后确认那是错的——N11 从未
   实现，全仓无 `GridReplayAuthority`。恢复锚里的错比别处贵，故记在此。）
 ```
+
+### 15.11 Aaron 本人的四项裁定（2026-08-25，`DELEGATED=NO`）
+
+完整记录：`ops/OWNER_DECISIONS_2026-08-25.md`。**与 2026-08-24 那批
+（Sol 在具名委托下裁定，`DELEGATED=YES`）分开记，引用时不得混。**
+
+```
+OD-1  N09 暂不签 P2 —— 执行路径尚不存在；今天签既不解锁执行，又保证以后
+      要走一次 P2S（_g_authorized_commit_matches_head 要求授权 commit 等于
+      运行时 HEAD）。三个值已核定并留档，只有 commit 随 HEAD 变。
+OD-2  N08=DROPPED —— §4 表中该行保留不删，标 DROPPED。若日后仍要做广域
+      逻辑审计，那是一次**新的范围裁定**，不得写成「恢复了 N08」。
+OD-3  N00=KEEP_UNRESOLVED —— 确认审计发现：不阻断 N09→N17，只阻断
+      N18-C／N18-I。未解决项仍是「原文是否还在 Aaron 手上」这一件。
+OD-4  MC-REG-COLLISION-001 走 fresh Sol 独立裁定；**Sol 返回前 builder
+      不推进**。提示词 ops/MC_REG_COLLISION_SOL_RATIFICATION_PROMPT.md，
+      六份工件已冻结登记。
+```
+
+**「Sol 返回前不推进」按字面执行**：本轮未动执行路径、未动 N13、未动任何
+被冻结工件；只转录裁定并把 N08 状态落到 §4 与本节。
