@@ -119,6 +119,29 @@ Aaron 2026-08-24：不再审 N06
 裁 (a) 必须同时给出：**F1/F2 残留在 N17 的披露措辞**，以及它在 N09 真实执行
 之前是否需要任何额外缓解。
 
+**F1/F2 的定性在你收到这份提示词之后被 builder 收窄了一次，据此裁定：**
+
+builder 于 2026-08-24 测了此前未测的那条路——**同时**伪造 prepared 与
+authority 使二者自洽（`ops/INCIDENT…` 之外的独立测量，钉在
+`tests/test_mc_supplement_coercion_census.py`）：
+
+```
+REAL_BUNDLE_DIGEST=f50c424d…   LIED_BUNDLE_DIGEST=765db774…
+VERIFY_ACCEPTED_FULLY_FORGED_PAIR=True
+BUILDER_RETURNED=True   SEAL_RETURNED=True
+BINDING_KEYS=[authorized_commit, day_universe_digest, method_version,
+              source_input_sha256, trial_id]
+```
+
+**结论：不是封存违规，是验证违规。** `bundle_table_digest` 是验证期量，
+不在 sealed binding 的键集里，所以谎言到不了任何字节。但
+`verify_supplement_authority` **可以被一个自洽的虚构满足**。
+
+这个定性比「封存字节可被伪造」窄，比「伪造买不到任何东西」宽。它的实际后果是：
+**凡是把"authority 验证通过"当作关于真实 bundle 的证据（而非仅仅内部自洽）的
+地方，那条推断不成立。** 你裁 (a) 的披露措辞需要覆盖这一点，而不是只说
+"capability 可绕过"。
+
 ### 你应当先自己判断的
 
 四轮 High 是否**真的**全部闭合——你有权重跑攻击、重读修复。builder 的自陈

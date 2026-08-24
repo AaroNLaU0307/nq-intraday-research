@@ -36,6 +36,10 @@ from pathlib import Path
 from itsf.mc import supplement_authority as sa
 from itsf.mc import day_strata_supplement as dss
 
+# fixtures live in the battery; importing them makes them available here
+from test_mc_supplement_provenance_battery import (  # noqa: F401
+    _fixture_root, authority, make_prod, prod)
+
 #: (module, function) whose body feeds a digest or an identity comparison.
 WATCHED = {
     (sa, "day_universe_digest"),
@@ -139,3 +143,93 @@ def test_the_divergence_measurement_is_pinned_not_folklore():
     poisoned = (_StrLiar(days[0]), days[1])
     assert sa.day_universe_digest(days) != sa.day_universe_digest(poisoned)
     assert poisoned[0] == days[0]      # ...yet still compares equal
+
+
+def test_a_fully_forged_pair_is_accepted_but_reaches_no_sealed_byte(
+        prod, authority, monkeypatch, tmp_path):
+    """The boundary of the F1/F2 residual, measured rather than assumed.
+
+    Round 4 left one route untested: forge BOTH the prepared input and the
+    authority so the pair is self-consistent. Measured 2026-08-24:
+
+        REAL_BUNDLE_DIGEST=f50c424d...   LIED_BUNDLE_DIGEST=765db774...
+        VERIFY_ACCEPTED_FULLY_FORGED_PAIR=True
+        BUILDER_RETURNED=True   SEAL_RETURNED=True
+        BINDING_KEYS=[authorized_commit, day_universe_digest,
+                      method_version, source_input_sha256, trial_id]
+
+    So the pair IS accepted -- but `bundle_table_digest` is a
+    verification-time quantity and is not among the sealed binding keys,
+    so the lie never reaches a byte. This is therefore NOT a sealed-byte
+    violation. It IS a verification weakness: `verify_supplement_authority`
+    can be satisfied by a self-consistent fiction, which matters wherever
+    "the authority verified" is later cited as evidence ABOUT THE REAL
+    BUNDLE rather than about internal consistency.
+
+    That distinction is the honest characterisation of F1/F2, and it is
+    narrower than "sealed bytes can be forged" and broader than "the
+    forgery buys nothing".
+
+    This test PINS the boundary. If a future change puts a
+    verification-time digest into the binding, it fails -- and then this
+    stops being a boundary and becomes a hole."""
+    import dataclasses
+    import json
+
+    from itsf.mc import supplement_authority as _sa
+    from itsf.mc import supplement_production as _sp
+    from test_mc_supplement_provenance_battery import (
+        INC as _INC, _capture_intended as _cap, _listing as _ls,
+        _rows as _rw)
+
+    class _StrLiar(str):
+        def __str__(self):
+            return "f" * 64
+
+        def __eq__(self, other):
+            return True
+
+        def __ne__(self, other):
+            return False
+
+        __hash__ = str.__hash__
+
+    def _forge(obj, **over):
+        new = object.__new__(type(obj))
+        for f in dataclasses.fields(obj):
+            object.__setattr__(new, f.name,
+                               over.get(f.name, getattr(obj, f.name)))
+        return new
+
+    table = dict(prod.file_sha256)
+    first = sorted(table)[0]
+    poisoned = dict(table)
+    poisoned[first] = _StrLiar(table[first])
+    real_bt = _sa.bundle_table_digest(table)
+    lied_bt = _sa.bundle_table_digest(poisoned)
+    assert real_bt != lied_bt              # the primitive is live
+
+    bad_prep = _forge(prod, file_sha256=poisoned)
+    bad_auth = _forge(authority, bundle_table_digest=lied_bt)
+    object.__setattr__(bad_auth, "authority_digest",
+                       _sa._digest(_sa.AUTHORITY_DIGEST_SCHEMA,
+                                   _sa._authority_payload(bad_auth)))
+
+    # accepted -- this is the F1/F2 residual, disclosed, not repaired here
+    assert _sa.verify_supplement_authority(bad_auth, bad_prep) is bad_auth
+
+    product = _sp.build_supplement_from_authority(
+        bad_auth, bad_prep, _rw(authority.expected_day_set))
+    seen = _cap(monkeypatch)
+    out = tmp_path / "seal"
+    out.mkdir()
+    _sp.seal_supplement_production(product, out, authority=bad_auth,
+                                   prepared=bad_prep, incident_id=_INC)
+
+    binding = json.loads(seen["intended"])["binding"]
+    assert "bundle_table_digest" not in binding, (
+        "a verification-time digest reached the sealed binding -- the "
+        "fully-forged pair now DOES produce a sealed-byte violation, and "
+        "the F1/F2 residual must be re-characterised as a hole")
+    assert real_bt not in json.dumps(binding)
+    assert lied_bt not in json.dumps(binding)
