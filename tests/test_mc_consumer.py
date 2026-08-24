@@ -355,7 +355,7 @@ def test_epistemic_crn_provenance_and_metrics():
     assert _epi(prepared, seed=13).observations.world_digests() != \
         want_digests
     fe = a.feasibility
-    assert fe.gate_status == "DECISION_REQUIRED"
+    assert fe.gate_status == "RULED_ND2_ND3_2026-08-24"
     assert not hasattr(fe, "feasible")         # the R2 boolean is GONE
     assert "feasible" not in fe.metrics
     assert 0.0 <= fe.metrics["ambiguous_share"] <= 1.0
@@ -529,7 +529,7 @@ def test_primary_theta_passes_theta_gate_then_hits_feasibility_gate():
     check passed)."""
     prepared = _prepare()
     with pytest.raises(mcc.MCInputError,
-                       match="feasibility_gate_decision_required"):
+                       match="feasibility_gate_input_absent"):
         mcc.epistemic_go_gate_input(
             _epi(prepared), _epi(prepared, scenario="Stress"))
 
@@ -537,8 +537,13 @@ def test_primary_theta_passes_theta_gate_then_hits_feasibility_gate():
 def test_no_public_surface_accepts_a_feasibility_boolean():
     import inspect
     sig = inspect.signature(mcc.epistemic_go_gate_input)
+    # No parameter named `feasible` -- the gate takes composed EVIDENCE.
+    # A bare boolean is refused at runtime too
+    # (test_mc_feasibility_composition), because `True` carries no gate
+    # outcomes and lets a caller assert what nothing measured.
     assert "feasible" not in sig.parameters
-    assert mcc.FEASIBILITY_GATE_STATUS == "DECISION_REQUIRED"
+    assert "feasibility" in sig.parameters
+    assert mcc.FEASIBILITY_GATE_STATUS == "RULED_ND2_ND3_2026-08-24"
 
 
 def test_hand_built_verdict_inputs_have_no_callable_entry():
@@ -616,5 +621,5 @@ def test_full_chain_ends_at_the_honest_refusals():
     res = _epi(prepared)
     assert res.world_means                     # epistemic ran
     with pytest.raises(mcc.MCInputError,
-                       match="feasibility_gate_decision_required"):
+                       match="feasibility_gate_input_absent"):
         mcc.epistemic_go_gate_input(res, _epi(prepared, scenario="Stress"))

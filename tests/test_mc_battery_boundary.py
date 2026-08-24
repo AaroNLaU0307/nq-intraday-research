@@ -20,7 +20,7 @@ Codex's reproduction, verbatim:
     direct_constructed=True
     battery_method_digest_changed=True
     seal_provenance_accepted=True
-    full_seal_first_refusal=feasibility_gate_decision_required
+    full_seal_first_refusal=feasibility_gate_input_absent
 
 "Stopped by the unrelated feasibility gate" is not a refusal.
 
@@ -359,12 +359,12 @@ def test_f1_public_constructor_product_carries_no_receipt(prod_like):
 def test_f1_codex_reproduction_method_digest_swap_now_refuses(prod_like):
     """Codex's exact synthetic reproduction: direct construction plus a
     changed method digest. `seal_provenance_accepted=True` and
-    `full_seal_first_refusal=feasibility_gate_decision_required` was the
+    `full_seal_first_refusal=feasibility_gate_input_absent` was the
     baseline behaviour; the refusal must now be the battery boundary."""
     forged = _hand_built(prod_like, method_digest="f" * 64)
     assert forged.method_digest != prod_like.method_digest
     code = _seal_code(forged)
-    assert code != "feasibility_gate_decision_required"
+    assert code != "feasibility_gate_input_absent"
     assert code in BATTERY_CODES
 
 
@@ -475,9 +475,15 @@ def test_f4_matrix_covers_every_declared_prepared_field(prod_like):
 def test_f5_production_shaped_product_still_reaches_the_feasibility_gate(
         prod_like):
     """The genuine article passes the battery/receipt boundary and stops
-    exactly where it stopped before — the honest missing decision."""
-    assert _seal_code(prod_like) == "feasibility_gate_decision_required"
-    assert mcc.FEASIBILITY_GATE_STATUS == "DECISION_REQUIRED"
+    exactly where it stopped before.
+
+    The stopping POINT is unchanged; only the reason moved. It used to be
+    that no feasibility rule existed anywhere; since M1-M5 (2026-08-24) the
+    rule exists and this call supplies no evidence for it. Either way the
+    code is a marker meaning "the forward path reached the gate", which is
+    what this test is actually about."""
+    assert _seal_code(prod_like) == "feasibility_gate_input_absent"
+    assert mcc.FEASIBILITY_GATE_STATUS == "RULED_ND2_ND3_2026-08-24"
 
 
 def test_f5_test_prepared_still_computes_and_cold_replays(test_prepared):

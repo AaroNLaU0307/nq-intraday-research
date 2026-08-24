@@ -113,3 +113,54 @@ def test_selection_returns_indices_the_consumer_can_be_handed():
     means = [100.0, -50.0, 0.0]
     low, mid, high = fw.select_fixed_worlds(means)
     assert (low, mid, high) == (1, 2, 0)
+
+
+# ---------------------------------------------------------------------------
+# M11 dependency 8: the selection reaches the report
+# ---------------------------------------------------------------------------
+
+def test_the_three_reports_are_the_three_selected_worlds():
+    """The rule is only worth having if the report actually uses it. This
+    pins the join: whatever `select_fixed_worlds` returns is exactly what
+    gets reported, in that order."""
+    from itsf.mc import consumer as mcc
+    from test_mc_consumer import _prepare, PRIMARY
+
+    prepared = _prepare()
+    obs = mcc.run_observation_set(prepared, run_label="base",
+                                  platform="topstep", engine="E1",
+                                  scenario="Conservative", channel=PRIMARY,
+                                  B=4, master_seed=7)
+    expected = fw.select_fixed_worlds(obs.world_means())
+    reports = mcc.fixed_world_reports(obs)
+    assert len(reports) == 3
+    assert tuple(r.world_index for r in reports) == expected
+
+
+def test_the_reports_are_ordered_low_mid_high_by_world_mean():
+    from itsf.mc import consumer as mcc
+    from test_mc_consumer import _prepare, PRIMARY
+
+    prepared = _prepare()
+    obs = mcc.run_observation_set(prepared, run_label="base",
+                                  platform="topstep", engine="E1",
+                                  scenario="Conservative", channel=PRIMARY,
+                                  B=8, master_seed=13)
+    means = obs.world_means()
+    lo, mid, hi = mcc.fixed_world_reports(obs)
+    assert means[lo.world_index] <= means[mid.world_index] \
+        <= means[hi.world_index]
+
+
+def test_the_consumer_still_owns_no_selection_of_its_own():
+    """`fixed_world_reports` carries indices; it does not choose them. If
+    this module ever grows its own chooser the rule has two homes, which
+    is the shape that produced four Highs in the supplement path."""
+    import inspect
+    from itsf.mc import consumer as mcc
+
+    src = inspect.getsource(mcc.fixed_world_reports)
+    assert "select_fixed_worlds(" in src
+    assert "ceil" not in src and "sorted(" not in src, (
+        "the consumer is re-deriving an order statistic instead of "
+        "importing the one M11 ratified")

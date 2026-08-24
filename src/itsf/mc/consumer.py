@@ -1473,12 +1473,18 @@ def _run_path_atom(prepared: PreparedMCInput, *, platform: str,
             "e2_intraday_over_budget_days"])
 
 
-# R2.1 PHASE G: the R2 necessary-conditions boolean ("any payout AND not
-# all skipped") is RETRACTED as a verdict gate — mechanical METRICS stay,
-# the reduction rule is Aaron's to freeze. Until then no feasibility
-# boolean may enter a VerdictInput, which keeps the Checkpoint-0 verdict
-# unreachable (see epistemic_go_gate_input).
-FEASIBILITY_GATE_STATUS = "DECISION_REQUIRED"
+# R2.1 PHASE G retracted the R2 necessary-conditions boolean ("any payout
+# AND not all skipped") as a verdict gate: the metrics stayed mechanical
+# and the reduction rule was left unfrozen, which kept the Checkpoint-0
+# verdict unreachable by construction.
+#
+# RULED 2026-08-24 (M1-M5, delegated to Codex GPT-5.6 Sol under Aaron's
+# named batch delegation). The reduction now exists, in
+# `itsf.mc.feasibility`, and this constant records WHICH ruling -- not
+# merely that one happened. A later ruling changes this string, and every
+# FeasibilityEvidence carrying the old one is rejected rather than
+# silently reinterpreted under a rule it was never evaluated against.
+FEASIBILITY_GATE_STATUS = "RULED_ND2_ND3_2026-08-24"
 
 # N01 PHASE D1: per-metric readiness. Every metric is now reduced from
 # the SAME atom set; the ones marked PENDING_LANE_S2 are computable the
@@ -1920,6 +1926,25 @@ class TotalPredictiveResult:
     observations_digest: str
 
 
+def fixed_world_reports(observations: ObservationSet) -> tuple:
+    """The three conditional-aleatoric reports M11 fixes, low -> mid -> high.
+
+    The SELECTION is not made here and must never be: it lives in
+    `itsf.mc.fixed_world`, which turns world-mean EV into three order
+    statistics, and this function only carries the resulting indices into
+    `run_conditional_aleatoric` one at a time. Keeping the two apart is
+    what lets a reader check WHICH worlds were reported and why -- the
+    indices are visible in between rather than chosen inside a call.
+
+    Before M11 the guard here asserted that no selection rule existed
+    anywhere. It now asserts that this module still makes none, which is
+    the half of that guarantee that survived the ruling."""
+    from .fixed_world import select_fixed_worlds
+    picked = select_fixed_worlds(observations.world_means())
+    return tuple(run_conditional_aleatoric(observations, world_index=w)
+                 for w in picked)
+
+
 def run_conditional_aleatoric(observations: ObservationSet, *,
                               world_index: int) -> AleatoricResult:
     """M attempt paths inside ONE FIXED world (frozen: MC SS5 conditional
@@ -1963,7 +1988,8 @@ def run_total_predictive(observations: ObservationSet
 
 
 def epistemic_go_gate_input(cons: EpistemicResult,
-                            stress: EpistemicResult):
+                            stress: EpistemicResult,
+                            *, feasibility=None):
     """Build the frozen VerdictInput for ONE combo from the SAME combo's
     Conservative and Stress epistemic results (S0 SS10.4 anti-cherry-pick:
     no cross-combo stitching). Feasibility comes EXCLUSIVELY from the
@@ -1995,16 +2021,39 @@ def epistemic_go_gate_input(cons: EpistemicResult,
         raise MCInputError("provenance_mismatch",
                            "Conservative/Stress computed from different "
                            "prepared inputs")
-    # R2.1 PHASE G: NO feasibility boolean exists until Aaron freezes the
-    # metric->boolean reduction rule — the gate refuses HERE, which keeps
-    # every Checkpoint-0 verdict unreachable (CHECKPOINT0_VERDICT_
-    # REACHABLE=NO). The metrics themselves live on
-    # cons.feasibility/stress.feasibility for the decision packet.
-    raise MCInputError(
-        "feasibility_gate_decision_required",
-        "the feasibility metric->boolean rule is not frozen anywhere; "
-        "Aaron must rule (see MC_DR5_BUILD_PACKET feasibility decision "
-        "packet) before any VerdictInput can be built")
+    # R2.1 PHASE G left the metric->boolean reduction unfrozen and refused
+    # HERE, which kept every Checkpoint-0 verdict unreachable. M1-M5 ruled
+    # it on 2026-08-24, so the gate can now be crossed -- but only with the
+    # composed evidence, never with a caller's assertion.
+    from .feasibility import ComboFeasibility, FEASIBILITY_RULING
+    from .verdict import VerdictInput
+    if feasibility is None:
+        raise MCInputError(
+            "feasibility_gate_input_absent",
+            "the feasibility reduction is ruled (M1-M5, 2026-08-24) but "
+            "this call supplied none; pass the ComboFeasibility that "
+            "itsf.mc.feasibility.combo_feasibility computed for THIS combo")
+    # A BARE BOOLEAN IS REFUSED, and this is the point of the type. `True`
+    # carries no gate outcomes, no scenario set and no ruling id, so a
+    # caller could assert feasibility that nothing measured -- which is
+    # exactly what R2's retracted necessary-conditions boolean did.
+    if not isinstance(feasibility, ComboFeasibility):
+        raise MCInputError(
+            "feasibility_not_composed_evidence",
+            f"feasibility={type(feasibility).__name__}; Checkpoint-0 takes "
+            "a ComboFeasibility carrying the gate outcomes it was composed "
+            "from, never a bare boolean a caller can assert")
+    if feasibility.ruling != FEASIBILITY_RULING:
+        raise MCInputError(
+            "feasibility_ruling_mismatch",
+            f"evidence carries {feasibility.ruling!r}, this build rules "
+            f"{FEASIBILITY_RULING!r}; a verdict must not be assembled from "
+            "gates evaluated under a different ruling")
+    return VerdictInput(
+        p5_cons=cons.p5, median_cons=cons.median,
+        median_stress=stress.median, p95_cons=cons.p95,
+        feasible=feasibility.feasible,
+        platform=cons.platform, engine=cons.engine, channel=cons.channel)
 
 
 # ---------------------------------------------------------------------------

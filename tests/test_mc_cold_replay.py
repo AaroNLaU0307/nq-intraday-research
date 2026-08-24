@@ -334,7 +334,7 @@ def test_an_all_green_receipt_cannot_bypass_the_replay(prepared):
     assert exc.value.code == "seal_test_only_prepared_input"
     with pytest.raises(mcc.MCInputError) as exc:
         mcc._reduce_primary_from_base(ev)
-    assert exc.value.code == "feasibility_gate_decision_required"
+    assert exc.value.code == "feasibility_gate_input_absent"
 
 
 def test_replay_receipt_is_an_audit_description_only(prepared):
@@ -744,14 +744,21 @@ def test_combo_label_is_verified_not_parsed(prepared):
 def test_feasibility_gate_stays_decision_required(prepared):
     obs = _obs(prepared)
     fe = mcc.FeasibilityEvidence.from_observations(obs)
-    assert fe.gate_status == "DECISION_REQUIRED"
+    # RULED 2026-08-24 (M1-M5). The status names WHICH ruling, so evidence
+    # carrying an older one is rejected rather than reinterpreted under a
+    # rule it was never evaluated against.
+    assert fe.gate_status == "RULED_ND2_ND3_2026-08-24"
+    # ...and the boolean still does not live here. That property survived
+    # the ruling and matters more now: the reduction exists, so the only
+    # thing keeping evidence from being mistaken for a verdict is that the
+    # boolean lives one layer up, in a type carrying what produced it.
     assert not hasattr(fe, "feasible")
     assert "feasible" not in fe.metrics
     epi = mcc.EpistemicResult.from_observations(obs)
     with pytest.raises(mcc.MCInputError) as exc:
         mcc.epistemic_go_gate_input(epi, epi)
     assert exc.value.code in ("scenario_role_violation",
-                              "feasibility_gate_decision_required")
+                              "feasibility_gate_input_absent")
 
 
 def test_forged_gate_status_refuses(prepared):

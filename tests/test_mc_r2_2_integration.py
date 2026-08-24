@@ -189,7 +189,7 @@ def test_codex_ce2_verdict_path_is_single_source():
         mcc.verdict_and_seal_from_evidence(
             prepared, base=base, doubled_by_axis={}, seed_runs={})
     with pytest.raises(mcc.MCInputError,
-                       match="feasibility_gate_decision_required"):
+                       match="feasibility_gate_input_absent"):
         mcc._reduce_primary_from_base(base)
 
 

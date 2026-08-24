@@ -238,3 +238,56 @@ def frequency_gate(day_universe: Sequence[str]) -> GateOutcome:
         threshold=FREQUENCY_ORACLE_DAYS_PER_MONTH_MIN,
         comparison=">=", n_worlds=0,
         detail=f"{len(days)} oracle days across {months} calendar month(s)")
+
+# ---------------------------------------------------------------------------
+# M4: composing the three into the one boolean the verdict table consumes
+# ---------------------------------------------------------------------------
+
+@_dc.dataclass(frozen=True)
+class ComboFeasibility:
+    """One Primary combo's `feasible`, with every gate that produced it.
+
+    `feasible` is the value `VerdictInput` consumes, and it is the LAST
+    thing anyone will be able to interrogate at N17 -- so the outcomes it
+    was composed from travel with it rather than being discarded at the
+    point the boolean is formed."""
+    feasible: bool
+    outcomes: tuple
+    scenarios: tuple
+    ruling: str = FEASIBILITY_RULING
+    delegated: bool = FEASIBILITY_RULING_DELEGATED
+    post_freeze_definition: bool = True
+
+    def failing(self) -> tuple:
+        return tuple(o for o in self.outcomes if not o.passed)
+
+
+def combo_feasibility(observations_by_scenario: Mapping,
+                      day_universe: Sequence[str]) -> ComboFeasibility:
+    """M4's conjunction over M5's scenario set, plus the M2 gate once.
+
+    THE MISSING SCENARIO IS A REFUSAL, NOT A SKIP. M5 requires the
+    path-shaped gates to hold in Conservative AND Stress; evaluating
+    whichever happens to be present would silently weaken the conjunction
+    to whatever the caller supplied, and would do it in the permissive
+    direction every time.
+
+    The frequency gate is evaluated ONCE: it reads the sealed day
+    universe, which is dates rather than results, and takes the same value
+    for every combo and every scenario."""
+    missing = [s for s in GATE_SCENARIOS if s not in observations_by_scenario]
+    if missing:
+        raise FeasibilityGateError(
+            "feasibility_scenario_missing",
+            f"M5 requires {list(GATE_SCENARIOS)}; absent: {missing}. "
+            "Evaluating the conjunction over the present subset would "
+            "weaken it, always permissively")
+    outcomes = [frequency_gate(day_universe)]
+    for scenario in GATE_SCENARIOS:
+        observations = observations_by_scenario[scenario]
+        outcomes.append(payout_gate(observations, scenario=scenario))
+        outcomes.append(integer_position_gate(observations,
+                                              scenario=scenario))
+    return ComboFeasibility(
+        feasible=all(o.passed for o in outcomes),
+        outcomes=tuple(outcomes), scenarios=GATE_SCENARIOS)

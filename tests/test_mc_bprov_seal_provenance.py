@@ -297,8 +297,8 @@ def test_bprov_forward_path_still_reaches_the_feasibility_refusal(prepared):
     Checkpoint-0."""
     with pytest.raises(mcc.MCInputError) as exc:
         mcc._reduce_primary_from_base(_evidence(prepared))
-    assert exc.value.code == "feasibility_gate_decision_required"
-    assert mcc.FEASIBILITY_GATE_STATUS == "DECISION_REQUIRED"
+    assert exc.value.code == "feasibility_gate_input_absent"
+    assert mcc.FEASIBILITY_GATE_STATUS == "RULED_ND2_ND3_2026-08-24"
 
 
 def test_bprov_forward_path_cold_replay_receipt_is_still_green(prepared):

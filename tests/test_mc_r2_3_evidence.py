@@ -533,8 +533,8 @@ def test_gate_status_decision_required_and_no_feasible_boolean():
     only the event-calibre count."""
     obs = _oset(_grid_atoms())
     fe = mcc.FeasibilityEvidence.from_observations(obs)
-    assert fe.gate_status == "DECISION_REQUIRED"
-    assert mcc.FEASIBILITY_GATE_STATUS == "DECISION_REQUIRED"
+    assert fe.gate_status == "RULED_ND2_ND3_2026-08-24"
+    assert mcc.FEASIBILITY_GATE_STATUS == "RULED_ND2_ND3_2026-08-24"
     assert not hasattr(fe, "feasible")
     assert "feasible" not in fe.metrics
     assert not hasattr(mcc, "FeasibilityObservation")
