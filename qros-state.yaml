@@ -109,17 +109,17 @@ packets: []
 inputs:
   - id: "prereg"
     path: "STUDY_0_PREREGISTRATION.md"
-    observed_revision: "514bc3baa003d6075f5d41cb3ef860cf11ee9315"
+    observed_revision: "783144b4e7be2a0fb39b68910549da75a4e80306"
     observed_sha256: "6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132"
   - id: "exposure_record"
     path: "ops/EXPOSURE_LEDGER.md"
-    observed_revision: "514bc3baa003d6075f5d41cb3ef860cf11ee9315"
-    observed_sha256: "02ca7e38e5a1877141093271bfcf9a1266650fac4436245847937d525e50d7b6"
+    observed_revision: "783144b4e7be2a0fb39b68910549da75a4e80306"
+    observed_sha256: "f90f65ec4f4ced0391f60cdf5a11d8dded5dc6e17047796ee214762b97ef583f"
   - id: "trial_accounting"
     path: "ops/TRIAL_REGISTRY.md"
-    observed_revision: "514bc3baa003d6075f5d41cb3ef860cf11ee9315"
+    observed_revision: "783144b4e7be2a0fb39b68910549da75a4e80306"
     observed_sha256: "ee9da33fdbb47725dc036243adc76d7d9ba69ff06df0df443b09103f897353d6"
 
 state_declared_at:
-  revision: "514bc3baa003d6075f5d41cb3ef860cf11ee9315"
+  revision: "783144b4e7be2a0fb39b68910549da75a4e80306"
   timestamp: "2026-08-24T00:00:00Z"

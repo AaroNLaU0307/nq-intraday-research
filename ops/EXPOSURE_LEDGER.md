@@ -20,26 +20,31 @@ CREATED=2026-08-24，依 Aaron 逐字指示「直接按你建议的做吧，能�
 
 NORMALIZATION_RULE: CLASSIFICATION_COLUMN_IS_CANONICAL
 
-classification 由历史行文本判定，规则与历史台账 header 块所声明的一致：
+**词汇是 runtime 的，不是我发明的。** 第一版转录我用错了两处，记在这里：
+`scope` 我填了研究名（`S0-T001`），但 §3.4A 的 scope 是**值算在哪个总体上**，
+合法值只有 `HISTORICAL_CUMULATIVE` 与 `CURRENT_REVIEW_SCOPE`；
+`classification` 我填了 `NONE/AGGREGATE/TARGET_METRIC`，那是 §1 的**贡献**轴，
+不是 §3.4B 的 classification 名。两者「never conflated」。
+
+§3.4B classification（列取字面值）及其对归一化值的贡献：
 
 ```
-TARGET_METRIC  该行记录查看了预注册判定统计量或其派生值
-AGGREGATE      该行记录只查看了聚合/摘要值，未及逐候选关系
-NONE           该行记录零 outcome 值查看
-UNKNOWN        该行文本不足以判定 —— fail-closed，绝不折算为 NONE
+NO_OUTCOME               -> NONE          未生成也未查看 outcome
+GENERATED_NOT_SEEN       -> NONE          已生成、封存未看（盲式收口正是此类）
+REVEALED_AGGREGATE       -> AGGREGATE     只看了聚合/摘要值
+REVEALED_TARGET_METRIC   -> TARGET_METRIC 看了预注册判定统计量或其派生值
 ```
 
 `数量`（researcher_exposure_count）与 classification **正交**：一行可以
-`数量=0` 而 classification 为 `AGGREGATE`。三轴不得互推。
+`数量=0` 而 classification 为 `REVEALED_AGGREGATE`。三轴不得互推。
 
 | ts | scope | classification | granularity | artifact_or_pointer | note |
 |---|---|---|---|---|---|
-| 2026-08-10 | S0 | NONE | structural bar load, no candidate relationship | EXPOSURE_LEDGER.md row 2 · ops/INCIDENT_STRUCTURAL_TEST_LOAD_20260810.md | legacy 数量=0；零候选关系被查看、零 outcome 生成。交叉引用行 |
-| 2026-08-14 | S0-T001 | NONE | blind close-out; results sealed and unread | EXPOSURE_LEDGER.md row 3 | legacy 数量=0；outcome_generated=YES 但未查看（盲式收口） |
-| 2026-08-14 | S0-T001 | TARGET_METRIC | 1575 preregistered relationship cells, whole manifest, preregistered order | EXPOSURE_LEDGER.md row 4 | legacy 数量=1575；本项目全部 researcher exposure 的唯一来源 |
-| 2026-08-14 | S0-T001 | NONE | completion marker for the same reveal | EXPOSURE_LEDGER.md row 5 | legacy 数量=0；与 REVEAL_STARTED 配对，不重复计数 |
-| 2026-08-14 | S0-T001 | AGGREGATE | six interpretive corrections over the same already-revealed results | EXPOSURE_LEDGER.md row 6 · ops/S0_T001_RESULT_DECISION_ADDENDUM.md | legacy 数量=0；零新候选关系。内容见指针，不在此复述 |
-| 2026-08-24 | S0-T001 | AGGREGATE | builder read the addendum summary embedded in the legacy ledger | EXPOSURE_LEDGER.md row 7 · ops/INCIDENT_HANDOFF_ARTIFACTS_CARRY_OUTCOME_20260824.md | legacy 数量=0；outcome_seen=YES，builder 自此非 outcome-blind。内容见指针 |
-
+| 2026-08-10 | HISTORICAL_CUMULATIVE | NO_OUTCOME | structural bar load, no candidate relationship | EXPOSURE_LEDGER.md row 2 · ops/INCIDENT_STRUCTURAL_TEST_LOAD_20260810.md | legacy 数量=0；零候选关系、零 outcome 生成 |
+| 2026-08-14 | HISTORICAL_CUMULATIVE | GENERATED_NOT_SEEN | S0-T001 first real run, results sealed and unread | EXPOSURE_LEDGER.md row 3 | legacy 数量=0；outcome_generated=YES 而未查看 —— 这一行正是该 class 存在的理由 |
+| 2026-08-14 | HISTORICAL_CUMULATIVE | REVEALED_TARGET_METRIC | 1575 preregistered relationship cells, whole manifest, preregistered order | EXPOSURE_LEDGER.md row 4 | legacy 数量=1575；本项目全部 researcher exposure 的唯一来源 |
+| 2026-08-14 | HISTORICAL_CUMULATIVE | NO_OUTCOME | completion marker for the same reveal | EXPOSURE_LEDGER.md row 5 | legacy 数量=0；与 REVEAL_STARTED 配对，不重复计数 |
+| 2026-08-14 | HISTORICAL_CUMULATIVE | REVEALED_AGGREGATE | six interpretive corrections over the same already-revealed results | EXPOSURE_LEDGER.md row 6 · ops/S0_T001_RESULT_DECISION_ADDENDUM.md | legacy 数量=0；零新候选关系。内容见指针，不在此复述 |
+| 2026-08-24 | HISTORICAL_CUMULATIVE | REVEALED_AGGREGATE | builder read the addendum summary embedded in the legacy ledger | EXPOSURE_LEDGER.md row 7 · ops/INCIDENT_HANDOFF_ARTIFACTS_CARRY_OUTCOME_20260824.md | legacy 数量=0；outcome_seen=YES，builder 自此非 outcome-blind。内容见指针 |
 累计 researcher_exposure_count：1575，全部来自 2026-08-14 那一行
 （其余各行贡献 0）。此数与历史台账逐字一致。

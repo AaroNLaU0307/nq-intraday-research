@@ -25,7 +25,12 @@
 数量                       -> researcher_exposure_count 的本行贡献
 ```
 
-classification 推导（行 → NONE | AGGREGATE | TARGET_METRIC）：
+classification 推导 —— **本段第一版写错，更正如下。**
+原文写「行 → NONE | AGGREGATE | TARGET_METRIC」，那是 QROS §1 的**贡献**轴，
+不是 §3.4B 的 classification 名（`NO_OUTCOME` / `GENERATED_NOT_SEEN` /
+`REVEALED_AGGREGATE` / `REVEALED_TARGET_METRIC`）。两者 runtime 明文
+「never conflated」。**权威词汇与逐行 classification 见 `ops/EXPOSURE_LEDGER.md`**；
+下表保留原文，作为该次错误的记录，不作为词汇依据：
 
 ```
 TARGET_METRIC  本行记录查看了预注册判定统计量，或由其派生的值
