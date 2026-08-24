@@ -278,7 +278,8 @@ def _atom(world_index, phase_offset, ev, **over):
         executed_trade_days=3, skips_n0=1, payout_count=0, winning_days=2,
         days_profit_ge_150=1, qualifying_days=1, exhausted=False,
         ambiguous_days=0, attempts_used=1, b2f_used=0,
-        contract_cap_hits=1, e2_over_budget_days=A.NOT_APPLICABLE)
+        contract_cap_hits=1, e2_over_budget_days=A.NOT_APPLICABLE,
+        e2_intraday_over_budget_days=A.NOT_APPLICABLE)
     kw.update(over)
     return A.SimulationPathObservation(**kw)
 

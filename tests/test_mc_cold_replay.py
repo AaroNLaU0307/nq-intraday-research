@@ -916,7 +916,8 @@ def _synthetic_atom(world, phase, ev):
         executed_trade_days=1, skips_n0=0, payout_count=0,
         winning_days=1, days_profit_ge_150=0, qualifying_days=0,
         exhausted=False, ambiguous_days=0, attempts_used=1, b2f_used=0,
-        contract_cap_hits=1, e2_over_budget_days=A.NOT_APPLICABLE)
+        contract_cap_hits=1, e2_over_budget_days=A.NOT_APPLICABLE,
+        e2_intraday_over_budget_days=A.NOT_APPLICABLE)
 
 
 def _synthetic_set(world_evs):

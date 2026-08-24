@@ -146,37 +146,81 @@ def test_absence_token_vocabularies_agree_across_lanes():
     (deliberate: neither module may depend on the other's layer). That
     agreement therefore has exactly one mechanical guard, and this is it.
 
-    Every `OverBudgetStatus` lane S2 can emit must correspond to an
-    `AbsentQuantity` lane S1 can carry, with a byte-identical token — a
-    silent rename on either side changes what a sealed report MEANS while
-    every other test stays green."""
+    Every `OverBudgetStatus` lane S2 can emit must be REPRESENTABLE in
+    lane S1 with a byte-identical token — a silent rename on either side
+    changes what a sealed report MEANS while every other test stays green.
+
+    D1 (2026-08-24) added `RULED`, and it is deliberately NOT an absence:
+    the other three say why a value is missing, `RULED` says one is here.
+    So the comparison is against S1's absence vocabulary PLUS its ruled
+    token, and the two are checked separately -- folding RULED into
+    ABSENT_BY_TOKEN to make one set comparison pass would let "ruled" be
+    read as one more flavour of absent, which is the whole distinction."""
     s2_tokens = {s.value for s in C.OverBudgetStatus}
-    s1_tokens = {q.token for q in (A.NOT_APPLICABLE,
-                                   A.NOT_APPLICABLE_NO_TRADE,
-                                   A.PENDING_RULING,
-                                   A.PENDING_ENGINEERING)}
-    assert s2_tokens <= s1_tokens, (
-        f"lane S2 can emit {sorted(s2_tokens - s1_tokens)} which lane S1 "
+    s1_absences = {q.token for q in (A.NOT_APPLICABLE,
+                                     A.NOT_APPLICABLE_NO_TRADE,
+                                     A.PENDING_RULING,
+                                     A.PENDING_ENGINEERING)}
+    s1_all = s1_absences | {A.E2_RULED_TOKEN}
+    assert s2_tokens <= s1_all, (
+        f"lane S2 can emit {sorted(s2_tokens - s1_all)} which lane S1 "
         "cannot represent")
-    # and the shared ones must be spelled identically, not merely present
+    # RULED is a presence on BOTH sides, and must not have leaked into
+    # either absence vocabulary
+    assert A.E2_RULED_TOKEN not in s1_absences
+    assert A.E2_RULED_TOKEN not in A.ABSENT_BY_TOKEN
+    assert C.OverBudgetStatus.RULED.value == A.E2_RULED_TOKEN
+    # and the absences must be spelled identically, not merely present
     for status in C.OverBudgetStatus:
+        if status is C.OverBudgetStatus.RULED:
+            continue
         matching = [q for q in (A.NOT_APPLICABLE, A.NOT_APPLICABLE_NO_TRADE,
                                 A.PENDING_RULING, A.PENDING_ENGINEERING)
                     if q.token == status.value]
         assert len(matching) == 1, status
 
 
-def test_over_budget_predicate_stays_unruled_and_boolean_is_refused():
-    """MC SS3 MANDATES the E2 over-budget disclosure but never DEFINES the
-    predicate (which loss, which basis, which budget). Until Aaron rules
-    (master plan N-D2), no lane may emit a boolean — a False would read
-    downstream as a measured "did not exceed budget"."""
-    assert C.OVER_BUDGET_PREDICATE_RULED is False
-    with pytest.raises(C.AuthoritativeFactError):
-        C.AccountEvent(day="D000", phase="xfa", balance=0.0, floor=0.0,
-                       day_net_usd=0.0, account_generation=0,
-                       requested_n=0, traded_n=0, cap_applied=False,
-                       qualifying_day=False, over_budget=True)
+def test_a_boolean_still_cannot_ride_under_a_label_that_denies_it():
+    """WAS `test_over_budget_predicate_stays_unruled_and_boolean_is_refused`.
+
+    MC SS3 mandated the E2 disclosure and defined no predicate, so until D1
+    (2026-08-24) NO lane could emit a boolean at all -- a False would read
+    downstream as a measured "did not exceed budget". D1 supplied the three
+    bases and the constant is now True, so pinning it False would pin the
+    past rather than the property.
+
+    The property that survives is what the refusal was actually protecting:
+    a value may not exist under a status that says it does not. Ruled or
+    unruled, the label and the value have to agree, and the failure mode is
+    the same either way -- an auditor reading the label concludes there is
+    no measurement while a count downstream says there is."""
+    assert C.OVER_BUDGET_PREDICATE_RULED is True
+
+    common = dict(day="D000", phase="xfa", balance=0.0, floor=0.0,
+                  day_net_usd=0.0, account_generation=0, requested_n=0,
+                  traded_n=0, cap_applied=False, qualifying_day=False)
+
+    # a boolean under an absence label
+    with pytest.raises(C.AuthoritativeFactError) as ei:
+        C.AccountEvent(
+            over_budget=True, intraday_over_budget=True,
+            over_budget_status=C.OverBudgetStatus.NOT_APPLICABLE_NO_TRADE,
+            **common)
+    assert ei.value.code == "over_budget_value_under_absence"
+
+    # and RULED standing over missing values
+    with pytest.raises(C.AuthoritativeFactError) as ei:
+        C.AccountEvent(over_budget_status=C.OverBudgetStatus.RULED,
+                       **common)
+    assert ei.value.code == "over_budget_ruled_without_values"
+
+    # HALF of a mandated pair is also a refusal: MC SS3 asks for two
+    # probabilities, so one boolean answers neither
+    with pytest.raises(C.AuthoritativeFactError) as ei:
+        C.AccountEvent(over_budget=True,
+                       over_budget_status=C.OverBudgetStatus.RULED,
+                       **common)
+    assert ei.value.code == "over_budget_ruled_without_values"
 
 
 def test_qualifying_phase_vocabulary_is_a_subset_of_emitted_phases():
@@ -418,6 +462,13 @@ def test_defence_in_depth_code_overlap_is_exactly_the_pinned_set():
     assert type_codes & stream_codes == {
         "day_net_usd_not_finite",
         "over_budget_status_not_typed",
+        # D1 (2026-08-24): both new coherence rules are enforced at BOTH
+        # layers on purpose. The type refuses them at construction; the
+        # verifier refuses the same shapes after a MUTATION, which is the
+        # attack __post_init__ can never see. Same invariant, two layers --
+        # which is what this overlap set is for.
+        "over_budget_ruled_without_values",
+        "over_budget_value_under_absence",
         "qualifying_day_absent_on_qualifying_phase",
         "qualifying_day_not_bool",
         "traded_n_exceeds_requested_n",

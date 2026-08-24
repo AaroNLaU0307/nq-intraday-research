@@ -70,6 +70,7 @@ from dataclasses import dataclass
 from typing import Iterator, Sequence
 
 from itsf import contracts
+from itsf.mc import over_budget as _over_budget
 from itsf.contracts import (QUALIFYING_PHASES, AccountEvent,
                             AuthoritativeFactError, OverBudgetStatus,
                             TradePathRecord, fact_layer_active)
@@ -116,6 +117,11 @@ AUTH_OVER_BUDGET_VALUE_NOT_BOOL = "over_budget_value_not_bool"
 AUTH_OVER_BUDGET_STATUS_MISSING = "over_budget_status_missing"
 AUTH_OVER_BUDGET_STATUS_TYPE = "over_budget_status_not_typed"
 AUTH_OVER_BUDGET_STATUS_MISMATCH = "over_budget_status_inconsistent"
+# D1 (2026-08-24). The type refuses these at construction; the stream
+# verifier exists to catch the same shapes after a MUTATION, which is
+# what __post_init__ can never see.
+AUTH_OVER_BUDGET_VALUE_UNDER_ABSENCE = "over_budget_value_under_absence"
+AUTH_OVER_BUDGET_RULED_WITHOUT_VALUES = "over_budget_ruled_without_values"
 # 6. the bounded day-net / balance / payout identity
 AUTH_DAY_NET_INVARIANT = "day_net_cross_check_violation"
 # 7. stream-level labelling
@@ -135,6 +141,8 @@ AUTH_REJECTION_CODES = frozenset({
     AUTH_OVER_BUDGET_VALUE_UNRULED, AUTH_OVER_BUDGET_VALUE_NOT_BOOL,
     AUTH_OVER_BUDGET_STATUS_MISSING, AUTH_OVER_BUDGET_STATUS_TYPE,
     AUTH_OVER_BUDGET_STATUS_MISMATCH,
+    AUTH_OVER_BUDGET_VALUE_UNDER_ABSENCE,
+    AUTH_OVER_BUDGET_RULED_WITHOUT_VALUES,
     AUTH_DAY_NET_INVARIANT,
     AUTH_PHASE_UNKNOWN, AUTH_PHASE_PLATFORM_MISMATCH,
     AUTH_ENGINE_UNKNOWN, AUTH_PLATFORM_UNKNOWN,
@@ -186,8 +194,54 @@ def over_budget_status_for(path: TradePathRecord | None,
         # 报告") — the obligation does not reach E1 days.
         return OverBudgetStatus.NOT_APPLICABLE
     if engine == "E2":
-        return OverBudgetStatus.PENDING_RULING
+        # D1 (2026-08-24) defined the predicate, so an E2 day that
+        # held a position carries real booleans and this token
+        # points at them. The PENDING_RULING branch is NOT dead:
+        # the constant is the switch, and a future retraction must
+        # return to saying so rather than leaving a stale RULED
+        # label standing over absent values.
+        return (OverBudgetStatus.RULED
+                if contracts.OVER_BUDGET_PREDICATE_RULED
+                else OverBudgetStatus.PENDING_RULING)
     raise ValueError(f"unknown engine {engine!r} (frozen set: E1 | E2)")
+
+
+def over_budget_facts(path: TradePathRecord | None, traded_n: int,
+                      budget: float) -> dict:
+    """The over-budget fact fragment for one day: status, and the two
+    booleans exactly when the predicate applies.
+
+    ONE RULE, ONE PLACE. Both platforms call this rather than each
+    computing the predicate for itself. Two implementations of one rule is
+    the shape that produced four separate Highs in the supplement path,
+    every one of them a case where the second copy was subtly weaker than
+    the first.
+
+    The booleans appear if and only if the status is RULED, which is what
+    `AccountEvent` independently enforces -- so a drift between this
+    helper and the fact type fails loudly instead of emitting a value
+    under a label that says there is none.
+    """
+    status = over_budget_status_for(path, traded_n)
+    if status is not OverBudgetStatus.RULED:
+        return {"over_budget_status": status}
+    if not budget > 0.0:
+        # Unreachable on a real traded day: n_micros(budget, ...) returns 0
+        # for a non-positive budget, which makes traded_n 0 and the status
+        # NOT_APPLICABLE_NO_TRADE. Kept because "unreachable" is a claim
+        # about today's call sites, and a fabricated comparison against a
+        # zero budget would read as a measured breach on every losing day.
+        raise ValueError(
+            f"over_budget_bad_budget: traded_n={traded_n} with "
+            f"budget={budget!r}; the predicate cannot judge a loss "
+            "against a non-positive budget")
+    verdict = _over_budget.evaluate(
+        final_pnl_per_contract=path.final_pnl_per_contract,
+        max_adverse_pnl=path.max_adverse_pnl,
+        traded_n=traded_n, budget=budget)
+    return {"over_budget_status": status,
+            "over_budget": verdict.realised_over_budget,
+            "intraday_over_budget": verdict.intraday_adverse_over_budget}
 
 
 def expected_over_budget_status(engine: str,
@@ -204,15 +258,18 @@ def expected_over_budget_status(engine: str,
         processing halts and dead-inert days alike.
       * traded_n > 0 and engine E1   -> NOT_APPLICABLE. frozen MC SS3 scopes
         the over-budget disclosure to E2; an E1 day owes no such fact.
-      * traded_n > 0 and engine E2   -> PENDING_RULING. frozen MC SS3
-        MANDATES the disclosure and DEFINES no predicate.
+      * traded_n > 0 and engine E2   -> RULED while the predicate is
+        ruled, else PENDING_RULING. Frozen MC SS3 mandates the
+        disclosure; D1 (2026-08-24) supplied the predicate.
     """
     if traded_n <= 0:
         return OverBudgetStatus.NOT_APPLICABLE_NO_TRADE
     if engine == "E1":
         return OverBudgetStatus.NOT_APPLICABLE
     if engine == "E2":
-        return OverBudgetStatus.PENDING_RULING
+        return (OverBudgetStatus.RULED
+                if contracts.OVER_BUDGET_PREDICATE_RULED
+                else OverBudgetStatus.PENDING_RULING)
     raise ValueError(f"unknown engine {engine!r} (frozen set: E1 | E2)")
 
 
@@ -353,6 +410,7 @@ def _iter_violations(events: Sequence, *, engine: str | None,
 
         # -- rule 5: typed over-budget state ---------------------------------
         ob, status = ev.over_budget, ev.over_budget_status
+        intraday = getattr(ev, "intraday_over_budget", None)
         if ob is not None and not contracts.OVER_BUDGET_PREDICATE_RULED:
             # Unconditional and engine-INDEPENDENT: frozen MC SS3 mandates
             # the E2 disclosure and defines no predicate, so ANY boolean is
@@ -384,6 +442,31 @@ def _iter_violations(events: Sequence, *, engine: str | None,
                     AUTH_OVER_BUDGET_STATUS_MISMATCH, i, day,
                     f"engine={engine} traded_n={trd} requires "
                     f"{want.value!r}, event carries {status.value!r}")
+
+        # D1: the label and the values must agree. This runs AFTER the
+        # label checks above on purpose -- if the status itself is
+        # wrong for this (engine, traded) day, that is the root cause
+        # and a value mismatch is only its consequence. Reporting the
+        # consequence first would send a reader to the wrong field.
+        # It runs here rather than only at construction because the
+        # failure that matters is a field flipped after a legal event
+        # was built, which __post_init__ can never see.
+        if status is OverBudgetStatus.RULED:
+            for _name, _v in (("over_budget", ob),
+                              ("intraday_over_budget", intraday)):
+                if not isinstance(_v, bool):
+                    yield FactViolation(
+                        AUTH_OVER_BUDGET_RULED_WITHOUT_VALUES, i, day,
+                        f"status=RULED but {_name}={_v!r}; MC SS3 mandates "
+                        "BOTH probabilities, so one value answers neither")
+        elif status is not None:
+            for _name, _v in (("over_budget", ob),
+                              ("intraday_over_budget", intraday)):
+                if _v is not None:
+                    yield FactViolation(
+                        AUTH_OVER_BUDGET_VALUE_UNDER_ABSENCE, i, day,
+                        f"status={status.value} declares the quantity "
+                        f"absent yet {_name}={_v!r} rides along")
 
         # -- pairwise: rule 2 motion + rule 6 identity -----------------------
         if prev is not None and _is_count(prev.account_generation) \

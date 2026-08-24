@@ -52,8 +52,14 @@ def _atom(**over):
         skips_n0=2, payout_count=1, winning_days=4,
         days_profit_ge_150=2, qualifying_days=3, exhausted=False,
         ambiguous_days=1, attempts_used=1, b2f_used=0,
-        contract_cap_hits=1, e2_over_budget_days=A.NOT_APPLICABLE)
+        contract_cap_hits=1, e2_over_budget_days=A.NOT_APPLICABLE,
+        e2_intraday_over_budget_days=A.NOT_APPLICABLE)
     kw.update(over)
+    # The two E2 counts must agree about engine applicability, so a caller
+    # overriding only the first gets the second to match rather than an
+    # engine-semantics refusal about a field it never mentioned.
+    if "e2_over_budget_days" in over and             "e2_intraday_over_budget_days" not in over:
+        kw["e2_intraday_over_budget_days"] = over["e2_over_budget_days"]
     return A.SimulationPathObservation(**kw)
 
 
@@ -88,6 +94,7 @@ def _stub(*, engine="E1", **over):
     kw = dict(day_net_usd=10.0, phase="evaluation", account_generation=0,
               requested_n=1, traded_n=1, cap_applied=False,
               payout_gross=0.0, qualifying_day=None, over_budget=None,
+              intraday_over_budget=None,
               over_budget_status=_status_for(engine, traded))
     kw.update(over)
     return _StubEvent(**kw)
@@ -337,24 +344,34 @@ def test_e1_carrying_an_over_budget_boolean_refuses():
     assert exc.value.code == "platform_facts_engine_semantics"
 
 
-def test_e2_without_a_ruled_predicate_yields_pending_never_zero():
+def test_e2_without_a_ruled_predicate_yields_pending_never_zero(
+        monkeypatch):
+    """The UNRULED branch is still live -- the constant is the switch, and
+    a retraction must land here rather than in a rewrite. So this keeps
+    testing the unruled state explicitly instead of by ambient default."""
+    from itsf import contracts
+    monkeypatch.setattr(contracts, "OVER_BUDGET_PREDICATE_RULED",
+                        False)
     facts = A.path_facts_from_events(
         [_stub(engine="E2", over_budget=None,
                over_budget_status="PENDING_RULING")],
         engine="E2", platform="topstep")
     assert facts["e2_over_budget_days"] is A.PENDING_RULING
     assert facts["e2_over_budget_days"] != 0
+    assert facts["e2_intraday_over_budget_days"] is A.PENDING_RULING
 
 
 # --- C3: the E2 over_budget boundary, gated at the ADAPTER ----------------
 
-def test_e2_boolean_over_budget_never_reaches_a_formal_count():
+def test_e2_boolean_over_budget_never_reaches_a_formal_count(monkeypatch):
     """C3 BASELINE COUNTEREXAMPLE (measured before this node): a legally
     constructed event stream whose `over_budget` was set to True after
     construction — `AccountEvent` is a MUTABLE dataclass — produced
     `e2_over_budget_days = 2` as a FORMAL COUNT, walking straight past
     PENDING_RULING. The producer's construction-time refusal cannot see
     a post-construction mutation; the consumer now refuses on its own."""
+    from itsf import contracts
+    monkeypatch.setattr(contracts, "OVER_BUDGET_PREDICATE_RULED", False)
     events = [_stub(engine="E2", over_budget=True,
                     over_budget_status="PENDING_RULING"),
               _stub(engine="E2", over_budget=True,
@@ -371,26 +388,55 @@ def test_a_real_account_event_mutated_after_construction_is_refused():
     ev = AccountEvent(day="2026-08-03", phase="evaluation", balance=50000.0,
                       floor=48000.0, day_net_usd=10.0,
                       account_generation=0, requested_n=1, traded_n=1,
-                      over_budget_status=OverBudgetStatus.PENDING_RULING)
-    # legal today
+                      over_budget=False, intraday_over_budget=False,
+                      over_budget_status=OverBudgetStatus.RULED)
+    # legal today: ruled, both values present, and a False counts as the
+    # measurement "this day did not exceed its budget"
     facts = A.path_facts_from_events([ev], engine="E2", platform="topstep")
-    assert facts["e2_over_budget_days"] is A.PENDING_RULING
-    ev.over_budget = True                      # the mutation the type allows
+    assert facts["e2_over_budget_days"] == 0
+
+    # the attack shape is unchanged -- the type is mutable, so flip a
+    # field after a legal construction and the producer's own
+    # __post_init__ never sees it. What changed is which coherence the
+    # consumer catches it on: the label now says a value is present, so
+    # the refusal is about the STATUS disagreeing, not about a boolean
+    # existing at all.
+    ev.over_budget_status = OverBudgetStatus.PENDING_RULING
     with pytest.raises(A.MCInputError) as exc:
         A.path_facts_from_events([ev], engine="E2", platform="topstep")
-    assert exc.value.code == "platform_facts_e2_over_budget_boolean_unruled"
+    assert exc.value.code == "platform_facts_over_budget_status_inconsistent"
 
 
 @pytest.mark.parametrize("value", [True, False])
-def test_duck_typed_e2_boolean_is_refused_in_both_polarities(value):
+def test_duck_typed_e2_boolean_is_refused_in_both_polarities(value,
+                                                             monkeypatch):
     """A False is refused as loudly as a True: 'measured, never exceeded'
     is exactly the reading PENDING_RULING exists to forbid."""
+    from itsf import contracts
+    monkeypatch.setattr(contracts, "OVER_BUDGET_PREDICATE_RULED",
+                        False)
     with pytest.raises(A.MCInputError) as exc:
         A.path_facts_from_events(
             [_stub(engine="E2", over_budget=value,
                    over_budget_status="PENDING_RULING")],
             engine="E2", platform="topstep")
     assert exc.value.code == "platform_facts_e2_over_budget_boolean_unruled"
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_under_the_ruling_a_false_is_a_measurement_not_a_refusal(value):
+    """The whole difference the ruling makes, stated as a test.
+
+    Unruled, a False means nothing and is refused. Ruled, it means "this
+    day did not exceed its budget" -- and the count of such days is the
+    disclosure MC SS3 asks for. If this ever starts refusing again, the
+    predicate has been retracted and the count must go back to absent."""
+    facts = A.path_facts_from_events(
+        [_stub(engine="E2", over_budget=value, intraday_over_budget=value,
+               over_budget_status="RULED")],
+        engine="E2", platform="topstep")
+    assert facts["e2_over_budget_days"] == (1 if value else 0)
+    assert facts["e2_intraday_over_budget_days"] == (1 if value else 0)
 
 
 @pytest.mark.parametrize("engine,over,code", [
@@ -430,50 +476,85 @@ def test_missing_over_budget_status_attribute_refuses_too():
     assert exc.value.code == "platform_facts_over_budget_status_absent"
 
 
-def test_a_flipped_ruling_does_not_silently_start_accepting_booleans(
-        monkeypatch):
-    """FORWARD RED LINE. If Aaron flips OVER_BUDGET_PREDICATE_RULED, this
-    adapter must REFUSE until a new explicit predicate implementation
-    lands — it may never inherit a boolean meaning nobody wrote down."""
-    from itsf import contracts
-    monkeypatch.setattr(contracts, "OVER_BUDGET_PREDICATE_RULED", True)
+def test_a_ruled_boolean_still_cannot_ride_under_an_unruled_label():
+    """WAS the forward red line for the flip itself: while the predicate
+    was unruled, ANY stream refused the moment the constant went True,
+    because the consumption rule below it was stale by definition. D1
+    landed the implementation, so that tripwire has fired and been
+    replaced.
+
+    What can still go wrong is narrower and is what this now guards: the
+    STATUS and the VALUES must agree. A boolean arriving under a label
+    that says the quantity is absent would be counted as evidence while
+    reading, to anyone auditing the label, as though none existed."""
     with pytest.raises(A.MCInputError) as exc:
         A.path_facts_from_events(
             [_stub(engine="E2", over_budget=True,
                    over_budget_status="PENDING_RULING")],
             engine="E2", platform="topstep")
-    assert exc.value.code == "platform_facts_over_budget_ruling_changed"
-    # ... and even an honest UNRULED-shaped stream refuses under the flip,
-    # because the pinned consumption rule below it is stale by definition
+    assert exc.value.code == "platform_facts_over_budget_status_inconsistent"
+
+    # and the mirror: RULED must not stand over missing values
     with pytest.raises(A.MCInputError) as exc:
         A.path_facts_from_events(
-            [_stub(engine="E2", over_budget_status="PENDING_RULING")],
+            [_stub(engine="E2", over_budget=None,
+                   intraday_over_budget=None,
+                   over_budget_status="RULED")],
             engine="E2", platform="topstep")
-    assert exc.value.code == "platform_facts_over_budget_ruling_changed"
+    assert exc.value.code == "platform_facts_e2_over_budget_value_missing"
+
     # E1 is untouched: its absence is permanent, not ruling-dependent
     assert A.path_facts_from_events(
         [_stub(engine="E1")], engine="E1",
         platform="topstep")["e2_over_budget_days"] is A.NOT_APPLICABLE
 
 
-def test_the_pinned_ruling_constant_is_still_false():
-    """PIN: this whole consumption rule is written for the UNRULED state.
-    If this assertion ever fails, the adapter's E2 branch must be
-    re-implemented deliberately, not adjusted."""
+def test_the_consumption_rule_tracks_the_ruling_constant(monkeypatch):
+    """WAS `test_the_pinned_ruling_constant_is_still_false`, which pinned
+    the constant at False so that flipping it could not quietly change
+    what the adapter counted. D1 flipped it on 2026-08-24 and the
+    implementation landed with it, so pinning False now would only pin
+    the past.
+
+    The property that survives is the one that mattered: the adapter's
+    expected token FOLLOWS the constant in both directions. A retraction
+    must return it to refusing, not leave a RULED label standing over
+    values nobody is entitled to."""
     from itsf import contracts
-    assert contracts.OVER_BUDGET_PREDICATE_RULED is False
+    assert contracts.OVER_BUDGET_PREDICATE_RULED is True
+    assert A.expected_over_budget_token("E2", 1) == "RULED"
+
+    monkeypatch.setattr(contracts, "OVER_BUDGET_PREDICATE_RULED", False)
     assert A.expected_over_budget_token("E2", 1) == "PENDING_RULING"
+    monkeypatch.undo()
+    assert A.expected_over_budget_token("E2", 1) == "RULED"
     assert A.expected_over_budget_token("E2", 0) == "NOT_APPLICABLE_NO_TRADE"
     assert A.expected_over_budget_token("E1", 1) == "NOT_APPLICABLE"
     assert A.expected_over_budget_token("E1", 0) == "NOT_APPLICABLE_NO_TRADE"
 
 
-def test_an_empty_e2_stream_is_pending_not_a_measured_zero():
+def test_an_empty_e2_stream_is_absent_not_a_measured_zero(monkeypatch):
     """An accumulator initialised to 0 would report "measured, never
-    exceeded" for a path that observed nothing at all."""
+    exceeded" for a path that observed nothing at all.
+
+    THIS TEST CAUGHT THE RULING'S OWN VERSION OF THAT FORGERY. The first
+    cut of the ruled implementation returned the accumulator directly, so
+    a stream with no E2 traded day reported 0 -- the same fabrication
+    wearing the ruling as a disguise. A count is a measurement only if
+    something was measured, so the ruled path now needs a non-empty
+    denominator and reports NOT_APPLICABLE_NO_TRADE otherwise.
+
+    The token differs by state and the property does not: never an int
+    where nothing was observed."""
     facts = A.path_facts_from_events([], engine="E2", platform="topstep")
-    assert facts["e2_over_budget_days"] is A.PENDING_RULING
+    assert facts["e2_over_budget_days"] is A.NOT_APPLICABLE_NO_TRADE
+    assert facts["e2_intraday_over_budget_days"] is A.NOT_APPLICABLE_NO_TRADE
     assert facts["event_days"] == 0
+
+    from itsf import contracts
+    monkeypatch.setattr(contracts, "OVER_BUDGET_PREDICATE_RULED", False)
+    unruled = A.path_facts_from_events([], engine="E2", platform="topstep")
+    assert unruled["e2_over_budget_days"] is A.PENDING_RULING
 
 
 # --- C2 layer 4: the adapter reads the PHASE ------------------------------

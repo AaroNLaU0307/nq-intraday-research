@@ -24,7 +24,7 @@ touch the sim balance.
 from __future__ import annotations
 
 from itsf.contracts import AccountEvent, TradePathRecord
-from itsf.mc.platforms.authoritative import over_budget_status_for
+from itsf.mc.platforms.authoritative import over_budget_facts
 from itsf.mc.platforms.base import TrailingFloorEngine
 
 # --- frozen machine parameters ----------------------------------------------
@@ -108,7 +108,8 @@ class LucidLifecycle:
         return self._tier_micros
 
     def step_day(self, path: TradePathRecord | None, micros: int,
-                 *, requested_n: int | None = None) -> AccountEvent:
+                 *, requested_n: int | None = None,
+                 budget: float = 0.0) -> AccountEvent:
         """Advance one session. `path` is the per-contract intraday record
         (S0 SS10.1 schema); None == no-trade day.
 
@@ -135,12 +136,12 @@ class LucidLifecycle:
                                 day_net_usd=0.0, qualifying_day=None,
                                 account_generation=self.generation,
                                 requested_n=req, traded_n=0, cap_applied=False,
-                                over_budget_status=over_budget_status_for(None, 0))
+                                **over_budget_facts(None, 0, 0.0))
 
         if self.phase == "funded" and self._payout_pending:
             return self._process_payout(day, fee, req)
 
-        return self._trade_day(day, fee, path, micros, req)
+        return self._trade_day(day, fee, path, micros, req, budget)
 
     def eligible_terminal_gross(self) -> float:
         """Gross amount withdrawable if the horizon ended now; 0 when not
@@ -240,11 +241,12 @@ class LucidLifecycle:
                             account_generation=self.generation,
                             requested_n=requested_n, traded_n=0,
                             cap_applied=False,
-                            over_budget_status=over_budget_status_for(None, 0))
+                            **over_budget_facts(None, 0, 0.0))
 
     def _trade_day(self, day: str, fee: float,
                    path: TradePathRecord | None, micros: int,
-                   requested_n: int = 0) -> AccountEvent:
+                   requested_n: int = 0,
+                   budget: float = 0.0) -> AccountEvent:
         balance_at_open = self.balance
         qual_before = self._qualifying_days
         cap_today = self.max_contracts_today()
@@ -261,7 +263,7 @@ class LucidLifecycle:
         facts = dict(account_generation=self.generation,
                      requested_n=requested_n, traded_n=traded,
                      cap_applied=cap_applied,
-                     over_budget_status=over_budget_status_for(path, traded))
+                     **over_budget_facts(path, traded, budget))
         if path is not None and contracts > 0:
             # Intraday breach on the ADVERSE path, equity incl. unrealized
             # (frozen: platform_params lucidflex_50k.mll_engine.intraday_breach;

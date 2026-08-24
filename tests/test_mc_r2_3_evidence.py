@@ -151,7 +151,9 @@ def _atom(world_index=0, phase_offset=0, *, ev=None, offered=4, skips_n0=1,
         attempts_used=(orch.MAX_EVALUATION_STARTS if exhausted else 1),
         b2f_used=0, contract_cap_hits=contract_cap_hits,
         e2_over_budget_days=(A.NOT_APPLICABLE if engine == "E1"
-                             else A.PENDING_RULING))
+                             else A.PENDING_RULING),
+        e2_intraday_over_budget_days=(A.NOT_APPLICABLE if engine == "E1"
+                                      else A.PENDING_RULING))
     kw.update(over)
     return A.SimulationPathObservation(**kw)
 

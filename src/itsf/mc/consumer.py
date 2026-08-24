@@ -1468,7 +1468,9 @@ def _run_path_atom(prepared: PreparedMCInput, *, platform: str,
         attempts_used=int(res.attempts_used),
         b2f_used=int(res.b2f_used_total),
         contract_cap_hits=facts["contract_cap_hits"],
-        e2_over_budget_days=facts["e2_over_budget_days"])
+        e2_over_budget_days=facts["e2_over_budget_days"],
+        e2_intraday_over_budget_days=facts[
+            "e2_intraday_over_budget_days"])
 
 
 # R2.1 PHASE G: the R2 necessary-conditions boolean ("any payout AND not
@@ -1494,7 +1496,9 @@ FEASIBILITY_METRICS_STATUS = MappingProxyType({
     "days_profit_ge_150": "COMPUTED",        # AccountEvent.day_net_usd
     "qualifying_days": "COMPUTED",           # platform's OWN counter
     "contract_cap_hits": "COMPUTED",         # AccountEvent.cap_applied
-    "e2_over_budget_days": "DECISION_REQUIRED",  # predicate unruled (S2)
+    # D1 (2026-08-24) ruled the predicate, so both are counted now.
+    "e2_over_budget_days": "COMPUTED",
+    "e2_intraday_over_budget_days": "COMPUTED",
     "qualifying_distribution_vs_payout_requirements":
         "DECISION_REQUIRED",                 # the RULE is Aaron's (N-D2)
 })

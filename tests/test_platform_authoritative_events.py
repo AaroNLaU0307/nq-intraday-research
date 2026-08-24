@@ -38,6 +38,8 @@ from itsf.contracts import (DAY_FACT_REJECTION_CODES,
                             FACT_NEGATIVE_GENERATION,
                             FACT_OVER_BUDGET_STATUS_TYPE,
                             FACT_OVER_BUDGET_UNRULED,
+                            FACT_OVER_BUDGET_RULED_WITHOUT_VALUES,
+                            FACT_OVER_BUDGET_VALUE_UNDER_ABSENCE,
                             FACT_QUALIFYING_MISSING,
                             FACT_QUALIFYING_NOT_BOOL,
                             FACT_QUALIFYING_PHASE_MISMATCH,
@@ -591,27 +593,45 @@ def test_halt_and_dead_days_do_not_claim_a_cap_hit():
 
 
 def test_uncapped_request_helper_never_changes_the_traded_size():
-    # `_n_for_day` returns (pre-cap request, real size); only the second may
-    # move a trade. Pre-cap >= real, and real is the capped value.
+    # `_n_for_day` returns (pre-cap request, real size, risk budget); only
+    # the second may move a trade. Pre-cap >= real, and real is the capped
+    # value. The budget rides along so the over-budget predicate compares
+    # against the SAME number the sizing used -- for P3/P4 it depends on
+    # buffer_at_entry, so recomputing it a frame later would silently judge
+    # a day against a different budget.
     for balance, floor, anchor, cap in ((50000.0, 48000.0, 100.0, 40),
                                         (50000.0, 48000.0, 1.0, 40),
                                         (0.0, -2000.0, 100.0, 20),
                                         (0.0, -2000.0, 25.0, 20)):
-        req, n = orch._n_for_day("P2", balance, floor, anchor, cap)
+        req, n, budget = orch._n_for_day("P2", balance, floor, anchor, cap)
         assert req >= n and n <= cap
+        assert budget == 100.0            # P2 is flat, so this is exact
 
 
 # ==========================================================================
 # 7. over_budget — typed unruled state (D5-3)
 # ==========================================================================
 
-def test_over_budget_is_never_a_boolean_while_unruled():
-    assert OVER_BUDGET_PREDICATE_RULED is False
+def test_a_boolean_appears_exactly_where_the_predicate_applies():
+    """WAS `test_over_budget_is_never_a_boolean_while_unruled`, which held
+    while MC SS3 mandated the disclosure and defined no predicate. D1
+    supplied it on 2026-08-24, so "never a boolean" would now pin the past.
+
+    What survives is the sharper statement: a boolean exists if and only
+    if the status says RULED. Everywhere else it is still absent, and the
+    typed status still says which kind of absent -- so a reader can never
+    confuse "no position was taken" with "measured, did not exceed"."""
+    assert OVER_BUDGET_PREDICATE_RULED is True
     for name in BATTERY:
         res = run_scenario(name)
-        assert all(e.over_budget is None for e in res.events), name
-        assert all(isinstance(e.over_budget_status, OverBudgetStatus)
-                   for e in res.events), name
+        for e in res.events:
+            assert isinstance(e.over_budget_status, OverBudgetStatus), name
+            ruled = e.over_budget_status is OverBudgetStatus.RULED
+            for value in (e.over_budget, e.intraday_over_budget):
+                if ruled:
+                    assert isinstance(value, bool), (name, e.day)
+                else:
+                    assert value is None, (name, e.day, e.over_budget_status)
 
 
 def test_over_budget_status_distinguishes_the_two_kinds_of_none():
@@ -622,8 +642,13 @@ def test_over_budget_status_distinguishes_the_two_kinds_of_none():
     assert traded_e1 and traded_e2
     assert all(e.over_budget_status is OverBudgetStatus.NOT_APPLICABLE
                for e in traded_e1)            # E1: frozen MC SS3 is E2-scoped
-    assert all(e.over_budget_status is OverBudgetStatus.PENDING_RULING
-               for e in traded_e2)            # E2: mandated, undefined
+    assert all(e.over_budget_status is OverBudgetStatus.RULED
+               for e in traded_e2)            # E2: mandated, and D1 ruled it
+    # ...and RULED means the values are there, which is the whole
+    # difference between this token and the three absences
+    assert all(isinstance(e.over_budget, bool)
+               and isinstance(e.intraday_over_budget, bool)
+               for e in traded_e2)
     idle = [e for e in e2.events if e.traded_n == 0]
     assert all(e.over_budget_status is OverBudgetStatus.NOT_APPLICABLE_NO_TRADE
                for e in idle)
@@ -633,7 +658,7 @@ def test_over_budget_status_helper_mapping_and_unknown_engine():
     p1 = day_path("d", 10.0, engine="E1")
     p2 = day_path("d", 10.0, engine="E2")
     assert auth.over_budget_status_for(p1, 3) is OverBudgetStatus.NOT_APPLICABLE
-    assert auth.over_budget_status_for(p2, 3) is OverBudgetStatus.PENDING_RULING
+    assert auth.over_budget_status_for(p2, 3) is OverBudgetStatus.RULED
     assert (auth.over_budget_status_for(p2, 0)
             is OverBudgetStatus.NOT_APPLICABLE_NO_TRADE)
     assert (auth.over_budget_status_for(None, 5)
@@ -644,14 +669,26 @@ def test_over_budget_status_helper_mapping_and_unknown_engine():
         auth.over_budget_status_for(bad, 1)
 
 
-def test_a_fabricated_over_budget_boolean_is_refused_at_construction():
+@pytest.mark.parametrize("value", [False, True])
+def test_a_fabricated_over_budget_boolean_is_refused_at_construction(value):
+    """The "False == measured" trap, restated for the ruled world.
+
+    Unruled, ANY boolean was fabricated. Ruled, a boolean is fabricated
+    when it arrives with NO status -- an untyped value is exactly the
+    reading the typed state exists to prevent, and False is the dangerous
+    polarity because it reads as "measured, did not exceed"."""
     with pytest.raises(AuthoritativeFactError) as ei:
         AccountEvent(day="d", phase="xfa", balance=0.0, floor=0.0,
-                     over_budget=False)       # the exact "False == measured" trap
-    assert ei.value.code == FACT_OVER_BUDGET_UNRULED
-    with pytest.raises(AuthoritativeFactError):
-        AccountEvent(day="d", phase="xfa", balance=0.0, floor=0.0,
-                     over_budget=True)
+                     over_budget=value)
+    assert ei.value.code == FACT_OVER_BUDGET_RULED_WITHOUT_VALUES
+
+    # and under an absence label, which is the post-D1 shape of the same trap
+    with pytest.raises(AuthoritativeFactError) as ei:
+        AccountEvent(
+            day="d", phase="xfa", balance=0.0, floor=0.0,
+            over_budget=value, intraday_over_budget=value,
+            over_budget_status=OverBudgetStatus.NOT_APPLICABLE_NO_TRADE)
+    assert ei.value.code == FACT_OVER_BUDGET_VALUE_UNDER_ABSENCE
 
 
 # ==========================================================================
@@ -692,7 +729,10 @@ def _fact_ev(**kw):
     (dict(day_net_usd=float("nan")), FACT_DAY_NET_NOT_FINITE),
     (dict(day_net_usd=float("inf")), FACT_DAY_NET_NOT_FINITE),
     (dict(account_generation=-1), FACT_NEGATIVE_GENERATION),
-    (dict(over_budget=True), FACT_OVER_BUDGET_UNRULED),
+    # Ruled since D1, so an untyped boolean is no longer refused for
+    # lacking a ruling -- it is refused for lacking a STATUS, which is
+    # the statement that says which kind of absence a None would be.
+    (dict(over_budget=True), FACT_OVER_BUDGET_RULED_WITHOUT_VALUES),
     (dict(over_budget_status="PENDING_RULING"), FACT_OVER_BUDGET_STATUS_TYPE),
 ])
 def test_structural_rejections_at_construction(kwargs, code):
@@ -732,8 +772,10 @@ def test_stream_checker_rejects_missing_generation_and_bad_states():
 
     ok = _fact_ev()
     assert auth.check_event_facts([ok]) == []
-    ok.over_budget = True                     # post-construction bypass
-    assert auth.AUTH_OVER_BUDGET_VALUE_UNRULED in {
+    # post-construction bypass: the type cannot see this, the checker can.
+    # Ruled, the defect is a value under a label that denies it.
+    ok.over_budget = True
+    assert auth.AUTH_OVER_BUDGET_VALUE_UNDER_ABSENCE in {
         v.code for v in auth.check_event_facts([ok])}
 
 
@@ -763,13 +805,17 @@ def test_all_stream_rejection_codes_are_registered_and_strict_raises():
         auth.AUTH_OVER_BUDGET_STATUS_MISSING,
         auth.AUTH_OVER_BUDGET_STATUS_TYPE,
         auth.AUTH_OVER_BUDGET_STATUS_MISMATCH,
+        auth.AUTH_OVER_BUDGET_VALUE_UNDER_ABSENCE,
+        auth.AUTH_OVER_BUDGET_RULED_WITHOUT_VALUES,
         auth.AUTH_DAY_NET_INVARIANT,
         auth.AUTH_PHASE_UNKNOWN, auth.AUTH_PHASE_PLATFORM_MISMATCH,
         auth.AUTH_ENGINE_UNKNOWN, auth.AUTH_PLATFORM_UNKNOWN,
     }
     # every code is a distinct, stable string (an accidental alias would
     # make two different defects indistinguishable to lane S1')
-    assert len(auth.AUTH_REJECTION_CODES) == 22
+    # 22 + the two D1 coherence codes (value under an absence label,
+    # RULED standing over missing values)
+    assert len(auth.AUTH_REJECTION_CODES) == 24
     with pytest.raises(auth.AuthoritativeStreamError) as ei:
         auth.check_event_facts(
             [AccountEvent(day="x", phase="xfa", balance=0.0, floor=0.0)],
@@ -779,8 +825,10 @@ def test_all_stream_rejection_codes_are_registered_and_strict_raises():
 
 def test_orchestrator_refuses_an_event_without_the_fact_layer(monkeypatch):
     class _Amnesiac(LucidLifecycle):
-        def step_day(self, path, micros, *, requested_n=None):
-            ev = super().step_day(path, micros, requested_n=requested_n)
+        def step_day(self, path, micros, *, requested_n=None,
+                     budget=0.0):
+            ev = super().step_day(path, micros, requested_n=requested_n,
+                                  budget=budget)
             ev.day_net_usd = None             # a new emission site forgets
             return ev
 
@@ -1101,17 +1149,29 @@ def _valid_stream():
                      qualifying_day=False, requested_n=0, traded_n=0,
                      cap_applied=False,
                      over_budget_status=OverBudgetStatus.NOT_APPLICABLE_NO_TRADE)
+    # D1 (2026-08-24): a traded E2 day now carries the ruled predicate's
+    # two booleans. Both False here -- a profitable day exceeded nothing,
+    # and under the ruling that IS the measurement rather than an absence.
     b = AccountEvent(day="b", phase="xfa", balance=150.0, floor=0.0,
                      day_net_usd=50.0, account_generation=0,
                      qualifying_day=False, requested_n=1, traded_n=1,
-                     cap_applied=False,
-                     over_budget_status=OverBudgetStatus.PENDING_RULING)
+                     cap_applied=False, over_budget=False,
+                     intraday_over_budget=False,
+                     over_budget_status=OverBudgetStatus.RULED)
     return [a, b]
 
 
 def _set(field, value):
     def mutate(stream):
         setattr(stream[1], field, value)
+    return mutate
+
+
+def _set_pair(f1, v1, f2, v2):
+    """Two fields at once, for a defect that needs the pair to disagree."""
+    def mutate(stream):
+        setattr(stream[1], f1, v1)
+        setattr(stream[1], f2, v2)
     return mutate
 
 
@@ -1141,8 +1201,18 @@ STREAM_NEGATIVES = [
     (auth.AUTH_CAP_FLAG, _set("requested_n", 3)),        # clamp NOT reported
     (auth.AUTH_CAP_FLAG, _set("cap_applied", True)),     # clamp NOT real
     (auth.AUTH_CAP_FLAG, _set("cap_applied", "yes")),
-    (auth.AUTH_OVER_BUDGET_VALUE_UNRULED, _set("over_budget", False)),
-    (auth.AUTH_OVER_BUDGET_VALUE_UNRULED, _set("over_budget", True)),
+    # These two moved out of this table on 2026-08-24. Their code fires
+    # only while OVER_BUDGET_PREDICATE_RULED is False, and this table runs
+    # against the live constant -- so they are exercised, under the unruled
+    # state, in test_the_unruled_defect_code_is_still_reachable below. The
+    # code is NOT dead: the constant is the switch, and a retraction must
+    # find the verifier still able to say so.
+    (auth.AUTH_OVER_BUDGET_VALUE_UNDER_ABSENCE,
+     _set_first("over_budget", True)),
+    (auth.AUTH_OVER_BUDGET_RULED_WITHOUT_VALUES,
+     _set("over_budget", None)),
+    (auth.AUTH_OVER_BUDGET_RULED_WITHOUT_VALUES,
+     _set("intraday_over_budget", None)),
     (auth.AUTH_OVER_BUDGET_STATUS_MISSING, _set("over_budget_status", None)),
     (auth.AUTH_OVER_BUDGET_STATUS_TYPE,
      _set("over_budget_status", "PENDING_RULING")),
@@ -1216,7 +1286,7 @@ def test_verify_event_stream_refuses_a_non_bool_over_budget_once_ruled(
     ("E1", 0, OverBudgetStatus.NOT_APPLICABLE_NO_TRADE),
     ("E2", 0, OverBudgetStatus.NOT_APPLICABLE_NO_TRADE),
     ("E1", 3, OverBudgetStatus.NOT_APPLICABLE),
-    ("E2", 3, OverBudgetStatus.PENDING_RULING),
+    ("E2", 3, OverBudgetStatus.RULED),
 ])
 def test_over_budget_status_applicability_conditions(engine, traded,
                                                      expected):
@@ -1461,3 +1531,25 @@ def test_verify_event_stream_is_a_pure_gate():
     body = src.split("def verify_event_stream")[1].split("\ndef ")[0]
     assert "return None" in body
     assert "sum(" not in body and "len(" not in body
+
+
+def test_the_unruled_defect_code_is_still_reachable(monkeypatch):
+    """`over_budget_value_without_ruling` cannot fire while the predicate
+    is ruled, which is correct and is exactly why it needs its own test.
+
+    A code that no live state can produce looks identical to a code that
+    was quietly dropped. The constant is the switch: a retraction of D1
+    must find the verifier still able to refuse a boolean, so the code is
+    exercised in the state that produces it rather than deleted from the
+    catalogue for being inconvenient today."""
+    from itsf import contracts as _c
+    streams = [_valid_stream(), _valid_stream()]      # built while ruled
+    monkeypatch.setattr(_c, "OVER_BUDGET_PREDICATE_RULED", False)
+    for value, stream in zip((True, False), streams):
+        stream[1].over_budget_status = OverBudgetStatus.PENDING_RULING
+        stream[1].over_budget = value
+        stream[1].intraday_over_budget = None
+        with pytest.raises(AuthoritativeFactError) as ei:
+            auth.verify_event_stream(stream, engine="E2", platform="topstep")
+        assert ei.value.code == auth.AUTH_OVER_BUDGET_VALUE_UNRULED
+    assert auth.AUTH_OVER_BUDGET_VALUE_UNRULED in auth.AUTH_REJECTION_CODES

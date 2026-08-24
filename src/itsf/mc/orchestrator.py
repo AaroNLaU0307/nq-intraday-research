@@ -187,19 +187,30 @@ def _facts(ev: AccountEvent) -> AccountEvent:
 
 
 def _n_for_day(policy: str, balance: float, floor: float,
-               anchor_usd: float, platform_cap: int) -> tuple[int, int]:
-    """(requested_n, n) — sizing via account.py pure functions ONLY.
+               anchor_usd: float,
+               platform_cap: int) -> tuple[int, int, float]:
+    """(requested_n, n, risk_budget_usd) — sizing via account.py only.
 
     `requested_n` is floor(risk_budget / anchor) with NO platform cap: the
     fact layer needs the size the strategy asked for before the platform
     clamped it, otherwise `cap_applied` could never be true (this caller
     pre-clamps). `n` is the real, capped size and is the only value that
     ever reaches a trade.
+
+    THE BUDGET IS RETURNED, NOT RECOMPUTED DOWNSTREAM (D1, 2026-08-24).
+    The over-budget predicate compares a day's loss against this exact
+    number, and for P3 and P4 it depends on `buffer_at_entry(balance,
+    floor)` — the buffer BEFORE this day's trade. Recomputing it anywhere
+    else in the day means reading a different balance and silently
+    comparing against a different budget, which is the failure mode that
+    stays green: the count would simply be wrong, with nothing to notice
+    it. So it leaves the frame that owns it and travels as a value.
     """
     buf = acct.buffer_at_entry(balance, floor)
     budget = acct.risk_budget_usd(policy, buf)
     requested = acct.n_micros(budget, anchor_usd, _UNCAPPED_REQUEST_MICROS)
-    return requested, acct.n_micros(budget, anchor_usd, platform_cap)
+    return (requested, acct.n_micros(budget, anchor_usd, platform_cap),
+            budget)
 
 
 def run_lifecycle(cfg: LifecycleConfig, days: list[TemplateDay],
@@ -291,17 +302,18 @@ def _run_lucid(cfg: LifecycleConfig, days: list[TemplateDay],
 
         micros = life.max_contracts_today()
         if path is not None and micros > 0 and life.phase in ("evaluation", "funded"):
-            requested_n, n = _n_for_day(cfg.sizing_policy, life.balance,
+            requested_n, n, budget = _n_for_day(cfg.sizing_policy,
+                                                life.balance,
                                         life.floor_engine.floor,
                                         path.sizing_anchor_usd, micros)
         else:
-            requested_n, n = 0, 0
+            requested_n, n, budget = 0, 0, 0.0
         if path is not None and n == 0 and micros > 0:
             skips += 1                    # frozen: MC SS3 n=0 -> skip counted
 
         phase_before = life.phase
         ev = _facts(life.step_day(path if n > 0 else None, n,
-                                 requested_n=requested_n))
+                                 requested_n=requested_n, budget=budget))
         ev.day = td.day_id                # template calendar label is canonical
         events.append(ev)
         gen = ev.account_generation       # platform may have crossed a boundary
@@ -390,9 +402,10 @@ def _run_topstep(cfg: LifecycleConfig, days: list[TemplateDay],
                     b2f_used = 0
                     prev_balance = combine.balance
             if xfa is not None and not xfa.dead:
-                requested_n, n = 0, 0
+                requested_n, n, budget = 0, 0, 0.0
                 if path is not None:
-                    requested_n, n = _n_for_day(cfg.sizing_policy, xfa.balance,
+                    requested_n, n, budget = _n_for_day(cfg.sizing_policy,
+                                                        xfa.balance,
                                                 xfa.floor_engine.floor,
                                                 path.sizing_anchor_usd,
                                                 xfa.micro_cap)
@@ -404,7 +417,8 @@ def _run_topstep(cfg: LifecycleConfig, days: list[TemplateDay],
                 ev = _facts(xfa.process_day(td.cal_offset,
                                             path if n > 0 else None, n,
                                             request_payout=req,
-                                            requested_n=requested_n))
+                                            requested_n=requested_n,
+                                            budget=budget))
                 ev.day = td.day_id        # template calendar label is canonical
                 events.append(ev)
                 gen = ev.account_generation
@@ -438,17 +452,19 @@ def _run_topstep(cfg: LifecycleConfig, days: list[TemplateDay],
                 if used_credit:
                     led.book_fee("topstep_reset_credit_used", 0.0)
                 prev_balance = combine.balance
-            requested_n, n = 0, 0
+            requested_n, n, budget = 0, 0, 0.0
             if path is not None and not combine.breached:
-                requested_n, n = _n_for_day(cfg.sizing_policy, combine.balance,
-                                            combine.floor_engine.floor,
-                                            path.sizing_anchor_usd,
-                                            ts.COMBINE_MAX_MICROS)
+                requested_n, n, budget = _n_for_day(cfg.sizing_policy,
+                                                    combine.balance,
+                                                    combine.floor_engine.floor,
+                                                    path.sizing_anchor_usd,
+                                                    ts.COMBINE_MAX_MICROS)
                 if n == 0:
                     skips += 1
             ev = _facts(combine.process_day(td.cal_offset,
                                            path if n > 0 else None, n,
-                                           requested_n=requested_n))
+                                           requested_n=requested_n,
+                                           budget=budget))
             ev.day = td.day_id            # template calendar label is canonical
             events.append(ev)
             gen = ev.account_generation

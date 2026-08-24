@@ -1006,12 +1006,25 @@ class OverBudgetStatus(str, Enum):
     # E2 day: the fact is REQUESTED by frozen text and UNDEFINED by frozen
     # text. Awaiting an Aaron ruling (see the N02 receipt / DECISION packet).
     PENDING_RULING = "PENDING_RULING"
+    # E2 day under the D1 ruling of 2026-08-24: the predicate now EXISTS,
+    # so this day carries real booleans and this token says to read them.
+    # The other three are absences; this one is the only presence, which
+    # is why it is not in the atom layer's ABSENT_BY_TOKEN vocabulary.
+    RULED = "RULED"
 
 
-# Flipped ONLY by an explicit Aaron ruling that defines the E2 over-budget
-# predicate. While False, AccountEvent refuses to carry a boolean over_budget
-# at all, so no lane can quietly invent the predicate downstream.
-OVER_BUDGET_PREDICATE_RULED = False
+# Flipped ONLY by an explicit ruling that DEFINES the E2 over-budget
+# predicate. While False, AccountEvent refuses to carry a boolean at all,
+# so no lane can quietly invent the predicate downstream.
+#
+# TRUE since 2026-08-24 (D1, delegated to Codex GPT-5.6 Sol under Aaron's
+# named batch delegation). The predicate is in `itsf.mc.over_budget` and
+# fixes all three bases the frozen text left open: whole-position loss,
+# policy risk budget, and BOTH booleans in parallel. Flipping this does not
+# make a boolean appear -- it makes one ADMISSIBLE, and the coherence rules
+# below make an admissible boolean mandatory exactly where the predicate
+# applies, so "ruled" cannot quietly mean "ruled and then not emitted".
+OVER_BUDGET_PREDICATE_RULED = True
 
 # Phases whose frozen ruleset defines a "qualifying day" at all:
 #   Lucid funded  — platform_params lucidflex_50k.payouts
@@ -1041,6 +1054,8 @@ FACT_DAY_NET_NOT_FINITE = "day_net_usd_not_finite"
 FACT_NEGATIVE_GENERATION = "account_generation_negative"
 FACT_OVER_BUDGET_UNRULED = "over_budget_emitted_without_ruling"
 FACT_OVER_BUDGET_STATUS_TYPE = "over_budget_status_not_typed"
+FACT_OVER_BUDGET_RULED_WITHOUT_VALUES = "over_budget_ruled_without_values"
+FACT_OVER_BUDGET_VALUE_UNDER_ABSENCE = "over_budget_value_under_absence"
 
 DAY_FACT_REJECTION_CODES = frozenset({
     FACT_TRADED_EXCEEDS_REQUESTED, FACT_NEGATIVE_CONTRACTS,
@@ -1048,6 +1063,8 @@ DAY_FACT_REJECTION_CODES = frozenset({
     FACT_QUALIFYING_MISSING, FACT_QUALIFYING_NOT_BOOL,
     FACT_DAY_NET_NOT_FINITE, FACT_NEGATIVE_GENERATION,
     FACT_OVER_BUDGET_UNRULED, FACT_OVER_BUDGET_STATUS_TYPE,
+    FACT_OVER_BUDGET_RULED_WITHOUT_VALUES,
+    FACT_OVER_BUDGET_VALUE_UNDER_ABSENCE,
 })
 
 
@@ -1155,6 +1172,12 @@ class AccountEvent:
     # the predicate (OVER_BUDGET_PREDICATE_RULED); the companion status field
     # says WHICH kind of None this is.
     over_budget: bool | None = None
+    # D1's second mandated disclosure. MC SS3 requires BOTH
+    # P(realised_loss > budget) AND P(intraday_adverse_loss > budget), so
+    # one field would discharge half a frozen obligation. Kept separate
+    # all the way down: the atom layer counts them into two accumulators
+    # that are never summed together.
+    intraday_over_budget: bool | None = None
     over_budget_status: OverBudgetStatus | None = None
 
     def __post_init__(self):
@@ -1214,11 +1237,46 @@ class AccountEvent:
                 f"fact layer is live (day_net_usd={self.day_net_usd!r}, "
                 f"account_generation={self.account_generation!r}); emit "
                 "True|False from the platform's own counter, never None")
-        if self.over_budget is not None and not OVER_BUDGET_PREDICATE_RULED:
+        booleans = (self.over_budget, self.intraday_over_budget)
+        if any(b is not None for b in booleans)                 and not OVER_BUDGET_PREDICATE_RULED:
             raise AuthoritativeFactError(
                 FACT_OVER_BUDGET_UNRULED,
                 "MC SS3 mandates the E2 disclosure but defines no predicate; "
                 "emit over_budget_status instead of a fabricated boolean")
+        # The status and the booleans must agree about whether a fact
+        # exists. RULED with a missing boolean would read as "we ruled it
+        # and measured nothing"; an absence token WITH a boolean would let
+        # a value ride under a label that says there is none.
+        # A value with NO status at all. Neither branch below would fire,
+        # and an untyped boolean is precisely what the tri-state exists to
+        # prevent: nothing downstream can tell "measured, did not exceed"
+        # from "never measured". While unruled this was caught by the
+        # ruling check above; once ruled, that check stops firing and this
+        # is the only thing left standing between the two readings.
+        if self.over_budget_status is None and any(b is not None
+                                                   for b in booleans):
+            raise AuthoritativeFactError(
+                FACT_OVER_BUDGET_RULED_WITHOUT_VALUES,
+                "a boolean arrived with no over_budget_status: "
+                f"over_budget={self.over_budget!r} "
+                f"intraday_over_budget={self.intraday_over_budget!r}; the "
+                "typed state says WHICH kind of absence a None is, and an "
+                "untyped value has no such statement at all")
+        if self.over_budget_status is OverBudgetStatus.RULED:
+            if any(not isinstance(b, bool) for b in booleans):
+                raise AuthoritativeFactError(
+                    FACT_OVER_BUDGET_RULED_WITHOUT_VALUES,
+                    "over_budget_status=RULED requires BOTH booleans; got "
+                    f"over_budget={self.over_budget!r} "
+                    f"intraday_over_budget={self.intraday_over_budget!r}")
+        elif self.over_budget_status is not None:
+            if any(b is not None for b in booleans):
+                raise AuthoritativeFactError(
+                    FACT_OVER_BUDGET_VALUE_UNDER_ABSENCE,
+                    f"over_budget_status={self.over_budget_status.value} "
+                    "declares the quantity absent, yet a boolean rides "
+                    f"along: over_budget={self.over_budget!r} "
+                    f"intraday_over_budget={self.intraday_over_budget!r}")
         if (self.over_budget_status is not None
                 and not isinstance(self.over_budget_status, OverBudgetStatus)):
             raise AuthoritativeFactError(

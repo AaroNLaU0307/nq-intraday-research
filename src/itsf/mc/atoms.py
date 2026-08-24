@@ -374,6 +374,10 @@ class SimulationPathObservation:
     b2f_used: int
     contract_cap_hits: object            # int | AbsentQuantity
     e2_over_budget_days: object          # int | AbsentQuantity
+    # D1's SECOND mandated disclosure, in its own field and its own
+    # accumulator all the way down. MC SS3 requires two probabilities;
+    # one field would answer neither.
+    e2_intraday_over_budget_days: object  # int | AbsentQuantity
 
     def __post_init__(self):
         _hex64(self.prepared_digest, field="prepared_digest")
@@ -424,6 +428,10 @@ class SimulationPathObservation:
             self, "e2_over_budget_days",
             _absent_or_nonneg_int(self.e2_over_budget_days,
                                   field="e2_over_budget_days"))
+        object.__setattr__(
+            self, "e2_intraday_over_budget_days",
+            _absent_or_nonneg_int(self.e2_intraday_over_budget_days,
+                                  field="e2_intraday_over_budget_days"))
 
         # --- cross invariants, one code each ---
         if self.offered_days > self.days_in_window:
@@ -492,18 +500,23 @@ class SimulationPathObservation:
                 f"{self.b2f_used}")
         # engine-conditional semantics of the E2 budget field
         if self.engine == "E1":
-            if self.e2_over_budget_days is not NOT_APPLICABLE:
-                raise MCInputError(
-                    "atom_e2_field_engine_semantics",
-                    "E1 has no sizing budget: e2_over_budget_days must "
-                    "be NOT_APPLICABLE (permanently), got "
-                    f"{self.e2_over_budget_days!r}")
+            for _f in ("e2_over_budget_days",
+                       "e2_intraday_over_budget_days"):
+                if getattr(self, _f) is not NOT_APPLICABLE:
+                    raise MCInputError(
+                        "atom_e2_field_engine_semantics",
+                        f"E1 has no sizing budget: {_f} must be "
+                        "NOT_APPLICABLE (permanently), got "
+                        f"{getattr(self, _f)!r}")
         else:                                        # E2
-            if self.e2_over_budget_days is NOT_APPLICABLE:
-                raise MCInputError(
-                    "atom_e2_field_engine_semantics",
-                    "E2 DOES have a sizing budget: NOT_APPLICABLE is "
-                    "wrong; use an int or PENDING_RULING")
+            for _f in ("e2_over_budget_days",
+                       "e2_intraday_over_budget_days"):
+                if getattr(self, _f) is NOT_APPLICABLE:
+                    raise MCInputError(
+                        "atom_e2_field_engine_semantics",
+                        f"E2 DOES have a sizing budget: {_f}="
+                        "NOT_APPLICABLE is wrong; use an int or "
+                        "PENDING_RULING")
 
     # --- identity helpers ---
     @property
@@ -553,7 +566,8 @@ def atom_from_canonical_dict(row: Mapping) -> SimulationPathObservation:
     kwargs = {}
     for name in ATOM_FIELDS:
         v = row[name]
-        if name in ("contract_cap_hits", "e2_over_budget_days") and \
+        if name in ("contract_cap_hits", "e2_over_budget_days",
+                    "e2_intraday_over_budget_days") and \
                 isinstance(v, str):
             if v not in ABSENT_BY_TOKEN:
                 raise MCInputError("atom_absent_token_unknown",
@@ -626,7 +640,7 @@ SEAM_REQUIRED_FIELDS = ("day_net_usd", "phase", "account_generation",
 # (qualifying_day) and on the engine + traded state + the frozen ruling
 # constant (over_budget). `over_budget_status` carries WHICH kind of None.
 SEAM_TRISTATE_FIELDS = ("qualifying_day", "over_budget",
-                        "over_budget_status")
+                        "intraday_over_budget", "over_budget_status")
 
 # --- C3: the CONSUMER-SIDE E2 over-budget gate (independent second gate) ---
 #
@@ -657,6 +671,11 @@ SEAM_TRISTATE_FIELDS = ("qualifying_day", "over_budget",
 # should count, and inheriting a boolean silently would reopen exactly the
 # forgery surface the typed absence was built to close.
 E2_UNRULED_TOKEN = "PENDING_RULING"
+#: The only PRESENCE token. Deliberately NOT in ABSENT_BY_TOKEN: the
+#: other three say why a value is missing, this one says a value is
+#: here. Folding it into the absence vocabulary would let "ruled" be
+#: read as one more flavour of absent.
+E2_RULED_TOKEN = "RULED"
 NO_TRADE_TOKEN = "NOT_APPLICABLE_NO_TRADE"
 E1_TRADED_TOKEN = "NOT_APPLICABLE"
 
@@ -668,17 +687,20 @@ def _seam_get(event, name: str):
 
 
 def expected_over_budget_token(engine: str, traded_n: int) -> str:
-    """The ONLY legal `over_budget_status` token for (engine, traded state)
-    while the predicate is unruled.
+    """The ONLY legal `over_budget_status` token for (engine, traded state).
 
     Transcribed from the frozen scope (MC SS3 scopes the over-budget
     disclosure to E2; a day with no position has no referent at all), NOT
     imported from the producer's mapping — the two lanes must agree by
     SPECIFICATION, so a producer-side drift is DETECTABLE here instead of
-    being inherited."""
+    being inherited. That is why this reads `contracts` for the ruling
+    switch and nothing else: the SWITCH is shared, the MAPPING is not."""
     if traded_n <= 0:
         return NO_TRADE_TOKEN
-    return E1_TRADED_TOKEN if engine == "E1" else E2_UNRULED_TOKEN
+    if engine == "E1":
+        return E1_TRADED_TOKEN
+    return (E2_RULED_TOKEN if _contracts.OVER_BUDGET_PREDICATE_RULED
+            else E2_UNRULED_TOKEN)
 
 
 def path_facts_from_events(events: Sequence, *, engine: str,
@@ -731,14 +753,14 @@ def path_facts_from_events(events: Sequence, *, engine: str,
             "platform_facts_over_budget_ruling_malformed",
             f"contracts.OVER_BUDGET_PREDICATE_RULED={ruled!r} is not a "
             "bool — the consumption rule cannot be evaluated")
-    if ruled and engine == "E2":
-        raise MCInputError(
-            "platform_facts_over_budget_ruling_changed",
-            "OVER_BUDGET_PREDICATE_RULED flipped to True: the E2 "
-            "over-budget consumption rule pinned in this adapter was "
-            "written for the UNRULED state and may not be extended by "
-            "default. A new explicit predicate implementation plus its "
-            "own tests must land here before any boolean is counted")
+    # The tripwire that used to stand here demanded exactly this: "a new
+    # explicit predicate implementation plus its own tests must land here
+    # before any boolean is counted". D1 (2026-08-24) supplied the
+    # predicate, `itsf.mc.over_budget` implements it, and the consumption
+    # rule below is written for the RULED state. The UNRULED branches are
+    # kept live rather than deleted, because the constant is the switch
+    # and a retraction must return this adapter to refusing rather than
+    # leaving it counting under a rule nobody holds any more.
     qualifying_phases = _contracts.QUALIFYING_PHASES
 
     executed = 0
@@ -747,9 +769,17 @@ def path_facts_from_events(events: Sequence, *, engine: str,
     ge150 = 0
     qualifying = 0
     cap_hits = 0
-    # C3: kept ONLY as a tripwire (see the tail of this function). Nothing
-    # can increment it while the predicate is unruled.
+    # C3: two accumulators, and they are NEVER summed. MC SS3 mandates two
+    # probabilities, so a single total would answer neither.
     over_budget_days = 0
+    intraday_over_budget_days = 0
+    # THE DENOMINATOR. Without it a stream containing no E2 traded day
+    # at all reports 0 over-budget days, which reads as "measured,
+    # never exceeded" on zero observations -- the same forgery the
+    # unruled state was protected from, just wearing the ruling as a
+    # disguise. A count is a measurement only if something was
+    # measured.
+    e2_days_subject = 0
     prev_generation = None
 
     for i, ev in enumerate(events):
@@ -838,11 +868,12 @@ def path_facts_from_events(events: Sequence, *, engine: str,
         status = _seam_get(ev, "over_budget_status")
         status_token = (None if status is _MISSING or status is None
                         else str(getattr(status, "value", status)))
-        if status_token is not None and status_token not in ABSENT_BY_TOKEN:
+        if status_token is not None and status_token != E2_RULED_TOKEN                 and status_token not in ABSENT_BY_TOKEN:
             raise MCInputError(
                 "platform_facts_malformed",
-                f"event {i}: over_budget_status={status_token!r} is not "
-                f"a known absence token {sorted(ABSENT_BY_TOKEN)}")
+                f"event {i}: over_budget_status={status_token!r} is "
+                f"neither {E2_RULED_TOKEN!r} nor a known absence token "
+                f"{sorted(ABSENT_BY_TOKEN)}")
         # gate 2 — the TYPED status is mandatory, on every event of every
         # engine. Without it there is no statement about WHY the boolean
         # is absent, and "absent" would be indistinguishable from
@@ -865,24 +896,44 @@ def path_facts_from_events(events: Sequence, *, engine: str,
                 f"event {i}: engine={engine} traded_n={trd} requires "
                 f"over_budget_status={want_token!r}, got "
                 f"{status_token!r}")
-        # gate 4 — the VALUE. No engine may carry a boolean today; the E1
-        # and E2 refusals keep their distinct codes because they say
-        # different things (E1: permanently out of scope; E2: defined but
-        # unruled).
-        if ob is not _MISSING and ob is not None:
-            if engine == "E1":
+        # gate 4 — the VALUE. E1 refuses a boolean permanently (out of
+        # frozen scope). E2 refuses one while unruled, and REQUIRES both
+        # while ruled: a RULED status with a missing value would read as
+        # "we ruled it and measured nothing".
+        intraday = _seam_get(ev, "intraday_over_budget")
+        if engine == "E1":
+            for name, value in (("over_budget", ob),
+                                ("intraday_over_budget", intraday)):
+                if value is not _MISSING and value is not None:
+                    raise MCInputError(
+                        "platform_facts_engine_semantics",
+                        f"event {i}: E1 carries {name}={value!r}; the "
+                        "frozen MC SS3 over-budget disclosure is "
+                        "E2-scoped, so an E1 boolean would manufacture "
+                        "evidence")
+        elif not ruled:
+            if ob is not _MISSING and ob is not None:
                 raise MCInputError(
-                    "platform_facts_engine_semantics",
-                    f"event {i}: E1 carries over_budget={ob!r}; the "
-                    "frozen MC SS3 over-budget disclosure is E2-scoped, "
-                    "so an E1 boolean would manufacture evidence")
-            raise MCInputError(
-                "platform_facts_e2_over_budget_boolean_unruled",
-                f"event {i}: E2 carries over_budget={ob!r} while "
-                "OVER_BUDGET_PREDICATE_RULED is False. MC SS3 mandates "
-                "the disclosure but defines no predicate, so a boolean "
-                "has no agreed meaning and MUST NOT enter a formal "
-                f"count (status={status_token!r} says PENDING_RULING)")
+                    "platform_facts_e2_over_budget_boolean_unruled",
+                    f"event {i}: E2 carries over_budget={ob!r} while "
+                    "OVER_BUDGET_PREDICATE_RULED is False. MC SS3 "
+                    "mandates the disclosure but defines no predicate, "
+                    "so a boolean has no agreed meaning and MUST NOT "
+                    f"enter a formal count (status={status_token!r})")
+        elif trd > 0:
+            for name, value in (("over_budget", ob),
+                                ("intraday_over_budget", intraday)):
+                if not isinstance(value, bool):
+                    raise MCInputError(
+                        "platform_facts_e2_over_budget_value_missing",
+                        f"event {i}: status={status_token!r} but "
+                        f"{name}={value!r}; the ruled predicate applies "
+                        "to this day and both booleans are mandatory")
+            e2_days_subject += 1
+            if ob:
+                over_budget_days += 1
+            if intraday:
+                intraday_over_budget_days += 1
 
         gross = getattr(ev, "payout_gross", 0.0)
         if isinstance(gross, bool) or not isinstance(gross, (int, float)):
@@ -908,9 +959,25 @@ def path_facts_from_events(events: Sequence, *, engine: str,
     # the same forgery in a different disguise.
     if engine == "E1":
         e2_days = NOT_APPLICABLE
+        e2_intraday_days = NOT_APPLICABLE
+    elif ruled and e2_days_subject > 0:
+        # Real counts, from real booleans over days the predicate actually
+        # judged. A zero here IS a measurement -- "no day exceeded" --
+        # which is exactly what it could not mean while the predicate was
+        # undefined.
+        e2_days = over_budget_days
+        e2_intraday_days = intraday_over_budget_days
+    elif ruled:
+        # Ruled, but this stream held no position on any E2 day, so the
+        # predicate never applied and there is nothing to have measured.
+        # Reporting 0 here would be the unruled state's forgery wearing
+        # the ruling as a disguise.
+        e2_days = NOT_APPLICABLE_NO_TRADE
+        e2_intraday_days = NOT_APPLICABLE_NO_TRADE
     else:
         e2_days = PENDING_RULING
-    if over_budget_days:                                  # pragma: no cover
+        e2_intraday_days = PENDING_RULING
+    if not ruled and (over_budget_days or intraday_over_budget_days):
         # unreachable: gate 4 refuses every boolean, so nothing can
         # increment the accumulator. Kept as a tripwire — if a future
         # ruled-predicate implementation starts counting, it must ALSO
@@ -930,6 +997,7 @@ def path_facts_from_events(events: Sequence, *, engine: str,
         "qualifying_days": qualifying,
         "contract_cap_hits": cap_hits,
         "e2_over_budget_days": e2_days,
+        "e2_intraday_over_budget_days": e2_intraday_days,
     })
 
 

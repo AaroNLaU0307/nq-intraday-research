@@ -27,7 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from itsf.contracts import AccountEvent, TradePathRecord
-from itsf.mc.platforms.authoritative import over_budget_status_for
+from itsf.mc.platforms.authoritative import over_budget_facts
 from itsf.mc.platforms.base import TrailingFloorEngine
 
 # --- Combine (standard path) -------------------------------------------------
@@ -230,7 +230,8 @@ class CombineLifecycle:
 
     def process_day(self, day: int, trade: TradePathRecord | None = None,
                     n_micros: int = 1, *,
-                    requested_n: int | None = None) -> AccountEvent:
+                    requested_n: int | None = None,
+                    budget: float = 0.0) -> AccountEvent:
         """`requested_n` (N02/D5-1) is FACT-ONLY — the pre-cap position size
         the caller wanted, used solely so `cap_applied` can be emitted
         truthfully when the caller already pre-clamped `n_micros`. It never
@@ -242,7 +243,7 @@ class CombineLifecycle:
         idle_facts = dict(day_net_usd=0.0, qualifying_day=None,
                           account_generation=self.generation,
                           requested_n=req, traded_n=0, cap_applied=False,
-                          over_budget_status=over_budget_status_for(None, 0))
+                          **over_budget_facts(None, 0, 0.0))
         if self.passed:
             return AccountEvent(day=str(day), phase="done", balance=self.balance,
                                 floor=self.floor_engine.floor, fees_usd=fees,
@@ -262,7 +263,7 @@ class CombineLifecycle:
                          requested_n=req, traded_n=traded,
                          cap_applied=(traded < req
                                       and COMBINE_MAX_MICROS < req),
-                         over_budget_status=over_budget_status_for(trade, traded))
+                         **over_budget_facts(trade, traded, budget))
             # frozen: combine.mll_engine.intraday_breach — realtime net P&L
             # incl. unrealized, adverse path (MC SS3); touch == breach
             equity_path = [self.balance + n * p for p in trade.mtm_adverse_pnl_1m]
@@ -409,7 +410,8 @@ class XfaLifecycle:
 
     def process_day(self, day: int, trade: TradePathRecord | None = None,
                     n_micros: int = 1, request_payout: bool = False,
-                    *, requested_n: int | None = None) -> AccountEvent:
+                    *, requested_n: int | None = None,
+                    budget: float = 0.0) -> AccountEvent:
         """`requested_n` (N02/D5-1) is FACT-ONLY — the pre-cap position size
         the caller wanted, used solely so `cap_applied` can be emitted
         truthfully when the caller already pre-clamped `n_micros`. It never
@@ -423,7 +425,7 @@ class XfaLifecycle:
                                 day_net_usd=0.0, qualifying_day=None,
                                 account_generation=self.generation,
                                 requested_n=req, traded_n=0, cap_applied=False,
-                                over_budget_status=over_budget_status_for(None, 0))
+                                **over_budget_facts(None, 0, 0.0))
         balance_at_open = self.balance
         qual_before = self.qualifying_days
         # frozen: xfa.scaling_tiers.update next_session_only — today's cap was
@@ -435,7 +437,7 @@ class XfaLifecycle:
                      requested_n=req, traded_n=traded,
                      cap_applied=(trade is not None and traded < req
                                   and cap_today < req),
-                     over_budget_status=over_budget_status_for(trade, traded))
+                     **over_budget_facts(trade, traded, budget))
         day_net = 0.0
         payout_gross = 0.0
         payout_cash = 0.0
