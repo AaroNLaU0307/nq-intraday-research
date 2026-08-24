@@ -34,8 +34,37 @@ Recompute and match before any work. On mismatch, truncation or absence:
 | `C51D25E58545F7C4E4C71EF93DACF29808FDE5E93EA7A3D5A11D32EFC91B72EB` | 18166 | `src/itsf/mc/supplement_contract.py` |
 
 Repo: `C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework`
-HEAD: `ba9745340b07650a396136c2f9820cc504295ed1`. All six are committed;
-worktree carries only this prompt.
+
+**On HEAD — read this before comparing it to anything.** HEAD is NOT a
+matched field of this declaration, and an earlier issue of this prompt was
+STOPped on exactly that misreading. The mistake was the author's: it printed
+a bare `HEAD: <sha>` inside this Transport block, directly under an
+instruction to recompute and match or STOP, which made HEAD look like a
+matched field — and then moved HEAD by committing twice, including
+committing this prompt itself. Pinning HEAD is unworkable by construction:
+committing the prompt changes HEAD, so the pin is stale the moment it is
+written.
+
+What IS declared, and what to verify instead:
+
+```
+REVIEW_ID                    = MC-REG-COLLISION-001-RATIFICATION
+REVIEWED_SET_UNCHANGED_SINCE = ba9745340b07650a396136c2f9820cc504295ed1
+VERIFY = git log ba97453..HEAD -- <the six paths above>   ->  must be EMPTY
+```
+
+An empty result proves that no commit since that point touched any reviewed
+byte. That is the property that actually matters, and — unlike a HEAD pin —
+it stays true as unrelated work lands. The six SHA-256s above remain the
+authority; the git check is a second, independent route to the same fact.
+
+At this issue, HEAD is `f8b8f8bc743573cb5f94748be13b10c4c72b4ab9`, and the
+two commits after `ba97453` are `167045f` (this prompt) and `f8b8f8b`
+(Aaron's four decisions of 2026-08-25, transcribed). Neither touches the
+reviewed set — verified both by the command above returning empty and,
+independently, by all six hashes still matching. Later commits may exist by
+the time you read this; re-run the command rather than comparing HEADs.
+Worktree at issue time: clean except this prompt.
 
 ## What is being asked
 

@@ -26,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
 from pathlib import Path
 
 REGISTER = Path(__file__).resolve().parent.parent / "ops" / \
@@ -63,9 +64,85 @@ def test_the_register_is_well_formed():
     """A malformed register silently guards nothing."""
     for e in _entries():
         for field in ("path", "sha256", "issued_to", "issued_at",
-                      "review_id"):
+                      "review_id", "unchanged_since"):
             assert e.get(field), f"entry missing {field!r}: {e}"
         assert len(e["sha256"]) == 64, e["sha256"]
+        assert re.fullmatch(r"[0-9a-f]{40}", e["unchanged_since"]), \
+            e["unchanged_since"]
+
+
+def test_no_commit_has_touched_a_reviewed_path_since_its_declaration():
+    """THE HOLE THE HASH CHECK LEFT, and it cost a review session.
+
+    2026-08-25: all six artifacts hashed correctly, the worktree was clean,
+    and a Sol session STOPped anyway — the prompt pinned a bare HEAD, and
+    the builder then committed twice, including committing the prompt
+    itself. `test_every_artifact_under_review_still_hashes_to_what_was_sent`
+    passed throughout. It compares bytes; it says nothing about the repo
+    the reviewer is asked to reason about.
+
+    Pinning HEAD cannot be the fix — committing the prompt moves HEAD, so
+    the pin is stale before it is read. What is pinned instead is
+    `unchanged_since`: no commit after it may touch a reviewed path. That
+    stays true as unrelated work lands, and the reviewer can verify it with
+    the same one-line git command rather than trusting a claim.
+    """
+    repo = REGISTER.parent.parent
+    entries = _entries()
+    if not entries:
+        return
+
+    touched = []
+    for e in entries:
+        out = subprocess.run(
+            ["git", "log", "--oneline", f"{e['unchanged_since']}..HEAD",
+             "--", e["path"]],
+            cwd=repo, capture_output=True, text=True)
+        assert out.returncode == 0, out.stderr
+        if out.stdout.strip():
+            touched.append(f"{e['path']} (sent to {e['issued_to']}, "
+                           f"unchanged_since {e['unchanged_since'][:12]}):\n"
+                           + "\n".join("      " + l
+                                       for l in out.stdout.splitlines()))
+    assert not touched, (
+        "a commit landed on a path a reviewer is holding; their declaration "
+        "no longer describes the tree:\n  " + "\n  ".join(touched))
+
+
+def test_a_review_prompt_never_pins_a_bare_head():
+    """The authoring defect itself, banned mechanically.
+
+    A bare `HEAD: <40-hex>` inside a transport block reads as a matched
+    field — Sol matched it and stopped; Fable read the same shape as
+    informational and proceeded. Two reviewers, one rule, opposite
+    behaviour, because the prompt was ambiguous. A prompt for a LIVE review
+    must declare `REVIEWED_SET_UNCHANGED_SINCE` instead, which does not go
+    stale.
+
+    Liveness is keyed on `review_id`, not on whether a prompt happens to
+    mention a registered path. Keying on paths was the first attempt and it
+    flagged a CLOSED review's prompt that merely names the same record — a
+    guard that fires on finished work trains people to ignore it.
+    """
+    entries = _entries()
+    if not entries:
+        return
+    live_ids = {e["review_id"] for e in entries}
+
+    problems = []
+    for prompt in sorted(REGISTER.parent.glob("*PROMPT*.md")):
+        text = prompt.read_text(encoding="utf-8")
+        if not any(rid in text for rid in live_ids):
+            continue                     # not a prompt for a live review
+        for m in re.finditer(r"^HEAD\s*[:=]\s*`?[0-9a-f]{40}`?",
+                             text, re.M):
+            problems.append(f"{prompt.name}: {m.group(0)[:24]}… — a bare "
+                            "HEAD pin; use REVIEWED_SET_UNCHANGED_SINCE")
+        if "REVIEWED_SET_UNCHANGED_SINCE" not in text:
+            problems.append(f"{prompt.name}: references a registered "
+                            "artifact but declares no "
+                            "REVIEWED_SET_UNCHANGED_SINCE")
+    assert not problems, "\n  ".join([""] + problems)
 
 
 #: A transport table row in a review prompt: hash, byte count, path.
