@@ -692,6 +692,36 @@ def verify_supplement_authority(
             "supplement_authority_test_only_mismatch",
             f"authority test_only={authority.test_only} vs prepared "
             f"{prepared.test_only}")
+    # N06 ROUND 4, High. Every comparison below asks the AUTHORITY'S OWN
+    # values whether they match. A `str` subclass whose `__eq__` returns
+    # True answers yes to all of them, and `__new__` +
+    # `object.__setattr__` installs one past `__post_init__`'s
+    # cross-field check while the type stays exactly right. Measured: a
+    # forged authority carrying a 2099 day universe cleared this verifier
+    # and all five B_DERIVE gates, and the seal wrote rows dated 2099
+    # under a binding digest describing the real 2026 universe
+    # (49352d44... declared vs 435fd9b4... actual).
+    #
+    # Same rule as `freeze_payload` and the builder, third site: exact
+    # built-ins only. THE TYPE CHECK IS THE LOAD-BEARING HALF -- removing
+    # it fails the round-4 battery. The digest re-derivation below is
+    # NOT load-bearing today and no test catches its removal: a
+    # plain-string forged universe is already caught by the specific
+    # comparisons above. It is kept as a standing invariant so the
+    # property survives a refactor of those comparisons, and is
+    # deliberately not claimed as a defence.
+    for i, day in enumerate(authority.day_universe):
+        if type(day) is not str:
+            raise SupplementError(
+                "supplement_authority_day_universe_type",
+                f"day {i} is {type(day).__name__}, not exactly str — a "
+                "subclass can carry hostile comparison behaviour")
+    if day_universe_digest(tuple(authority.day_universe)) !=             authority.day_universe_digest:
+        raise SupplementError(
+            "supplement_authority_day_universe_digest_unbacked",
+            "the authority's day_universe_digest does not describe the "
+            "day universe it carries")
+
     if authority.schema != SUPPLEMENT_AUTHORITY_SCHEMA:
         raise SupplementError("supplement_authority_schema",
                               f"schema={authority.schema!r}")

@@ -1209,10 +1209,12 @@ def test_n11_no_refusal_anywhere_leaves_a_byte_in_the_output_directory(
 # from the public API (`_components_locally` below is asserted equal to
 # the module's own).
 #
-# This is the same hole as section Y, one layer down, and it is what
-# makes the seal's SECOND line of defence (binding / day-set / rows-digest
-# re-derivation) the thing that actually holds - so these tests exercise
-# it deliberately.
+# This is the same hole as section Y, one layer down. It used to say
+# re-derivation was the thing that actually holds; rounds 2, 3 and 4
+# each refuted that. Re-derivation holds only where the re-derived
+# value cannot answer the comparison itself -- which is why the exact
+# built-in rule now applies at all three sites (payload freeze, builder
+# rows, authority day universe).
 # ===========================================================================
 
 def _components_locally(authority, prepared, payload):
@@ -1504,10 +1506,11 @@ def test_y_new_walks_around_the_capability_and_clears_all_of_b_derive(
     capability, and a clone carrying only GENUINE facts passes the whole
     of `B_DERIVE`, builds a product and SEALS it.
 
-    The forgery buys nothing - every field it carries was re-derived from
-    the same prepared input, so the sealed bytes are identical to the
-    factory's - but the factory boundary itself is not what stops it. The
-    N06 re-derivation is."""
+    THIS clone buys nothing, because every field it carries is a
+    genuine one. That is a fact about this clone, NOT a general
+    property: round 4 built the same kind of clone with a lying day
+    universe and it sealed rows dated 2099. See
+    `test_r4_a_lying_day_universe_cannot_reach_the_seal`."""
     clone = _new_forged_authority(authority)
     assert clone is not authority
     assert sa.verify_supplement_authority(clone, prod) is clone
@@ -2091,3 +2094,76 @@ def test_r3b_the_builder_refuses_a_hostile_scalar_too(prod, authority):
         sp.build_supplement_from_authority(authority, prod, rows)
     assert ei.value.code == "production_payload_unsupported_type"
     assert "_Lying" in str(ei.value)
+
+
+def test_r4_a_lying_day_universe_cannot_reach_the_seal(
+        prod, authority, monkeypatch, tmp_path):
+    """N06 ROUND 4, High — the poison is in the AUTHORITY, not the rows.
+
+    Every comparison in `verify_supplement_authority` asks the authority's
+    own values whether they match, and a `str` subclass with a lying
+    `__eq__` answers yes to all of them. The rows stay plain strings, so
+    the builder's normalisation never sees anything wrong. Measured before
+    the repair, on 8b16118:
+
+        VERIFY_RETURNED=True   BUILDER_RETURNED=True   SEAL_RETURNED=True
+        SEALED_DAYS=2099-01-03..2099-01-07
+        BOUND_DIGEST=49352d441d195b69cae265ec...   (the real 2026 universe)
+        ACTUAL_DIGEST=435fd9b45e515710e96acf6e...  (the 2099 rows)
+        BOUND_DIGEST_MATCH=False
+
+    i.e. sealed bytes whose binding describes a different day universe
+    than their own rows."""
+    class _LyingDate(str):
+        def __eq__(self, other):
+            return True
+
+        def __ne__(self, other):
+            return False
+
+        __hash__ = str.__hash__
+
+    bad = tuple(_LyingDate(f"2099-01-{d:02d}") for d in range(3, 8))
+    forged = sa.SupplementAuthority.__new__(sa.SupplementAuthority)
+    for field in dataclasses.fields(authority):
+        value = bad if field.name == "day_universe" else getattr(
+            authority, field.name)
+        object.__setattr__(forged, field.name, value)
+    object.__setattr__(forged, "authority_digest",
+                       sa._digest(sa.AUTHORITY_DIGEST_SCHEMA,
+                                  sa._authority_payload(forged)))
+    assert type(forged) is sa.SupplementAuthority     # the guard cannot see it
+
+    with pytest.raises(dss.SupplementError) as ei:
+        sa.verify_supplement_authority(forged, prod)
+    assert ei.value.code == "supplement_authority_day_universe_type"
+
+    # and nothing downstream can be reached with it
+    plain = tuple(str.__str__(d) for d in bad)
+    seen = _capture_intended(monkeypatch)
+    out = tmp_path / "seal"
+    out.mkdir()
+    with pytest.raises((dss.SupplementError, sp.SupplementProductionError)):
+        sp.build_supplement_from_authority(forged, prod, _rows(plain))
+    assert "intended" not in seen
+    assert _listing(out) == []
+
+
+def test_r4_a_day_universe_digest_must_describe_its_own_universe(
+        prod, authority):
+    """The second half of the same repair: the verifier used to check only
+    that the authority's OVERALL self-digest was consistent, which a forger
+    simply recomputes. The day-universe digest is now re-derived from the
+    universe the authority actually carries."""
+    forged = sa.SupplementAuthority.__new__(sa.SupplementAuthority)
+    for field in dataclasses.fields(authority):
+        object.__setattr__(forged, field.name, getattr(authority, field.name))
+    object.__setattr__(forged, "day_universe",
+                       tuple(f"2099-01-{d:02d}" for d in range(3, 8)))
+    object.__setattr__(forged, "authority_digest",
+                       sa._digest(sa.AUTHORITY_DIGEST_SCHEMA,
+                                  sa._authority_payload(forged)))
+    with pytest.raises(dss.SupplementError) as ei:
+        sa.verify_supplement_authority(forged, prod)
+    assert ei.value.code in ("supplement_authority_day_universe_mismatch",
+                             "supplement_authority_day_universe_digest_unbacked")

@@ -259,8 +259,14 @@ KNOWN_FAILURES
   ops/N06_HOLD_REPAIR_EVIDENCE.md §3.
 
 KNOWN_ASSUMPTIONS
-  - Module privates are not a security boundary in Python; the boundary that
-    holds is RE-DERIVATION, not the capability object.
+  - RETRACTED (third time, and each time it was mine). This line used to
+    say the boundary that holds is RE-DERIVATION rather than the
+    capability object. Round 2 refuted it, round 3 showed the
+    consequence, round 4 showed it again one layer up: a forged
+    authority carrying a lying day universe cleared the verifier and
+    sealed rows dated 2099 under a binding describing 2026.
+    Re-derivation is only a boundary where the value being re-derived
+    cannot answer the comparison itself.
   - R1's §D.3.2 P3 contract contradicts its own state diagram twice; the code
     implements the diagram reading, which NO ratified profile covers
     verbatim until ND1_RECOMMENDED_PROFILE_R2 is ratified.
