@@ -32,17 +32,22 @@ research_id: "ITSF-S0"
 lane: "AARON_MUST_DECLARE"
 
 # workflow_stage: A A2 B C D E F G H I J K L, closed (§2.5). The stage
-# currently DUE OR IN PROGRESS — not a status, not a verdict.
+# currently DUE OR IN PROGRESS — not a status, not a verdict, not a health
+# indicator.
 #
-# AARON_MUST_DECLARE. No canonical statement of it exists anywhere.
+# DECLARED BY THE WORKING SESSION. I asked Aaron for this one and should not
+# have: §4.1's Authority row is "every K-stage decision, seals, unlocks, LANE
+# DECLARATIONS, seat-map changes, all spends". `workflow_stage` is not in it,
+# and §10.2 makes DECLARED a working-session self-report that no canonical
+# artifact is overridden by. So it is mine to state and Aaron's to correct.
 #
-# RECOMMENDATION: C. Basis: S0 itself ran and was revealed, but its verdict
-# is INCONCLUSIVE_PENDING_MC — the Checkpoint-0 statistic is produced by the
-# MC, and the MC pipeline is under construction (N01–N13). N16 is the
+# C. Basis: S0 itself ran and was revealed, but its verdict is
+# INCONCLUSIVE_PENDING_MC — the Checkpoint-0 statistic is produced by the MC,
+# and the MC pipeline is under construction (N01–N13). N16 is the
 # preregistered run, which is E. So what is in progress is the build.
-# Contestable: read the MC as a separate study and ITSF-S0 sits at F,
-# awaiting its evidence.
-workflow_stage: "AARON_MUST_DECLARE"
+# Contestable, and recorded as contestable: read the MC as a separate study
+# and ITSF-S0 sits at F awaiting its evidence.
+workflow_stage: "C"
 
 # §10.4 requires a one-line `MATERIALITY: ORDINARY | MATERIAL` in the
 # measurement plan or preregistration. SEARCHED: no such line exists in this
