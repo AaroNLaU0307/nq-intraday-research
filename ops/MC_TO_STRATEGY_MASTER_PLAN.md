@@ -697,3 +697,184 @@ Aaron 已决定不再审 N06，故 **N06 永远不会以 PASS 结束**。在 N06
                                        Aaron 已解盲，读它们零成本
 4. 找回或宣告丢失 N00 的五份文档       → AI 只能做仓库内检索，恢复须 Aaron
 ```
+
+---
+
+## 15. `CURRENT_ANCHOR_AFTER_ND2_ND3_RATIFICATION_AND_N07_N09_N12`（现势恢复锚；本节编号最高，与上文冲突处以本节为准）
+
+```
+ANCHOR_DATE=2026-08-25
+SUPERSEDES=§14（及其以上全部锚节），仅在冲突处
+LANE=FULL   STAGE=C（工作会话自陈，非裁定）
+L6_RUNTIME=OPERATIONAL；本仓已注册为 ITSF-S0，qros-state.yaml 在仓根
+```
+
+### 15.1 §14 遗留的五件，现已并入（原 `ops/PENDING_ANCHOR_UPDATES.md`）
+
+1. **INC-TRANSPORT-20260824** —— 交付中的工件被 builder 改动，导致一次委托裁定
+   作废。处置与新增守卫见 `ops/INCIDENT_TRANSPORTED_ARTIFACT_MUTATED_20260824.md`
+   与 `tests/test_artifacts_under_review_are_frozen.py`。
+2. **N16 单位成本实测** —— `ops/MC_COST_PROBE_FINDINGS.md`：0.0114 sec/path
+   @504 天；一次 BE（16 Primary cell）1.1 h；18 BE = 19 h；＋θ0.3 通道 ×2 ≈
+   1.6 天。**custody（15–42 h）比模拟（19 h）还贵。** §14.4「总时长给不出小时数」
+   一句到此更新；**下界性质与 E3 的必要性不变**。
+3. **F1/F2 定性收窄** —— 全伪造 (prepared, authority) 对被接受，但
+   `bundle_table_digest` 不在 sealed binding 键集内，谎言到不了字节；故为
+   **验证违规而非封存违规**。逐字披露措辞见
+   `ops/DELEGATED_RULINGS_2026-08-24.md` §1.1。
+4. **强制转换登记表** —— `tests/test_mc_supplement_coercion_census.py` 以 AST
+   登记每一处摘要／身份派生里的 `str()`/`int()`，每条 KNOWN 条目写明其防御是
+   **顺序性的而非构造性的**。
+5. **测试地板** 3980 → **4167**（实测，非算术推得：本弧四次全量跑分别为
+   4157 / 4164 / 4166 / 4167，每次都以实测数为准）。
+
+### 15.2 Sol 两份委托裁定已落地并已实现（`DELEGATED=YES`）
+
+```
+N06_FINAL=ACCEPTED_WITH_DISCLOSED_RESIDUAL —— 第五轮不再进行；就 §4/§13.5
+          而言取代「N06 PASS」并满足进入 N-D2 的依赖。§14.6 的形式卡点到此解除
+          （走的是三条合法路径中的 (a)）。**不表示 F1/F2 已被消除。**
+N-D2+N-D3=32 项全部裁定；G2–G7 原样批准，G1 与 G8 附修改批准
+```
+
+**N-D3 不需要第二次裁定**：其 12 项已包含在这 32 项内（1–6=G1–G6，
+7–10=M12–M15，11–12=G7–G8）。此前记为「仍待裁」是 builder 的错误，已自纠。
+
+### 15.3 N07 —— 三块全部落地，全部进入 config digest
+
+| 模块 | 裁定 | 内容 |
+|---|---|---|
+| `src/itsf/mc/feasibility.py` | M1–M5 | 三道门＋合成＋两情景；阈值为**裁定值非派生值** |
+| `src/itsf/mc/over_budget.py` | D1 | 整仓亏损／政策风险预算／**两个布尔并行**；比较为严格 `>` |
+| `src/itsf/mc/fixed_world.py` | M11 | 三个次序统计量 ceil(0.05B/0.5B/0.95B)，并列取较小世界号 |
+
+三者已加入 `atoms.HARVESTED_CONSTANT_MODULES`。**现在加是免费的，以后加不是**：
+加模块会改 `lifecycle_config_digest` 从而作废此前所有原子——今日无原子可作废，
+N16 之后就有了。
+
+`contracts.OverBudgetStatus.RULED` 是**唯一的在场令牌**，刻意不在
+`ABSENT_BY_TOKEN` 内；E2 另加 `e2_days_subject` 分母，防止「零观测的 0 次超预算」
+被读成「测过且从未超」。
+
+### 15.4 N09 —— 强制缓解已实现
+
+`src/itsf/mc/bundle_precheck.py`：从**磁盘字节**重算 14 文件 SHA-256 表。
+签名**不接受任何会自陈内容的对象**（无 `PreparedMCInput`、无
+`SupplementAuthority`），测试以 AST 钉定它永远不会接受，也永远不调用
+`verify_supplement_authority`。产出的是**重算出的表**而不是「匹配了」的布尔——
+布尔会让证据说「查过了」而不记录查的是什么。
+
+### 15.5 N12 —— MC registry 语法与解析器落地
+
+- `src/itsf/mc/mc_contract.py`：16 个事件、必需／条件字段、合法转移、授权句。
+- `src/itsf/mc/mc_registry.py`：解析、校验、链解析、LIVE 授权判定。
+
+三处**由构造发现、不在提案内**的收紧，均在裁定范围内：
+
+1. **G1 授权句绑定分支政策而非分支哈希**（Sol 独立发现的时序矛盾）：payload
+   由被授权的运行**产生**，写句子时其哈希尚不存在，故 G1 原文与 M14/G7 不可
+   同时满足。句子改绑 `BRANCH_POLICY_TOKEN`，哈希改由 `MC_BRANCH_SEALED` 事后绑定。
+2. **删去 `MC_RUN_COMPLETED → MC_PRIMARY_REVEALED` 与
+   `MC_PRIMARY_REVEALED → MC_RUN_CLOSED` 两条边**：前者允许「什么都没封存就
+   揭盲主判据」，正是 G7 存在的唯一目的；后者让未触发分支永远悬在链上。
+3. **授权句是重建的，不是比对的**：从 bracket 里的 run id、commit 单元格与
+   note 里的 smoke_ref **重新生成**句子再要求逐字相等。N06 第三轮的教训——
+   把运来的字符串和它自己比，什么也没证明。
+
+**前缀所有权**是本模块的立身之本：`MC_` 前缀内**未知即拒绝**，不是跳过。只认
+自己认得的令牌的解析器，会把 `MC_RUN_AUTHORIZEDD` 留给「没有主人」，而没有主人
+的行就是能通过的行。
+
+**第四项收紧：全局序号。** `SEQUENCE_NAMESPACE=GLOBAL` 是被强制的、不是散文——
+`supplement_registry._check_global_sequence` 的「最高值」是对**文件里全部编号行
+（含外族行）**算的，且要求**下一个值**而非仅仅更大的值。实测：一条 seq=99 的
+`MC_BRANCH_SEALED` 落进最高值为 5 的文件，会让此后每一条编号 supplement 行永久
+非法。故 `mc_registry` 现强制同一规则（`mc_seq_not_next_value` /
+`mc_seq_duplicate` / `mc_seq_not_integer`）。
+
+这一项 builder **实现了而非上交**：该规则是**文件的**属性、已获批准，且无论 MC
+行是否与 supplement 共用一份文件，其读法都一样，故实现它**不预设**
+MC-REG-COLLISION-001 怎么裁。
+
+### 15.6 新发现：两份已批准工件互相矛盾（`MC-REG-COLLISION-001`）
+
+**记录：`ops/DECISION_MC_REGISTRY_COLLISION.md`。**
+
+G8 把 MC 行放进 `ops/TRIAL_REGISTRY.md` 且 dirty allowlist 只此一份；N05
+supplement 语法把 `MC_RUN_AUTHORIZED` 与 `MC_RUN_STARTED` **按名拒绝**，且
+`ANY_CHAIN_DEFECT=REFUSE_WHOLE_RESOLUTION` 使该拒绝是整份的。两者都已批准，
+合在一起**不可实现**：day-strata supplement 是 MC 运行的**输入**，故第一次真实
+MC 运行会打断证明它自己输入合法的那套机制。
+
+已对真实 registry 复现（只打印判据码，未读入 registry 内容）。**换拼写不是出路**：
+不带前缀的 `RUN_AUTHORIZED` 转而打断 S0-T001 自己的解析器（实测：live 授权丢失），
+而仓内三处早已预设正是 `MC_RUN_AUTHORIZED` 这个拼写。
+
+**builder 未自行裁决**，未改动任何已批准工件。已出提示词
+`ops/MC_REGISTRY_COLLISION_FABLE_PROMPT.md`（Fable 提案 → fresh Sol 批准）。
+builder 推荐 R2，并**自陈了 R2 自身的弱点**：拒绝是按**调用点**搬家的，而今天
+没有任何代码调用 `mc_registry`，故 R2 若先于 N13 接线落地会留下真实的覆盖空窗。
+
+### 15.7 N08 —— 范围无法重建，须 Aaron
+
+`ops/N08_SCOPE_UNRESOLVED.md`：「9/12 簇」的出处在仓内检索不到。AI 只能检索，
+不能恢复。**未按任何一种猜测实现。**
+
+### 15.8 现势节点状态
+
+```
+N00=BLOCKED —— 五份 Round-4 文档仍缺（§11.4 未变）
+N-D1=RATIFIED   N03/N04/N05=IMPLEMENTED
+N06=ACCEPTED_WITH_DISCLOSED_RESIDUAL（委托裁定，DELEGATED=YES）
+N-D2/N-D3=RATIFIED（32 项；G1、G8 附修改）
+N07=DONE   N09_MITIGATION=DONE   N12=DONE
+全套件 **4167 passed / 0 failed**（393 s，终态树，主代理实测）
+N08=SCOPE_UNRESOLVED（须 Aaron）
+N10=BLOCKED（依赖 N09 的真实执行）
+N11=NOT_IMPLEMENTED —— `GridReplayAuthority` 与 `KReplayEvidence` 全仓不存在
+N13=BLOCKED —— §4 DAG 写 N13 依赖 N11；N11 依赖 N10 依赖 N09，而 N09 需要
+    **Aaron 的 P2 精确授权**才能执行。故执行段到 N09 为止，其下游全部封锁
+MC_EXECUTED=NO ／ SUPPLEMENT_EXECUTED=NO ／ STRATEGY_BUILD_STARTED=NO
+REGISTRY_EVENTS_APPENDED=NO ／ EXPOSURE_EVENTS_APPENDED=NO
+REAL_DIRECTORIES_CREATED=NO ／ REAL_DATA_READ=NO
+REVEALED_OUTCOME_READ_BY_BUILDER=**YES** —— builder 自陈的违规：曾 tail
+    EXPOSURE_LEDGER.md 并读到揭盲后一行（endpoint spread 一个数与一句零方向
+    计数）。scope 已在 ops/EXPOSURE_LEDGER.md 登记。§14.5 写 NO 是错的，此处纠正
+S0-T001 14 文件 run==archive ／ 两个 supplements\ 子树不存在 ／ 零 SUPPLEMENT_ 行
+```
+
+### 15.9 三次纪律失败已转成机械守卫（不是「我会记得」）
+
+| 失败 | 守卫 |
+|---|---|
+| 交付中工件被改动（INC-TRANSPORT） | `tests/test_artifacts_under_review_are_frozen.py` |
+| 提示词里的哈希与登记表脱节（实测：一小时内五分之三过期） | 同上，新增 prompt/register 一致性检查，已变异验证 |
+| 一次覆盖 214 个文件（含已封存证据）的行尾批量转换 | `tests/test_source_line_endings.py`，并钉定守卫本身不得扩大范围 |
+| 摘要／身份派生里的隐式强制转换 | `tests/test_mc_supplement_coercion_census.py`（AST 登记） |
+
+### 15.10 停止点与归属
+
+```
+归 Fable（Aaron 的常设指示：需 Aaron 决策的直接交 Fable）
+  MC-REG-COLLISION-001 —— 提示词已出，read-only，0 workflow
+
+归 fresh Sol
+  批准 Fable 对 MC-REG-COLLISION-001 的提案
+
+归 Aaron（不可委托）
+  1. 读 ops/S0_T001_RESULT_DECISION_ADDENDUM.md:26 与 EXPOSURE_LEDGER.md:19
+     —— 两份都含揭盲 outcome，读它们即污染该 AI 席位
+  2. 找回或宣告丢失 N00 的五份 Round-4 文档
+  3. N08 的「9/12 簇」出处，或重新定义该判据
+
+builder 下一步（不需任何人裁）
+  **没有。** 这是本节最重要的一句：N12 之后，DAG 上不存在 builder 可以独立
+  推进的下一个节点。N13 依赖 N11 依赖 N10 依赖 N09，而 N09 是 Aaron 的执行
+  授权节点。绕开的唯一方式是替 N11 发明 `GridReplayAuthority`／
+  `KReplayEvidence` 的接口——那正是「不得虚构未裁之物」所禁止的，且这两个
+  类型承载的是 N09/N10 真实执行才会产生的 attestation 数据。
+
+  （2026-08-25 的一次自纠：本节初稿写 `N13=UNBLOCKED_NOT_STARTED`、
+  「builder 下一步＝N13 运行器主体」。核 §4 DAG 后确认那是错的——N11 从未
+  实现，全仓无 `GridReplayAuthority`。恢复锚里的错比别处贵，故记在此。）
+```

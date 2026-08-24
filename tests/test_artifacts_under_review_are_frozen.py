@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 REGISTER = Path(__file__).resolve().parent.parent / "ops" / \
@@ -65,3 +66,41 @@ def test_the_register_is_well_formed():
                       "review_id"):
             assert e.get(field), f"entry missing {field!r}: {e}"
         assert len(e["sha256"]) == 64, e["sha256"]
+
+
+#: A transport table row in a review prompt: hash, byte count, path.
+_PROMPT_ROW_RE = re.compile(
+    r"\|\s*`([0-9a-fA-F]{64})`\s*\|\s*(\d+)\s*\|\s*`([^`]+)`")
+
+
+def test_no_review_prompt_carries_a_hash_the_register_disagrees_with():
+    """A stale hash in a prompt wastes a review as surely as a moved file.
+
+    The register and the prompt are two copies of the same claim, written
+    minutes apart, and the second drifts the moment the builder touches a
+    file again. Measured, 2026-08-25: three of five hashes in a prompt went
+    stale inside the hour it was written, and only a hand-run cross-check
+    caught it. A hand-run cross-check is not a control.
+    """
+    repo = REGISTER.parent.parent
+    expected = {e["path"]: e["sha256"].lower() for e in _entries()}
+    if not expected:
+        return                      # nothing under review, nothing to check
+
+    drift = []
+    for prompt in sorted(REGISTER.parent.glob("*PROMPT*.md")):
+        text = prompt.read_text(encoding="utf-8")
+        for digest, size, path in _PROMPT_ROW_RE.findall(text):
+            if path not in expected:
+                continue
+            if digest.lower() != expected[path]:
+                drift.append(f"{prompt.name} -> {path}: says {digest[:16]}"
+                             f"..., register says {expected[path][:16]}...")
+            actual = (repo / path).stat().st_size
+            if int(size) != actual:
+                drift.append(f"{prompt.name} -> {path}: says {size} bytes, "
+                             f"the file is {actual}")
+    assert not drift, (
+        "a review prompt carries a hash or size the register disagrees "
+        "with; the reviewer will STOP on its opening precheck:\n  "
+        + "\n  ".join(drift))
