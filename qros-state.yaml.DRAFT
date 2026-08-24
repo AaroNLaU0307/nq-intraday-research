@@ -1,0 +1,108 @@
+# DRAFT — not the live state file. Rename to `qros-state.yaml` only after
+# Aaron declares the two fields marked AARON_MUST_DECLARE below.
+#
+# Every other value here is TRANSCRIBED from a canonical ITSF artifact, with
+# the source named. Nothing is inferred. Per the ratified §10.2 the DECLARED
+# partition is a non-authoritative self-report — canonical artifacts win in
+# their domains, always — and per §2.1 the state file is edited only by
+# working sessions of this project, which is what wrote this draft.
+#
+# The CLI's YAML subset takes double-quoted scalars only and no trailing
+# comments, so every note here sits on its own line.
+
+schema_version: "17"
+
+# ---------------------------------------------------------------- DECLARED --
+# research_id: free value, declares no vocabulary (§2.4).
+# S0-T001 is the TRIAL id, not the research id.
+research_id: "ITSF-S0"
+
+# lane: FULL | MEASUREMENT | EXPLORATORY, closed, "Never inferred" (§2.4).
+#
+# AARON_MUST_DECLARE. ITSF has no canonical lane declaration. The only
+# `LANE=` strings in this repository sit inside prompt headers THIS SESSION
+# wrote, so using them as the basis would be circular — I would be citing my
+# own inference back to myself.
+#
+# RECOMMENDATION: FULL. Basis: a sealed preregistration (tag s0-freeze-v1),
+# a Checkpoint-0 kill gate carrying a promotion/falsification decision table
+# (prereg §10.4), and a trial registry. That is the FULL shape. The
+# MEASUREMENT in my prompt headers described the REVIEW TASK, never the
+# project.
+lane: "AARON_MUST_DECLARE"
+
+# workflow_stage: A A2 B C D E F G H I J K L, closed (§2.5). The stage
+# currently DUE OR IN PROGRESS — not a status, not a verdict.
+#
+# AARON_MUST_DECLARE. No canonical statement of it exists anywhere.
+#
+# RECOMMENDATION: C. Basis: S0 itself ran and was revealed, but its verdict
+# is INCONCLUSIVE_PENDING_MC — the Checkpoint-0 statistic is produced by the
+# MC, and the MC pipeline is under construction (N01–N13). N16 is the
+# preregistered run, which is E. So what is in progress is the build.
+# Contestable: read the MC as a separate study and ITSF-S0 sits at F,
+# awaiting its evidence.
+workflow_stage: "AARON_MUST_DECLARE"
+
+# §10.4 requires a one-line `MATERIALITY: ORDINARY | MATERIAL` in the
+# measurement plan or preregistration. SEARCHED: no such line exists in this
+# repository. The one MATERIALITY string present is
+# `MATERIALITY_CONCLUSION=NOT_ESTABLISHED`, in a post-reveal addendum — a
+# different statement about a different question. Per §10.4 absence renders
+# UNKNOWN, and UNKNOWN holds `F -> L`. Fail-closed and correct; not a gap to
+# paper over by declaring ORDINARY.
+measurement_materiality: "UNKNOWN"
+
+# §3.4. S0-T001 was revealed 2026-08-14; cumulative researcher exposure 1575.
+outcome_exposure:
+  declared: "TARGET_METRIC"
+  scope: "CURRENT_REVIEW_SCOPE"
+
+prereg:
+  reference: "STUDY_0_PREREGISTRATION.md"
+  seal_revision: "c685ebc1ed65e0c6fc9b9b7212a054289d1b37fd"
+  lineage_anchor: "修订记录"
+
+# POINTER ONLY — no count is ever copied into this file.
+trial_accounting:
+  canonical_ref: "ops/TRIAL_REGISTRY.md"
+  value_anchor: "S0-T001（FIRST_REAL_S0_FULL_DEVELOPMENT_RUN，exposure_seq 1）"
+
+change_labels: []
+
+# --------------------------------------------------------- RECONSTRUCTIBLE --
+cache:
+  exposure_mirror:
+    from_input: "exposure_record"
+    excerpt: "累计 exposure：1575（全部来自 S0-T001 正式揭盲一次性查看；历史各行均为 0 查看行）"
+
+# --------------------------------------------- OPERATIONAL, append-only -----
+# Empty by construction. Every review this project has run so far travelled
+# as a hand-written prompt, never as a Review Packet v1, and produced no
+# PACKET_ISSUANCE / PACKET_OUTCOME record. Back-filling them would be
+# manufacturing operational records for events the runtime never witnessed,
+# so they stay out. The pre-attachment review history lives in ops/ and in
+# the master plan's §14 anchor.
+ops_events: []
+session_log: []
+human_decisions: []
+packets: []
+
+# ------------------------------------------------------------- INPUTS §2.3 --
+inputs:
+  - id: "prereg"
+    path: "STUDY_0_PREREGISTRATION.md"
+    observed_revision: "1f1026abc127c75ba404ec846e6314aa15a7ba34"
+    observed_sha256: "6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132"
+  - id: "exposure_record"
+    path: "EXPOSURE_LEDGER.md"
+    observed_revision: "1f1026abc127c75ba404ec846e6314aa15a7ba34"
+    observed_sha256: "382182bf8563a8e466115bf3024e3c1e1bd2f4b9f102d24d755e91c4174ba7ba"
+  - id: "trial_accounting"
+    path: "ops/TRIAL_REGISTRY.md"
+    observed_revision: "1f1026abc127c75ba404ec846e6314aa15a7ba34"
+    observed_sha256: "ee9da33fdbb47725dc036243adc76d7d9ba69ff06df0df443b09103f897353d6"
+
+state_declared_at:
+  revision: "1f1026abc127c75ba404ec846e6314aa15a7ba34"
+  timestamp: "2026-08-24T00:00:00Z"
