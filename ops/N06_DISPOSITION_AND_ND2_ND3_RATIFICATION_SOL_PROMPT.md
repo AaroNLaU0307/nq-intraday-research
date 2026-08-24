@@ -48,6 +48,20 @@ ops\DECISION_PACKET_ND2_ND3.md
 
 **只读仓库，不改任何文件。**
 
+> **第一次尝试因哈希不匹配而 STOP，原因在 builder 一侧，不在你。** 当时
+> `ops\ND2_ND3_RULING_REVIEW_FINDINGS.md` 在你审查期间被 builder 追加了
+> 一节（`8DC87212…` → `E2493F1A…`），HEAD 也从 `154c9b73` 移到 `79a05390`。
+> 你按「任一不匹配即停止」停下来是对的。
+>
+> 现在：那一节已拆到独立记录（`ops/MC_COST_PROBE_FINDINGS.md`），该文件
+> **逐字节复原为交付时的字节**，四个哈希全部等于上面所列。四份工件已登记在
+> `ops/ARTIFACTS_UNDER_REVIEW.json`，由
+> `tests/test_artifacts_under_review_are_frozen.py` 机械守着——审查期间
+> 任何一份被改动，builder 的测试套件立刻失败。
+>
+> **HEAD 仍会移动**（builder 在其他文件上继续工作）。工件由**内容哈希**钉定，
+> 不由 HEAD 钉定；HEAD 变化本身不是停止条件，四个哈希才是。
+
 ---
 
 ### 禁读（硬约束，违反即本轮作废）
