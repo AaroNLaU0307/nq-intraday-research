@@ -17,6 +17,12 @@
       ]
     },
     {
+      "path": "ops/EXPOSURE_LEDGER.md",
+      "restates": [
+        "cumulative exposure count"
+      ]
+    },
+    {
       "path": "ops/MC_DR5_BUILD_PACKET.md",
       "restates": [
         "revealed verdict"

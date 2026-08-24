@@ -70,10 +70,16 @@ workflow_stage: "C"
 # paper over by declaring ORDINARY.
 measurement_materiality: "UNKNOWN"
 
-# §3.4. S0-T001 was revealed 2026-08-14; cumulative researcher exposure 1575.
+# §3.4. S0-T001 was revealed 2026-08-14; the ledger records the whole of it.
+#
+# scope: HISTORICAL_CUMULATIVE, not CURRENT_REVIEW_SCOPE. §3.4A makes scope
+# the POPULATION a value is computed over, and every row in the ledger is a
+# historical event; there is no current review to scope to. My first draft
+# said CURRENT_REVIEW_SCOPE and the runtime returned UNKNOWN because no row
+# fell in that population -- fail-closed, and correct.
 outcome_exposure:
   declared: "TARGET_METRIC"
-  scope: "CURRENT_REVIEW_SCOPE"
+  scope: "HISTORICAL_CUMULATIVE"
 
 prereg:
   reference: "STUDY_0_PREREGISTRATION.md"
@@ -109,17 +115,17 @@ packets: []
 inputs:
   - id: "prereg"
     path: "STUDY_0_PREREGISTRATION.md"
-    observed_revision: "783144b4e7be2a0fb39b68910549da75a4e80306"
+    observed_revision: "5d3574145b6291594e4eb072ac654be3b92fc402"
     observed_sha256: "6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132"
   - id: "exposure_record"
     path: "ops/EXPOSURE_LEDGER.md"
-    observed_revision: "783144b4e7be2a0fb39b68910549da75a4e80306"
-    observed_sha256: "f90f65ec4f4ced0391f60cdf5a11d8dded5dc6e17047796ee214762b97ef583f"
+    observed_revision: "5d3574145b6291594e4eb072ac654be3b92fc402"
+    observed_sha256: "2afeebc27a2e7e6dfa93509a0ad3dce784a97c7e609044133ca61ddecb11f25b"
   - id: "trial_accounting"
     path: "ops/TRIAL_REGISTRY.md"
-    observed_revision: "783144b4e7be2a0fb39b68910549da75a4e80306"
+    observed_revision: "5d3574145b6291594e4eb072ac654be3b92fc402"
     observed_sha256: "ee9da33fdbb47725dc036243adc76d7d9ba69ff06df0df443b09103f897353d6"
 
 state_declared_at:
-  revision: "783144b4e7be2a0fb39b68910549da75a4e80306"
+  revision: "5d3574145b6291594e4eb072ac654be3b92fc402"
   timestamp: "2026-08-24T00:00:00Z"

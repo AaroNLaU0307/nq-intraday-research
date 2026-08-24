@@ -211,11 +211,26 @@ def test_addendum_records_the_exact_endpoint_spread_and_withdrawals():
 
 
 def test_ledger_addendum_row_is_zero_quantity_and_cumulative_unchanged():
+    """TIGHTENED 2026-08-24, not loosened.
+
+    This used to select on the substring "DECISION_ADDENDUM" and assert a
+    single hit, which held only while nothing else mentioned the addendum.
+    A later cross-reference row -- the builder recording that it read the
+    addendum summary -- made it two and failed the test for the wrong
+    reason: the property being protected was never uniqueness.
+
+    The property is that NO row about the addendum ever carries a non-zero
+    quantity, and that the cumulative total never moves. Asserting it over
+    every such row is strictly stronger than asserting there is one."""
     table = _table_block()
     rows = [r for r in table if "DECISION_ADDENDUM" in r]
-    assert len(rows) == 1, table
-    cells = [c.strip() for c in rows[0].split("|")]
-    assert cells[4] == "0", cells
+    assert rows, table
+    for row in rows:
+        cells = [c.strip() for c in row.split("|")]
+        assert cells[4] == "0", cells
+    dated = [r for r in rows if r.strip().startswith("| 2026-08-14 |")]
+    assert len(dated) == 1, ("the 2026-08-14 addendum event itself must "
+                             "appear exactly once", dated)
     lines = [ln for ln in _ledger_lines() if ln.strip()]
     assert lines[-1].strip().startswith("累计 exposure：1575")
 
