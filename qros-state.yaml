@@ -1,37 +1,125 @@
+# ITSF-S0 state file (L6 Runtime spec §2). LIVE as of 2026-08-24.
+#
+# `lane` was declared by Aaron; `workflow_stage` by this working session.
+# Which is which, and on what authority, is recorded at each field.
+#
+# Every other value here is TRANSCRIBED from a canonical ITSF artifact, with
+# the source named. Nothing is inferred. Per the ratified §10.2 the DECLARED
+# partition is a non-authoritative self-report — canonical artifacts win in
+# their domains, always — and per §2.1 the state file is edited only by
+# working sessions of this project, which is what wrote this draft.
+#
+# The CLI's YAML subset takes double-quoted scalars only and no trailing
+# comments, so every note here sits on its own line.
+
 schema_version: "17"
+
+# ---------------------------------------------------------------- DECLARED --
+# research_id: free value, declares no vocabulary (§2.4).
+# S0-T001 is the TRIAL id, not the research id.
 research_id: "ITSF-S0"
+
+# lane: FULL | MEASUREMENT | EXPLORATORY, closed, "Never inferred" (§2.4).
+#
+# DECLARED BY AARON, 2026-08-24, by adopting the working session's
+# recommendation. His words, verbatim: 「直接按你建议的做吧，能执行的全执行」,
+# answering a message whose recommendation was FULL with its basis. Lane
+# declarations sit in §4.1's Authority row, so this records HIS act, not the
+# session's — the session recommended and he adopted. Precedent for the
+# shape: IR-29, where Aaron sent a named prompt and then said 「那现在执行吧」.
+#
+# Basis of the recommendation he adopted: QROS §1 makes lane semantics
+# "which claims the work may emit, nothing else". The sealed prereg §10.4
+# commits to emitting STOP / GO / β / α — a strategy-performance verdict on
+# deployment. MEASUREMENT may not emit that; EXPLORATORY may emit no
+# confirmatory performance evidence at all. FULL is the only lane whose
+# may-emit set contains what this project's own sealed contract promises to
+# produce.
+#
+# Consequence, recorded rather than hidden: FULL makes A2 an unconditional
+# gate that can never be retroactively satisfied — no runs/ A2 record exists
+# and B is long past (SEAL=VERIFIED). The state file will permanently show
+# A2 → B HOLD. That is an honest permanent disclosure of a real gap, and it
+# is why ITSF can supply a Stage I pilot for §9.1 but never an A2 one.
 lane: "FULL"
+
+# workflow_stage: A A2 B C D E F G H I J K L, closed (§2.5). The stage
+# currently DUE OR IN PROGRESS — not a status, not a verdict, not a health
+# indicator.
+#
+# DECLARED BY THE WORKING SESSION. I asked Aaron for this one and should not
+# have: §4.1's Authority row is "every K-stage decision, seals, unlocks, LANE
+# DECLARATIONS, seat-map changes, all spends". `workflow_stage` is not in it,
+# and §10.2 makes DECLARED a working-session self-report that no canonical
+# artifact is overridden by. So it is mine to state and Aaron's to correct.
+#
+# C. Basis: S0 itself ran and was revealed, but its verdict is
+# INCONCLUSIVE_PENDING_MC — the Checkpoint-0 statistic is produced by the MC,
+# and the MC pipeline is under construction (N01–N13). N16 is the
+# preregistered run, which is E. So what is in progress is the build.
+# Contestable, and recorded as contestable: read the MC as a separate study
+# and ITSF-S0 sits at F awaiting its evidence.
 workflow_stage: "C"
-measurement_materiality: "N_A"
+
+# §10.4 requires a one-line `MATERIALITY: ORDINARY | MATERIAL` in the
+# measurement plan or preregistration. SEARCHED: no such line exists in this
+# repository. The one MATERIALITY string present is
+# `MATERIALITY_CONCLUSION=NOT_ESTABLISHED`, in a post-reveal addendum — a
+# different statement about a different question. Per §10.4 absence renders
+# UNKNOWN, and UNKNOWN holds `F -> L`. Fail-closed and correct; not a gap to
+# paper over by declaring ORDINARY.
+measurement_materiality: "UNKNOWN"
+
+# §3.4. S0-T001 was revealed 2026-08-14; cumulative researcher exposure 1575.
 outcome_exposure:
   declared: "TARGET_METRIC"
-  scope: "HISTORICAL_CUMULATIVE"
+  scope: "CURRENT_REVIEW_SCOPE"
+
 prereg:
   reference: "STUDY_0_PREREGISTRATION.md"
-  seal_revision: "s0-freeze-v1"
-  lineage_anchor: "### 修订记录"
-  normative_references: []
+  seal_revision: "c685ebc1ed65e0c6fc9b9b7212a054289d1b37fd"
+  lineage_anchor: "修订记录"
+
+# POINTER ONLY — no count is ever copied into this file.
 trial_accounting:
   canonical_ref: "ops/TRIAL_REGISTRY.md"
-  value_anchor: "## S0-T001（FIRST_REAL_S0_FULL_DEVELOPMENT_RUN，exposure_seq 1）"
+  value_anchor: "S0-T001（FIRST_REAL_S0_FULL_DEVELOPMENT_RUN，exposure_seq 1）"
+
 change_labels: []
+
+# --------------------------------------------------------- RECONSTRUCTIBLE --
+cache:
+  exposure_mirror:
+    from_input: "exposure_record"
+    excerpt: "累计 exposure：1575（全部来自 S0-T001 正式揭盲一次性查看；历史各行均为 0 查看行）"
+
+# --------------------------------------------- OPERATIONAL, append-only -----
+# Empty by construction. Every review this project has run so far travelled
+# as a hand-written prompt, never as a Review Packet v1, and produced no
+# PACKET_ISSUANCE / PACKET_OUTCOME record. Back-filling them would be
+# manufacturing operational records for events the runtime never witnessed,
+# so they stay out. The pre-attachment review history lives in ops/ and in
+# the master plan's §14 anchor.
 ops_events: []
 session_log: []
 human_decisions: []
 packets: []
+
+# ------------------------------------------------------------- INPUTS §2.3 --
 inputs:
   - id: "prereg"
     path: "STUDY_0_PREREGISTRATION.md"
-    observed_revision: "b2616b835918623cb0708ea2245c35f8891b5efe"
+    observed_revision: "514bc3baa003d6075f5d41cb3ef860cf11ee9315"
     observed_sha256: "6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132"
   - id: "exposure_record"
-    path: "EXPOSURE_LEDGER.md"
-    observed_revision: "b2616b835918623cb0708ea2245c35f8891b5efe"
-    observed_sha256: "382182bf8563a8e466115bf3024e3c1e1bd2f4b9f102d24d755e91c4174ba7ba"
+    path: "ops/EXPOSURE_LEDGER.md"
+    observed_revision: "514bc3baa003d6075f5d41cb3ef860cf11ee9315"
+    observed_sha256: "02ca7e38e5a1877141093271bfcf9a1266650fac4436245847937d525e50d7b6"
   - id: "trial_accounting"
     path: "ops/TRIAL_REGISTRY.md"
-    observed_revision: "b2616b835918623cb0708ea2245c35f8891b5efe"
+    observed_revision: "514bc3baa003d6075f5d41cb3ef860cf11ee9315"
     observed_sha256: "ee9da33fdbb47725dc036243adc76d7d9ba69ff06df0df443b09103f897353d6"
+
 state_declared_at:
-  revision: "b2616b835918623cb0708ea2245c35f8891b5efe"
-  timestamp: "2026-08-24T06:36:55Z"
+  revision: "514bc3baa003d6075f5d41cb3ef860cf11ee9315"
+  timestamp: "2026-08-24T00:00:00Z"
