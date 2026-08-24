@@ -9,8 +9,10 @@ summary anywhere: a caller can hand over atoms (which carry their own
 cross-invariants and identity bindings) or nothing at all.
 
 What this module deliberately does NOT contain (decision isolation D7):
-no feasibility gate/threshold, no K-dependent kill rule, no fixed-world
-selection rule, no strategy parameter, no eligibility rule, no NA rule.
+no K-dependent kill rule, no strategy parameter, no eligibility rule,
+no NA rule. The feasibility thresholds and the fixed-world selection rule
+were undecided when this was written and were ratified on 2026-08-24; they
+live in `itsf.mc.feasibility` and `itsf.mc.fixed_world`, still not here.
 It establishes RAW FACTS and MECHANICAL CAPABILITY only. Every threshold
 that appears here (`QUALIFYING_DAY_MIN_PROFIT_USD`, the platform
 constants) is transcribed from an ALREADY-FROZEN source and is a raw
@@ -1489,9 +1491,10 @@ class ObservationSet:
         """The M attempt EVs INSIDE one fixed world (MC SS5 conditional
         aleatoric), reduced from the SAME atoms.
 
-        NOTE (D7): this slices a world the CALLER names. No fixed-world
-        SELECTION rule exists here — that ruling is Aaron's (master plan
-        N-D2) and inventing one would be a decision leak."""
+        NOTE: this slices a world the CALLER names, and still does.
+        The fixed-world SELECTION rule was ratified on 2026-08-24 (M11)
+        and lives in `itsf.mc.fixed_world`; it is deliberately NOT here,
+        so this reducer cannot acquire a preference of its own."""
         evs = reduce_world_evs(self.atoms)
         if world_index not in evs:
             raise MCInputError("aleatoric_world_absent",

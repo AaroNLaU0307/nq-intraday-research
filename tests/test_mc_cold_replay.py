@@ -1099,10 +1099,16 @@ def test_aleatoric_cannot_leak_into_the_go_gate(prepared):
     assert exc.value.code == "aleatoric_leak_into_go_gate"
 
 
-def test_no_fixed_world_selection_rule_was_invented(prepared):
-    """D7: which world the conditional-aleatoric report fixes is Aaron's
-    ruling (master plan N-D2). The module exposes no chooser — the
-    caller must NAME a world, and an absent one refuses."""
+def test_the_consumer_still_names_no_world_of_its_own(prepared):
+    """WAS `test_no_fixed_world_selection_rule_was_invented`, until M11
+    ratified a rule on 2026-08-24 and made that name a false claim.
+
+    The half that survives: selection is NOT the consumer's. It lives in
+    `itsf.mc.fixed_world`, and a world index always arrives here
+    explicitly. The half that had to go: "no rule exists anywhere" would
+    now pass forever while protecting nothing, which reads like coverage
+    and is worse than no guard. The ratified rule is pinned in
+    tests/test_mc_fixed_world_selection.py."""
     for name in dir(mcc):
         low = name.lower()
         if "world" in low:

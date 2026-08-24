@@ -1922,10 +1922,11 @@ def run_conditional_aleatoric(observations: ObservationSet, *,
     aleatoric — "固定世界内 M 条账户路径的结果分布"), sliced out of the
     executed atom trace.
 
-    D7: the caller NAMES the world; no fixed-world SELECTION rule exists
-    here. Which world(s) the report fixes is Aaron's ruling (master plan
-    N-D2: single pre-registered world / P5-P50-P95 neighbourhood / report
-    every world), and inventing one would be a decision leak."""
+    The caller NAMES the world, and still does. Which world(s) the
+    report fixes was undecided when this was written; M11 ratified it on
+    2026-08-24 as an order statistic over world-mean EV, and it lives in
+    `itsf.mc.fixed_world`. Keeping it out of this function is the point:
+    the selection arrives as an explicit index that a reader can check."""
     if type(observations) is not ObservationSet:
         raise MCInputError("aleatoric_source_invalid",
                            f"{type(observations).__name__} is not an "
