@@ -1,4 +1,47 @@
 {
   "_comment": "Frozen while a reviewer holds them. Remove an entry when the review returns; an empty list is the normal state. Nothing on ops/OUTCOME_CARRYING_ARTIFACTS.json may be listed here. Guarded by tests/test_artifacts_under_review_are_frozen.py and tests/test_review_artifacts_are_outcome_clean.py",
-  "under_review": []
+  "under_review": [
+    {
+      "path": "ops/RULING_PROPOSAL_MC_REG_COLLISION_FABLE_2026-08-25.md",
+      "sha256": "03c42848c14962a168b49586c75d67655784d0a0d2a955afbcc6fd282bcf06d6",
+      "issued_to": "Codex GPT-5.6 Sol (fresh top-level session)",
+      "issued_at": "2026-08-25",
+      "review_id": "MC-REG-COLLISION-001-RATIFICATION"
+    },
+    {
+      "path": "ops/DECISION_MC_REGISTRY_COLLISION.md",
+      "sha256": "3d9a4e385ff88d18914c92c4942291813370955c4e077ac46faad89aa7fd5295",
+      "issued_to": "Codex GPT-5.6 Sol (fresh top-level session)",
+      "issued_at": "2026-08-25",
+      "review_id": "MC-REG-COLLISION-001-RATIFICATION"
+    },
+    {
+      "path": "ops/DECISION_PACKET_N00_AND_ND1.md",
+      "sha256": "da64a3d68454e6f129287412f200ea51309ee85daad9d9bdb7465d9765e47991",
+      "issued_to": "Codex GPT-5.6 Sol (fresh top-level session)",
+      "issued_at": "2026-08-25",
+      "review_id": "MC-REG-COLLISION-001-RATIFICATION"
+    },
+    {
+      "path": "src/itsf/mc/mc_registry.py",
+      "sha256": "b56d4205aaec5e2a7eafcc10e2ba2fabff46ead5c6c4e809da4d97a2f0c6d005",
+      "issued_to": "Codex GPT-5.6 Sol (fresh top-level session)",
+      "issued_at": "2026-08-25",
+      "review_id": "MC-REG-COLLISION-001-RATIFICATION"
+    },
+    {
+      "path": "src/itsf/mc/supplement_registry.py",
+      "sha256": "c1628b51d94a54750bccbb5e5060f2c210dfe160898a03ce96097cc192096613",
+      "issued_to": "Codex GPT-5.6 Sol (fresh top-level session)",
+      "issued_at": "2026-08-25",
+      "review_id": "MC-REG-COLLISION-001-RATIFICATION"
+    },
+    {
+      "path": "src/itsf/mc/supplement_contract.py",
+      "sha256": "c51d25e58545f7c4e4c71ef93dacf29808fde5e93ea7a3d5a11d32efc91b72eb",
+      "issued_to": "Codex GPT-5.6 Sol (fresh top-level session)",
+      "issued_at": "2026-08-25",
+      "review_id": "MC-REG-COLLISION-001-RATIFICATION"
+    }
+  ]
 }
