@@ -1,0 +1,77 @@
+{
+  "_comment": "PERMANENT quarantine. Every file here restates revealed outcome. None may enter a mandatory-read set for an outcome-blind seat: a reviewer who reads one must record OUTCOME_EXPOSED and stops qualifying as a future Stage I, and those seats do not regenerate. An entry leaves only when the restating text itself is gone -- never by editing this file. Guarded by tests/test_review_artifacts_are_outcome_clean.py",
+  "carries_outcome": [
+    {
+      "path": "EXPOSURE_LEDGER.md",
+      "restates": [
+        "revealed verdict",
+        "cumulative exposure count",
+        "endpoint spread value",
+        "zero-direction cell count"
+      ]
+    },
+    {
+      "path": "ops/DECISION_PACKET_ND2_ND3.md",
+      "restates": [
+        "addendum feasibility assertion"
+      ]
+    },
+    {
+      "path": "ops/MC_DR5_BUILD_PACKET.md",
+      "restates": [
+        "revealed verdict"
+      ]
+    },
+    {
+      "path": "ops/MC_FACTORY_BOUNDARY_STAGE_I.md",
+      "restates": [
+        "revealed verdict"
+      ]
+    },
+    {
+      "path": "ops/MC_TO_STRATEGY_MASTER_PLAN.md",
+      "restates": [
+        "revealed verdict",
+        "cumulative exposure count"
+      ]
+    },
+    {
+      "path": "ops/ND2_ND3_FABLE_DECISION_PROMPT.md",
+      "restates": [
+        "revealed verdict",
+        "cumulative exposure count"
+      ]
+    },
+    {
+      "path": "ops/ND2_ND3_RULING_REVIEW_FINDINGS.md",
+      "restates": [
+        "zero-direction cell count"
+      ]
+    },
+    {
+      "path": "ops/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md",
+      "restates": [
+        "revealed verdict",
+        "cumulative exposure count",
+        "addendum feasibility assertion",
+        "endpoint spread value",
+        "zero-direction cell count"
+      ]
+    },
+    {
+      "path": "ops/S0_T001_RESULT_DECISION_ADDENDUM.md",
+      "restates": [
+        "revealed verdict",
+        "addendum feasibility assertion",
+        "endpoint spread value"
+      ]
+    },
+    {
+      "path": "ops/S0_T001_RESULT_REVEAL_ATTESTATION.md",
+      "restates": [
+        "revealed verdict",
+        "cumulative exposure count"
+      ]
+    }
+  ]
+}

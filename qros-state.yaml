@@ -1,0 +1,37 @@
+schema_version: "17"
+research_id: "ITSF-S0"
+lane: "FULL"
+workflow_stage: "C"
+measurement_materiality: "N_A"
+outcome_exposure:
+  declared: "TARGET_METRIC"
+  scope: "HISTORICAL_CUMULATIVE"
+prereg:
+  reference: "STUDY_0_PREREGISTRATION.md"
+  seal_revision: "s0-freeze-v1"
+  lineage_anchor: "### 修订记录"
+  normative_references: []
+trial_accounting:
+  canonical_ref: "ops/TRIAL_REGISTRY.md"
+  value_anchor: "## S0-T001（FIRST_REAL_S0_FULL_DEVELOPMENT_RUN，exposure_seq 1）"
+change_labels: []
+ops_events: []
+session_log: []
+human_decisions: []
+packets: []
+inputs:
+  - id: "prereg"
+    path: "STUDY_0_PREREGISTRATION.md"
+    observed_revision: "b2616b835918623cb0708ea2245c35f8891b5efe"
+    observed_sha256: "6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132"
+  - id: "exposure_record"
+    path: "EXPOSURE_LEDGER.md"
+    observed_revision: "b2616b835918623cb0708ea2245c35f8891b5efe"
+    observed_sha256: "382182bf8563a8e466115bf3024e3c1e1bd2f4b9f102d24d755e91c4174ba7ba"
+  - id: "trial_accounting"
+    path: "ops/TRIAL_REGISTRY.md"
+    observed_revision: "b2616b835918623cb0708ea2245c35f8891b5efe"
+    observed_sha256: "ee9da33fdbb47725dc036243adc76d7d9ba69ff06df0df443b09103f897353d6"
+state_declared_at:
+  revision: "b2616b835918623cb0708ea2245c35f8891b5efe"
+  timestamp: "2026-08-24T06:36:55Z"
