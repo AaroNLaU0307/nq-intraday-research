@@ -903,3 +903,35 @@ OD-4  MC-REG-COLLISION-001 走 fresh Sol 独立裁定；**Sol 返回前 builder
 
 **「Sol 返回前不推进」按字面执行**：本轮未动执行路径、未动 N13、未动任何
 被冻结工件；只转录裁定并把 N08 状态落到 §4 与本节。
+
+### 15.12 MC-REG-COLLISION-001 —— fresh Sol 已批准（附修改），待 Aaron 裁决
+
+记录：`ops/RULING_MC_REG_COLLISION_SOL_RATIFICATION_2026-08-25.md`。
+`VERDICT=PASS`／`RULING=RATIFIED_AS_MODIFIED`／**`DELEGATED=YES`**。
+
+```
+C1  原样批准（MC 前缀所有权）
+C2  **整条被 Sol 替换**为「单快照中介不变量」——见下
+C3  恰解除 MC_RUN_AUTHORIZED 与 MC_RUN_STARTED；原五名转录须以显式排除项
+    形式保持可核，不得静默删除
+C4  consumer.authorize_real_mc 只能换成基于解析的判定，永不子串，不得早于 C2
+C5  解除动作不得搭载 registry 追加／exposure 移动／授权／已批准记录编辑
+```
+
+**C2 被替换的理由是一个真缺陷，builder 已机械复核**：Fable 原 C2 要求覆盖每一个
+生产读取方，却允许各自读取同一份**可变**文件。仓内对 `ops/TRIAL_REGISTRY.md`
+存在**四处独立 `read_text`**（`consumer.py:3206`／`day_strata_supplement.py:140`／
+`real_input.py:32`／`supplement_runner.py:947`），故 MC 校验与 supplement 解析
+拿到不同快照是可达的。Sol 改为要求**单一共享校验边界＋同一份不可变快照**，并要
+一条架构/不可绕过测试与一条行为测试同时钉住。
+
+**F3 未触发**：§D.3.4（`DECISION_PACKET_N00_AND_ND1.md:811`）的 REASON 是
+「生命周期定义……尚不完整」、CONSEQUENCE 是「在 N-D3 裁定前」，对这两个 MC 事件
+不附带额外前置。builder 独立核对该行，读法一致。
+
+**必须随裁定传播的独立性限制**：Sol 自陈它撰写了 C2，**故 C2 现行文本从未被任何
+独立席位复核过**。builder 意见：不必现在再开一轮，C2 约束的那次改动落地时会走
+N14；但此限制不得在日后被读成「C2 已经过独立复核」。
+
+**本轮未实现任何东西。** Fable 的 COLLATERAL 写明修订「only after Sol
+ratification **+ Aaron**」——Sol 已批，Aaron 未裁。
