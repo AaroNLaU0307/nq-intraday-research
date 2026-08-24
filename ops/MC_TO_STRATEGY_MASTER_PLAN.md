@@ -561,3 +561,139 @@ REAL_DIRECTORIES_CREATED=NO ／ REAL_DATA_READ=NO
 3. NEW TOP-LEVEL SESSION，GPT-5.6 Sol XHIGH，正式 N06 exact-tree Stage I
 4. 只有 N06 PASS 之后才进入 N-D2；N09 仍须另行精确执行授权
 ```
+
+---
+
+## 14. `CURRENT_ANCHOR_AFTER_N06_FOUR_ROUNDS_AND_ND2_ND3_PROPOSAL`（现势恢复锚；本节编号最高，与上文冲突处以本节为准）
+
+> 只追加。§1–§13 一字未删。**§13.4 已过期**——它写 R2「提案待裁」，R2 已于
+> 2026-08-23 由 Aaron 批准（记录见 `ops/ND1_PROFILE_RATIFICATION.md` §8）。
+
+### 14.1 commit 锚（40 位全长）
+
+```
+HEAD                      f6c5c14f764c16be10212024a4f7f4ee3b6bccef
+N06 修复弧起点             617f7c33d20051fd991d74afa7c76716720e385d
+R2 批准 + 三项修复          07dc864（第一轮 HOLD 修复）
+第一轮被验 HOLD             291786aec0a33826516b7b435446780530e46444
+第二轮被验 HOLD             17904bf6aef2b11f898e05a7351123af614e6cfd
+第三轮被验 HOLD             2a7374fc069274eeab2b090f5be84520efda5868
+第四轮被验 HOLD             8b16118fadb5637c161022b793a6c3cf0a7d196d
+```
+
+### 14.2 N06：四轮，四个 High，同一个形状
+
+四轮全部由**互不相同的 fresh Sol 顶层会话**审查，全部判 HOLD，四个 High 全部
+由 builder 独立复现后修复。形状始终是**调用方给的值参与了一次决定要不要写的
+比较**：
+
+| 轮 | High | 被信任而未重新推导的 | 修复 |
+|---|---|---|---|
+| 1 | N03→N04 接缝是反的（伪 authority 过，真 authority 被拒） | authority 对象 | gate 检查类型＋重算 |
+| 2 | check 与 use 未绑定同一快照（TOCTOU） | payload 被读四次 | `freeze_payload` 一次性冻结 |
+| 3 | 冻结按引用返回标量，说谎 `__eq__` 骗过摘要比较 | 快照里的 `rows_digest` | **改设计**：seal 重建自己要写的东西＋精确内建标量 |
+| 4 | 毒在 authority 的 `day_universe`，rows 是纯字符串 | `authority.day_universe` | 同一规则第三个应用点 |
+
+第三轮的修复是 Aaron 裁定的**改设计**（不再是打补丁）：seal 从 authority 派生
+day universe 与 binding，用 rows 重建 payload，序列化自己重建的那份；receipt
+对重建结果再验一次。第四轮的修复不是第五轮设计，是**已批准规则的第三个应用
+点**（payload 冻结 → builder rows → authority day universe）。
+
+builder 自查另外找到两个无人到达的洞：`freeze_payload` 顶层内联了更弱的键规则；
+builder 把 caller rows 直接喂进 hermetic core（说谎 `__eq__` 过词表、`__str__`
+写出 `vol_stratum='2099-12-31'`）。两者均已闭合。
+
+「重新推导才是边界」这句话**被收回三次**（每次都是 builder 写的，每次都留下
+副本）。现行表述：**重新推导只在被推导的值无法自己回答那个比较时才成立。**
+
+```
+N06_ROUNDS=4    ALL_HIGHS_CLOSED=YES    N06_FINAL_PASS=NO
+NO_FIFTH_REVIEW=Aaron 2026-08-24（不再找 Sol，直接推进）
+残留=F1/F2 exact-type capability bypass（Python 层面不可根治，须入 N17 披露）
+测试 3118→3980（本弧 3966→3980），battery 74→84
+```
+
+### 14.3 N-D2＋N-D3：合并决策包与委托裁定
+
+```
+包        ops/DECISION_PACKET_ND2_ND3.md   7bc92817…  32 项（M15/D2/O4/E3/G8）
+提示词    ops/ND2_ND3_FABLE_DECISION_PROMPT.md
+提案      ops/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md
+          SHA256 E9745EAD…11519380，59,191 字节，Fable 5，零 CANNOT_DECIDE
+验收      ops/ND2_ND3_RULING_REVIEW_FINDINGS.md  8dc87212…
+状态      PROPOSED_NOT_APPROVED —— 无一项生效
+```
+
+**包生成时发现的三件事**（写在包 §2）：三个候选阈值 `0.5/0.75/0.50` 在仓库里
+**没有出处**（是从零设定不是追认）；`ops/S0_T001_RESULT_DECISION_ADDENDUM.md:26`
+有一句揭盲后的 feasibility 断言，**builder 与 Fable 均不得读**；frequency 门
+在定义上无法对 S0 无知。
+
+**验收发现两处须改**（数值均不动）：M2 的 5.0 日/月**不是导出的**——平台
+`qualifying_days_required: 5` 每次 payout 后重置、**没有日历月窗口**，故须与
+M1/M3 同列为从零设定；D1 的理由「E2 组合本就不可 GO」与其自己的 M13 冲突
+（β 的替代集合就是那两个 E2 组合，可经主门槛判 GO），须删，保留"纯披露不进
+任何门"作为唯一理由（`over_budget` 仅见 `consumer.py:1471`）。
+
+**第三件是 builder 自己的缺陷**：`EXPOSURE_LEDGER` 被我放进可读白名单，而它
+内嵌揭盲后摘要——白名单本身泄了。归 Aaron。
+
+### 14.4 N16 算力总账（此前无人合成）
+
+BE＝一次 B=1000×M≈21 全量通道（M 轴按 IR-29a 不加倍）。
+
+```
+M10(b) B 加倍 × 3 seeds                    9 BE
+M12+M14 α 分支（同受加倍与 seeds 约束）      9 BE
+生产模拟小计                               18 BE
+M10(a) K 加倍 × 3 seeds                    9 K-单位（独立网格通道）
+E3 冒烟（synthetic）                        3 BE
+
+custody（E2 实测外推 100–140 min/通道 × 18）
+  随 B 线性        30–42 小时
+  固定解析主导     15–21 小时
+```
+
+**总时长给不出小时数——单位成本从未被测过。** 形状为
+`18 × (未知 BE 模拟耗时) + custody 15–42h + 网格 9 K-单位`。只有 E3 能填第一项。
+**E2 的绊线是单次运行 >280 min，M10 的倍数是 ×18；聚合量不在任何绊线视野内。**
+
+### 14.5 现势节点状态
+
+```
+N00=BLOCKED —— 五份 Round-4 文档仍缺（联合矩阵正文／两个候选的正式定义／
+     逐格签字／Option C wrapper 定义）；§11.4 未变：五项不齐，即使 N17=GO
+     也不得开始 candidate-specific build
+N-D1=RATIFIED（R1 → R2，R2 于 2026-08-23 批准）
+N03/N04/N05=IMPLEMENTED，四轮 HOLD 全部修复
+N06=HOLD_ALL_HIGHS_CLOSED_NO_FURTHER_REVIEW —— **终态未裁**（见 14.6）
+N-D2/N-D3=PROPOSAL_LANDED_AWAITING_RATIFICATION
+N07/N08/N12/N13=BLOCKED（判据未定义，无法实现）
+MC_EXECUTED=NO ／ SUPPLEMENT_EXECUTED=NO ／ STRATEGY_BUILD_STARTED=NO
+REGISTRY_EVENTS_APPENDED=NO ／ EXPOSURE_EVENTS_APPENDED=NO
+REAL_DIRECTORIES_CREATED=NO ／ REAL_DATA_READ=NO
+REVEALED_OUTCOME_READ_BY_BUILDER=NO
+registry ee9da33f ／ exposure 382182bf ／ attestation d839b965（三者自 b3ac453 未动）
+S0-T001 14 文件 run==archive ／ 两个 supplements\ 子树不存在 ／ 零 SUPPLEMENT_ 行
+```
+
+### 14.6 形式上的卡点（必须裁，否则链子是断的）
+
+§4 DAG 写 **N-D2 依赖 N06**，§13.5 写「只有 N06 PASS 之后才进入 N-D2」。
+Aaron 已决定不再审 N06，故 **N06 永远不会以 PASS 结束**。在 N06 终态被裁定
+之前，任何进入 N-D2 的动作都是未记录的绕过。
+
+三条合法路径：(a) 宣布 N06 以「接受＋披露残留」终结；(b) 修改依赖并入档；
+(c) 维持 HOLD 且不进 N-D2。
+
+### 14.7 归 Aaron 的四件（2026-08-24 委托状态）
+
+```
+1. N06 终态裁定                      → 委托 Sol（具名批次委托）
+2. 32 项裁定的批准                    → 委托 Sol（具名批次委托）
+3. 读 addendum:26 与 EXPOSURE_LEDGER:19 并裁定
+                                     → **不可委托任何 AI 席位**：两份文件都含
+                                       揭盲 outcome，读它们即污染该席位；
+                                       Aaron 已解盲，读它们零成本
+4. 找回或宣告丢失 N00 的五份文档       → AI 只能做仓库内检索，恢复须 Aaron
+```
