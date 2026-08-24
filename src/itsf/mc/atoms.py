@@ -91,6 +91,22 @@ HARVESTED_CONSTANT_MODULES = (
     "itsf.mc.platforms.lucid",
     "itsf.mc.platforms.topstep",
     "itsf.mc.account",
+    # Added 2026-08-24, when the N-D2/N-D3 ruling turned three previously
+    # empty questions into live constants. Each of these decides a number
+    # that reaches the verdict, so by this list's own rule -- harvested by
+    # default, exemptions require a written reason and there are none --
+    # they belong in the digest:
+    #   feasibility  the three gate thresholds and the two quantiles
+    #   over_budget  the strict comparison and the ruled bases
+    #   fixed_world  the three order-statistic positions
+    # DOING THIS NOW IS FREE AND DOING IT LATER IS NOT. Adding a module
+    # changes lifecycle_config_digest and so invalidates every atom
+    # produced before the change -- by construction, which is the point.
+    # Production scale has never run and no MC atom exists anywhere, so
+    # today there is nothing to invalidate. After N16 there would be.
+    "itsf.mc.feasibility",
+    "itsf.mc.over_budget",
+    "itsf.mc.fixed_world",
 )
 
 # EXPLICIT exclusion set: "module:NAME" -> reason. Anything harvested is

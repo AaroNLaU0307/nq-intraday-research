@@ -213,3 +213,45 @@ def test_a_quantile_that_is_not_one_of_the_two_ratified_ones_is_refused():
     # n=2, so h = 1 * 0.95 and the answer interpolates to 0.95,
     # not 1.0 -- type-7 on a two-element sample, not a bug.
     assert fz._epistemic([0.0, 1.0], fz.P95) == pytest.approx(0.95)
+
+
+def test_every_module_carrying_a_ratified_number_is_in_the_config_digest():
+    """The harvest list decides what a change to a constant invalidates.
+
+    Its own rule is harvested-by-default with written exemptions, and the
+    exemption set is empty. Three modules created on 2026-08-24 carry
+    numbers that reach the verdict -- the gate thresholds, the strict
+    over-budget comparison, the order-statistic positions -- so leaving any
+    of them out would mean a threshold could move without the digest
+    noticing, and atoms produced under the old value would still look
+    current.
+
+    This is cheap today only because production scale has never run and no
+    MC atom exists to invalidate. After N16 it would not be."""
+    from itsf.mc import atoms as at
+
+    for module in ("itsf.mc.feasibility", "itsf.mc.over_budget",
+                   "itsf.mc.fixed_world"):
+        assert module in at.HARVESTED_CONSTANT_MODULES, module
+
+
+def test_moving_a_ratified_threshold_moves_the_config_digest():
+    """The property the harvest list exists for, exercised rather than
+    assumed: change a gate threshold and every atom minted afterwards
+    carries a different lifecycle_config_digest."""
+    import itsf.mc.feasibility as target
+    from itsf.mc import atoms as at
+
+    before = at.harvest_frozen_constants()
+    original = target.SKIP_RATE_P95_MAX
+    try:
+        target.SKIP_RATE_P95_MAX = 0.30
+        after = at.harvest_frozen_constants()
+    finally:
+        target.SKIP_RATE_P95_MAX = original
+
+    assert before != after, (
+        "the skip-rate threshold moved and the harvested constants did "
+        "not; a ruled number can then change without invalidating a "
+        "single atom produced under the old one")
+    assert at.harvest_frozen_constants() == before      # restored
