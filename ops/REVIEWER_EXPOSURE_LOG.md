@@ -37,6 +37,8 @@ classification 用不冲突的值），**归 Aaron**：那要动一份 append-on
 |---|---|---|---|---|---|---|---|
 | 1 | 2026-08-25 | Codex GPT-5.6 Sol，fresh session（review N09-EXECUTION-PATH-A2） | `ops/MC_TO_STRATEGY_MASTER_PLAN.md`（在 `ops/OUTCOME_CARRYING_ARTIFACTS.json` 的 `carries_outcome` 名单上） | verdict token ＋ exposure count（**席位自陈**；未读真实 Development 数据，未读目标绩效数值） | `REVEALED_TARGET_METRIC`（**席位自评，builder 未下调**） | 该会话不得再承担 outcome-blind Stage I | builder 未在复审提示词中给出 outcome-carrying 禁区清单 |
 
+| 2 | 2026-08-26 | Codex GPT-5.6 Sol，fresh session（review `rv-3651f9fe0b68-da56aecb6991`，R2 设计审） | 被隔离的 outcome-carrying **恢复锚**（席位自陈：a broad symbol search surfaced snippets from a quarantined outcome-carrying recovery anchor） | 该锚的片段（**未刻意打开该文件**——是一次广域符号搜索带出来的） | `TARGET_METRIC`（**席位自评，builder 未下调**） | 该会话不得再承担 outcome-blind Stage I | builder 的禁区清单只存在于**提示词**里，而本次交付载体是 **Review Packet**——清单没有随之传递 |
+
 ### 第 1 行的补充说明
 
 - **分类沿用席位自评。** 按 §3.4B 的字面定义，「verdict token」属「预注册判定
@@ -54,3 +56,31 @@ classification 用不冲突的值），**归 Aaron**：那要动一份 append-on
 - **Review Packet v1 的 `PULL_PROTOCOL` 是更强的结构性缓解**：复审者**列出**
   它需要的路径，由工作会话提供逐字节内容——它不自己导航，因而不会走到禁区。
   R1 那轮用的是散文提示词，没有这层保护。
+
+---
+
+## 第 2 行的补充说明 —— 与第 1 行**不是**同一个原因
+
+第 1 行的成因是「提示词没写禁区清单」。第 2 行**写了**，但**清单没有到达复审者**：
+
+```
+禁区清单出现在 ops/N09_EXECUTION_PATH_A2_SOL_PROMPT.md : 1 处
+禁区清单出现在 交付给 Sol 的 Review Packet            : 0 处
+三条相关守卫扫描的范围                                : ops/*PROMPT*.md
+```
+
+**交付载体从散文提示词换成 Review Packet 时，缓解措施静默失效了。** packet 由
+`qros packet` 机械生成，没有承载禁区清单的字段；而守卫只扫 `*PROMPT*.md`，本次
+没有活跃提示词，于是它**通过了，且什么也没保护**——今日第三次同一形状。
+
+### 一条比「别打开那个文件」更强的事实
+
+席位自陈它**不是刻意打开**恢复锚的：**一次广域符号搜索把片段带了出来**。
+
+这意味着「禁区清单」这类缓解**在原理上就不够**：只要复审者在仓内做任何广域检索，
+被隔离的内容就可能进入它的上下文。**唯一能真正消除它的是让那些内容不在会被检索
+到的地方**——即 D-2 的选项 A（拆锚）。
+
+这条事实已随 `ops/DECISION_PACKET_FOUR_OPEN_2026-08-26.md` 的 D-2 一并交 Fable，
+但它**在本记录写下时才出现**，故补记于此：**两个席位已被烧掉，第二个甚至没有
+打开那个文件。**

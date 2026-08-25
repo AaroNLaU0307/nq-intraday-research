@@ -271,19 +271,39 @@ def test_a_live_prompt_names_the_outcome_carrying_artifacts_as_off_limits():
         "anchor stopped carrying outcome (good, update this guard) or the "
         "lookup broke (bad, and this assertion is why you found out)")
 
+    # EVERY live review must have a CARRIER for the off-limits list, and
+    # the carrier is not necessarily a prompt.
+    #
+    # MEASURED, 2026-08-26 — the second seat burned. The off-limits section
+    # was written, into a *PROMPT*.md. The delivery vehicle then changed to
+    # a Review Packet, which `qros packet` generates mechanically and which
+    # has no field for it. Measured after the fact: the list appeared once
+    # in the prompt and ZERO times in the packet actually handed over. This
+    # guard scanned only *PROMPT*.md, found no live prompt, and passed —
+    # protecting nothing, for the third time in one day.
+    #
+    # So it now searches every ops/*.md for one that names the live review,
+    # rather than assuming the carrier's filename. A packet cannot carry
+    # the list, so a companion document must exist and be delivered WITH
+    # it; the absence of any carrier is the failure this reports.
     problems = []
-    for prompt in sorted(REGISTER.parent.glob("*PROMPT*.md")):
-        text = prompt.read_text(encoding="utf-8")
-        if not any(rid in text for rid in live_ids):
-            continue
-        if "OUTCOME_CARRYING_ARTIFACTS.json" not in text:
-            problems.append(f"{prompt.name}: does not name the "
-                            "outcome-carrying register as off limits")
-        for anchor in anchors:
-            if anchor not in text:
-                problems.append(f"{prompt.name}: does not warn off {anchor}, "
-                                "which is both outcome-carrying and the "
-                                "recovery anchor a reviewer would open first")
+    for review_id in sorted(live_ids):
+        carriers = []
+        for doc in sorted(REGISTER.parent.glob("*.md")):
+            text = doc.read_text(encoding="utf-8")
+            if review_id not in text:
+                continue
+            if "OUTCOME_CARRYING_ARTIFACTS.json" not in text:
+                continue
+            if all(a in text for a in anchors):
+                carriers.append(doc.name)
+        if not carriers:
+            problems.append(
+                f"{review_id}: no document names this review AND the "
+                "outcome-carrying register AND "
+                f"{anchors[0]}. A Review Packet cannot carry the "
+                "off-limits list, so a companion must — and must be handed "
+                "over with it.")
     assert not problems, "\n  ".join([""] + problems)
 
 

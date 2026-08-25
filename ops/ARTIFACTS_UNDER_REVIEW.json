@@ -1,29 +1,4 @@
 {
   "_comment": "Frozen while a reviewer holds them. Remove an entry when the review returns; an empty list is the normal state. `unchanged_since` is the commit the declaration pins: no commit after it may touch the path. HEAD itself is NEVER pinned -- committing the review prompt moves HEAD, so a HEAD pin is stale the moment it is written (measured 2026-08-25: a Sol session STOPped on exactly that). Nothing on ops/OUTCOME_CARRYING_ARTIFACTS.json may be listed here. Guarded by tests/test_artifacts_under_review_are_frozen.py and tests/test_review_artifacts_are_outcome_clean.py",
-  "under_review": [
-    {
-      "path": "ops/N09_EXECUTION_PATH_DESIGN.md",
-      "sha256": "6e541e29ddd480a33c15f5742cc6623500c133b7a2074195c7767ac4a9e661d5",
-      "issued_to": "Codex GPT-5.6 Sol (fresh session, via Review Packet v1)",
-      "issued_at": "2026-08-26",
-      "review_id": "rv-3651f9fe0b68-da56aecb6991",
-      "unchanged_since": "af5528fa8a2e03a33305f588efb2605bdb942267"
-    },
-    {
-      "path": "ops/N09_EXECUTION_PATH_DESIGN_R2.md",
-      "sha256": "a14d2344bbf5717e276835ea2bc8eb596b5d7fcb5db5c06fdde98f987a12730b",
-      "issued_to": "Codex GPT-5.6 Sol (fresh session, via Review Packet v1)",
-      "issued_at": "2026-08-26",
-      "review_id": "rv-3651f9fe0b68-da56aecb6991",
-      "unchanged_since": "af5528fa8a2e03a33305f588efb2605bdb942267"
-    },
-    {
-      "path": "ops/REVIEWER_EXPOSURE_LOG.md",
-      "sha256": "6d07e05db1515e966a41d8a4911042f47a7bbe8cfb4c099982522da437f4b8ca",
-      "issued_to": "Codex GPT-5.6 Sol (fresh session, via Review Packet v1)",
-      "issued_at": "2026-08-26",
-      "review_id": "rv-3651f9fe0b68-da56aecb6991",
-      "unchanged_since": "af5528fa8a2e03a33305f588efb2605bdb942267"
-    }
-  ]
+  "under_review": []
 }
