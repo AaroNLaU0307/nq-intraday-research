@@ -115,8 +115,8 @@ BLIND_SEAT_MAY_NOT_SEARCH_THE_REPOSITORY = 是
 ### 两条暴露轴，一并告知（D-1 条件 1）
 
 ```
-研究轴  ops/EXPOSURE_LEDGER.md        —— 研究自由度消耗（累计量在此）
-席位轴  ops/REVIEWER_EXPOSURE_LOG.md  —— 复审席位被烧；不消耗研究自由度
+研究轴  ops/EXPOSURE_LEDGER.md        —— 研究自由度消耗   【OFF-LIMITS，blind 席位不得读】
+席位轴  ops/REVIEWER_EXPOSURE_LOG.md  —— 复审席位被烧；不消耗研究自由度   【可读】
 ```
 
 **烧掉一个席位不消耗研究自由度**，所以两者分账。要报告自身暴露状态，看席位轴；

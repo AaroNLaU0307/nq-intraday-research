@@ -121,7 +121,9 @@
 ## 10. 不能动的（移动 = 弄断生产代码或测试）
 
 被 `src/`、`tests/`、`scripts/`、`qros-state.yaml` 或 `ops/*.json` **按路径**
-引用，共 22 份：
+引用，共 22 份。这里只列文件名以说明「不能移动」，**不是让你去开**；要读哪一份
+先查 `OUTCOME_CARRYING_ARTIFACTS.json`。
+**下表含隔离件，一律按 OFF-LIMITS 对待：**
 
 ```
 TRIAL_REGISTRY.md                    EXPOSURE_LEDGER.md
