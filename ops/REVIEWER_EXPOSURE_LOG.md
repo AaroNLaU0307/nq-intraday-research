@@ -86,3 +86,27 @@ classification 用不冲突的值），**归 Aaron**：那要动一份 append-on
 这条事实已随 `ops/DECISION_PACKET_FOUR_OPEN_2026-08-26.md` 的 D-2 一并交 Fable，
 但它**在本记录写下时才出现**，故补记于此：**两个席位已被烧掉，第二个甚至没有
 打开那个文件。**
+
+
+---
+
+## 第 4 行 —— **一个没有被烧掉的席位**（2026-08-26）
+
+| # | ts | seat | artifact_read | what_was_seen | classification | consequence | cause |
+|---|---|---|---|---|---|---|---|
+| 4 | 2026-08-26 | Codex GPT-5.6 Sol，fresh session（review `rv-f4207865a116-c004854e6828`，D-3 registry 写者裁定复核） | 只按提示逐条打开了送审集的六个路径＋packet＋提示词本身，另加两份 `Quant trade\` 下的 doctrine 文件与自身的 verification skill（全部**不在**隔离名单上） | 无隔离内容 | **`NOT_EXPOSED`**（席位自陈 `SEAT_STATUS=BLIND`：未打开隔离件，未做任何 grep／rg／rglob／符号检索） | 该会话**仍可**承担 outcome-blind 角色 | —— 无事故 |
+
+### 为什么把一个「没发生的事」记进暴露台账
+
+**这一行不是暴露事件，它是缓解措施是否奏效的量度。** 前三个席位分别死于：
+旧恢复序引路、一次广域符号搜索、一次单模式定向 grep。此后落地了四件东西——
+拆锚（`ops/RECOVERY_ANCHOR.md`）、检索禁令（S1(b)）、禁区清单的常驻载体
+（`ops/NEXT_HANDOFF.md`）、以及交付前的隔离交集守卫
+（`tests/test_delivery_names_no_quarantined_path.py`）。
+
+**第四个席位是这四件东西全部就位之后的第一次交付，它活下来了。** 三烧一活不构成
+统计证据，但「没有记录 ⇒ UNKNOWN，绝不为 NONE」对**未发生**同样适用：不记的话，
+将来没人能说清缓解到底有没有起过作用。
+
+**归 Aaron 裁**：本台账原本只记暴露事件，`NOT_EXPOSED` 是 builder 新引入的
+classification 值。若认为不该混记，请裁，我按 append-only 追加更正行，**不改本行**。

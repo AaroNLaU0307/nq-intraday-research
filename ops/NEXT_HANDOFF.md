@@ -4,51 +4,47 @@
 > 你不必再去 `ops/` 里认哪个是最新的 prompt。
 
 ```
-UPDATED = 2026-08-26（D-3 复审已挂出）
+UPDATED = 2026-08-26（D-3 已返回 HOLD；**当前没有挂着的交付**）
 ```
 
 ---
 
 ## 现在挂着的交付
 
-### ① 交 fresh Sol —— D-3 registry 写者裁定复核
+### ①（已完成）D-3 registry 写者裁定复核 —— **fresh Sol 返回 HOLD**
 
 ```
-提示   ops/PROMPT_D3_SOL_REVIEW.md          ← 整份贴给一个新的 Sol 会话
-packet ops/packets/rv-f4207865a116-c004854e6828.packet
-提案   ops/D3_REGISTRY_WRITER_PROPOSAL.md   （Sol 自己按提示从磁盘打开）
-门     TIER1_DISCRETIONARY   REVIEW_ID=rv-f4207865a116-c004854e6828
-状态   已就绪，未发出
+REVIEW_ID  rv-f4207865a116-c004854e6828   GATE=TIER1_DISCRETIONARY
+VERDICT    HOLD          SEAT_STATUS=BLIND（席位未烧，第一个活下来的）
+记录       ops/RULING_SOL_D3_HOLD_2026-08-26.md
+           sha256 5f533347622156932fce5c35f11ffa2b089771eba0f2dd6157b7bb2f801a00ff
+登记表     已清空（六路径解冻）
 ```
 
-**要裁什么**：边界第 4 条「registry 只允许主代理单写」，与已完成真实运行中运行器
-自行追加 `RUN_STARTED` 的先例相抵。Fable 提案拆开裁——P3 由运行器自追加（受托
-单写限缩解释），失败事件仅主代理追加。Sol 判这个构造安不安全。
+**四条 High ＋ 一条 Medium，builder 已逐条复现（无一采信）**：读—校验—追加之间
+没有临界区，writer 是无锁 `open("a")`；失败事件条款与已批准 actor 合同相抵三行；
+崩溃／陈旧租约无状态机，且当前根本没有 MC 生产执行路径可审；never-re-read 只是
+结构＋注释；OneDrive 原子性无法靠读代码排除。
 
-**出提示的过程中实测到一件改变问题性质的事**：已批准的 `ND1_RECOMMENDED_PROFILE_R2`
-（sha256 `a3d40b7c…`，2026-08-23 批准）actor 表把 **P3／P4／A1／F1／F2 全判给
-`main agent (mc_ds_runner)`**，只把 A2／AX／F3 判给 `main agent`。所以提案的 P3 一半
-与已批准文本**一致**，失败事件一半与已批准文本**相抵三行**（A1／F1／F2）。
-另有 `src/itsf/s0/runner.py:725` 今天就在跨过不可逆点后追加 `FAILED`。
-写入提案 §2.5–2.7 并加了第五个猎取点，**未替 Sol 也未替 Aaron 收口**。
+**这不否掉 Fable 的提案**——P3 那一半与已批准 actor 表一致；被质疑的是它的安全
+前提（租约、临界区、原子性）尚不存在，以及失败事件那一半与合同相抵。
 
-**PASS 不授权任何写入**：条件 3 明写，Sol PASS ＋ Aaron 授权之前，生产代码不得
-获得任何 registry 写能力。Sol 返回之后仍需 Aaron 终裁。
+### ② 等 Aaron —— 现在共 **八项**，全在你的权限内
 
-**送审集已冻结**（`ops/ARTIFACTS_UNDER_REVIEW.json`，六条，钉子
-`7b582b1240e4a9d93cd8c9d9ac470ca98525ce02` 由 `derive_pin()` 派生）：
-在 Sol 返回前**不要动**这六个路径——
-`ops/D3_REGISTRY_WRITER_PROPOSAL.md`、`src/itsf/mc/supplement_contract.py`、
-`src/itsf/s0/runner.py`、`src/itsf/mc/registry_boundary.py`、
-`src/itsf/mc/supplement_runner.py`、`scripts/s0_real_run.py`。
+**原三项**：D-1 条件 3（把全局 L6「每次 exposure 事件都追加」收窄到研究轴）、
+D-2 的 S1(a)＋registry 豁免、D-4 的 runtime `_SAVE_DIR` 工作项。
 
-### ② 等 Aaron —— 另外三项裁定的后续
+**D-3 新增五项**（Sol 的 `UNRESOLVED_FOR_AARON`，原文见裁定记录 §一）：
+actor 是否同时表达执行者／是否加独立 executor provenance；保留 A1／F1／F2 的
+runner actor 还是修订已批准 profile＋planner＋生产先例；P3 后硬崩溃该产生什么
+事件、由谁追加、恢复写入的授权条件；registry 是否继续在主动同步的 OneDrive 树中
+作为 canonical 写入面；租约回收能否自动执行还是必须 fail-closed 等人裁。
 
-D-1 条件 3（把全局 L6「每一次 exposure 事件都要追加」一句收窄到研究轴）、
-D-2 的 S1(a) ＋ registry 豁免、D-4 的 runtime `_SAVE_DIR` 工作项——**都要 Aaron
-本人动全局文件或运行时仓，builder 不能代劳**。
+**Sol 给了一个较窄且与现有合同一致的解释供你参考**（它明说采不采用归你）：
+运行器存活并捕获到的 A1／F1／F2 仍由运行器追加；硬崩溃后的检测／恢复由主代理
+负责，用你批准的独立恢复语义。
 
-### ③ 等 D-3 落定 —— N09 的 R3 设计
+### ③ 等 D-3 落定### ③ 等 D-3 落定 —— N09 的 R3 设计
 
 Sol 对 R2 的 High #2 认定：执行路径的可建范围取决于 D-3 怎么裁。**所以 R3 在 ①
 返回之前写不了**，现在能建的只有一个永远拒绝的骨架。

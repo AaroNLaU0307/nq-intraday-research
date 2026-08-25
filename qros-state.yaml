@@ -225,6 +225,55 @@ packets:
     decision_requested: "Ratify, modify, or reject the D-3 proposal on who appends P3 and the failure events, given that the ratified ND1 profile already assigns three failure events to the runner"
     selector: "builder"
     appended_at: "2026-08-26T00:00:00Z"
+  # PACKET_OUTCOME bound to the issuance above. Immutable append (§5.5):
+  # the issuance is NOT completed in place; a correction would append again
+  # under the same review_id.
+  #
+  # THE SCHEMA IS NARROW ON PURPOSE AND I FIRST WROTE IT WRONG. My initial
+  # draft carried seat_status, transport_precheck, verdict_record_sha256,
+  # findings counts and a builder_reproduced flag. None of those fields
+  # exist: _OUTCOME_FIELDS is exactly kind / packet_record_id / review_id /
+  # issuance_packet_record_id / corrects / returned_at / verdict /
+  # paths_pulled / rejection_origin_class / rejection_cause_class /
+  # ops_events_ref / appended_at. Everything else about this review lives in
+  # the canonical artifact named below, which is where it belongs — the
+  # state file is the operational log, not the evidence.
+  #
+  # No rejection_origin_class / rejection_cause_class: §5.5.2 admits them
+  # only on REJECTED_INCOMPLETE and rejects them on any other verdict.
+  #
+  # TIER1_DISCRETIONARY. Per §3.1 a discretionary review releases no
+  # transition and is never a requirement's gate, so this does NOT move
+  # REVIEW_SATISFACTION for A2 or STAGE_I; the A2->B and I->J HOLDs are
+  # unaffected. Recorded because it happened, not because it unlocks
+  # anything.
+  #
+  # Verdict, findings, and the builder's line-by-line reproduction of them:
+  #   ops/RULING_SOL_D3_HOLD_2026-08-26.md
+  #   sha256 5f533347622156932fce5c35f11ffa2b089771eba0f2dd6157b7bb2f801a00ff
+  # That hash certifies the TRANSCRIPTION — the verdict arrived by chat, and
+  # chat-carried bytes are never a source of truth.
+  - kind: "PACKET_OUTCOME"
+    packet_record_id: "pr-rvf4207865a116-002"
+    issuance_packet_record_id: "pr-rvf4207865a116-001"
+    review_id: "rv-f4207865a116-c004854e6828"
+    verdict: "HOLD"
+    returned_at: "2026-08-26T00:00:00Z"
+    ops_events_ref: "N_A — ops_events[] is empty; this review produced no operational event beyond this record and the ruling artifact"
+    paths_pulled:
+      - "ops/PROMPT_D3_SOL_REVIEW.md"
+      - "ops/packets/rv-f4207865a116-c004854e6828.packet"
+      - "ops/D3_REGISTRY_WRITER_PROPOSAL.md"
+      - "src/itsf/mc/supplement_contract.py"
+      - "src/itsf/mc/registry_boundary.py"
+      - "src/itsf/mc/supplement_runner.py"
+      - "src/itsf/s0/runner.py"
+      - "scripts/s0_real_run.py"
+      - "../L6_RUNTIME_SPEC.md"
+      - "../AI_RESEARCH_OPERATING_MODE.md"
+      - "C:/Users/Aaron/.codex/plugins/cache/openai-curated-remote/codex-engineering-guardrails/1.1.1/skills/code-verification/SKILL.md"
+      - "C:/Users/Aaron/.codex/plugins/cache/openai-curated-remote/codex-engineering-guardrails/1.1.1/skills/code-verification/references/verification-matrix.md"
+    appended_at: "2026-08-26T00:00:00Z"
 
 # ------------------------------------------------------------- INPUTS §2.3 --
 inputs:
