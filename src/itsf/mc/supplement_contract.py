@@ -303,9 +303,40 @@ EVENTS: Mapping[str, EventSpec] = MappingProxyType(
 EVENT_TOKENS: tuple = tuple(sorted({s.token for s in _SPECS}))
 
 #: Deferred to N-D3 (§D.3.4). Named so the parser refuses them BY NAME.
+#: THE RATIFIED FIVE-NAME TRANSCRIPTION — unchanged, and deliberately so.
+#: Two of them are no longer refused by this grammar (see below), but the
+#: transcription itself stays verifiable against §D.3.4: C3 of the
+#: MC-REG-COLLISION-001 ruling requires the discharge to be recorded as an
+#: explicit exclusion citing the ruling, NOT as a silent deletion of names
+#: from a ratified list.
 ND3_DEFERRED_TOKENS = ("SUPPLEMENT_CONSUMED_BY_GRID_REPLAY",
                        "MC_RUN_AUTHORIZED", "MC_RUN_STARTED",
                        "MC_RUN_SEALED", "MC_RUN_FAILED")
+
+#: THE EXCLUSION. `MC-REG-COLLISION-001`, C3, ratified by a fresh Codex
+#: GPT-5.6 Sol session 2026-08-25 over a Fable 5 proposal. `DELEGATED=YES`.
+#:
+#: §D.3.4 deferred these names for a stated REASON — "其生命周期定义（前置/
+#: 后继/终态/与 MC run 序列的耦合）尚不完整" — under a stated CONSEQUENCE,
+#: "在 N-D3 裁定前". Both have now fired for exactly these two: the N-D3
+#: ruling (G1-G8, 2026-08-24) supplied the missing lifecycle definitions,
+#: and `mc_registry` owns and validates them. This is a guard being
+#: DISCHARGED on its own terms, not a refusal being weakened.
+#:
+#: The other three are NOT discharged, for two different reasons:
+#:   SUPPLEMENT_CONSUMED_BY_GRID_REPLAY — deferred over the GRID-replay
+#:     coupling, which N-D3 did not rule. Its condition has not fired.
+#:   MC_RUN_SEALED / MC_RUN_FAILED — anticipated at N05, never created by
+#:     the ruling (it made MC_BRANCH_SEALED and MC_RUN_FAILED_POSTSTART
+#:     instead). Nothing to discharge; a name that means nothing stays
+#:     refused.
+ND3_DEFERRAL_DISCHARGED_BY = "MC-REG-COLLISION-001 (C3, DELEGATED=YES)"
+ND3_DEFERRAL_DISCHARGED = ("MC_RUN_AUTHORIZED", "MC_RUN_STARTED")
+
+#: What this grammar still refuses BY NAME. Derived, never hand-listed —
+#: a second hand-written tuple is a second thing to keep in agreement.
+ND3_STILL_REFUSED_BY_NAME = tuple(
+    t for t in ND3_DEFERRED_TOKENS if t not in ND3_DEFERRAL_DISCHARGED)
 
 #: The two terminals (§D.3.3). `A1` and `AX` are explicitly NOT terminals.
 TERMINAL_SHORT_IDS = ("P5", "F3")

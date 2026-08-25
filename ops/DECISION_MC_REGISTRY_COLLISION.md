@@ -214,3 +214,55 @@ ownership that costs nothing.
 The question is exactly one sentence: **which of R1 or R2 reconciles G8 with
 the N05 supplement grammar** — and, if R2, that it is conditioned on
 `mc_registry` retaining prefix ownership.
+
+---
+
+## STATUS — CLOSED, 2026-08-25
+
+**Appended, not rewritten.** Everything above is the record as the reviewers
+held it, including the two errors Fable found in it (§4's example token
+contradicts §5; §4 says four production paths resolve, and only
+`supplement_runner` does). Correcting a held artifact in place is what cost a
+review session on 2026-08-24 — findings go in new records, and this closure
+is one.
+
+```
+RULING        = R2, AS MODIFIED
+PROPOSED_BY   = Fable 5        (ops/RULING_PROPOSAL_MC_REG_COLLISION_FABLE_2026-08-25.md)
+RATIFIED_BY   = Codex GPT-5.6 Sol, fresh session   (ops/RULING_MC_REG_COLLISION_SOL_RATIFICATION_2026-08-25.md)
+ADJUDICATED_BY= Aaron, 2026-08-25
+DELEGATED     = YES   —— 提案与批准都是委托，不是 Aaron 本人的判断
+```
+
+Sol replaced C2 outright. Fable's version required every production reader to
+be covered but still allowed each to take its own read of a MUTABLE shared
+file, so MC validation could pass against one version while supplement
+resolution acted on another — four independent `read_text` calls on this path
+existed at the time. The ratified C2 requires ONE shared validation boundary:
+one read, both lifecycles against the identical immutable snapshot, and a
+refusal from either leaving nothing usable.
+
+Implemented in the same change, as C2 requires:
+
+- `src/itsf/mc/registry_boundary.py` — the boundary.
+- `supplement_runner.run_supplement_production` obtains its chain through it;
+  an MC refusal arrives as the chain's own `problem`, so the existing
+  A_PRECHECK gate enforces the coupling with no gate changed.
+- `supplement_contract` — the discharge as an explicit exclusion (C3). The
+  ratified five-name transcription is unchanged and still verifiable.
+- Two tests C2 names: architecture/no-bypass and behavioural. Both
+  mutation-proved.
+
+**Measured after the change, against the real registry:** a complete,
+well-formed MC chain appended to `ops/TRIAL_REGISTRY.md` leaves the boundary
+usable, supplement resolution unrefused, and MC-R001 carrying 7 events and 1
+live authorization. Before, the same append refused everything.
+
+**Not adopted, tracked separately:** C6 — case and prefix variants
+(`mc_run_authorized`) are invisible to both grammars. Pre-existing,
+machine-inert, neither created nor widened by R2.
+
+**A limitation that travels with this ruling:** Sol disclosed that it authored
+the C2 modification and is therefore not independent of that condition's
+design. C2's text has had no independent review. The implementation goes
+through N14; nobody may read this as "C2 was independently reviewed".

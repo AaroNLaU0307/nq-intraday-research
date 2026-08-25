@@ -153,23 +153,22 @@ def test_no_token_is_legal_in_both_vocabularies():
     assert not overlap, f"legal in both grammars: {sorted(overlap)}"
 
 
-def test_the_two_names_that_do_appear_in_both_are_refused_by_the_supplement():
-    """Where the strings DO coincide, that is the handoff, not a collision.
+def test_the_two_names_that_appear_in_both_are_the_discharged_pair():
+    """Where the strings coincide, that was the handoff — and the handoff
+    has now happened.
 
     `supplement_contract` named four MC tokens in `ND3_DEFERRED_TOKENS`
-    before N-D3 was ruled, precisely so its parser would refuse them BY NAME
-    rather than ignore them. Two of those four are now real MC events, and
-    the refusal has to survive the ruling: an MC row inside a supplement
-    registry is a category error whether or not the token exists elsewhere.
-
-    `test_nd3_deferred_tokens_refused_by_name` already exercises the parser
-    over the whole deferred list. What is asserted here is the cross-grammar
-    fact that list cannot see -- that these two strings are now legal
-    somewhere, and still refused here."""
+    before N-D3 was ruled, so its parser would refuse them BY NAME rather
+    than ignore them. Two of those four became real MC events, and those
+    two are exactly the pair C3 discharged. The other two were never
+    created and stay refused."""
     from itsf.mc import supplement_contract as sc
 
     shared = set(mc.EVENTS) & set(sc.ND3_DEFERRED_TOKENS)
     assert shared == {"MC_RUN_AUTHORIZED", "MC_RUN_STARTED"}
+    assert set(sc.ND3_DEFERRAL_DISCHARGED) == shared, (
+        "the discharged pair must be exactly the names that turned out to "
+        "be real MC events — no more, no less")
 
 
 def test_the_ruling_did_not_create_two_of_the_four_anticipated_names():
@@ -205,27 +204,23 @@ def test_the_ruling_did_not_create_two_of_the_four_anticipated_names():
         assert chains, "the supplement chain must still resolve"
 
 
-def test_a_ratified_mc_row_breaks_supplement_resolution():
-    """AN OPEN CONTRADICTION BETWEEN TWO RATIFIED ARTIFACTS. Do not
-    "fix" this test; it is the reproduction.
+def test_a_ratified_mc_row_no_longer_breaks_supplement_resolution():
+    """WAS the reproduction of MC-REG-COLLISION-001. Now the pin that it
+    is fixed, and the record of what it used to prove.
 
-    G8 (RATIFIED AS MODIFIED) puts MC registry rows in
-    `ops/TRIAL_REGISTRY.md` and dirty-allowlists that file and no other.
-    The N05 supplement grammar refuses `MC_RUN_AUTHORIZED` and
-    `MC_RUN_STARTED` BY NAME, and `ANY_CHAIN_DEFECT=REFUSE_WHOLE_RESOLUTION`
-    makes that refusal total. Both are ratified; together they are not
-    implementable, because the day-strata supplement is an INPUT to the MC
-    run -- so the first real MC run would break the mechanism that proves
-    its own input was authorized.
+    Until 2026-08-25 this test asserted the opposite: an `MC_RUN_AUTHORIZED`
+    row in `ops/TRIAL_REGISTRY.md` refused the WHOLE supplement resolution
+    with `token_deferred_to_nd3`, and since the day-strata supplement is an
+    INPUT to the MC run, the first real MC run would have broken the
+    mechanism proving its own input was authorized. Two ratified artifacts
+    that could not both be implemented.
 
-    The spelling is not the way out. `RUN_AUTHORIZED` unprefixed breaks
-    S0-T001's resolver instead (measured: it loses its live authorization),
-    and three independent places in this repo already anticipate exactly
-    `MC_RUN_AUTHORIZED` -- `ND3_DEFERRED_TOKENS`, `real_input`'s docstring,
-    and `consumer.MC_AUTHORIZATION_EVENT`.
-
-    Reconciliation is a decision, not an implementation detail, and it is
-    not the builder's. Recorded in `ops/DECISION_MC_REGISTRY_COLLISION.md`.
+    Resolved as R2 with modifications — Fable proposed, a fresh Sol
+    ratified, Aaron adjudicated. `DELEGATED=YES`. §D.3.4's deferral carried
+    its own discharge condition ("before the N-D3 ruling") and its own
+    reason (incomplete lifecycle definitions); N-D3 supplied the
+    definitions, so the guard was discharged on its own terms rather than
+    weakened.
     """
     from itsf.mc import consumer as mcc
     from itsf.mc import supplement_registry as sr
@@ -237,17 +232,31 @@ def test_a_ratified_mc_row_breaks_supplement_resolution():
         assert token in mc.EVENTS, token
         reg = Reg().chain(("P1", "P2", "P3", "P4", "P5"))
         reg.raw(f"| 4 | {UTC} | **{token}** | {C1} | Aaron "
-                f"| [{SID}] run_id: MC-R001 |")
+                f"| [MC-R001] run_id: MC-R001 |")
         chains, refusal = sr.resolve_supplement_chains(reg.text())
-        assert refusal is not None and refusal.code == "token_deferred_to_nd3"
-        assert chains == {}, "the whole resolution is refused, not one row"
+        assert refusal is None, (token, refusal)
+        assert chains, "the supplement chain must resolve alongside MC rows"
 
 
-def test_the_mc_contract_imports_nothing_from_the_supplement_grammar():
-    import inspect
-    src = inspect.getsource(mc)
-    assert "supplement_contract" not in src.replace(
-        "`supplement_contract`", "")
+def test_what_replaced_the_refusal_is_stricter_than_it_was():
+    """The discharge did not leave those rows unguarded — it moved them to
+    a grammar that demands far more.
+
+    The old by-name guard refused the token unconditionally. `mc_registry`
+    accepts it only as part of a chain that starts at MC_PACKET_DRAFTED,
+    takes the next global sequence value, carries a 40-hex commit, names
+    Aaron as actor, and carries the authorization sentence rebuilt from its
+    own run id, commit and smoke ref. A row that merely says AUTHORIZED is
+    still refused — by the owner, and for better reasons."""
+    from itsf.mc import mc_registry as mr
+    from test_mc_supplement_registry import C1, Reg, SID, UTC
+
+    reg = Reg().chain(("P1", "P2", "P3", "P4", "P5"))
+    reg.raw(f"| 4 | {UTC} | **MC_RUN_AUTHORIZED** | {C1} | Aaron "
+            f"| [MC-R001] run_id: MC-R001 |")
+    _, refusal = mr.resolve_mc_chains(reg.text())
+    assert refusal is not None, "the MC grammar must own and judge this row"
+    assert refusal.code in mr.REFUSAL_CODES
 
 
 # --- the anchors ------------------------------------------------------------

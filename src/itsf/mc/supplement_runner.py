@@ -54,7 +54,12 @@ from . import supplement_authority as sa
 from . import supplement_contract as sc
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-REGISTRY_PATH = "ops/TRIAL_REGISTRY.md"
+#: Re-exported, not re-declared. The governed path is defined once, in
+#: `registry_boundary`, which is the only module allowed to read it. This
+#: module still NAMES it — the dirty-allowlist gate compares against it —
+#: but naming and reading are now separated by construction rather than by
+#: everyone remembering which is which.
+from .registry_boundary import REGISTRY_PATH        # noqa: E402  (re-export)
 
 
 class SupplementRunnerError(ValueError):
@@ -939,13 +944,30 @@ def run_supplement_production(supplement_id: str = sc.FIRST_SUPPLEMENT_ID,
     opened, no output root is touched, no directory is created, no probe
     is written, nothing is appended. Everything past the authorization
     gate is unreachable while `SUPPLEMENT_EXECUTION_AUTHORIZED=NO`.
+
+    THAT READ NOW GOES THROUGH THE BOUNDARY (C2 as ratified, 2026-08-25).
+    It used to be a direct `read_text` here plus a direct resolver call —
+    one of four independent reads of the same mutable file across the
+    package. `registry_boundary.resolve_for_supplement` reads once and
+    runs BOTH lifecycles against that one snapshot, so an MC refusal
+    arrives as this chain's own `problem` and the existing A_PRECHECK gate
+    refuses on it without any gate being changed.
     """
     from itsf.guards import G9_FLAG, SECOND_COPY_FLAG, assert_real_run_allowed
     assert_real_run_allowed(G9_FLAG, SECOND_COPY_FLAG)
 
-    registry = _REPO_ROOT / REGISTRY_PATH
-    text = registry.read_text(encoding="utf-8") if registry.exists() else ""
-    chain = (resolver or _default_resolver)(text, supplement_id)
+    from . import registry_boundary as _rb
+    if resolver is None:
+        _snapshot, chain = _rb.resolve_for_supplement(supplement_id)
+    else:
+        # TEST SEAM. It swaps the RESOLVER only — never the read. An
+        # injected resolver still receives the boundary's single snapshot,
+        # so this function has exactly one read path whether or not a test
+        # is driving it. Giving the seam its own `read_text` would put a
+        # second read of a mutable file back into production code, which
+        # is the loophole C2 was rewritten to close.
+        snapshot = _rb.read_snapshot()
+        chain = resolver(snapshot.text, supplement_id)
 
     problem = getattr(chain, "problem", None)
     if problem:

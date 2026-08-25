@@ -21,17 +21,33 @@ second thing to keep in agreement. The VOCABULARY is not shared: nothing
 here consults `supplement_contract`, and `mc_contract` names its own sixteen
 events. Follow the shape; do not assume identity.
 
-AN OPEN CONTRADICTION, STATED HERE BECAUSE IT IS LOAD-BEARING. G8 puts these
-rows in `ops/TRIAL_REGISTRY.md`. The N05 supplement grammar refuses
+A CONTRADICTION THAT WAS OPEN, AND HOW IT CLOSED. G8 puts these rows in
+`ops/TRIAL_REGISTRY.md`. The N05 supplement grammar refused
 `MC_RUN_AUTHORIZED` and `MC_RUN_STARTED` BY NAME, totally
-(`ANY_CHAIN_DEFECT=REFUSE_WHOLE_RESOLUTION`). Both are ratified, and together
-they are not implementable: the day-strata supplement is an INPUT to the MC
-run, so the first real MC run would break the mechanism proving its own
-input was authorized. Measured, not inferred — see
-`test_a_ratified_mc_row_breaks_supplement_resolution`. Reconciling two
-ratified artifacts is a decision, not an implementation detail; it is
-recorded in `ops/DECISION_MC_REGISTRY_COLLISION.md` and nothing here
-resolves it unilaterally.
+(`ANY_CHAIN_DEFECT=REFUSE_WHOLE_RESOLUTION`). Both were ratified, and
+together they were not implementable: the day-strata supplement is an INPUT
+to the MC run, so the first real MC run would have broken the mechanism
+proving its own input was authorized.
+
+Resolved 2026-08-25 as `MC-REG-COLLISION-001` — Fable proposed R2, a fresh
+Sol ratified it with modifications, Aaron adjudicated. `DELEGATED=YES`.
+§D.3.4's deferral carried its own discharge condition ("before the N-D3
+ruling") and its own reason (incomplete lifecycle definitions); N-D3
+supplied the definitions, so the guard was discharged on its own terms
+rather than weakened. Exactly two names moved; the ratified five-name
+transcription stays verifiable behind an explicit exclusion.
+
+What replaced the by-name refusal is STRICTER, and it is not in this module:
+`registry_boundary` reads the registry once and runs both lifecycles against
+that single immutable snapshot, so a broken MC record makes the file
+unusable for the supplement lifecycle too. Sol's own modification — Fable's
+version would have let each reader take its own read of a mutable file, and
+four such reads existed. Nothing may read that path or call either resolver
+outside the boundary; the exceptions are unconditional-refusal stubs, proved
+to refuse by calling them.
+
+Records: `ops/DECISION_MC_REGISTRY_COLLISION.md`,
+`ops/RULING_MC_REG_COLLISION_SOL_RATIFICATION_2026-08-25.md`.
 
 DEFAULT REFUSE, EVERYWHERE. A missing chain is not a permissive default; a
 malformed element refuses the whole resolution rather than the one row; and

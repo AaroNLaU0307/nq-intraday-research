@@ -725,8 +725,8 @@ L6_RUNTIME=OPERATIONAL；本仓已注册为 ITSF-S0，qros-state.yaml 在仓根
 4. **强制转换登记表** —— `tests/test_mc_supplement_coercion_census.py` 以 AST
    登记每一处摘要／身份派生里的 `str()`/`int()`，每条 KNOWN 条目写明其防御是
    **顺序性的而非构造性的**。
-5. **测试地板** 3980 → **4167**（实测，非算术推得：本弧四次全量跑分别为
-   4157 / 4164 / 4166 / 4167，每次都以实测数为准）。
+5. **测试地板** 3980 → **4188**（实测，非算术推得：本弧五次全量跑分别为
+   4157 / 4164 / 4166 / 4167 / 4188，每次都以实测数为准）。
 
 ### 15.2 Sol 两份委托裁定已落地并已实现（`DELEGATED=YES`）
 
@@ -828,7 +828,7 @@ N-D1=RATIFIED   N03/N04/N05=IMPLEMENTED
 N06=ACCEPTED_WITH_DISCLOSED_RESIDUAL（委托裁定，DELEGATED=YES）
 N-D2/N-D3=RATIFIED（32 项；G1、G8 附修改）
 N07=DONE   N09_MITIGATION=DONE   N12=DONE
-全套件 **4167 passed / 0 failed**（393 s，终态树，主代理实测）
+全套件 **4188 passed / 0 failed**（386 s，终态树，主代理实测；C2 实现后）
 N08=**DROPPED**（Aaron 本人 2026-08-25，OD-2026-08-25-2）
 N00=KEEP_UNRESOLVED —— 阻断面已澄清：**不**阻断 N09→N17，只阻断
     N18-C／N18-I 的 candidate-specific build（OD-2026-08-25-3）
@@ -933,5 +933,30 @@ C5  解除动作不得搭载 registry 追加／exposure 移动／授权／已批
 独立席位复核过**。builder 意见：不必现在再开一轮，C2 约束的那次改动落地时会走
 N14；但此限制不得在日后被读成「C2 已经过独立复核」。
 
-**本轮未实现任何东西。** Fable 的 COLLATERAL 写明修订「only after Sol
-ratification **+ Aaron**」——Sol 已批，Aaron 未裁。
+**Aaron 已于同日裁决「开始」，实现随即落地**——见 §15.13。
+
+### 15.13 C2 实现落地（同一次改动，如 C2 所要求）
+
+```
+src/itsf/mc/registry_boundary.py   新建：单一校验边界
+supplement_runner                  经边界取链；REGISTRY_PATH 改为再导出，
+                                   路径字面量只存在于边界一处
+supplement_contract                C3 的显式排除项；五名转录逐字不变
+supplement_registry                两处判定改用 ND3_STILL_REFUSED_BY_NAME
+mc_registry                        docstring 的「OPEN CONTRADICTION」段改写为收口
+tests/test_registry_boundary.py    C2 点名的两条测试，均经变异验证
+```
+
+**边界的核心性质**：读一次；两套语法跑同一份不可变快照；任一拒绝即整体不可用。
+MC 拒绝会**作为 supplement 链自身的 `problem`** 传出，于是既有的 A_PRECHECK 门
+`registry_chain_resolvable` 不改一行就执行了跨生命周期耦合。
+
+**改动后对真实 registry 实测**：把一条**完整合法**的 MC 链追加进
+`ops/TRIAL_REGISTRY.md`，边界可用、supplement 无拒绝、MC-R001 7 事件 1 条存活
+授权。改动前同样的追加会拒掉整份文件。
+
+**一条会翻转的守卫**：C2 还要求 A_PRECHECK 门走边界，而今天生产里根本没有构造
+`GateContext` 的地方，故该义务**空真**。
+`test_the_gate_obligation_is_vacuous_today_and_must_invert_when_it_is_not`
+钉住这一点——执行路径建起来那天它会失败，**正确反应是把断言换成实义的那条**
+（`registry_text` 与 `chain` 须来自同一次边界调用），不是删掉它。

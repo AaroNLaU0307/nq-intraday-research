@@ -587,8 +587,15 @@ _T1_MARKER_FIELDS = ("successor_supplement_id", "predecessor_supplement_id",
 
 
 def is_supplement_row(row: RegistryRow) -> bool:
+    """Which rows this grammar OWNS.
+
+    `ND3_STILL_REFUSED_BY_NAME`, not `ND3_DEFERRED_TOKENS`: the two
+    discharged MC tokens are now owned and validated by `mc_registry`, so
+    they are skipped here as another lifecycle's rows — exactly as
+    `MC_BRANCH_SEALED` always was. See the exclusion in
+    `supplement_contract` (MC-REG-COLLISION-001 C3, DELEGATED=YES)."""
     return (row.event.startswith("SUPPLEMENT_")
-            or row.event in sc.ND3_DEFERRED_TOKENS)
+            or row.event in sc.ND3_STILL_REFUSED_BY_NAME)
 
 
 def parse_supplement_events(text: str) -> tuple:
@@ -619,11 +626,14 @@ def _classify_and_validate(row: RegistryRow):
 
     token = row.event
     # --- token ------------------------------------------------------
-    if token in sc.ND3_DEFERRED_TOKENS:
+    if token in sc.ND3_STILL_REFUSED_BY_NAME:
         return no("token_deferred_to_nd3",
                   f"{token} is deferred to N-D3 (§D.3.4) and is NOT "
                   "implemented by the N-D1 grammar; it is refused BY NAME "
-                  "rather than ignored")
+                  "rather than ignored. Two of §D.3.4's five names are no "
+                  f"longer refused here — {list(sc.ND3_DEFERRAL_DISCHARGED)} "
+                  f"were discharged by {sc.ND3_DEFERRAL_DISCHARGED_BY} and "
+                  "belong to mc_registry; this token is not one of them")
     if token not in sc.EVENT_TOKENS:
         return no("unknown_event_token",
                   f"{token!r} is not a ratified supplement event token; "

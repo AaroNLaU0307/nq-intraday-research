@@ -986,14 +986,64 @@ def test_archive_codes_come_from_the_contract():
 # 12 / 13 — deferred and unknown tokens
 # ===========================================================================
 
-@pytest.mark.parametrize("token", sc.ND3_DEFERRED_TOKENS)
+@pytest.mark.parametrize("token", sc.ND3_STILL_REFUSED_BY_NAME)
 def test_nd3_deferred_tokens_refused_by_name(token):
+    """Three of §D.3.4's five, not all five.
+
+    `MC-REG-COLLISION-001` C3 discharged two of them — see the companion
+    test below. The parametrization moved to `ND3_STILL_REFUSED_BY_NAME`
+    rather than to a hand-written list of three, so it can never disagree
+    with the exclusion it is derived from."""
     reg = Reg().chain(("P1", "P2", "P3", "P4", "P5"))
     reg.raw(f"| 4 | {UTC} | **{token}** | {C1} | main agent "
             f"| [{SID}] schema: x |")
     refusal = refuse(reg.text(), "token_deferred_to_nd3")
     assert token in refusal.detail
     assert "N-D3" in refusal.detail
+
+
+@pytest.mark.parametrize("token", sc.ND3_DEFERRAL_DISCHARGED)
+def test_the_two_discharged_tokens_are_skipped_as_another_lifecycles_rows(
+        token):
+    """The discharge, at the only place it is observable.
+
+    §D.3.4 deferred these two under a stated condition — "before the N-D3
+    ruling" — for a stated reason: their lifecycle definitions were
+    incomplete. N-D3 (G1-G8) supplied those definitions, so the guard's own
+    condition has fired. They are now `mc_registry`'s rows and this grammar
+    skips them the way it has always skipped `MC_BRANCH_SEALED`.
+
+    Skipping is not permissiveness: nothing may act on this file except
+    through `registry_boundary`, which runs MC resolution over the SAME
+    snapshot and refuses everything if the MC record is broken. That
+    coupling is pinned in `tests/test_registry_boundary.py`."""
+    reg = Reg().chain(("P1", "P2", "P3", "P4", "P5"))
+    reg.raw(f"| 4 | {UTC} | **{token}** | {C1} | Aaron "
+            f"| [MC-R001] run_id: MC-R001 |")
+    chains, refusal = sr.resolve_supplement_chains(reg.text())
+    assert refusal is None, f"{token} should no longer be refused here"
+    assert chains, "the supplement chain must still resolve"
+
+
+def test_the_ratified_five_name_transcription_is_still_verifiable():
+    """C3: the discharge is an EXCLUSION citing the ruling, never a silent
+    deletion of names from a ratified list. Someone checking this file
+    against §D.3.4 must still find all five."""
+    assert len(sc.ND3_DEFERRED_TOKENS) == 5
+    assert set(sc.ND3_DEFERRAL_DISCHARGED) < set(sc.ND3_DEFERRED_TOKENS)
+    assert set(sc.ND3_STILL_REFUSED_BY_NAME) == (
+        set(sc.ND3_DEFERRED_TOKENS) - set(sc.ND3_DEFERRAL_DISCHARGED))
+    assert "MC-REG-COLLISION-001" in sc.ND3_DEFERRAL_DISCHARGED_BY
+    assert "DELEGATED=YES" in sc.ND3_DEFERRAL_DISCHARGED_BY
+
+
+def test_the_grid_replay_deferral_was_not_discharged():
+    """Its condition never fired. N-D3 ruled the MC event family; it ruled
+    nothing about the GRID-replay coupling, which is the reason §D.3.4
+    gave for deferring this one."""
+    assert "SUPPLEMENT_CONSUMED_BY_GRID_REPLAY" in sc.ND3_STILL_REFUSED_BY_NAME
+    assert "SUPPLEMENT_CONSUMED_BY_GRID_REPLAY" \
+        not in sc.ND3_DEFERRAL_DISCHARGED
 
 
 def test_p6_grid_replay_consumption_is_deferred():
