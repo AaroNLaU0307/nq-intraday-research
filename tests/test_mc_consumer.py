@@ -623,3 +623,65 @@ def test_full_chain_ends_at_the_honest_refusals():
     with pytest.raises(mcc.MCInputError,
                        match="feasibility_gate_input_absent"):
         mcc.epistemic_go_gate_input(res, _epi(prepared, scenario="Stress"))
+
+
+# ===========================================================================
+# WHICH theta channels — Fable V2 Medium, closed 2026-08-26
+# ===========================================================================
+
+def _sealed_with_channels(mutate):
+    """A LEGITIMATELY sealed bundle whose channel key set differs.
+
+    The in-bundle manifest is refreshed, so this is NOT a tamper: custody
+    has nothing to object to and `bundle_hash_mismatch` never fires. That
+    distinction is the whole point — the first attempt at this measurement
+    mutated the report WITHOUT refreshing the manifest, was caught by the
+    custody digest, and proved nothing about the channel key set."""
+    b = dict(_bundle())
+    rep = json.loads(b["S0_REPORT.json"].decode("utf-8"))
+    before = set(rep["oracle_daily"])
+    mutate(rep["oracle_daily"])
+    assert set(rep["oracle_daily"]) != before, "the mutation changed nothing"
+    b["S0_REPORT.json"] = json.dumps(rep).encode("utf-8")
+    _refresh_manifest(b)
+    return b
+
+
+def test_a_sealed_bundle_without_the_primary_theta_channel_is_refused():
+    """The prepare battery took whatever key set the bundle carried.
+
+    Measured before the fix: a sealed bundle with the primary renamed, or
+    absent entirely, passed the entire ten-check battery and produced
+    `traded_day_sets` keyed by whatever was there. The primary is frozen
+    (S0 §7 L133) and `epistemic_go_gate` accepts exactly it — but that is
+    the verdict layer, one real run too late."""
+    for mutate in (
+            lambda od: od.__setitem__("theta_0.9_unruled",
+                                      od.pop(mcc.PRIMARY_THETA_CHANNEL)),
+            lambda od: od.pop(mcc.PRIMARY_THETA_CHANNEL)):
+        with pytest.raises(mcc.MCInputError) as ei:
+            _prepare(bundle=_sealed_with_channels(mutate))
+        assert ei.value.args[0].startswith("primary_theta_channel_absent")
+
+
+def test_a_channel_outside_the_ruled_pair_is_refused():
+    """An unruled channel would enter day_sequences, traded_day_sets and
+    the prepared identity with nobody having ruled it."""
+    with pytest.raises(mcc.MCInputError) as ei:
+        _prepare(bundle=_sealed_with_channels(
+            lambda od: od.__setitem__(
+                "theta_0.9_unruled", od[mcc.SECONDARY_THETA_CHANNEL])))
+    assert ei.value.args[0].startswith("theta_channel_outside_ruled_set")
+
+
+def test_the_secondary_channel_is_not_required_because_nothing_rules_it():
+    """A DELIBERATE NON-REQUIREMENT, recorded so it is not read as an
+    oversight.
+
+    The frozen text names 主 0.5 副 0.3, but nothing the builder can point
+    to makes the secondary's PRESENCE mandatory. Requiring it would be
+    inventing a rule — the failure this codebase has already paid for
+    twice. A bundle carrying only the primary prepares."""
+    prepared = _prepare(bundle=_sealed_with_channels(
+        lambda od: od.pop(mcc.SECONDARY_THETA_CHANNEL)))
+    assert set(prepared.traded_day_sets) == {mcc.PRIMARY_THETA_CHANNEL}

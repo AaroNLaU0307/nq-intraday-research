@@ -1129,3 +1129,52 @@ def test_the_consumer_still_names_no_world_of_its_own(prepared):
     with pytest.raises(mcc.MCInputError) as exc:
         mcc.run_conditional_aleatoric({"not": "a set"}, world_index=0)
     assert exc.value.code == "aleatoric_source_invalid"
+
+
+# ===========================================================================
+# The E2 aggregation's two refusal codes — Fable V2 Medium, closed 2026-08-26
+# ===========================================================================
+
+def _e2_rows(*values):
+    """Minimal cold-trace rows carrying only the summed field."""
+    return [{"e2_over_budget_days": v} for v in values]
+
+
+def test_mixing_two_absence_reasons_in_one_sum_is_refused():
+    """`cold_trace_absent_mixed` had NO test. It is the code that stops a
+    set of atoms disagreeing about WHY a quantity is absent from
+    collapsing into one confident-looking answer — 'not applicable' and
+    'pending ruling' are different claims and their union is neither."""
+    from itsf.mc import atoms as A
+    from itsf.mc import cold_reducer as cr
+
+    rows = _e2_rows(A.NOT_APPLICABLE.token, A.PENDING_RULING.token)
+    with pytest.raises(cr.ColdReducerError) as exc:
+        cr._absent_aware_sum(rows, "e2_over_budget_days")
+    assert exc.value.code == "cold_trace_absent_mixed"
+    assert "e2_over_budget_days" in str(exc.value)
+
+
+def test_an_unknown_absence_token_in_a_sum_is_refused():
+    """`cold_trace_absent_token` had NO test either. A string that is not
+    a ratified absence token is not a weaker absence; it is not one."""
+    from itsf.mc import cold_reducer as cr
+
+    with pytest.raises(cr.ColdReducerError) as exc:
+        cr._absent_aware_sum(_e2_rows(3, "absent_because_i_said_so"),
+                             "e2_over_budget_days")
+    assert exc.value.code == "cold_trace_absent_token"
+
+
+def test_one_absence_among_real_counts_makes_the_whole_sum_absent():
+    """The positive statement of the same rule, measured rather than
+    assumed: a partial sum would read downstream as a complete count."""
+    from itsf.mc import atoms as A
+    from itsf.mc import cold_reducer as cr
+
+    assert cr._absent_aware_sum(_e2_rows(1, 2, 3),
+                                "e2_over_budget_days") == 6
+    out = cr._absent_aware_sum(_e2_rows(1, 2, A.NOT_APPLICABLE.token),
+                               "e2_over_budget_days")
+    assert out == A.NOT_APPLICABLE.token, out
+    assert out != 3 and out != 0

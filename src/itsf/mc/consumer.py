@@ -1167,6 +1167,43 @@ def _prepare_mc_input_impl(bundle: Mapping[str, bytes], *,
     theta_population: dict = {}
     if not isinstance(oracle, dict) or not oracle:
         raise MCInputError("day_universe_missing", "oracle_daily absent")
+    # (C6b, added 2026-08-26) WHICH channels, not just what is in them.
+    #
+    # The loop below took whatever key set the bundle happened to carry.
+    # Measured on a LEGITIMATELY sealed bundle — manifest refreshed, custody
+    # clean, so `bundle_hash_mismatch` has nothing to say — all three of
+    # these passed the whole ten-check battery: the frozen primary renamed
+    # to an unruled channel, the primary absent entirely, and an extra
+    # unruled channel added. `traded_day_sets` then came out keyed by
+    # whatever was there.
+    #
+    # The primary is frozen (S0 §7 L133: 主 0.5 副 0.3, no post-hoc
+    # promotion) and `epistemic_go_gate` accepts exactly it — but that is
+    # the VERDICT layer, thousands of lines and one real run too late. A
+    # bundle with no primary prepared cleanly and failed only there.
+    #
+    # The secondary is NOT required here: the frozen text names it, but
+    # nothing the builder can point to makes its presence mandatory, and
+    # inventing a requirement is the failure this codebase keeps paying
+    # for. Required: the primary present. Forbidden: anything outside the
+    # ruled pair.
+    channels = set(oracle)
+    if PRIMARY_THETA_CHANNEL not in channels:
+        raise MCInputError(
+            "primary_theta_channel_absent",
+            f"oracle_daily carries {sorted(channels)} and not "
+            f"{PRIMARY_THETA_CHANNEL!r}; the primary is frozen and the "
+            "verdict gate accepts no other, so a bundle without it can "
+            "never reach a verdict")
+    unruled = sorted(channels - {PRIMARY_THETA_CHANNEL,
+                                 SECONDARY_THETA_CHANNEL})
+    if unruled:
+        raise MCInputError(
+            "theta_channel_outside_ruled_set",
+            f"{unruled} is outside the ruled pair "
+            f"{[PRIMARY_THETA_CHANNEL, SECONDARY_THETA_CHANNEL]}; an "
+            "unruled channel would enter day_sequences, traded_day_sets "
+            "and the prepared identity without anyone having ruled it")
     for theta, node in oracle.items():
         du = node.get("day_universe", {})
         tp = list(du.get("tp_days", ()))

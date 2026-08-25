@@ -943,3 +943,66 @@ def test_invalid_epistemic_samples_refused(arm, monkeypatch):
         with pytest.raises(mcc.MCInputError) as ei:
             A.reduce_feasibility_counts(())
         assert ei.value.code == "feasibility_observations_incomplete"
+
+
+# ===========================================================================
+# The outer K has no inner witness — Fable V2 Medium, dispositioned 2026-08-26
+# ===========================================================================
+
+def test_run_evidence_binds_b_m_and_seed_to_every_inner_result():
+    """What IS bound, so the next test's absence is legible as a gap."""
+    import inspect
+
+    # The binding lives in `validate_inner_binding`, NOT `__post_init__`
+    # (which only deep-freezes the results mapping). The first draft of
+    # this test read __post_init__, found none of the three, and failed —
+    # a reminder to check what a lookup returns before asserting on it.
+    src = inspect.getsource(mcc.RunEvidence.validate_inner_binding)
+    for field in ("B", "M", "master_seed"):
+        assert f"self.{field}" in src, (
+            f"{field} is no longer cross-checked against inner results")
+
+
+def test_the_outer_k_has_no_inner_witness_and_that_is_deliberate():
+    """A GUARD THAT MUST INVERT, not one that must keep passing.
+
+    `RunEvidence.__post_init__` binds outer B, M and master_seed to every
+    inner `EpistemicResult`. It does NOT bind K — and it cannot: K appears
+    nowhere in the atom layer. Not on `EpistemicResult`, not on
+    `ObservationSet`, not on `SimulationPathObservation`. The epistemic
+    layer is B worlds x M start phases and does not consume K at all, so
+    the outer K is a caller-declared integer with nothing to check it
+    against.
+
+    That is exactly the impersonation N-D2 forbids — a K-non-consuming
+    category called twice, wearing outer metadata that says `double_K`.
+    It is unreachable TODAY because the consuming layer refuses the K axis
+    outright (`k_axis_evidence_blocked_grid_replay`, pinned elsewhere in
+    this file), and the source says so in as many words: "outer metadata
+    may not impersonate it".
+
+    WHEN THE K AXIS UNBLOCKS — GRID-B supplement sealed and
+    `KReplayEvidence` wired (N11) — this test will fail, and the correct
+    response is NOT to delete it. It is to bind the outer K to whatever
+    inner witness then exists, exactly as B, M and master_seed are bound.
+    Without that, a real K-doubled run and a relabelled base run stay
+    indistinguishable.
+    """
+    import inspect
+
+    from itsf.mc.atoms import ObservationSet, SimulationPathObservation
+
+    witnesses = []
+    for T in (mcc.EpistemicResult, ObservationSet, SimulationPathObservation):
+        witnesses += [n for n in T.__dataclass_fields__
+                      if n == "K" or n.lower().startswith("k_")]
+    assert not witnesses, (
+        f"an inner K witness now exists ({witnesses}) — bind the outer "
+        "RunEvidence.K to it in __post_init__, the way B, M and "
+        "master_seed are bound, and then update this test rather than "
+        "deleting it")
+
+    src = inspect.getsource(mcc.RunEvidence.validate_inner_binding)
+    assert "self.K" not in src, (
+        "K is now cross-checked but no inner witness was found — one of "
+        "these two facts is stale")
