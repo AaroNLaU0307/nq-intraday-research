@@ -42,7 +42,7 @@ DECISION_ID  dec-eight-open-2026-08-26        DELEGATED=YES
 | **7** | `ops/REGISTRY_SYNC_FAILURE_MODEL.md`（边界 3+4）＋ `src/itsf/s0/registry_witness.py`（边界 1+2，13 测试、6 变异全红） | 见证根的目录创建授权；之后才接入生产门 |
 | 2 | 未开始 | 迁移＋carve-out 授权 |
 | 3 | 未开始 | 开维护窗 |
-| 6 | 未开始 | ND1 profile R3 三步流程 |
+| **6＋8** | `ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md` —— 提案已写完，可直接路由给 fresh Sol | 你把它发给 Sol；Sol 过后你 ratify |
 
 **第 7 项的代码刻意未接入任何门**：`witness_path` 是必填参数、无默认值，模块
 永不建目录（变异证红）。接入会改变运行期行为，而运行期行为依赖那个尚未授权的
