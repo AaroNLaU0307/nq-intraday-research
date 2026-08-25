@@ -352,13 +352,23 @@ def test_no_review_prompt_carries_a_hash_the_register_disagrees_with():
     caught it. A hand-run cross-check is not a control.
     """
     repo = REGISTER.parent.parent
-    expected = {e["path"]: e["sha256"].lower() for e in _entries()}
+    entries = _entries()
+    expected = {e["path"]: e["sha256"].lower() for e in entries}
     if not expected:
         return                      # nothing under review, nothing to check
+    live_ids = {e["review_id"] for e in entries}
 
     drift = []
     for prompt in sorted(REGISTER.parent.glob("*PROMPT*.md")):
         text = prompt.read_text(encoding="utf-8")
+        # Liveness is keyed on review_id, as it is in the two guards below.
+        # This one used to key on PATH, which flagged a CLOSED review's
+        # prompt for carrying the hashes it had when it was written — the
+        # paths were later re-registered under a DIFFERENT review. A prompt
+        # that names no live review is not a live prompt, and three guards
+        # over the same register must not disagree about what "live" means.
+        if not any(rid in text for rid in live_ids):
+            continue
         for digest, size, path in _PROMPT_ROW_RE.findall(text):
             if path not in expected:
                 continue
