@@ -1,0 +1,83 @@
+# 下一份要交出去的东西 —— 固定入口
+
+> **这个文件名永远不变。** 我说「贴这个给 Sol／Fable」时，指的就是它。
+> 你不必再去 `ops/` 里认哪个是最新的 prompt。
+
+```
+UPDATED = 2026-08-26
+```
+
+---
+
+## 现在挂着的交付
+
+### ① 交 Fable —— 四项待裁决策包
+
+```
+文件   ops/DECISION_PACKET_FOUR_OPEN_2026-08-26.md
+状态   Aaron 已发出，运行中（2026-08-26）
+形式   整份贴给一个新的 Fable 会话
+```
+
+四项：exposure 台账是否补指针行 / 恢复锚拆不拆 / P3 与失败事件由谁追加 /
+qros-runtime 的 `_SAVE_DIR` 改不改。**其中两项裁了也不等于 builder 能执行**，
+原因写在包里。
+
+### ② 交 fresh Sol —— R2 设计审
+
+```
+状态   已返回 VERDICT=HOLD（2026-08-26）
+记录   见下方「已完成」
+```
+
+**R3 未出**：Sol 的 High #2 认定执行路径的可建范围取决于上面 ① 的裁定结果，
+所以 R3 等 Fable 返回后再写。现在能建的只有一个永远拒绝的骨架。
+
+---
+
+## 禁区 —— 任何复审席位交付时必须随附本节
+
+**这一节是本文件存在的第二个理由。** Review Packet 由 `qros packet` 机械生成，
+**没有承载禁区清单的字段**；2026-08-26 就因为清单只写在提示词里、而交付的是
+packet，烧掉了第二个复审席位。本文件是那份清单的常驻载体。
+
+**交给任何复审席位时，把本节一起给他。**
+
+权威清单：`ops/OUTCOME_CARRYING_ARTIFACTS.json` 的 `carries_outcome`。
+**读那个 json，把里面每一条路径当作关闭。** 尤其点名：
+
+```
+ops/MC_TO_STRATEGY_MASTER_PLAN.md
+```
+
+它**既是 outcome-carrying，又是本项目的恢复锚**（§1「恢复序」是任何会话定位
+状态的标准第一站）。按常规做一次状态定位就会踩中。
+
+**而且「别打开它」还不够。** 第二次暴露的席位**没有打开它**——一次广域符号搜索
+把片段带了出来。所以：**不要在本仓做广域检索**。需要什么路径就列出来，由工作
+会话提供逐字节内容（Review Packet 的 `PULL_PROTOCOL` 正是这个约定）。
+
+---
+
+## 已完成（保留最近三次，便于回溯）
+
+| 何时 | 交给谁 | 什么 | 结果 |
+|---|---|---|---|
+| 2026-08-26 | fresh Sol | R2 设计审（Review Packet v1，`rv-3651f9fe0b68-da56aecb6991`） | **HOLD** —— 三条 High 全部经 builder 独立复核成立；记录 `ops/A2_N09_SOL_EXPOSURE_AND_REDESIGN_2026-08-25.md` 与 `ops/REVIEWER_EXPOSURE_LOG.md` 第 2 行 |
+| 2026-08-25 | fresh Sol | MC-REG-COLLISION-001 批准 | **RATIFIED_AS_MODIFIED**（C2 被整条替换）→ 已实现，记录 `ops/RULING_MC_REG_COLLISION_SOL_RATIFICATION_2026-08-25.md` |
+| 2026-08-25 | Fable | MC-REG-COLLISION-001 提案 | R2 提案 → 记录 `ops/RULING_PROPOSAL_MC_REG_COLLISION_FABLE_2026-08-25.md` |
+
+---
+
+## 交付前 builder 必须做的（清单，不是提醒）
+
+1. 把送审工件**先 commit**，再 `derive_pin()` 派生钉子——钉子不手打。
+2. 登记进 `ops/ARTIFACTS_UNDER_REVIEW.json`（含 `unchanged_since`）。
+3. **提交之后**再跑一次
+   `tests/test_artifacts_under_review_are_frozen.py`——不是提交之前。
+4. 把上面「禁区」一节随交付一起给出。
+5. 复审返回后清空登记表。
+
+前三条各自对应今天一次真实的失败，逐条写在
+`ops/INCIDENT_TRANSPORT_HEAD_PIN_20260825.md` 与
+`ops/INCIDENT_TRANSPORT_PIN_DERIVATION_20260825.md`。
