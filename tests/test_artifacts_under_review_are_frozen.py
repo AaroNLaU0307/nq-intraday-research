@@ -339,11 +339,16 @@ def test_every_packet_issuance_has_the_off_limits_carrier(tmp_path):
         "quarantine — which is how the second seat burned.")
 
     text = carrier.read_text(encoding="utf-8")
+    # D-2 condition 4: the carrier must give a PERMITTED starting point as
+    # well as the forbidden set. Telling a seat only what it may not read
+    # leaves it to find its own way in — which is how the first one went.
     required = {
         "the quarantine register":
             "OUTCOME_CARRYING_ARTIFACTS.json",
         "the blind-seat search ban (S1(b))":
             "BLIND_SEAT_MAY_NOT_SEARCH_THE_REPOSITORY",
+        "the permitted outcome-clean entry point":
+            "RECOVERY_ANCHOR.md",
     }
     missing = [why for why, token in required.items() if token not in text]
     for anchor in _quarantined_anchors():

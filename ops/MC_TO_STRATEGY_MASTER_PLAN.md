@@ -725,9 +725,9 @@ L6_RUNTIME=OPERATIONAL；本仓已注册为 ITSF-S0，qros-state.yaml 在仓根
 4. **强制转换登记表** —— `tests/test_mc_supplement_coercion_census.py` 以 AST
    登记每一处摘要／身份派生里的 `str()`/`int()`，每条 KNOWN 条目写明其防御是
    **顺序性的而非构造性的**。
-5. **测试地板** 3980 → **4210**（实测，非算术推得：本弧九次全量跑分别为
-   4157 / 4164 / 4166 / 4167 / 4188 / 4193 / 4201 / 4205 / 4210，每次都以实测数
-   为准）。
+5. **测试地板** 3980 → **4216**（实测，非算术推得：本弧十次全量跑分别为
+   4157 / 4164 / 4166 / 4167 / 4188 / 4193 / 4201 / 4205 / 4210 / 4216，每次都以
+   实测数为准）。
 
 ### 15.2 Sol 两份委托裁定已落地并已实现（`DELEGATED=YES`）
 
@@ -961,3 +961,28 @@ MC 拒绝会**作为 supplement 链自身的 `problem`** 传出，于是既有�
 `test_the_gate_obligation_is_vacuous_today_and_must_invert_when_it_is_not`
 钉住这一点——执行路径建起来那天它会失败，**正确反应是把断言换成实义的那条**
 （`registry_text` 与 `chain` 须来自同一次边界调用），不是删掉它。
+
+---
+
+## 16. 恢复入口已迁出本文件（D-2，2026-08-26）—— **仅 append，上文一字未改**
+
+```
+NEW_ENTRY_POINT = ops/RECOVERY_ANCHOR.md   （outcome-clean，永不隔离）
+THIS_FILE       = 仍是 DAG 与节点台账的权威，但**是隔离件**
+RULED_BY        = D-2（Fable 2026-08-26，DELEGATED=YES），选项 C：拆锚 ＋ 保留围栏
+```
+
+**§1「恢复序」自本条起被取代，但其字节一字未删未改**——本项目的锚文件是
+append-only，改写它会违反它自己的纪律。
+
+**为什么迁出。** 本文件在 `ops/OUTCOME_CARRYING_ARTIFACTS.json` 的
+`carries_outcome` 名单上，而 §1 又是任何会话定位状态的标准第一站。**于是「按
+文档做一次正常的状态定位」这件事本身，会把每一个 outcome-blind 席位领进一份
+它不得阅读的文件。** 已经兑现三次，其中两次席位**根本没有打开本文件**——一次是
+广域符号搜索带出片段，一次是单模式定向 grep。
+
+**此后**：会话从 `ops/RECOVERY_ANCHOR.md` 开始。需要本文件里的事实时，
+outcome-blind 席位**列出所需路径、由工作会话经 `PULL_PROTOCOL` 提供字节**，
+不得自行打开，也不得在本仓检索。
+
+本横幅不含任何还原类内容（守卫：`tests/test_recovery_anchor_is_clean.py`）。
