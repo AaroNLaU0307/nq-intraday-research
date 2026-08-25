@@ -4,54 +4,41 @@
 > 你不必再去 `ops/` 里认哪个是最新的 prompt。
 
 ```
-UPDATED = 2026-08-26（八项待裁已挂出，交 Fable 决裁席）
+UPDATED = 2026-08-26（八项已裁并经 Aaron 采纳；**当前没有挂着的交付**）
 ```
 
 ---
 
 ## 现在挂着的交付
 
-### ① 交 Fable 决裁席 —— **八项待裁**（Aaron 明示委托）
+### ①（已完成）八项待裁 —— Fable 已裁，Aaron 已采纳
 
 ```
-提示   ops/PROMPT_EIGHT_OPEN_FABLE.md        ← 整份贴给一个新的 Fable 会话
-DECISION_ID  dec-eight-open-2026-08-26       DELEGATED=YES
-状态   已就绪，未发出
+DECISION_ID  dec-eight-open-2026-08-26        DELEGATED=YES
+裁定全文     ops/RULING_FABLE_EIGHT_OPEN_2026-08-26.md
+             sha256 5116f7b03dabe6cc4a8a2357b02b4b30e3a9227d050e41d9c1f0943262ed7dd3
+采纳记录     ops/OWNER_DECISIONS_2026-08-26.md（逐项结算表在 OD-2026-08-26-3）
+登记表       已清空（十路径解冻）
 ```
 
-Aaron 2026-08-26：「fable将会替我做选择，把这八项都交给fable」。**前三项**＝
-D-1 条件 3（全局 L6 规则限缩）／D-2 的 S1(a)＋注册表 carve-out／D-4 运行时
-`_SAVE_DIR`；**后五项**＝D-3 被 Sol 判 HOLD 后留下的五个未决。
+**第 4、5 项已完成**（所欠仅决策记录，且本就零改动）。**其余六项的实质选择已定，
+但执行仍欠 Aaron 的具体动作** —— 逐项见 OD-2026-08-26-3 的「还欠」栏。
+**八项不解锁 D-3**：其 HOLD 条件 3 继续在 force。
 
-**裁定 ≠ 执行解锁。** 提示词要求每一项分别回答 `RULING` 与
-`EXECUTION_UNLOCKED_BY_THIS_RULING`——第 1 项动全局文件、第 3 项动已认证的
-qros-runtime 仓，两者的**写入**都超出 builder 常权。
+### ② 等 Aaron —— 六个具体动作
 
-**已知残留（已写进提示词 §4）**：第 4–8 项是 Fable 在裁**自己上一轮的提案**。
-新会话满足会话独立性，但同族护短风险真实存在，故明写「推翻是被允许且被期待的」，
-并要求它在无法独立判断时填 `SEAT_INDEPENDENCE_CONCERN` 而不是硬裁。
+1. **全局 `~/.claude/CLAUDE.md` L6 exposure 句的修订授权**（第 1 项）
+2. **carve-out 行使 ＋ 迁移执行授权**，并确认 08-25 hold 不覆盖本项（第 2 项）
+3. **开启 qros-runtime 维护窗**（第 3 项）
+4. **ND1 profile R3 修订的 ratify**，走提案→fresh Sol→Aaron 三步（第 6 项）
+5. **见证目录的单独目录创建授权**，若落在 `C:\Users\Aaron\quant-data\` 下（第 7 项）
+6. **席位台账分类**：第 3 行终分类、第 4 行 `NOT_EXPOSED` 值的存废、第 5 行终分类
 
-**送审集已冻结**（十条，钉子 `ce378c857f135e82287dfbade1da5aa910e1b39b`，
-`derive_pin()` 派生）：Fable 返回前**不要动**
-`ops/D124_RULINGS_CLEAN_EXTRACT.md`、`ops/RULING_SOL_D3_HOLD_2026-08-26.md`、
-`ops/D3_REGISTRY_WRITER_PROPOSAL.md`、`ops/RUNTIME_DEVIATION_PACKET_SAVE_DIR.md`、
-`ops/REVIEWER_EXPOSURE_LOG.md`、`src/itsf/mc/supplement_contract.py`、
-`src/itsf/mc/supplement_runner.py`、`src/itsf/mc/registry_boundary.py`、
-`src/itsf/s0/runner.py`、`scripts/s0_real_run.py`。
+**builder 侧已就绪、等你一句话就能做的**：第 7 项边界 (2)(3)(4)——冲突副本点名
+检测、提交纪律、故障模型文档。边界 (1)（反回退见证）**卡在第 5 条授权上**，
+而四条边界是一个包，所以我没有单发 (2) 制造虚假覆盖感。
 
-### ②（已完成）D-3 复核 —— fresh Sol 返回 **HOLD**
-
-```
-REVIEW_ID  rv-f4207865a116-c004854e6828   GATE=TIER1_DISCRETIONARY
-VERDICT    HOLD          SEAT_STATUS=BLIND（席位未烧，第一个活下来的）
-记录       ops/RULING_SOL_D3_HOLD_2026-08-26.md
-           sha256 5f533347622156932fce5c35f11ffa2b089771eba0f2dd6157b7bb2f801a00ff
-```
-
-四条 High ＋ 一条 Medium，builder 已逐条复现（无一采信）。**HOLD 不释放也不阻塞
-任何门**（§3.1），`A2→B` 与 `I→J` 状态未变。其五项未决已并入上面 ① 的第 4–8 项。
-
-### ③ 等八项落定### ③ 等 D-3 落定### ③ 等 D-3 落定 —— N09 的 R3 设计
+### ③ 等八项落定### ③ 等八项落定### ③ 等 D-3 落定### ③ 等 D-3 落定 —— N09 的 R3 设计
 
 Sol 对 R2 的 High #2 认定：执行路径的可建范围取决于 D-3 怎么裁。**所以 R3 在 ①
 返回之前写不了**，现在能建的只有一个永远拒绝的骨架。
@@ -172,6 +159,13 @@ ops/MC_TO_STRATEGY_MASTER_PLAN.md
    `tests/test_artifacts_under_review_are_frozen.py`——不是提交之前。
 4. 把上面「禁区」一节随交付一起给出。
 5. 复审返回后清空登记表。
+6. **交付说明里的路径一律写绝对路径。** 2026-08-26 实测：决裁席的工作目录在
+   `Desktop`、不在仓内，而我给的是仓相对路径 `ops/PROMPT_...md`，它只能**先检索
+   才能找到那份写着「不许检索」的文件**——三次文件名操作发生在读到禁令之前
+   （席位台账第 5 行）。这次只命中文件名，纯属运气：`ops\PROMPT*` 那一次若有隔离件
+   恰好叫 `*PROMPT*`，返回的就是禁区路径。**一个必须先被找到才能读到禁令的文件，
+   本身就是缺陷。** 绝对路径形如
+   `C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework\ops\<名>`。
 
 前三条各自对应今天一次真实的失败，逐条写在
 `ops/INCIDENT_TRANSPORT_HEAD_PIN_20260825.md` 与
