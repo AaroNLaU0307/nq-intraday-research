@@ -39,6 +39,8 @@ classification 用不冲突的值），**归 Aaron**：那要动一份 append-on
 
 | 2 | 2026-08-26 | Codex GPT-5.6 Sol，fresh session（review `rv-3651f9fe0b68-da56aecb6991`，R2 设计审） | 被隔离的 outcome-carrying **恢复锚**（席位自陈：a broad symbol search surfaced snippets from a quarantined outcome-carrying recovery anchor） | 该锚的片段（**未刻意打开该文件**——是一次广域符号搜索带出来的） | `TARGET_METRIC`（**席位自评，builder 未下调**） | 该会话不得再承担 outcome-blind Stage I | builder 的禁区清单只存在于**提示词**里，而本次交付载体是 **Review Packet**——清单没有随之传递 |
 
+| 3 | 2026-08-26 | Fable 5，决裁席（四项待裁决策包 D-1..D-4） | 被隔离的累计 exposure 计数值（出现在**未登记**的决策包与席位台账中）；另一次定向 grep 触到隔离锚中一行治理边界文本 | 该计数值；一行治理边界文本（**不含还原内容**）。席位自陈：未见 verdict token、spread、cell count 或任何目标绩效数值 | **`PENDING_AARON`** —— 席位自陈「按现行类别定义不再自证完全 outcome-blind」，并把终分类留给 Aaron，因为它取决于「累计计数是否属该类别」的裁定 | 待终分类后确定 | builder 让该值扩散进 10 份未登记文件（含 3 份测试，在那里它被断言为不变量）——见 `ops/FINDINGS_FABLE_FOUR_OPEN_TRANSPORT_STOP.md` §2.2 |
+
 ### 第 1 行的补充说明
 
 - **分类沿用席位自评。** 按 §3.4B 的字面定义，「verdict token」属「预注册判定

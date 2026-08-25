@@ -59,6 +59,21 @@ ops/MC_TO_STRATEGY_MASTER_PLAN.md
 
 ---
 
+### 交付前必须逐条核对的一件（2026-08-26 加入）
+
+**本次交付点名的每一个路径，都不得出现在 `carries_outcome` 里。**
+
+`ops/DECISION_PACKET_FOUR_OPEN_2026-08-26.md` 就栽在这上面：它一边写着禁区
+清单，一边在呈交格式一节让复审者「形式沿用
+`ops/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md`」——**而那份文件在隔离名单
+上**。同一份文件里，禁止与指令自相矛盾。Fable 是先查注册表才没被烧，**那是它
+谨慎，不是我做对了**。
+
+机械做法：交付前把文件里出现的每个 `ops/...md` 路径与
+`OUTCOME_CARRYING_ARTIFACTS.json` 求交集，非空即停。
+
+---
+
 ## 已完成（保留最近三次，便于回溯）
 
 | 何时 | 交给谁 | 什么 | 结果 |
