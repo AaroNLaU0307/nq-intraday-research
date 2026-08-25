@@ -59,8 +59,6 @@ WITNESS_MALFORMED = "WITNESS_MALFORMED"
 #: An OneDrive conflict copy of the registry is present.
 CONFLICT_COPY = "REGISTRY_CONFLICT_COPY_PRESENT"
 
-_REGISTRY_STEM = "TRIAL_REGISTRY"
-
 
 def registry_facts(registry_text: str, event_rows) -> dict:
     """The three quantities a witness records, per the ruling.
@@ -172,25 +170,36 @@ def verify_against_witness(registry_text: str, event_rows,
     return OK, "registry is a superset of the last witness"
 
 
-def find_conflict_copies(ops_dir: Path) -> list[Path]:
-    """Boundary (2). Every `TRIAL_REGISTRY*` file that is not the registry.
+def find_conflict_copies(canonical_path: Path) -> list[Path]:
+    """Boundary (2). Every sibling that shares the canonical file's stem.
 
     Deliberately broader than any specific OneDrive naming scheme. The
     conflict-copy formats vary by client version and locale
     (`-DESKTOP-XXXX`, `(… conflicted copy …)`, `-PC`), and a pattern list
     tuned to the ones seen so far would silently miss the next one. Any
-    sibling that starts with the registry's stem is refused and a human
-    looks at it.
+    sibling that starts with the stem is refused and a human looks at it.
+
+    TAKES THE PATH, NAMES NO FILE. The caller passes the canonical file;
+    this module holds no registry filename of its own. That is not
+    cosmetic — `tests/test_registry_boundary.py` refuses any production
+    module that both names `TRIAL_REGISTRY` and does file I/O, because a
+    second reader of one mutable file is exactly the loophole C2 was
+    rewritten to close (MC-REG-COLLISION-001). The first version of this
+    module carried the stem as a constant and that guard caught it. The
+    guard is right and the module changed; parameterising the name is also
+    the better design, since nothing here is specific to one registry.
 
     This is a NAMED guard for something `git_clean` already catches as an
     untracked file. Naming it is the point: a gate that says
     "REGISTRY_CONFLICT_COPY_PRESENT" tells the operator what happened,
     where "untracked file present" sends them looking for a stray script.
     """
-    if not ops_dir.exists():
+    parent = canonical_path.parent
+    if not parent.exists():
         return []
+    stem = canonical_path.stem
     return sorted(
-        p for p in ops_dir.iterdir()
+        p for p in parent.iterdir()
         if p.is_file()
-        and p.name.startswith(_REGISTRY_STEM)
-        and p.name != f"{_REGISTRY_STEM}.md")
+        and p.name.startswith(stem)
+        and p.name != canonical_path.name)

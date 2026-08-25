@@ -231,17 +231,62 @@ def test_the_witness_file_is_append_only_in_practice(tmp_path):
 def test_conflict_copies_are_found_whatever_the_client_named_them(tmp_path):
     ops = tmp_path / "ops"
     ops.mkdir()
-    (ops / "TRIAL_REGISTRY.md").write_text("real", encoding="utf-8")
+    canonical = ops / "TRIAL_REGISTRY.md"
+    canonical.write_text("real", encoding="utf-8")
     (ops / "README.md").write_text("not it", encoding="utf-8")
-    assert rw.find_conflict_copies(ops) == []
+    assert rw.find_conflict_copies(canonical) == []
     for name in ("TRIAL_REGISTRY-DESKTOP-4F2A1B.md",
                  "TRIAL_REGISTRY (Aaron's conflicted copy 2026-08-26).md",
                  "TRIAL_REGISTRY-PC.md"):
         (ops / name).write_text("copy", encoding="utf-8")
-    found = {p.name for p in rw.find_conflict_copies(ops)}
+    found = {p.name for p in rw.find_conflict_copies(canonical)}
     assert len(found) == 3
     assert "TRIAL_REGISTRY.md" not in found, "the registry itself was flagged"
     assert "README.md" not in found
+
+
+def test_the_witness_module_names_no_registry_and_so_passes_the_c2_guard():
+    """MEASURED FAILURE, 2026-08-26 — the full suite caught this, not me.
+
+    My first version held `_REGISTRY_STEM = "TRIAL_REGISTRY"`, and
+    `tests/test_registry_boundary.py`'s
+    `test_no_production_module_reads_the_registry_path_outside_the_boundary`
+    went red: a production module that both names the registry and does
+    file I/O is exactly the second-reader shape C2 was rewritten to close
+    after MC-REG-COLLISION-001.
+
+    The guard was right. The module changed — the caller passes the
+    canonical path — rather than the guard being widened to admit it.
+    Weakening a guard to fit an implementation constant is the direction
+    D-4 explicitly refused.
+
+    This asserts the property locally so the reason survives next to the
+    code, instead of living only in a boundary test that names no module.
+    """
+    import ast
+    src = (REPO / "src" / "itsf" / "s0" / "registry_witness.py").read_text(
+        encoding="utf-8")
+    tree = ast.parse(src)
+    docstrings = set()
+    # Only these four carry a docstring, and only these four have a `body`
+    # that is a list. `ast.Lambda` and `ast.IfExp` also have `.body`, and
+    # subscripting theirs raises — which is how the first draft of this
+    # test failed. The boundary guard this mirrors has the same filter.
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Module, ast.FunctionDef,
+                                 ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        body = node.body
+        if (body and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)):
+            docstrings.add(id(body[0].value))
+    named = [n.value for n in ast.walk(tree)
+             if isinstance(n, ast.Constant) and isinstance(n.value, str)
+             and id(n) not in docstrings and "TRIAL_REGISTRY" in n.value]
+    assert not named, (
+        "registry_witness.py carries a registry filename outside a "
+        f"docstring ({named}); the C2 boundary guard will refuse it")
 
 
 def test_the_failure_model_document_still_says_both_channels_exist():
