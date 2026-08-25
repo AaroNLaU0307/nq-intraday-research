@@ -77,6 +77,13 @@ measurement_materiality: "UNKNOWN"
 # historical event; there is no current review to scope to. My first draft
 # said CURRENT_REVIEW_SCOPE and the runtime returned UNKNOWN because no row
 # fell in that population -- fail-closed, and correct.
+# D-1 条件 1（Fable 裁定 2026-08-26，DELEGATED=YES）：双向可发现性必须机械化。
+# 本项目的暴露分两条轴，各有台账，**两者并举**：
+#   研究轴  ops/EXPOSURE_LEDGER.md        —— 研究自由度消耗；`scope` 一栏说的是它
+#   席位轴  ops/REVIEWER_EXPOSURE_LOG.md  —— 复审席位被烧；不消耗研究自由度
+# 下面的 `scope` 是运行时的封闭枚举，装不下路径（试过加兄弟字段，validator 判
+# OUTCOME_EXPOSURE_SHAPE 拒绝），所以指针在这里，强制在
+# tests/test_exposure_discoverability.py。
 outcome_exposure:
   declared: "TARGET_METRIC"
   scope: "HISTORICAL_CUMULATIVE"

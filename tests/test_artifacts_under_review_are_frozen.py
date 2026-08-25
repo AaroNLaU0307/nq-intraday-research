@@ -307,6 +307,65 @@ def test_a_live_prompt_names_the_outcome_carrying_artifacts_as_off_limits():
     assert not problems, "\n  ".join([""] + problems)
 
 
+def test_every_packet_issuance_has_the_off_limits_carrier(tmp_path):
+    """D-2 / S2 — the mitigation must travel with EVERY delivery vehicle.
+
+    Ruled by Fable on 2026-08-26 (`DELEGATED=YES`) after the second seat
+    burned. The chain it closes: the off-limits list was written into a
+    *PROMPT*.md, the delivery vehicle became a Review Packet, `qros packet`
+    has no field for the list, the guard scanned only *PROMPT*.md — so it
+    passed, protected nothing, and a seat was lost.
+
+    A packet cannot carry the list, so a companion must, and it must exist
+    for every issuance rather than whenever someone remembers. That
+    companion is `ops/NEXT_HANDOFF.md`, whose filename never changes for
+    exactly this reason.
+    """
+    import re
+
+    state = REGISTER.parent.parent / "qros-state.yaml"
+    if not state.exists():
+        return
+    issuances = re.findall(r'kind:\s*"?PACKET_ISSUANCE"?',
+                           state.read_text(encoding="utf-8"))
+    if not issuances:
+        return
+
+    carrier = REGISTER.parent / "NEXT_HANDOFF.md"
+    assert carrier.exists(), (
+        f"{len(issuances)} PACKET_ISSUANCE record(s) exist and the "
+        "off-limits carrier does not. A packet carries no such field, so "
+        "without the companion a reviewer is handed nothing about the "
+        "quarantine — which is how the second seat burned.")
+
+    text = carrier.read_text(encoding="utf-8")
+    required = {
+        "the quarantine register":
+            "OUTCOME_CARRYING_ARTIFACTS.json",
+        "the blind-seat search ban (S1(b))":
+            "BLIND_SEAT_MAY_NOT_SEARCH_THE_REPOSITORY",
+    }
+    missing = [why for why, token in required.items() if token not in text]
+    for anchor in _quarantined_anchors():
+        if anchor not in text:
+            missing.append(f"the recovery anchor by name ({anchor})")
+    assert not missing, (
+        "the off-limits carrier is incomplete; a delivery made from it "
+        "would repeat a known exposure:\n  " + "\n  ".join(missing))
+
+
+def _quarantined_anchors():
+    import json as _json
+
+    register = REGISTER.parent / "OUTCOME_CARRYING_ARTIFACTS.json"
+    if not register.exists():
+        return []
+    data = _json.loads(register.read_text(encoding="utf-8"))
+    paths = [e if isinstance(e, str) else e.get("path", "")
+             for e in data.get("carries_outcome", ())]
+    return [p for p in paths if "MASTER_PLAN" in p]
+
+
 def test_a_live_prompt_tells_the_reviewer_to_read_it_from_disk():
     """MEASURED, 2026-08-25 — the wasted session this one is for.
 
