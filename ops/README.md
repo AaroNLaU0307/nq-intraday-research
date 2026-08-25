@@ -26,6 +26,7 @@
 | [`DECISION_PACKET_FOUR_OPEN_2026-08-26.md`](DECISION_PACKET_FOUR_OPEN_2026-08-26.md) | 四项待裁。Fable 已裁，但**裁决工件不在盘上**——见下一行 |
 | [`RULING_FABLE_FOUR_OPEN_2026-08-26.md`](RULING_FABLE_FOUR_OPEN_2026-08-26.md) | **Fable 对 D-1..D-4 的裁决全文**，逐字节转录，SHA256 `90CC7110…749B86` 已复核 **⚠ outcome-carrying**（自身携带累计 exposure 计数，转录同时已隔离） |
 | [`FINDINGS_FABLE_FOUR_OPEN_TRANSPORT_STOP.md`](FINDINGS_FABLE_FOUR_OPEN_TRANSPORT_STOP.md) | **传输 STOP**：四项裁决未转录未执行；另含两条已复核的 builder 自身缺陷（指令指向隔离件；隔离值扩散进 10 份未登记文件，其中 3 份是测试） |
+| [`PREP_ITEM2_QUARANTINE_MIGRATION.md`](PREP_ITEM2_QUARANTINE_MIGRATION.md) | **第 2 项交付物**：迁移可行性实测（生产代码零路径引用）＋计划。**发现裁定未区分仓根台账**，三选一待 Aaron |
 | [`PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md`](PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md) | **第 6＋8 项交付物**：ND1 profile R3 修订提案（三步之第一步）。含 builder 实测的**第二个缺口**——闭合检查生产零调用，悬空 P3 今天会过 A_PRECHECK |
 | [`PREP_ITEM1_L6_EXPOSURE_TEXT.md`](PREP_ITEM1_L6_EXPOSURE_TEXT.md) | **第 1 项交付物**：全局 L6 exposure 句的逐字终稿，可整段替换。**未落地**——全局文件写入需 Aaron 单独授权 |
 | [`REGISTRY_SYNC_FAILURE_MODEL.md`](REGISTRY_SYNC_FAILURE_MODEL.md) | **第 7 项边界 (3)(4)**：registry 在同步树内的故障模型与恢复程序。含 builder 复核出的第二条致命通道（裁定文本少算的那条） |
