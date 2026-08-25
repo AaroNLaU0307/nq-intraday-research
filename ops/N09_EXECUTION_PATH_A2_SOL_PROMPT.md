@@ -43,6 +43,31 @@ Confirm you are reading the current file: line 67 of it must read
 If what you are reading says anything else, it is stale — stop and ask for
 the file.
 
+## OFF LIMITS — do not open these, whatever you are tracing
+
+A reviewer seat was burned on 2026-08-25 for want of this section. A fresh
+Sol session opened the project's recovery anchor to trace governance state,
+saw a verdict token and an exposure count, and reported itself
+outcome-exposed. It can never serve as an outcome-blind Stage I reviewer
+again. **That was the author's omission, not the reviewer's error** — the
+prompt named no forbidden set.
+
+The authoritative list is `ops/OUTCOME_CARRYING_ARTIFACTS.json`, key
+`carries_outcome`. **Read that file first and treat every path in it as
+closed.** The trap worth naming explicitly:
+
+```
+ops/MC_TO_STRATEGY_MASTER_PLAN.md
+```
+
+is BOTH outcome-carrying AND the project's recovery anchor — the documented
+first stop for any session orienting itself (its §1 "recovery sequence").
+Following normal orientation procedure walks you straight into it. Do not.
+
+Everything this challenge needs is in the six transported artifacts. If you
+believe you need governance state beyond them, **stop and ask** rather than
+navigating for it.
+
 ## Transport
 
 Recompute and match before any work. On mismatch, truncation or absence:

@@ -220,6 +220,73 @@ def test_a_review_prompt_never_pins_a_bare_head():
     assert not problems, "\n  ".join([""] + problems)
 
 
+def test_a_live_prompt_names_the_outcome_carrying_artifacts_as_off_limits():
+    """MEASURED, 2026-08-25 — a reviewer seat was burned by its absence.
+
+    A fresh Sol session opened `ops/MC_TO_STRATEGY_MASTER_PLAN.md` while
+    tracing governance state, saw a verdict token and an exposure count, and
+    reported itself outcome-exposed. It can never serve as an outcome-blind
+    Stage I reviewer again.
+
+    That file is registered in OUTCOME_CARRYING_ARTIFACTS.json — AND it is
+    the project's recovery anchor, the documented first stop for any session
+    orienting itself. So the trap is structural: an outcome-blind reviewer
+    doing a perfectly normal state lookup walks into it.
+
+    `test_review_artifacts_are_outcome_clean` already checks that what we
+    SEND is clean. It says nothing about where the reviewer will NAVIGATE.
+    This closes that: a live review's prompt must name the register and must
+    name the anchor explicitly, because "the reviewer will know" is not a
+    control.
+
+    This is the cheap half of the fix. Whether the anchor should be SPLIT so
+    the recovery sequence points at an outcome-clean document is Aaron's
+    decision, recorded in
+    `ops/A2_N09_SOL_EXPOSURE_AND_REDESIGN_2026-08-25.md` §1.3.
+    """
+    import json as _json
+
+    entries = _entries()
+    if not entries:
+        return
+    live_ids = {e["review_id"] for e in entries}
+
+    register = REGISTER.parent / "OUTCOME_CARRYING_ARTIFACTS.json"
+    if not register.exists():
+        return
+    carriers = _json.loads(register.read_text(encoding="utf-8"))
+    # Entries may be plain strings or objects carrying a `path`. The first
+    # version of this guard assumed strings, so `"MASTER_PLAN" in entry`
+    # tested a dict's KEYS and the anchor half silently checked nothing —
+    # a guard that passes and protects nothing, written by the same hand
+    # that keeps warning about them. Normalise, then assert we found some.
+    paths = [e if isinstance(e, str) else e.get("path", "")
+             for e in carriers.get("carries_outcome", ())]
+    assert any(paths), (
+        "OUTCOME_CARRYING_ARTIFACTS.json yielded no paths — the register "
+        "shape changed and this guard would silently check nothing")
+    anchors = [p for p in paths if "MASTER_PLAN" in p]
+    assert anchors, (
+        "no MASTER_PLAN entry in the outcome-carrying register; either the "
+        "anchor stopped carrying outcome (good, update this guard) or the "
+        "lookup broke (bad, and this assertion is why you found out)")
+
+    problems = []
+    for prompt in sorted(REGISTER.parent.glob("*PROMPT*.md")):
+        text = prompt.read_text(encoding="utf-8")
+        if not any(rid in text for rid in live_ids):
+            continue
+        if "OUTCOME_CARRYING_ARTIFACTS.json" not in text:
+            problems.append(f"{prompt.name}: does not name the "
+                            "outcome-carrying register as off limits")
+        for anchor in anchors:
+            if anchor not in text:
+                problems.append(f"{prompt.name}: does not warn off {anchor}, "
+                                "which is both outcome-carrying and the "
+                                "recovery anchor a reviewer would open first")
+    assert not problems, "\n  ".join([""] + problems)
+
+
 def test_a_live_prompt_tells_the_reviewer_to_read_it_from_disk():
     """MEASURED, 2026-08-25 — the wasted session this one is for.
 
