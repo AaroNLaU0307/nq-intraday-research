@@ -109,7 +109,27 @@ cache:
 ops_events: []
 session_log: []
 human_decisions: []
-packets: []
+packets:
+  # PACKET_ISSUANCE — immutable append (§5.5). In-place completion
+  # is prohibited; a correction appends within the same review_id.
+  - kind: "PACKET_ISSUANCE"
+    packet_record_id: "pr-rv3651f9fe0b68-001"
+    review_id: "rv-3651f9fe0b68-da56aecb6991"
+    saved_path: "runs/packets/rv-3651f9fe0b68-da56aecb6991.packet"
+    sha256: "74fbcea03dfe8fb1a794ab5ab53f21f3e46322db067162c39f703155f1a5fae9"
+    gate: "TIER1_DISCRETIONARY"
+    head: "af5528fa8a2e03a33305f588efb2605bdb942267"
+    basis: "HEAD"
+    scope_kind: "TIER1_BATCH"
+    scope_base: "857eed711558e488efb814462d822706049f82e6"
+    scope_base_origin: "selected"
+    scope_content_digest: "b33bd4a64205ef327d94d264ecdc24662702828049535049f43387c530e32d6b"
+    prereg_input_sha256: "6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132"
+    material_design_contributor: "UNKNOWN"
+    effective_table_bundle_identity: "5008F5253E47F2196B5DA541038DB08C7B096C0C2D8F65FFD2507404F3637B5F"
+    decision_requested: "Should the N09 execution-path design R2 be built as written?"
+    selector: "builder"
+    appended_at: "2026-08-25T16:39:57Z"
 
 # ------------------------------------------------------------- INPUTS §2.3 --
 inputs:
