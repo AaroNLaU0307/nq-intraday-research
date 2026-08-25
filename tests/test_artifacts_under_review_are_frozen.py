@@ -220,6 +220,56 @@ def test_a_review_prompt_never_pins_a_bare_head():
     assert not problems, "\n  ".join([""] + problems)
 
 
+def test_a_live_prompt_tells_the_reviewer_to_read_it_from_disk():
+    """MEASURED, 2026-08-25 — the wasted session this one is for.
+
+    The prompt was re-issued with a corrected pin, committed, and the file
+    on disk was right. The reviewer stopped anyway, quoting a pin that
+    appeared nowhere in the file: it had been given the EARLIER text as a
+    paste.
+
+    The transport rule says chat-carried bytes are never a source of truth.
+    Two sessions were spent before anyone noticed the rule was being
+    applied to the artifacts and not to the document that declares them.
+
+    A prompt cannot stop itself from being pasted. What it can do is tell
+    the reader to open the file, and name the line that proves the copy is
+    current — so this asserts both, and asserts the line number is the real
+    one, because a self-check that has drifted is another stale declaration.
+    """
+    entries = _entries()
+    if not entries:
+        return
+    live_ids = {e["review_id"] for e in entries}
+    pins = {e["unchanged_since"] for e in entries}
+
+    problems = []
+    for prompt in sorted(REGISTER.parent.glob("*PROMPT*.md")):
+        text = prompt.read_text(encoding="utf-8")
+        if not any(rid in text for rid in live_ids):
+            continue
+        lines = text.splitlines()
+        if "read" not in text.lower() or "from disk" not in text.lower():
+            problems.append(f"{prompt.name}: does not tell the reviewer to "
+                            "read it from disk")
+        actual = [i for i, ln in enumerate(lines, 1)
+                  if ln.startswith("REVIEWED_SET_UNCHANGED_SINCE")]
+        cited = re.findall(r"line (\d+) of it must read", text)
+        if not cited:
+            problems.append(f"{prompt.name}: carries no line-number "
+                            "self-check for a stale paste")
+        elif len(actual) != 1 or int(cited[0]) != actual[0]:
+            problems.append(
+                f"{prompt.name}: self-check cites line {cited[0]}, the "
+                f"declaration is on {actual or 'no'} — the self-check has "
+                "drifted and is itself a stale declaration")
+        for pin in pins:
+            if pin not in text:
+                problems.append(f"{prompt.name}: does not carry the "
+                                f"registered pin {pin[:12]}")
+    assert not problems, "\n  ".join([""] + problems)
+
+
 #: A transport table row in a review prompt: hash, byte count, path.
 _PROMPT_ROW_RE = re.compile(
     r"\|\s*`([0-9a-fA-F]{64})`\s*\|\s*(\d+)\s*\|\s*`([^`]+)`")

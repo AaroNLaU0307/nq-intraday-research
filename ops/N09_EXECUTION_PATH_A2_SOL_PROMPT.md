@@ -21,6 +21,28 @@ WHY_THIS_MODEL=QROS FULL routing puts a fresh-Sol A2 design challenge before
 
 # A2 — challenge the N09 execution-path design before it is built
 
+## READ THIS PROMPT FROM DISK BEFORE ANYTHING ELSE
+
+```
+THIS_PROMPT = ops/N09_EXECUTION_PATH_A2_SOL_PROMPT.md
+```
+
+**If you received this text as a paste, open that file and read it there
+instead.** A pasted declaration can be stale, and that is exactly how the
+second issue of this prompt failed: it was re-issued with a corrected pin,
+but the reviewer worked from the earlier text and stopped on a pin
+(`d4d7c6e…`) that no longer appeared anywhere in the file.
+
+The artifact-transport rule says chat-carried bytes are never a source of
+truth. That applies to this declaration too — it took two wasted sessions
+for the author to notice that the rule was being applied to the artifacts
+and not to the document declaring them.
+
+Confirm you are reading the current file: line 67 of it must read
+`REVIEWED_SET_UNCHANGED_SINCE = c02d5e128474a15242259732e676ce3959e63dce`.
+If what you are reading says anything else, it is stale — stop and ask for
+the file.
+
 ## Transport
 
 Recompute and match before any work. On mismatch, truncation or absence:
