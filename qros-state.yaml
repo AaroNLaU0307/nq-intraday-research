@@ -94,9 +94,26 @@ prereg:
   lineage_anchor: "修订记录"
 
 # POINTER ONLY — no count is ever copied into this file.
+#
+# value_anchor carries the "## " heading prefix because the runtime matches
+# anchors on the WHOLE LINE: packet.py:359 is
+# `line.strip() == anchor.strip()`. Without the prefix the anchor could
+# never match, and both packets issued before 2026-08-26 therefore rendered
+# TRIAL_ACCOUNTING_RESOLUTION=... anchor not found and
+# TRIAL_ACCOUNTING_EXCERPT=NOT_MECHANICALLY_EXTRACTABLE. That is the
+# runtime's fail-closed canonical negative behaving correctly (§5.2.3) —
+# the declaration was simply wrong, and a reviewer was handed a pointer
+# that resolved to nothing.
+#
+# The section it now resolves to was scanned before this change, not after:
+# 26 lines, outcome-clean by the repository's own scanner AND on reading —
+# it ends at "COMPLETED | S0 report sealed" and states no verdict and no
+# statistic. Checked deliberately, because making an anchor resolve puts
+# its excerpt inside every future packet, including packets handed to
+# outcome-blind seats.
 trial_accounting:
   canonical_ref: "ops/TRIAL_REGISTRY.md"
-  value_anchor: "S0-T001（FIRST_REAL_S0_FULL_DEVELOPMENT_RUN，exposure_seq 1）"
+  value_anchor: "## S0-T001（FIRST_REAL_S0_FULL_DEVELOPMENT_RUN，exposure_seq 1）"
 
 change_labels: []
 

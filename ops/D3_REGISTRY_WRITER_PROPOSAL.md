@@ -79,6 +79,71 @@ Sol 复核而非采信」——复核的对象因此是**结构**，不是**保�
 已核。**L-5 缺陷正是 OneDrive 残渣类**（同步产生的 `desktop.ini`／`*.tmp` 会让
 M6.1.7 的 exact-set 磁盘不变量判为封存拒绝、烧掉一次 trial）。
 
+### 2.5 已批准的 actor 表**已经**把失败事件判给运行器 —— 三行相抵
+
+`src/itsf/mc/supplement_contract.py` 的 `EVENTS` 表逐字转录
+`ND1_RECOMMENDED_PROFILE_R2`（sha256 `a3d40b7c…`，**2026-08-23 已批准**）。
+实测全表 actor：
+
+| 事件 | token | 已批准 actor |
+|---|---|---|
+| P3 | `SUPPLEMENT_RUN_STARTED` | **`main agent (mc_ds_runner)`** |
+| P4 | `SUPPLEMENT_SEALED` | **`main agent (mc_ds_runner)`** |
+| **A1** | `SUPPLEMENT_ARCHIVE_FAILED` | **`main agent (mc_ds_runner)`** |
+| **F1** | `SUPPLEMENT_ATTEMPT_FAILURE` | **`main agent (mc_ds_runner)`** |
+| **F2** | `SUPPLEMENT_FAILED` | **`main agent (mc_ds_runner)`** |
+| A2 | `SUPPLEMENT_ARCHIVE_RECOVERED` | `main agent` |
+| AX | `SUPPLEMENT_ARCHIVE_PERMANENTLY_FAILED` | `main agent` |
+| F3 | `SUPPLEMENT_SUPERSEDED` | `main agent` |
+| P1 | `SUPPLEMENT_PROPOSED` | `main agent` |
+| P2 | `SUPPLEMENT_EXECUTION_AUTHORIZED` | `Aaron` |
+| P5 / F2v | 验证类 | `<verifier>` |
+
+**两点，都要看：**
+
+**(a) 提案的 P3 一半与已批准文本一致**，不是新裁——P3 的 actor 本来就是运行器。
+
+**(b) 提案的失败事件一半与已批准文本相抵，抵在三行上**（A1、F1、F2）。提案写
+「失败事件：仅主代理追加（B 形）」，而已批准表把这三个失败事件都判给了运行器。
+
+**并且已批准表用的正是提案自己的理由。** 提案说「失败观察者必须在失败后存活」——
+已批准表就是按这条切的：运行器还活着时观察到的失败（A1／F1／F2）归运行器；
+运行器已经不在时才发生的（A2 归档恢复、AX 永久失败、F3 被取代）归主代理。
+**那条原则已经实现了，切口就在「观察者还在不在」。**
+
+### 2.6 S0 运行器今天就在写自己的讣告
+
+`src/itsf/s0/runner.py` 经**同一个** `append_registry_event` 回调发四类事件
+（`scripts/s0_real_run.py:3136` 把它接成 actor 恒为 `"main agent (s0_real_run)"`）：
+
+| 行 | 事件 | 何时 |
+|---|---|---|
+| 685 | `PRE_RUN_ATTEMPT_FAILURE` | P3 之前，`exposure NOT consumed` |
+| **725** | **`FAILED`** | **P3 之后，注释原文 `trial permanently consumed; outputs retained`** |
+| 772 | `RUN_STARTED` | Stage C 入口 |
+| 1340 | `COMPLETED` | 报告封存 |
+
+**725 行就是运行器在跨过不可逆点之后写自己的讣告，且已在生产代码里。**
+提案说「运行器永不写自己的讣告——失败观察者必须在失败后存活，编排器做不到」，
+可 725 行的运行器**确实活着**：它是在异常处理路径里写的，门失败不等于进程死亡。
+真正写不了的只有**硬崩溃**，而那一种现有设计另有办法——772 行的 `except` 落
+`HALF_TRANSITION` 标记。
+
+### 2.7 「谁是记录 actor」与「哪个进程执行追加」是两个问题
+
+已批准表定的是**第一个**：actor 字符串。提案裁的是**第二个**：哪个进程去写文件。
+**两者不是同一件事，提案把它们当成了一件。**
+
+但请注意 actor 字符串**本身**长什么样：`main agent (mc_ds_runner)`、
+`main agent (s0_real_run)`——**括号里点名的就是执行追加的那个工具**。要把它读成
+「主代理事后手工补录」很勉强。也就是说：**「受托单写」这个限缩解释可能不是提案
+现在才提出的新构造，而是 2026-08-23 就已随 actor 表批准了的东西。** 若如此，
+§一所说的「两份已批准文本相抵」比表述的更窄——已批准的 profile 对 MC 生命周期
+已经给了答案。
+
+**builder 不替 Sol 定这个。** 两种读法都摆在这里，请 Sol 判，并把判不了的部分
+写进 `UNRESOLVED_FOR_AARON`。
+
 ## 三、请专门猎取的四点（Fable 指定）
 
 **① 分快照读。** `MC-REG-COLLISION-001` 的洞是「同一份可变文件被读成两个快照」，
@@ -104,6 +169,8 @@ VERDICT=PASS | HOLD | REJECTED_INCOMPLETE
 STRONGEST_OBJECTION=<即使 PASS 也要写出最强的反对>
 FINDINGS=<逐条，带文件与符号>
 四点逐一作答：① 分快照读 ② 陈旧租约 ③ 并发竞争 ④ OneDrive 原子性
+⑤（builder 追加）§2.5–2.7：失败事件的裁定与已批准 actor 表的三行冲突怎么办？
+   是提案该改，还是已批准表该改，还是两者本就管着不同的问题？
 UNRESOLVED_FOR_AARON=<builder 与 Sol 都不得替他决定的部分>
 INDEPENDENCE_STATEMENT=<按维度分别陈述>
 ```
