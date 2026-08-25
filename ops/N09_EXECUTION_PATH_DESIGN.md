@@ -141,3 +141,27 @@ ledger 均 append-only，**只允许主代理单写**」。若编排器自己追
 - C_BUILD 5 门：每门一条红证（修复前失败）。
 - 编排器：`SUPPLEMENT_EXECUTION_AUTHORIZED=NO` 时**整条路径仍确定性拒绝**——
   实现执行路径不得削弱默认拒绝。
+
+---
+
+## STATUS — SUPERSEDED, 2026-08-26
+
+**追加，未改写正文。** 上面是 fresh Sol 审过的那一份，包括它找出的两个错误：
+
+1. §3 的「跑 A→B→C」不成立——`GateContext` 不携带 product／seal 证据／archive
+   report，而五个 C_BUILD 门分属三个不同时刻。
+2. §4 把最终 event-stratum 映射归给了 `s0/context.py`，实际归 `s0/dataset.py`。
+
+两条 builder 均已独立复核确认。**就地改写会毁掉审查链**，故正文保持原样。
+
+```
+VERDICT      = REDESIGN（非正式工程意见）
+L6_VERDICT   = REJECTED_INCOMPLETE   L6_GATE_EFFECT = NONE
+SUPERSEDED_BY= ops/N09_EXECUTION_PATH_DESIGN_R2.md
+REVIEW_RECORD= ops/A2_N09_SOL_EXPOSURE_AND_REDESIGN_2026-08-25.md
+```
+
+R2 采纳了全部六条修改，并新增一条本文件漏掉的、已批准的不变量：**目录创建、
+写探针、执行是三次独立授权，不得合并**（`SEPARATE_DIRECTORY_CREATION_
+AUTHORIZATION_STILL_REQUIRED=YES`）——即签了 P2 也不足以创建那两个
+`supplements\` 子树。
