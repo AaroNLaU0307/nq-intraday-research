@@ -33,6 +33,26 @@ to work from reads as a place to go.
 SCOPE IS LIVE DELIVERIES ONLY, keyed on `review_id` exactly as the guards
 in `test_artifacts_under_review_are_frozen.py` are. A guard that fires on
 finished work trains people to ignore it.
+
+WHAT THIS DOES NOT COVER, measured rather than assumed. The scope is
+documents that NAME the live review — the prompt and the packet. It is NOT
+every file the reviewer is handed: a registered evidence path does not
+name the review it is evidence for, so it is never scanned.
+
+Extending it to every registered path was tried and rejected on evidence.
+It produces eleven findings across three files, and all eleven are the
+"mention is not a pointer" kind — `不得动：两份 EXPOSURE_LEDGER.md` is a
+prohibition, and `为什么另立一份，而不是记进 ops/EXPOSURE_LEDGER.md` is a
+heading explaining why NOT to use it. Making them pass would mean writing
+OFF-LIMITS markers into `ops/D124_RULINGS_CLEAN_EXTRACT.md`, whose whole
+value is being a byte-verbatim copy of a ruling nobody may open and
+therefore nobody can diff against. A guard that can only be satisfied by
+falsifying a transcription is the wrong guard.
+
+So the gap is real, bounded, and deliberate: this catches a DELIVERY that
+points at quarantine, not an EVIDENCE FILE that discusses it. If that ever
+needs closing, close it by keeping quarantined content out of evidence
+files, not by annotating verbatim text.
 """
 from __future__ import annotations
 

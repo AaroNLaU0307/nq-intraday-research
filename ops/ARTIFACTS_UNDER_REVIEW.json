@@ -1,4 +1,95 @@
 {
   "_comment": "Frozen while a reviewer holds them. Remove an entry when the review returns; an empty list is the normal state. `unchanged_since` is the commit the declaration pins: no commit after it may touch the path. HEAD itself is NEVER pinned -- committing the review prompt moves HEAD, so a HEAD pin is stale the moment it is written (measured 2026-08-25: a Sol session STOPped on exactly that). Nothing on ops/OUTCOME_CARRYING_ARTIFACTS.json may be listed here. Guarded by tests/test_artifacts_under_review_are_frozen.py and tests/test_review_artifacts_are_outcome_clean.py",
-  "under_review": []
+  "under_review": [
+    {
+      "path": "ops/D124_RULINGS_CLEAN_EXTRACT.md",
+      "sha256": "5d6e8b65b4a7f9d030d13a074f40a9c388bad763e17c610b9c529d14e5634745",
+      "issued_to": "Fable 5（决裁席，八项待裁；Aaron 2026-08-26 明示委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-eight-open-2026-08-26",
+      "unchanged_since": "ce378c857f135e82287dfbade1da5aa910e1b39b",
+      "why": "D-1／D-2／D-4 裁决逐字副本（原件隔离）"
+    },
+    {
+      "path": "ops/RULING_SOL_D3_HOLD_2026-08-26.md",
+      "sha256": "5f533347622156932fce5c35f11ffa2b089771eba0f2dd6157b7bb2f801a00ff",
+      "issued_to": "Fable 5（决裁席，八项待裁；Aaron 2026-08-26 明示委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-eight-open-2026-08-26",
+      "unchanged_since": "ce378c857f135e82287dfbade1da5aa910e1b39b",
+      "why": "D-3 的 Sol HOLD 全文＋builder 逐条复现"
+    },
+    {
+      "path": "ops/D3_REGISTRY_WRITER_PROPOSAL.md",
+      "sha256": "2ae3db75f6fff99d88a9868e09d3dbb13a972ccf96a75706aa6882c190b3cfd3",
+      "issued_to": "Fable 5（决裁席，八项待裁；Aaron 2026-08-26 明示委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-eight-open-2026-08-26",
+      "unchanged_since": "ce378c857f135e82287dfbade1da5aa910e1b39b",
+      "why": "被 HOLD 的 D-3 提案本体，含 §2.5–2.7 实测"
+    },
+    {
+      "path": "ops/RUNTIME_DEVIATION_PACKET_SAVE_DIR.md",
+      "sha256": "04232aeae7fd41d05a7af4c1e0ab01f4fee2f789262b3bb7fdac8f077b3488f6",
+      "issued_to": "Fable 5（决裁席，八项待裁；Aaron 2026-08-26 明示委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-eight-open-2026-08-26",
+      "unchanged_since": "ce378c857f135e82287dfbade1da5aa910e1b39b",
+      "why": "D-4 的过渡形与实测冲突"
+    },
+    {
+      "path": "ops/REVIEWER_EXPOSURE_LOG.md",
+      "sha256": "40ac83f5863af2d7f345e803105ea13799f0e054d4c96185de2eee264e6283d3",
+      "issued_to": "Fable 5（决裁席，八项待裁；Aaron 2026-08-26 明示委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-eight-open-2026-08-26",
+      "unchanged_since": "ce378c857f135e82287dfbade1da5aa910e1b39b",
+      "why": "D-1／D-2 的席位轴事实，含第 4 行未烧席位"
+    },
+    {
+      "path": "src/itsf/mc/supplement_contract.py",
+      "sha256": "c6d5b46f71404044d3e0d2ce770bfda2f4eaa88b3448e397d035b3ec8aff7298",
+      "issued_to": "Fable 5（决裁席，八项待裁；Aaron 2026-08-26 明示委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-eight-open-2026-08-26",
+      "unchanged_since": "ce378c857f135e82287dfbade1da5aa910e1b39b",
+      "why": "已批准 ND1 actor 表（D-3 第 1、2 问的标的）"
+    },
+    {
+      "path": "src/itsf/mc/supplement_runner.py",
+      "sha256": "3cb698aef52dcc14ee0987e585ee5b46705a3046e7e53ea42d3db69e001cf746",
+      "issued_to": "Fable 5（决裁席，八项待裁；Aaron 2026-08-26 明示委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-eight-open-2026-08-26",
+      "unchanged_since": "ce378c857f135e82287dfbade1da5aa910e1b39b",
+      "why": "plan_failure_event 硬编码 ACTOR_RUNNER"
+    },
+    {
+      "path": "src/itsf/mc/registry_boundary.py",
+      "sha256": "fdb6f99a58180e1439749f6a1e2b9343fb83b7e59e42461b28ddffd56c7f0520",
+      "issued_to": "Fable 5（决裁席，八项待裁；Aaron 2026-08-26 明示委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-eight-open-2026-08-26",
+      "unchanged_since": "ce378c857f135e82287dfbade1da5aa910e1b39b",
+      "why": "C2 单一校验边界（分快照读）"
+    },
+    {
+      "path": "src/itsf/s0/runner.py",
+      "sha256": "e0be5ae9771029d8c3e96a7d06f41808f15f28902d4e8739c33350df575bd8ee",
+      "issued_to": "Fable 5（决裁席，八项待裁；Aaron 2026-08-26 明示委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-eight-open-2026-08-26",
+      "unchanged_since": "ce378c857f135e82287dfbade1da5aa910e1b39b",
+      "why": "1388 无锁 writer；725 跨不可逆点的 FAILED；772 三步分离"
+    },
+    {
+      "path": "scripts/s0_real_run.py",
+      "sha256": "fa6f2adbd92b771cb4b66c4297d19d8e531519ae01149c3fbc7f2a73e4c42044",
+      "issued_to": "Fable 5（决裁席，八项待裁；Aaron 2026-08-26 明示委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-eight-open-2026-08-26",
+      "unchanged_since": "ce378c857f135e82287dfbade1da5aa910e1b39b",
+      "why": "3136 registry_append 绑定；三处 never-re-read"
+    }
+  ]
 }

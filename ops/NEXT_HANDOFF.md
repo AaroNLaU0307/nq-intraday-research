@@ -4,47 +4,54 @@
 > 你不必再去 `ops/` 里认哪个是最新的 prompt。
 
 ```
-UPDATED = 2026-08-26（D-3 已返回 HOLD；**当前没有挂着的交付**）
+UPDATED = 2026-08-26（八项待裁已挂出，交 Fable 决裁席）
 ```
 
 ---
 
 ## 现在挂着的交付
 
-### ①（已完成）D-3 registry 写者裁定复核 —— **fresh Sol 返回 HOLD**
+### ① 交 Fable 决裁席 —— **八项待裁**（Aaron 明示委托）
+
+```
+提示   ops/PROMPT_EIGHT_OPEN_FABLE.md        ← 整份贴给一个新的 Fable 会话
+DECISION_ID  dec-eight-open-2026-08-26       DELEGATED=YES
+状态   已就绪，未发出
+```
+
+Aaron 2026-08-26：「fable将会替我做选择，把这八项都交给fable」。**前三项**＝
+D-1 条件 3（全局 L6 规则限缩）／D-2 的 S1(a)＋注册表 carve-out／D-4 运行时
+`_SAVE_DIR`；**后五项**＝D-3 被 Sol 判 HOLD 后留下的五个未决。
+
+**裁定 ≠ 执行解锁。** 提示词要求每一项分别回答 `RULING` 与
+`EXECUTION_UNLOCKED_BY_THIS_RULING`——第 1 项动全局文件、第 3 项动已认证的
+qros-runtime 仓，两者的**写入**都超出 builder 常权。
+
+**已知残留（已写进提示词 §4）**：第 4–8 项是 Fable 在裁**自己上一轮的提案**。
+新会话满足会话独立性，但同族护短风险真实存在，故明写「推翻是被允许且被期待的」，
+并要求它在无法独立判断时填 `SEAT_INDEPENDENCE_CONCERN` 而不是硬裁。
+
+**送审集已冻结**（十条，钉子 `ce378c857f135e82287dfbade1da5aa910e1b39b`，
+`derive_pin()` 派生）：Fable 返回前**不要动**
+`ops/D124_RULINGS_CLEAN_EXTRACT.md`、`ops/RULING_SOL_D3_HOLD_2026-08-26.md`、
+`ops/D3_REGISTRY_WRITER_PROPOSAL.md`、`ops/RUNTIME_DEVIATION_PACKET_SAVE_DIR.md`、
+`ops/REVIEWER_EXPOSURE_LOG.md`、`src/itsf/mc/supplement_contract.py`、
+`src/itsf/mc/supplement_runner.py`、`src/itsf/mc/registry_boundary.py`、
+`src/itsf/s0/runner.py`、`scripts/s0_real_run.py`。
+
+### ②（已完成）D-3 复核 —— fresh Sol 返回 **HOLD**
 
 ```
 REVIEW_ID  rv-f4207865a116-c004854e6828   GATE=TIER1_DISCRETIONARY
 VERDICT    HOLD          SEAT_STATUS=BLIND（席位未烧，第一个活下来的）
 记录       ops/RULING_SOL_D3_HOLD_2026-08-26.md
            sha256 5f533347622156932fce5c35f11ffa2b089771eba0f2dd6157b7bb2f801a00ff
-登记表     已清空（六路径解冻）
 ```
 
-**四条 High ＋ 一条 Medium，builder 已逐条复现（无一采信）**：读—校验—追加之间
-没有临界区，writer 是无锁 `open("a")`；失败事件条款与已批准 actor 合同相抵三行；
-崩溃／陈旧租约无状态机，且当前根本没有 MC 生产执行路径可审；never-re-read 只是
-结构＋注释；OneDrive 原子性无法靠读代码排除。
+四条 High ＋ 一条 Medium，builder 已逐条复现（无一采信）。**HOLD 不释放也不阻塞
+任何门**（§3.1），`A2→B` 与 `I→J` 状态未变。其五项未决已并入上面 ① 的第 4–8 项。
 
-**这不否掉 Fable 的提案**——P3 那一半与已批准 actor 表一致；被质疑的是它的安全
-前提（租约、临界区、原子性）尚不存在，以及失败事件那一半与合同相抵。
-
-### ② 等 Aaron —— 现在共 **八项**，全在你的权限内
-
-**原三项**：D-1 条件 3（把全局 L6「每次 exposure 事件都追加」收窄到研究轴）、
-D-2 的 S1(a)＋registry 豁免、D-4 的 runtime `_SAVE_DIR` 工作项。
-
-**D-3 新增五项**（Sol 的 `UNRESOLVED_FOR_AARON`，原文见裁定记录 §一）：
-actor 是否同时表达执行者／是否加独立 executor provenance；保留 A1／F1／F2 的
-runner actor 还是修订已批准 profile＋planner＋生产先例；P3 后硬崩溃该产生什么
-事件、由谁追加、恢复写入的授权条件；registry 是否继续在主动同步的 OneDrive 树中
-作为 canonical 写入面；租约回收能否自动执行还是必须 fail-closed 等人裁。
-
-**Sol 给了一个较窄且与现有合同一致的解释供你参考**（它明说采不采用归你）：
-运行器存活并捕获到的 A1／F1／F2 仍由运行器追加；硬崩溃后的检测／恢复由主代理
-负责，用你批准的独立恢复语义。
-
-### ③ 等 D-3 落定### ③ 等 D-3 落定 —— N09 的 R3 设计
+### ③ 等八项落定### ③ 等 D-3 落定### ③ 等 D-3 落定 —— N09 的 R3 设计
 
 Sol 对 R2 的 High #2 认定：执行路径的可建范围取决于 D-3 怎么裁。**所以 R3 在 ①
 返回之前写不了**，现在能建的只有一个永远拒绝的骨架。
