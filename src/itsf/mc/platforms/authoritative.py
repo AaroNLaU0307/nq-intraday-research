@@ -124,6 +124,12 @@ AUTH_OVER_BUDGET_VALUE_UNDER_ABSENCE = "over_budget_value_under_absence"
 AUTH_OVER_BUDGET_RULED_WITHOUT_VALUES = "over_budget_ruled_without_values"
 # 6. the bounded day-net / balance / payout identity
 AUTH_DAY_NET_INVARIANT = "day_net_cross_check_violation"
+#: Added 2026-08-26, closing a Fable V2 Medium. `balance` enters the
+#: identity but was the ONLY one of its three inputs never checked for
+#: finiteness, and a NaN there made the residual NaN — which
+#: `abs(resid) > tol` reads as "within tolerance". A NaN balance was
+#: therefore indistinguishable from an identity that holds.
+AUTH_BALANCE_NOT_FINITE = "balance_not_finite"
 # 7. stream-level labelling
 AUTH_PHASE_UNKNOWN = "phase_not_in_allowed_set"
 AUTH_PHASE_PLATFORM_MISMATCH = "phase_not_valid_for_platform"
@@ -143,7 +149,7 @@ AUTH_REJECTION_CODES = frozenset({
     AUTH_OVER_BUDGET_STATUS_MISMATCH,
     AUTH_OVER_BUDGET_VALUE_UNDER_ABSENCE,
     AUTH_OVER_BUDGET_RULED_WITHOUT_VALUES,
-    AUTH_DAY_NET_INVARIANT,
+    AUTH_DAY_NET_INVARIANT, AUTH_BALANCE_NOT_FINITE,
     AUTH_PHASE_UNKNOWN, AUTH_PHASE_PLATFORM_MISMATCH,
     AUTH_ENGINE_UNKNOWN, AUTH_PLATFORM_UNKNOWN,
 })
@@ -345,6 +351,16 @@ def _iter_violations(events: Sequence, *, engine: str | None,
                 f"(its state machines emit "
                 f"{sorted(PLATFORM_PHASES[platform])})")
 
+        # -- rule 0: balance finite ------------------------------------------
+        # Unconditional, and before the fact-layer gate: `balance` is present
+        # on every event including migration-state ones, and a non-finite
+        # balance is never valid on any of them. It sits here rather than
+        # inside rule 6 because rule 6 CANNOT see it — a NaN input makes the
+        # residual NaN, and the tolerance comparison then reports nothing.
+        if not _is_real_number(ev.balance) or                 not math.isfinite(float(ev.balance)):
+            yield FactViolation(AUTH_BALANCE_NOT_FINITE, i, day,
+                                f"balance={ev.balance!r}")
+
         # -- rule 1: day_net present and finite ------------------------------
         if ev.day_net_usd is None:
             if require_facts:
@@ -486,7 +502,12 @@ def _iter_violations(events: Sequence, *, engine: str | None,
         if prev is not None and _is_real_number(ev.day_net_usd) \
                 and _is_real_number(ev.payout_gross):
             resid = day_net_cross_check(prev, ev)
-            if resid is not None and abs(resid) > CROSS_CHECK_TOL_USD:
+            # NOT `abs(resid) > tol`. That asks "can I prove a violation",
+            # and a NaN residual answers no — silently. This asks "can I
+            # prove the identity HOLDS", which a NaN residual also answers
+            # no, but in the safe direction. Fixing `balance` closes today's
+            # reachable path; this closes the shape.
+            if resid is not None and not (abs(resid) <= CROSS_CHECK_TOL_USD):
                 yield FactViolation(
                     AUTH_DAY_NET_INVARIANT, i, day,
                     f"day_net={ev.day_net_usd!r} balance_delta="

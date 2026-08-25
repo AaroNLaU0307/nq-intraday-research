@@ -1,0 +1,115 @@
+1. GENERATED           assembled by qros; EVERY FIELD ORIGIN-TAGGED (§5.2)
+
+REVIEW_ID=rv-3651f9fe0b68-da56aecb6991 [MECH]
+RESEARCH_ID=ITSF-S0 [DECLARED]
+LANE=FULL [DECLARED]
+STAGE=C [DECLARED]
+DECISION_REQUESTED=Should the N09 execution-path design R2 be built as written? <selector: builder> [SELECTED]
+HEAD=af5528fa8a2e03a33305f588efb2605bdb942267 [MECH]
+BASIS=HEAD [MECH]
+WORKTREE=CLEAN [MECH]
+SCOPE_KIND=TIER1_BATCH [MECH]
+SCOPE_BASE=857eed711558e488efb814462d822706049f82e6 (composition: selected base · MECH resolution of it) [MIXED]
+SCOPE_BASE_ORIGIN=selected [MECH]
+SUPPLEMENTAL_SCOPE=NONE [SELECTED]
+FILE_MANIFEST= [MECH]
+  FILE_MANIFEST=ops/N09_EXECUTION_PATH_DESIGN.md · 6e541e29ddd480a33c15f5742cc6623500c133b7a2074195c7767ac4a9e661d5 · modified
+  FILE_MANIFEST=ops/N09_EXECUTION_PATH_DESIGN_R2.md · a14d2344bbf5717e276835ea2bc8eb596b5d7fcb5db5c06fdde98f987a12730b · +added
+  FILE_MANIFEST=ops/REVIEWER_EXPOSURE_LOG.md · 6d07e05db1515e966a41d8a4911042f47a7bbe8cfb4c099982522da437f4b8ca · +added
+PREREG_REF=STUDY_0_PREREGISTRATION.md [DECLARED]
+SEAL_REVISION=c685ebc1ed65e0c6fc9b9b7212a054289d1b37fd [DECLARED]
+SEAL=VERIFIED [MECH]
+LINEAGE_ANCHOR=修订记录 [DECLARED]
+LINEAGE_AMENDMENTS=ABSENT [CANON]
+MATERIAL_DESIGN_CONTRIBUTOR=UNKNOWN (composition: CANON record · MECH parse — the Lineage/Amendments excerpt does not resolve) [MIXED]
+INDEPENDENCE_UNKNOWN=YES [MECH]
+TRIAL_ACCOUNTING_REF=ops/TRIAL_REGISTRY.md + anchor S0-T001（FIRST_REAL_S0_FULL_DEVELOPMENT_RUN，exposure_seq 1） [DECLARED]
+TRIAL_ACCOUNTING_RESOLUTION=ops/TRIAL_REGISTRY.md · ee9da33fdbb47725dc036243adc76d7d9ba69ff06df0df443b09103f897353d6 · anchor not found [MECH]
+TRIAL_ACCOUNTING_EXCERPT=NOT_MECHANICALLY_EXTRACTABLE [CANON]
+INPUT_FRESHNESS= [MECH]
+  INPUT_FRESHNESS=exposure_record=FRESH row=TBL-FRESHNESS.R02 BASIS=HEAD
+  INPUT_FRESHNESS=prereg=FRESH row=TBL-FRESHNESS.R02 BASIS=HEAD
+  INPUT_FRESHNESS=trial_accounting=FRESH row=TBL-FRESHNESS.R02 BASIS=HEAD
+TESTS_RUN= [BUILDER]
+  TESTS_RUN=full suite 4188 passed / 0 failed at d4d7c6e (R2 is design only and adds no code)
+VALIDATORS_RUN= [BUILDER]
+  VALIDATORS_RUN=qros check --project ITSF-S0: SEAL=VERIFIED, all inputs FRESH
+REPRO_COMMANDS= [BUILDER]
+  REPRO_COMMANDS=python -m pytest tests -q
+OUTCOME_EXPOSURE_SCOPE=HISTORICAL_CUMULATIVE [DECLARED]
+OUTCOME_EXPOSURE_DECLARED=TARGET_METRIC [DECLARED]
+OUTCOME_EXPOSURE_CANONICAL=TARGET_METRIC (composition: CANON record bytes · DECLARED normalization rule · MECH classification and aggregation) [MIXED]
+EXPOSURE_CONFLICT= [MECH]
+  EXPOSURE_CONFLICT=NO
+  EXPOSURE_CONFLICT=The runtime detects only **recorded** exposure and **contradiction between record and declaration**. It cannot detect exposure that was never written down — in-context exposure has no artifact witness. **A clean exposure check is never evidence that no exposure occurred**; it is evidence that the records on file agree with each other. The residual defense is procedural: failing to append an exposure event is a per-se process violation, and Stage I's task list includes an exposure-log plausibility check.
+TRIGGERS= [MIXED]
+  TRIGGERS=composition: MECH path and diff-breadth detection · DECLARED state, event and judgment sources · CANON external-KB relationship counts
+  TRIGGERS=matched=0
+  TRIGGERS=path-clear=0
+  TRIGGERS=unassessed=14
+EXECUTOR_ESCALATION=NONE [MECH]
+TRANSITION_ELIGIBILITY=UNKNOWN [MECH]
+REGENERATION_INPUTS= [MECH]
+  REGENERATION_INPUTS=runtime_version=qros-runtime 0.1.0 (§9.2 step 7a core)
+  REGENERATION_INPUTS=spec_revision=Rev18
+  REGENERATION_INPUTS=effective_table_bundle_identity=5008F5253E47F2196B5DA541038DB08C7B096C0C2D8F65FFD2507404F3637B5F
+  REGENERATION_INPUTS=HEAD=af5528fa8a2e03a33305f588efb2605bdb942267
+  REGENERATION_INPUTS=BASIS=HEAD
+  REGENERATION_INPUTS=SCOPE_BASE=857eed711558e488efb814462d822706049f82e6
+  REGENERATION_INPUTS=packet_content_identity=3651f9fe0b682526f40c340c00e71b3fa25112ce4517f52291ba2741d1aea1f6
+  REGENERATION_INPUTS=packet_attempt_identity=da56aecb6991
+  REGENERATION_INPUTS=input.exposure_record=2afeebc27a2e7e6dfa93509a0ad3dce784a97c7e609044133ca61ddecb11f25b@5d3574145b6291594e4eb072ac654be3b92fc402
+  REGENERATION_INPUTS=input.prereg=6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132@5d3574145b6291594e4eb072ac654be3b92fc402
+  REGENERATION_INPUTS=input.trial_accounting=ee9da33fdbb47725dc036243adc76d7d9ba69ff06df0df443b09103f897353d6@5d3574145b6291594e4eb072ac654be3b92fc402
+  REGENERATION_INPUTS=hash.RESEARCH_ID=eea604da6f645e7792dd7277aba68740e3dba856d680f6e9bec27b699a68fa13
+  REGENERATION_INPUTS=hash.LANE=cb6839cad0217d04d215050e8d6306dd9d4904dddc86a6b36e377d08509e5240
+  REGENERATION_INPUTS=hash.STAGE=6b23c0d5f35d1b11f9b683f0b0a617355deb11277d91ae091d399c655b87940d
+  REGENERATION_INPUTS=hash.DECISION_REQUESTED=1ec7f27fd5d1e82879b1936c567d76dbd082874ddb092d7273449dd29676c2e6
+  REGENERATION_INPUTS=hash.SUPPLEMENTAL_SCOPE=dc937b59892604f5a86ac96936cd7ff09e25f18ae6b758e8014a24c7fa039e91
+  REGENERATION_INPUTS=hash.PREREG_REF=86eb48a583d16ee1a064186baa8d5ff3b63da3fec38278edbcb032d86c40e69f
+  REGENERATION_INPUTS=hash.SEAL_REVISION=a49032cf338b99b73480ce3fd710c9aaa51c33774b186c19cdee6dd68aefed69
+  REGENERATION_INPUTS=hash.LINEAGE_ANCHOR=3b3cead32bcb7a9ac67f66cc8d6368233c3fc233741b143d38413e9e763b7568
+  REGENERATION_INPUTS=hash.TRIAL_ACCOUNTING_REF=1f322c33a0ef96c654c68df84482a26ad47022a0b7d700704682aee39c23dad6
+  REGENERATION_INPUTS=hash.TESTS_RUN=8a36ec2d98a163050da0ca10be56eb5b691d404f5a1d547f559c890f0430e2b5
+  REGENERATION_INPUTS=hash.VALIDATORS_RUN=1cfe4d9e24cc03163f6df71efae6bcf1e1c9a4fa86468aa0968a8753ac8c519a
+  REGENERATION_INPUTS=hash.REPRO_COMMANDS=9f546d24645f3586de4f10a85a3ac9f29868eb21453ed7203cbdf695cb0b57a0
+  REGENERATION_INPUTS=hash.OUTCOME_EXPOSURE_SCOPE=ac1c5b5854470ac6f6567a41cdaf82385eb45a7ceaad9007de24866f430bce2f
+  REGENERATION_INPUTS=hash.OUTCOME_EXPOSURE_DECLARED=bb5c725bff4b5f7fef6251842055b98f7913eef55f164d6662fbdebed3baa9ff
+GENERATED_BLOCK_SHA256=ad7cb312a4e1852473a7890862c4022ba4c6420b3b2c09d9d3103ac55526606d [MECH]
+
+2. BUILDER-SUPPLIED    visibly self-reported
+
+CLAIM_BEING_EVALUATED       A failed, partial or misread P3 append is an INDETERMINATE_HALF_TRANSITION routed to Aaron, never an automatic F2.
+KNOWN_FAILURES              The prior review of R1 returned L6_VERDICT=REJECTED_INCOMPLETE: no Review Packet was issued, and the reviewer lost outcome-blindness by opening the recovery anchor, which is outcome-carrying. That exposure is recorded in ops/REVIEWER_EXPOSURE_LOG.md.
+KNOWN_ASSUMPTIONS           The day_rows producer can reuse the production S0 universe/data assembly path without re-deriving any stratification; both strata come from s0.dataset mappings.
+UNRESOLVED_UNCERTAINTIES
+  Who appends P3 and the failure events is unruled: global boundary 4 says only the main agent writes the registry, while scripts/s0_real_run.py appended its own RUN_STARTED on the real S0 run.
+  Whether the exposure consumed by an INDETERMINATE_HALF_TRANSITION counts is undecided by construction — it is routed to Aaron.
+  Whether Aaron wants a future P2 sentence to also carry directory-creation authorization, merging two of three ratified-separate authorizations.
+COUNTERFACTUAL              If the day_rows producer needed to re-derive or re-interpret any stratification, that would be a methodological decision wearing engineering clothes and the design stops.
+BUILDER_RECOMMENDATION      Build R2 as written, with the four Aaron-reserved items left unresolved and refusing closed.
+
+3. REVIEWER CONTRACT   what the reviewer is asked to do, and must not do
+
+REVIEWER_TASK           discretionary phase-boundary review; it releases no transition and is never a requirement's gate
+MUST_NOT_DO
+  author
+  repair
+  approve its own prior work
+  accept a summary in place of bytes
+  treat a DECLARED, BUILDER, or SELECTED field as verified
+  accept a narrowed Tier-2 base
+  read UNKNOWN provenance as reviewer_only
+  claim unscoped independence (INV-8)
+REQUIRED_OUTPUT_SCHEMA
+  VERDICT: PASS | HOLD | REJECTED_INCOMPLETE  (§5.5.2, its sole normative site; this HOLD is a different field from TRANSITION_ELIGIBILITY's HOLD)
+  STRONGEST_OBJECTION: the best case against passing, stated even on PASS
+  PATHS_PULLED: every path whose bytes were read — the actual paths, listed individually. A count is not a substitute
+  INDEPENDENCE_STATEMENT: scoped per dimension and per target (QROS §3.1)
+    INDEPENDENCE_UNKNOWN=YES — the affected certification must be reported as scoped-unknown or explicitly non-independent, or the separate certification obtained must be named
+  ON a rejection verdict, additionally:
+    REJECTION_ORIGIN_CLASS: vocabulary source [TBL-PACKET-ORIGINS]
+    REJECTION_CAUSE_CLASS: RUNTIME_MECHANICAL_DEFECT | SOURCE_CONTENT | REVIEWER_DISCRETION | OTHER
+PULL_PROTOCOL           the reviewer lists the paths it needs; the working session supplies verbatim bytes; refusal or inability to supply ⇒ a rejection verdict
+
+REQUIRED SAVE PATH: runs/packets/rv-3651f9fe0b68-da56aecb6991.packet

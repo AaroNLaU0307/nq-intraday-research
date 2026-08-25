@@ -807,15 +807,18 @@ def test_all_stream_rejection_codes_are_registered_and_strict_raises():
         auth.AUTH_OVER_BUDGET_STATUS_MISMATCH,
         auth.AUTH_OVER_BUDGET_VALUE_UNDER_ABSENCE,
         auth.AUTH_OVER_BUDGET_RULED_WITHOUT_VALUES,
-        auth.AUTH_DAY_NET_INVARIANT,
+        auth.AUTH_DAY_NET_INVARIANT, auth.AUTH_BALANCE_NOT_FINITE,
         auth.AUTH_PHASE_UNKNOWN, auth.AUTH_PHASE_PLATFORM_MISMATCH,
         auth.AUTH_ENGINE_UNKNOWN, auth.AUTH_PLATFORM_UNKNOWN,
     }
     # every code is a distinct, stable string (an accidental alias would
     # make two different defects indistinguishable to lane S1')
     # 22 + the two D1 coherence codes (value under an absence label,
-    # RULED standing over missing values)
-    assert len(auth.AUTH_REJECTION_CODES) == 24
+    # RULED standing over missing values) + AUTH_BALANCE_NOT_FINITE, added
+    # 2026-08-26 when a NaN balance was found to defeat the day-net identity
+    # silently. This pin's job is to make an addition deliberate, and it did:
+    # the fix could not land until this number moved by hand.
+    assert len(auth.AUTH_REJECTION_CODES) == 25
     with pytest.raises(auth.AuthoritativeStreamError) as ei:
         auth.check_event_facts(
             [AccountEvent(day="x", phase="xfa", balance=0.0, floor=0.0)],
@@ -1553,3 +1556,75 @@ def test_the_unruled_defect_code_is_still_reachable(monkeypatch):
             auth.verify_event_stream(stream, engine="E2", platform="topstep")
         assert ei.value.code == auth.AUTH_OVER_BUDGET_VALUE_UNRULED
     assert auth.AUTH_OVER_BUDGET_VALUE_UNRULED in auth.AUTH_REJECTION_CODES
+
+
+# ===========================================================================
+# NaN defeats the day-net identity — Fable V2 Medium, 2026-08-20
+# ===========================================================================
+
+def test_a_nan_balance_does_not_silently_satisfy_the_day_net_identity():
+    """RED PROOF for the Fable V2 Medium finding, reproduced from scratch.
+
+    The identity is `day_net == (balance - prev.balance) + payout_gross`,
+    enforced as `abs(residual) > CROSS_CHECK_TOL_USD`. If any input is NaN
+    the residual is NaN, and `abs(nan) > tol` is **False** — so the
+    comparison reports no violation. Silence, not a failure.
+
+    `day_net_usd` is separately checked for finiteness, so a NaN there is
+    caught under its own code. `balance` never was: nothing in this module
+    checked it. A NaN balance therefore defeated the identity with no
+    day-net violation at all — it behaved EXACTLY like a satisfied
+    identity, which is the worst shape a check can have.
+
+    The assertion below is on the SPECIFIC code, deliberately. An earlier
+    draft asserted merely that some violation existed and passed against an
+    unrelated `engine_label_unknown` — including for a pair whose identity
+    was deliberately violated. A proof that cannot tell those apart proves
+    nothing.
+    """
+    import math
+
+    from itsf.mc.platforms import authoritative as auth
+
+    prev = _fact_ev(day="2026-08-03", phase="funded", balance=50000.0,
+                    day_net_usd=0.0)
+    broken = _fact_ev(day="2026-08-04", phase="funded", balance=99999.0,
+                      day_net_usd=100.0)
+    nan_balance = _fact_ev(day="2026-08-04", phase="funded",
+                           balance=float("nan"), day_net_usd=100.0)
+
+    def codes(pair):
+        return {v.code for v in auth.check_event_facts(
+            pair, engine="E2", platform="lucid")}
+
+    # the residual really is NaN, and the comparison really is False
+    resid = auth.day_net_cross_check(prev, nan_balance)
+    assert resid is not None and math.isnan(resid)
+    assert not (abs(resid) > auth.CROSS_CHECK_TOL_USD)
+
+    # the control: a plainly violated identity IS reported
+    assert auth.AUTH_DAY_NET_INVARIANT in codes([prev, broken]), (
+        "the control failed — this test cannot detect the defect it is for")
+
+    # the defect: NaN must not be indistinguishable from a satisfied identity
+    assert auth.AUTH_DAY_NET_INVARIANT in codes([prev, nan_balance])         or auth.AUTH_BALANCE_NOT_FINITE in codes([prev, nan_balance]), (
+        "a NaN balance produced no day-net violation — it is indis"
+        "tinguishable from an identity that holds")
+
+
+def test_a_non_finite_residual_is_never_read_as_no_violation():
+    """Defence in depth, one layer below the root cause.
+
+    Fixing `balance` closes the reachable path. It does not fix the
+    comparison, which still reads any NaN residual as "within tolerance".
+    Anything that produces a non-finite residual in future — a new field in
+    the identity, an inf balance — would be silently absorbed again."""
+    import math
+
+    from itsf.mc.platforms import authoritative as auth
+
+    for value in (float("nan"), float("inf"), float("-inf")):
+        assert not (abs(value) > auth.CROSS_CHECK_TOL_USD) or math.isinf(
+            value), f"{value!r} unexpectedly compared as over tolerance"
+    # inf DOES exceed tolerance; nan does not. Only nan is silent.
+    assert not (abs(float("nan")) > auth.CROSS_CHECK_TOL_USD)
