@@ -71,6 +71,81 @@ def test_the_register_is_well_formed():
             e["unchanged_since"]
 
 
+def _git(repo, *args) -> str:
+    out = subprocess.run(["git", *args], cwd=repo, capture_output=True,
+                         text=True)
+    assert out.returncode == 0, out.stderr
+    return out.stdout.strip()
+
+
+def derive_pin(repo, paths) -> str:
+    """THE pin for a review set, derived — never typed.
+
+    A pin is only meaningful if it is at or after every reviewed path's
+    last change. Typing one invites the failure it is supposed to prevent,
+    so it is computed from git: the most recent among each path's
+    last-change commit. `git log <pin>..HEAD -- <paths>` is then empty by
+    construction.
+
+    Refuses a path that has never been committed. That refusal is the
+    load-bearing part: it makes the sequencing mistake IMPOSSIBLE rather
+    than merely detectable. You cannot pin an untracked file, so the
+    reviewed artifacts must be committed BEFORE the register and the
+    prompt are written — which is exactly the order that keeps the pin
+    true.
+    """
+    last = {}
+    for path in paths:
+        commit = _git(repo, "log", "-1", "--format=%H", "--", path)
+        assert commit, (
+            f"{path} has never been committed, so it cannot be pinned. "
+            "Commit the reviewed artifacts FIRST, then register them.")
+        last[path] = commit
+    return max(last.values(),
+               key=lambda c: int(_git(repo, "log", "-1", "--format=%ct", c)))
+
+
+def test_the_pin_is_the_derived_one_not_a_typed_one():
+    """MEASURED FAILURE, 2026-08-25 — the third transport stop in one day.
+
+    I registered six artifacts with `unchanged_since` set to the then-HEAD,
+    ran this file's guards, saw them pass, committed, and handed over. A
+    fresh Sol stopped: the range was not empty.
+
+    The pin was wrong the moment it was written — one reviewed artifact did
+    not exist at that commit. And the range guard could not catch it: at the
+    time I ran it, nothing had been committed, so the range was TRIVIALLY
+    empty. A guard checked at a moment when it cannot fail is not a check.
+
+    This test closes that by construction. The pin is recomputed from git
+    every run, so a hand-typed, stale, or too-early value fails immediately
+    — including a value that happens to leave the range empty."""
+    repo = REGISTER.parent.parent
+    entries = _entries()
+    if not entries:
+        return
+
+    by_review = {}
+    for e in entries:
+        by_review.setdefault(e["review_id"], []).append(e)
+
+    wrong = []
+    for review_id, group in sorted(by_review.items()):
+        declared = {e["unchanged_since"] for e in group}
+        if len(declared) != 1:
+            wrong.append(f"{review_id}: {len(declared)} different pins in "
+                         "one review set")
+            continue
+        expected = derive_pin(repo, [e["path"] for e in group])
+        if declared.pop() != expected:
+            wrong.append(f"{review_id}: pinned "
+                         f"{group[0]['unchanged_since'][:12]}, derived "
+                         f"{expected[:12]}")
+    assert not wrong, (
+        "a review pin disagrees with the one git derives; the reviewer's "
+        "history check will not be empty:\n  " + "\n  ".join(wrong))
+
+
 def test_no_commit_has_touched_a_reviewed_path_since_its_declaration():
     """THE HOLE THE HASH CHECK LEFT, and it cost a review session.
 

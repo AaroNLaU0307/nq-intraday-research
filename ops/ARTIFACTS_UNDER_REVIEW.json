@@ -7,7 +7,7 @@
       "issued_to": "Codex GPT-5.6 Sol (fresh top-level session)",
       "issued_at": "2026-08-25",
       "review_id": "N09-EXECUTION-PATH-A2",
-      "unchanged_since": "d4d7c6ead513f6526f7237bfca3f81ca4fb92d14"
+      "unchanged_since": "c02d5e128474a15242259732e676ce3959e63dce"
     },
     {
       "path": "src/itsf/mc/registry_boundary.py",
@@ -15,7 +15,7 @@
       "issued_to": "Codex GPT-5.6 Sol (fresh top-level session)",
       "issued_at": "2026-08-25",
       "review_id": "N09-EXECUTION-PATH-A2",
-      "unchanged_since": "d4d7c6ead513f6526f7237bfca3f81ca4fb92d14"
+      "unchanged_since": "c02d5e128474a15242259732e676ce3959e63dce"
     },
     {
       "path": "src/itsf/mc/supplement_runner.py",
@@ -23,7 +23,7 @@
       "issued_to": "Codex GPT-5.6 Sol (fresh top-level session)",
       "issued_at": "2026-08-25",
       "review_id": "N09-EXECUTION-PATH-A2",
-      "unchanged_since": "d4d7c6ead513f6526f7237bfca3f81ca4fb92d14"
+      "unchanged_since": "c02d5e128474a15242259732e676ce3959e63dce"
     },
     {
       "path": "src/itsf/mc/supplement_production.py",
@@ -31,7 +31,7 @@
       "issued_to": "Codex GPT-5.6 Sol (fresh top-level session)",
       "issued_at": "2026-08-25",
       "review_id": "N09-EXECUTION-PATH-A2",
-      "unchanged_since": "d4d7c6ead513f6526f7237bfca3f81ca4fb92d14"
+      "unchanged_since": "c02d5e128474a15242259732e676ce3959e63dce"
     },
     {
       "path": "src/itsf/mc/supplement_authority.py",
@@ -39,7 +39,7 @@
       "issued_to": "Codex GPT-5.6 Sol (fresh top-level session)",
       "issued_at": "2026-08-25",
       "review_id": "N09-EXECUTION-PATH-A2",
-      "unchanged_since": "d4d7c6ead513f6526f7237bfca3f81ca4fb92d14"
+      "unchanged_since": "c02d5e128474a15242259732e676ce3959e63dce"
     },
     {
       "path": "src/itsf/mc/day_strata_supplement.py",
@@ -47,7 +47,7 @@
       "issued_to": "Codex GPT-5.6 Sol (fresh top-level session)",
       "issued_at": "2026-08-25",
       "review_id": "N09-EXECUTION-PATH-A2",
-      "unchanged_since": "d4d7c6ead513f6526f7237bfca3f81ca4fb92d14"
+      "unchanged_since": "c02d5e128474a15242259732e676ce3959e63dce"
     }
   ]
 }

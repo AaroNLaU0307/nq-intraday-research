@@ -42,12 +42,28 @@ the prompt changes it. What is declared instead:
 
 ```
 REVIEW_ID                    = N09-EXECUTION-PATH-A2
-REVIEWED_SET_UNCHANGED_SINCE = d4d7c6ead513f6526f7237bfca3f81ca4fb92d14
-VERIFY = git log d4d7c6e..HEAD -- <the six paths above>   ->  must be EMPTY
+REVIEWED_SET_UNCHANGED_SINCE = c02d5e128474a15242259732e676ce3959e63dce
+VERIFY = git log c02d5e1..HEAD -- <the six paths above>   ->  must be EMPTY
 ```
 
 An empty result proves no commit since that point touched a reviewed byte.
 Re-run it rather than comparing HEADs.
+
+**RE-ISSUE — the first issue of this prompt was correctly STOPped.** It
+declared `d4d7c6e`, and `c02d5e1` had touched
+`ops/N09_EXECUTION_PATH_DESIGN.md` since. The author's fault, twice over:
+`d4d7c6e` predates the design document's existence, so the pin was false when
+written; and the guard that would have caught it was run at a moment when it
+could not fail — before anything was committed, when the range was trivially
+empty.
+
+The pin is no longer typed. It is DERIVED from git as the most recent of each
+reviewed path's last-change commit, so the range is empty by construction,
+and the derivation refuses a path that has never been committed — which makes
+the sequencing mistake impossible rather than merely detectable. Reviewed
+artifacts are committed first; the register and this prompt land in a
+separate commit that touches none of them. Nothing in the reviewed set
+changed between the two issues; all six hashes above are unchanged.
 
 ## What is being asked
 
