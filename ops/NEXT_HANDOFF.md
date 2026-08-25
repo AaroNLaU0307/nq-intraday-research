@@ -4,34 +4,54 @@
 > 你不必再去 `ops/` 里认哪个是最新的 prompt。
 
 ```
-UPDATED = 2026-08-26
+UPDATED = 2026-08-26（D-3 复审已挂出）
 ```
 
 ---
 
 ## 现在挂着的交付
 
-### ① 交 Fable —— 四项待裁决策包
+### ① 交 fresh Sol —— D-3 registry 写者裁定复核
 
 ```
-文件   ops/DECISION_PACKET_FOUR_OPEN_2026-08-26.md
-状态   Aaron 已发出，运行中（2026-08-26）
-形式   整份贴给一个新的 Fable 会话
+提示   ops/PROMPT_D3_SOL_REVIEW.md          ← 整份贴给一个新的 Sol 会话
+packet ops/packets/rv-f4207865a116-c004854e6828.packet
+提案   ops/D3_REGISTRY_WRITER_PROPOSAL.md   （Sol 自己按提示从磁盘打开）
+门     TIER1_DISCRETIONARY   REVIEW_ID=rv-f4207865a116-c004854e6828
+状态   已就绪，未发出
 ```
 
-四项：exposure 台账是否补指针行 / 恢复锚拆不拆 / P3 与失败事件由谁追加 /
-qros-runtime 的 `_SAVE_DIR` 改不改。**其中两项裁了也不等于 builder 能执行**，
-原因写在包里。
+**要裁什么**：边界第 4 条「registry 只允许主代理单写」，与已完成真实运行中运行器
+自行追加 `RUN_STARTED` 的先例相抵。Fable 提案拆开裁——P3 由运行器自追加（受托
+单写限缩解释），失败事件仅主代理追加。Sol 判这个构造安不安全。
 
-### ② 交 fresh Sol —— R2 设计审
+**出提示的过程中实测到一件改变问题性质的事**：已批准的 `ND1_RECOMMENDED_PROFILE_R2`
+（sha256 `a3d40b7c…`，2026-08-23 批准）actor 表把 **P3／P4／A1／F1／F2 全判给
+`main agent (mc_ds_runner)`**，只把 A2／AX／F3 判给 `main agent`。所以提案的 P3 一半
+与已批准文本**一致**，失败事件一半与已批准文本**相抵三行**（A1／F1／F2）。
+另有 `src/itsf/s0/runner.py:725` 今天就在跨过不可逆点后追加 `FAILED`。
+写入提案 §2.5–2.7 并加了第五个猎取点，**未替 Sol 也未替 Aaron 收口**。
 
-```
-状态   已返回 VERDICT=HOLD（2026-08-26）
-记录   见下方「已完成」
-```
+**PASS 不授权任何写入**：条件 3 明写，Sol PASS ＋ Aaron 授权之前，生产代码不得
+获得任何 registry 写能力。Sol 返回之后仍需 Aaron 终裁。
 
-**R3 未出**：Sol 的 High #2 认定执行路径的可建范围取决于上面 ① 的裁定结果，
-所以 R3 等 Fable 返回后再写。现在能建的只有一个永远拒绝的骨架。
+**送审集已冻结**（`ops/ARTIFACTS_UNDER_REVIEW.json`，六条，钉子
+`7b582b1240e4a9d93cd8c9d9ac470ca98525ce02` 由 `derive_pin()` 派生）：
+在 Sol 返回前**不要动**这六个路径——
+`ops/D3_REGISTRY_WRITER_PROPOSAL.md`、`src/itsf/mc/supplement_contract.py`、
+`src/itsf/s0/runner.py`、`src/itsf/mc/registry_boundary.py`、
+`src/itsf/mc/supplement_runner.py`、`scripts/s0_real_run.py`。
+
+### ② 等 Aaron —— 另外三项裁定的后续
+
+D-1 条件 3（把全局 L6「每一次 exposure 事件都要追加」一句收窄到研究轴）、
+D-2 的 S1(a) ＋ registry 豁免、D-4 的 runtime `_SAVE_DIR` 工作项——**都要 Aaron
+本人动全局文件或运行时仓，builder 不能代劳**。
+
+### ③ 等 D-3 落定 —— N09 的 R3 设计
+
+Sol 对 R2 的 High #2 认定：执行路径的可建范围取决于 D-3 怎么裁。**所以 R3 在 ①
+返回之前写不了**，现在能建的只有一个永远拒绝的骨架。
 
 ---
 
@@ -134,6 +154,7 @@ ops/MC_TO_STRATEGY_MASTER_PLAN.md
 
 | 何时 | 交给谁 | 什么 | 结果 |
 |---|---|---|---|
+| 2026-08-26 | Fable | 四项待裁决策包 | **全部返回** —— D-1=A、D-2=C、D-3=C（三步之第一步，故成为上面 ①）、D-4=改；裁决全文是隔离件，D-3 一节的干净副本见 `ops/D3_REGISTRY_WRITER_PROPOSAL.md` |
 | 2026-08-26 | fresh Sol | R2 设计审（Review Packet v1，`rv-3651f9fe0b68-da56aecb6991`） | **HOLD** —— 三条 High 全部经 builder 独立复核成立；记录 `ops/A2_N09_SOL_EXPOSURE_AND_REDESIGN_2026-08-25.md` 与 `ops/REVIEWER_EXPOSURE_LOG.md` 第 2 行 |
 | 2026-08-25 | fresh Sol | MC-REG-COLLISION-001 批准 | **RATIFIED_AS_MODIFIED**（C2 被整条替换）→ 已实现，记录 `ops/RULING_MC_REG_COLLISION_SOL_RATIFICATION_2026-08-25.md` |
 | 2026-08-25 | Fable | MC-REG-COLLISION-001 提案 | R2 提案 → 记录 `ops/RULING_PROPOSAL_MC_REG_COLLISION_FABLE_2026-08-25.md` |

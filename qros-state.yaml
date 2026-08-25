@@ -186,6 +186,45 @@ packets:
     decision_requested: "Should the N09 execution-path design R2 be built as written?"
     selector: "builder"
     appended_at: "2026-08-25T16:59:01Z"
+  # PACKET_ISSUANCE — a NEW review, not a correction of the one above.
+  # D-3: who appends P3 and the failure events to ops/TRIAL_REGISTRY.md.
+  # Saved under ops/packets/ for the reason recorded at pr-rv3651f9fe0b68-002
+  # and in ops/RUNTIME_DEVIATION_PACKET_SAVE_DIR.md — unchanged, still a
+  # deviation, still disclosed.
+  #
+  # basis is WORKTREE, not HEAD, and that is inherent rather than sloppy:
+  # generating the packet requires the delivery materials to exist, and
+  # committing them moves HEAD, so no packet can ever be generated on a
+  # clean tree that already contains itself. The two dirty paths at
+  # generation were ops/NEXT_HANDOFF.md and ops/PROMPT_D3_SOL_REVIEW.md —
+  # neither is a reviewed path. The authoritative transport checks are the
+  # six registered hashes and an empty
+  # `git log <unchanged_since>..HEAD -- <reviewed paths>`.
+  - kind: "PACKET_ISSUANCE"
+    packet_record_id: "pr-rvf4207865a116-001"
+    review_id: "rv-f4207865a116-c004854e6828"
+    saved_path: "ops/packets/rv-f4207865a116-c004854e6828.packet"
+    sha256: "452afc10e86909e15cf7884cbe134d249221dd9a7ae8c2e3315b42211c56d731"
+    gate: "TIER1_DISCRETIONARY"
+    head: "7b582b1240e4a9d93cd8c9d9ac470ca98525ce02"
+    basis: "WORKTREE"
+    scope_kind: "TIER1_BATCH"
+    scope_base: "713010eb3353df19acb8b3c22f938c40f509ad9e"
+    scope_base_origin: "selected"
+    # DERIVED, not transcribed: the packet renders no scope_content_digest
+    # field. It is serialize.scope_content_digest() over the packet's own
+    # FILE_MANIFEST pairs, per packet.py:942. Verified by recomputing the
+    # R2 record above from ITS packet — the method reproduces the recorded
+    # b33bd4a6… exactly, so this is the same quantity and not a guess.
+    # packet_content_identity f4207865a116… is NOT recorded here: the state
+    # schema rejects it as an unrecognised field (measured).
+    scope_content_digest: "72c6a33847b03d6c08ca1accba3766a56d17874f318aaa876136edafab0cc2f7"
+    prereg_input_sha256: "6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132"
+    material_design_contributor: "UNKNOWN"
+    effective_table_bundle_identity: "5008F5253E47F2196B5DA541038DB08C7B096C0C2D8F65FFD2507404F3637B5F"
+    decision_requested: "Ratify, modify, or reject the D-3 proposal on who appends P3 and the failure events, given that the ratified ND1 profile already assigns three failure events to the runner"
+    selector: "builder"
+    appended_at: "2026-08-26T00:00:00Z"
 
 # ------------------------------------------------------------- INPUTS §2.3 --
 inputs:
