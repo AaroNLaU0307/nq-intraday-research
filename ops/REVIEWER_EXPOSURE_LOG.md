@@ -134,3 +134,51 @@ classification 值。若认为不该混记，请裁，我按 append-only 追加�
 
 **席位自评从严、披露从宽**：Fable 主动在开工第一段申报了这三次操作，未被问及。
 按台账惯例**自评不下调**，终分类归 Aaron。
+
+
+---
+
+## 词表节（R9 条件 1，2026-08-26 追加；既有各行一字未动）
+
+| classification | 含义 | 首次裁定 |
+|---|---|---|
+| `REVEALED_TARGET_METRIC` | 席位见到揭盲后的目标统计量本体 | 第 1 行 |
+| `TARGET_METRIC` | 席位见到目标统计量的片段或派生值 | 第 2 行 |
+| `QUARANTINE_CONTACT_NON_OUTCOME` | 席位接触了隔离字节，**但其内容不属 outcome 轴**（如记账轴数值、治理边界文本） | R8（Fable，`dec-remaining-2026-08-26`） |
+| `NOT_EXPOSED` | 一次在 blind-mandate 下完成的具体复审，**经认证未接触任何隔离内容** | R9（同上） |
+| `PENDING_AARON` | 过渡态：席位自评与分类判据不足以定，留给 Aaron | 第 3 行（现已由 R8 定） |
+
+**`NOT_EXPOSED` 的范围规则（R9，防语义漂移）**：仅许可用于**一次具体复审的逐单
+认证**，必须引用 `review_id`；**不得用作例行会话点名册**。本台账的主题由此明确为
+「席位暴露**状态**事件」——阳性（烧）与认证阴性（活）同为状态事件。
+**新 classification 值首用前须经裁定**（Aaron 或受委托席）。
+
+## 更正行（append-only；上方任何一行一字未改）
+
+| 更正 | 针对 | 内容 |
+|---|---|---|
+| C-1 | **第 3 行** | 终分类由 `PENDING_AARON` 定为 **`QUARANTINE_CONTACT_NON_OUTCOME`**。依据（逐字，杜绝逐事件重开）：**「累计暴露计数属 TRIAL_ACCOUNTING／记账轴，不属 outcome 轴；三条正交轴永不由一轴推另一轴。」** outcome-blind 资格按内容轴**不烧**；接触隔离字节的事实与成因记录**存续不删**。`delegated Fable seat, dec-remaining-2026-08-26；Aaron may override by append` |
+| C-2 | **第 5 行** | 终分类定为 **`NOT_EXPOSED`**（pre-constraint、filename-only、zero content）。**builder 机械复核（R10 条件 2）**：在 `6fe14a7` 下 `ops/PROMPT*` 返回的文件名集合恰为 `ops/PROMPT_D3_SOL_REVIEW.md` 与 `ops/PROMPT_EIGHT_OPEN_FABLE.md` 两个，**无一在隔离名单上**。近失属实并记录在案：`ops/ND2_ND3_FABLE_DECISION_PROMPT.md` 在名单上且名含 `PROMPT`，但**不以 `PROMPT` 起头**，锚定 glob 未命中。`delegated Fable seat, dec-remaining-2026-08-26；Aaron may override by append` |
+
+**第 4 行不动**（R9 条件 2）：其 `NOT_EXPOSED` 值经 R9 转为合法词表成员，无需更正行。
+
+**R8 条件 2 已由 builder 机械核验**：outcome-clean 扫描器的 `_SELF` 自排除清单仅两项
+（`ops/INCIDENT_HANDOFF_ARTIFACTS_CARRY_OUTCOME_20260824.md` 与扫描器自身），
+**`ops/REVIEWER_EXPOSURE_LOG.md` 不在其中**，在 `rglob("*.md")` 扫描范围内且实扫干净。
+**无逐文件豁免 ⇒ R8 的机械佐证成立，不降级。**
+
+## 第 6 行 —— 第二个未被烧的席位，且是第一个不需要找文件的
+
+| # | ts | seat | artifact_read | what_was_seen | classification | consequence | cause |
+|---|---|---|---|---|---|---|---|
+| 6 | 2026-08-26 | Fable 5，决裁席（`dec-remaining-2026-08-26`，其余十项） | 只读送审集内八条；**零检索、零定位操作**（绝对路径修复生效，本仓历任决裁席第一个不需要找文件的） | **一项主动申报的接触**：送审集内 `ops/REVIEWER_EXPOSURE_LOG.md` 序言携带的研究暴露累计值——**而那正是它随后要在 R8 里裁的那个值**。除此零隔离内容 | **`PENDING_AARON`** —— 席位自评 `BLIND`，但它**明示让出**自己这一行的终分类（`STILL_AARON_ONLY` 第 5 条），以切断「用自己的 R8 裁定为自己开脱」的循环 | 待终分类后确定 | —— 无事故。**接触源于 builder 把席位台账放进了送审集**，而 R8 恰好要裁台账里的那个值：**要它裁，就得给它看** |
+
+### 第 6 行的两点，都值得记住
+
+**一、绝对路径那条修复，一次就见效了。** 第 5 行的成因是 builder 只给了仓相对路径，
+决裁席在仓外只能先找。改成绝对路径之后，本席**零定位操作**——这不是运气，是同一个
+缺陷被修掉的直接证据。
+
+**二、它自己指出了一个我造成的循环，并且拒绝用它。** R8 要裁的是「累计计数值算不算
+outcome 暴露」，而那个值就在我送去给它读的文件里。它**先申报接触、再裁那个值、然后
+明说自己这一行不由自己的裁定决定**。这个顺序是对的；我把台账放进送审集时没想到这层。

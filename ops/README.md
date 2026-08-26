@@ -76,6 +76,7 @@
 
 | 文件 | 是什么 |
 |---|---|
+| [`RULING_FABLE_REMAINING_2026-08-26.md`](RULING_FABLE_REMAINING_2026-08-26.md) | **其余十项裁定全文**（R1–R10，逐字）＋ builder 审核。R4／R6／R7 判 `DELEGABLE=NO`，仍等 Aaron；两条机械条件已跑，均成立 |
 | [`RULING_FABLE_EIGHT_OPEN_2026-08-26.md`](RULING_FABLE_EIGHT_OPEN_2026-08-26.md) | **八项裁定全文**（逐字）＋ builder 逐条复现审核；含一处经复核的论证更正 |
 | [`RULING_SOL_D3_HOLD_2026-08-26.md`](RULING_SOL_D3_HOLD_2026-08-26.md) | **D-3 复核结果 = HOLD**（4 High／1 Medium，五项留给 Aaron）＋ builder 逐条复现记录。outcome-clean |
 | [`A2_N09_SOL_EXPOSURE_AND_REDESIGN_2026-08-25.md`](A2_N09_SOL_EXPOSURE_AND_REDESIGN_2026-08-25.md) | N09 首轮：席位暴露 ＋ 非正式 REDESIGN |
