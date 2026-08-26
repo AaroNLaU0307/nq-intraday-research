@@ -101,8 +101,9 @@ ND1_RECOMMENDED_PROFILE_R2 → 跨字段检查重跑 → 新 canonical SHA-256 �
 
 ## 二.1 R3 候选正文（correction-only，由 R2 字节构造）
 
-> **本节为第二版。** 第一版被 fresh Sol 判 HOLD，`STRONGEST_OBJECTION` 是
-> **CR1→F3 单向声明**——见 §二.2(a)。第一版的 `d26cbc3e…` 作废。
+> **本节为第三版。** v1 被判 HOLD（CR1→F3 单向声明）；v2 亦被判 HOLD——
+> `registry_intact_verification` 的哈希前像未定义、且 R3 哈希不绑定 CR1 语法。
+> **`d26cbc3e…`（v1）与 `12105e98…`（v2）均作废。**
 
 ```
 BEGIN_ND1_RECOMMENDED_PROFILE_R3
@@ -129,10 +130,11 @@ RECOMMENDED_F3_PERMITTED_PREDECESSOR=P1|P2|F1|F2|F2v|AX|CR1
 RECOMMENDED_F3_PERMITTED_SUCCESSOR=T1
 RECOMMENDED_GRAMMAR_T1=ADOPT_AS_WRITTEN
 RECOMMENDED_GRAMMAR_CR1=ADOPT_AS_INTRODUCED_BY_R3
+RECOMMENDED_CR1_GRAMMAR_SHA256=3154ade699eb7dad36fb32ac2a0d7b7a862e845d5d0c3910bcb56f66be5a3879
 RECOMMENDED_CR1_PERMITTED_PREDECESSOR=P3
 RECOMMENDED_CR1_PERMITTED_SUCCESSOR=F3
 RECOMMENDED_CR1_DANGLING_EVENT_DOMAIN=P3
-RECOMMENDED_CR1_REGISTRY_INTACT_VERIFICATION_DOMAIN=64HEX_SHA256_OF_REGISTRY_AT_RESOLUTION
+RECOMMENDED_CR1_REGISTRY_INTACT_VERIFICATION_DOMAIN=SHA256_HEX64_OF_REGISTRY_BYTES_AS_READ_BEFORE_THIS_ROW_IS_APPENDED
 RECOMMENDED_GRAMMAR_STATE_MACHINE=ADOPT_AS_WRITTEN
 RECOMMENDED_GRAMMAR_PARSER_FAIL_CLOSED_RULES=ADOPT_AS_WRITTEN
 RECOMMENDED_F1_GATE_NAME_ENUM=DEFER_TO_N04
@@ -169,29 +171,54 @@ END_ND1_RECOMMENDED_PROFILE_R3
 
 ```
 CANONICAL_BYTES=BEGIN 与 END 两行之间的行（不含这两行），LF 结尾，UTF-8，逐行原样
-R3_CANONICAL_SHA256=12105e98438c6a547d2264f195b59f0bb5e2831342c536a7aa87e0cfc9a8873c
+R3_CANONICAL_SHA256=9c8621acc8a1b9e9b302a19b7fd0f81cc1d81baf1863e0eba9b085aecaeda568
 ```
 
-**correction-only 的机械证明（沿 §D.11.3 的形式）**：
+### 二.1b CR1 语法 canonical 块（Finding 3 的答复）
+
+**Sol 指出 R3 哈希只覆盖 profile 块，`row_class`／`actor`／字段／`terminal`／
+`incident_required` 全在块外，`ADOPT_AS_INTRODUCED_BY_R3` 没有唯一 section
+marker 或子块哈希。** 本版给出构造：**CR1 语法自成一个 canonical 块，profile 里
+用一行 `RECOMMENDED_CR1_GRAMMAR_SHA256` 把它绑住** —— 绑定因此落在 R3 哈希覆盖
+范围之内，而语法块本身**不含自己的哈希**，无自引用。
 
 ```
-R2_LINES=51
-R3_LINES=58
-INHERITED_VERBATIM=47 / 58
-EDITS=11
-  changed  PROFILE_ID=..._R2 -> ..._R3
-  changed  RECOMMENDED_GRAMMAR_P3=ADOPT_AS_CORRECTED_BY_R2
-        -> RECOMMENDED_GRAMMAR_P3=ADOPT_AS_CORRECTED_BY_R2_THEN_R3
-  changed  RECOMMENDED_P3_PERMITTED_SUCCESSOR=P4|A1|F2 -> P4|A1|F2|CR1
-  changed  RECOMMENDED_GRAMMAR_F3=ADOPT_AS_WRITTEN -> ADOPT_AS_CORRECTED_BY_R3
-  added    RECOMMENDED_F3_PERMITTED_PREDECESSOR=P1|P2|F1|F2|F2v|AX|CR1
-  added    RECOMMENDED_F3_PERMITTED_SUCCESSOR=T1
-  added    RECOMMENDED_GRAMMAR_CR1=ADOPT_AS_INTRODUCED_BY_R3
-  added    RECOMMENDED_CR1_PERMITTED_PREDECESSOR=P3
-  added    RECOMMENDED_CR1_PERMITTED_SUCCESSOR=F3
-  added    RECOMMENDED_CR1_DANGLING_EVENT_DOMAIN=P3
-  added    RECOMMENDED_CR1_REGISTRY_INTACT_VERIFICATION_DOMAIN=64HEX_SHA256_OF_REGISTRY_AT_RESOLUTION
+BEGIN_ND1_CR1_GRAMMAR_R3
+CR1_SHORT_ID=CR1
+CR1_TOKEN=SUPPLEMENT_RUN_CRASH_RESOLVED
+CR1_ROW_CLASS=NUMBERED
+CR1_ACTOR=main agent
+CR1_TERMINAL=NO
+CR1_INCIDENT_REQUIRED=YES
+CR1_PERMITTED_PREDECESSOR=P3
+CR1_PERMITTED_SUCCESSOR=F3
+CR1_REQUIRED_FIELDS=supplement_id|dangling_event|incident_id|crash_evidence_summary|recovery_authorization_doc|registry_intact_verification
+CR1_FIELD_DOMAIN_dangling_event=P3
+CR1_FIELD_DOMAIN_registry_intact_verification=SHA256_HEX64_OF_REGISTRY_BYTES_AS_READ_BEFORE_THIS_ROW_IS_APPENDED
+CR1_REGISTRY_INTACT_PREIMAGE=the complete on-disk bytes of ops/TRIAL_REGISTRY.md, read once, immediately BEFORE the CR1 row is appended; no normalization, no encoding change, no line-ending rewrite; the value is therefore never part of its own preimage
+CR1_GRAMMAR_CONTAINS_NO_EXECUTION_AUTHORIZATION=YES
+END_ND1_CR1_GRAMMAR_R3
 ```
+
+```
+CANONICAL_BYTES=同上口径
+CR1_GRAMMAR_SHA256=3154ade699eb7dad36fb32ac2a0d7b7a862e845d5d0c3910bcb56f66be5a3879
+```
+
+**correction-only 的机械证明**：
+
+```
+R2_LINES=51   R3_LINES=59   INHERITED_VERBATIM=47 / 59   EDITS=12
+  changed  PROFILE_ID / GRAMMAR_P3 / P3_PERMITTED_SUCCESSOR / GRAMMAR_F3   （4 处）
+  added    F3_PERMITTED_PREDECESSOR · F3_PERMITTED_SUCCESSOR               （2 处）
+  added    GRAMMAR_CR1 · CR1_GRAMMAR_SHA256 · CR1_PERMITTED_PREDECESSOR ·
+           CR1_PERMITTED_SUCCESSOR · CR1_DANGLING_EVENT_DOMAIN ·
+           CR1_REGISTRY_INTACT_VERIFICATION_DOMAIN                          （6 处）
+```
+
+**机械核验已入套件**：`tests/test_nd1_profile_revision_chain.py` 断言 R3 块的
+字节确实算出上面那个哈希、对 R2 恰为 12 处编辑、CR1 的边双向声明、且各条边界行
+仍为 NO。**五条变异全红，含第四次 HOLD 的那个原始缺陷。**
 
 ### 二.2 三处升级 —— **(a) 是 Sol 判 HOLD 的直接原因**
 
@@ -223,8 +250,24 @@ Aaron 明示 ratify」。
 
 - `RECOMMENDED_CR1_DANGLING_EVENT_DOMAIN=P3` —— 否则可在 P3 之后声称任意 dangling
   event。
-- `RECOMMENDED_CR1_REGISTRY_INTACT_VERIFICATION_DOMAIN=64HEX_SHA256_OF_REGISTRY_AT_RESOLUTION`
-  —— 一个可复算的证明，而不是一个 `YES`。**这个取值是我提的，请裁。**
+- `RECOMMENDED_CR1_REGISTRY_INTACT_VERIFICATION_DOMAIN=SHA256_HEX64_OF_REGISTRY_BYTES_AS_READ_BEFORE_THIS_ROW_IS_APPENDED`
+
+**v2 在这一条上被判 HOLD，Sol 的反对成立**：我写的
+`64HEX_SHA256_OF_REGISTRY_AT_RESOLUTION` **没有定义前像**。若覆盖追加 CR1 之后的
+registry，该字段的值就落在自己的前像里——**不可实现的自引用**；若覆盖追加之前，
+则冻结时点、字节范围、编码、换行规则全未言明。**当时只能验证「长得像 64-hex」。**
+
+**本版的定义（逐字见 §二.1b 的 `CR1_REGISTRY_INTACT_PREIMAGE`）**：
+
+```
+ops/TRIAL_REGISTRY.md 的完整磁盘字节，读取一次，时点为 CR1 行被追加之前；
+不做规范化、不改编码、不重写换行。该值因此永不属于它自己的前像。
+```
+
+**「追加之前」这个时点不是新发明**：`pre_exposure_recheck` 比对的
+`registry_sha256` 与 `post_run_started_hook` 记录的
+`registry_sha256_after_run_started` 用的就是「整文件字节在某个具名时刻」这一
+惯例（`scripts/s0_real_run.py:3060-3080`）。**本版沿用它，不另立口径。**
 
 ## 二、Part A —— CR1 的语法正文（随 R3 profile 一并批准）
 
@@ -273,16 +316,29 @@ NON_TERMINAL_TRAPS = ("A1", "AX", "CR1")     # 现为 ("A1", "AX")
 （`supplement_runner.py:748-749`）现在只认 A1／AX，加 CR1 会让它给出错误提示。
 **这是修订的建造义务，不是可选项。**
 
-### A.3 `FORBIDDEN_EDGES` 增加两条
+### A.3 `FORBIDDEN_EDGES` —— **中间态不可保留，两个完整选项二择一**
 
-```python
-("CR1", "P4"),    # 崩溃裁定永不复活运行
-("CR1", "P5"),    # 更不能直接跳到独立验证
+**Sol 两轮都指出**：两条禁边对强制正确性**都非必要**（CR1 的 successors 只有 F3，
+普通 transition 检查已会拒 `CR1→P4/P5`）；若要作为具名政策保留，**当前又缺一条
+——真正的重启边 `CR1→P3`**。它明确说：**不能保留这个缺一条的中间态。**
+
+**builder 不替任何人选，但把两个完整形都写出来**：
+
+```
+选项 ZERO  —— 一条不加。完全依赖 closed successor list。
+             理由：不制造与 successors 重复的第二真相源。
+             代价：「崩溃裁定永不复活运行」不是被测断言，只是 successors 恰好没写。
+
+选项 FULL  —— 三条全加，并各配专用拒绝码：
+             ("CR1","P4") ("CR1","P5") ("CR1","P3")
+             其中 ("CR1","P3") 才是真正的重启边——「永不复活」这句话的正面对象。
+             代价：三条与 successors 重复，须同步维护。
 ```
 
-两者都不在 CR1 的 `successors` 里，所以已经非法；**但 `FORBIDDEN_EDGES` 是
-「数据化的显式拒绝清单」，有测试逐条断言解析器拒绝它们**。写进去让「永不复活」
-成为被测断言，而不是靠 successors 恰好没写。
+**builder 的观察（非裁定）**：本栈既有的 8 条 `FORBIDDEN_EDGES` 里，
+`("F2","P3")`（`f2_to_p3_in_place_retry`）与 `("P2S","P3")` 都是**重启边**——
+**「禁止就地重启」在这份表里已有先例，且正是它的主要用途**。若取 FULL，
+`("CR1","P3")` 与那两条同形。
 
 ### A.4 明确**不动**的
 
@@ -337,11 +393,14 @@ F2v。追下去发现问题比漏项更深：黑名单形式本身是错的** �
 **改为白名单**（实测各事件的 terminal 位与后继得出）：
 
 ```
-START_ADMISSIBLE(chain) == last ∈ {"P1", "P2", "F1"}
+CHAIN_STATE_PERMITS_START(chain) == last ∈ {"P1", "P2", "F1"}
 ```
 
-即：**只有尚未开跑的三种状态允许开新运行**，其余一律拒绝。**新增事件默认落在
-拒绝侧**，这正是白名单相对黑名单的全部价值。
+**改名自 `START_ADMISSIBLE`（Sol Finding ④）**：旧名暗示「可以开跑」，而
+**它只是必要条件之一，不是许可**。P1 仅表示「仍在 pre-start 生命周期」；真正开跑
+还必须与**唯一 live P2** 等授权条件**合取**。新名只陈述链状态这一维，不暗示授权。
+
+其余一律拒绝。**新增事件默认落在拒绝侧**，这正是白名单相对黑名单的全部价值。
 
 | last | 状态 | 可否开新运行 | 拒绝时该说什么（Sol 要求各状态命名不同） |
 |---|---|---|---|
@@ -373,8 +432,10 @@ START_ADMISSIBLE(chain) == last ∈ {"P1", "P2", "F1"}
 ### B. 修订本体（须 ratify）—— **代码是转录，不是批准对象**
 
 **顺序按 §二.0 的既定路径，不得倒**：
-Sol 复核本提案 → builder 把 R3 正文与 CR1 语法做 **doc-only commit**（该 commit
-即 `APPROVAL_BINDS_DOC_HEAD`）→ Aaron 批准 `id + sha256 + 精确 doc HEAD` →
+Sol 复核本提案 → **builder 重跑 §7 明列的「跨字段检查」（C1–C10）并把结果入证据
+——前一版漏了这一步，Finding 5** → builder 把 R3 正文与 CR1 语法做 **doc-only
+commit**（该 commit 即 `APPROVAL_BINDS_DOC_HEAD`）→ Aaron 批准
+`id + sha256 + 精确 doc HEAD` →
 **然后**才轮到下列代码转录：
 
 1. `EVENTS` 加 CR1 **并把 CR1 加进 `EVENTS["F3"].predecessors`**；
@@ -389,17 +450,21 @@ Sol 复核本提案 → builder 把 R3 正文与 CR1 语法做 **doc-only commit
 2. 修 `assert_chain_closed:748-749` 的写死提示语 —— **Sol 要求提示语由 successor
    数据生成，不再扩展那个硬编码三元表达式**。加一个事件就要改一次字符串，是同一
    缺陷的第三次重演。
-3. bootstrap 悬链拒绝：链尾为 P3 且无后继 ⇒ 拒绝**该 supplement_id 的一切新
-   工作**，并拒绝 **MC 生产入口整体**，直至裁定。
+3. bootstrap 悬链拒绝：链尾为 P3 且无后继 ⇒ 拒绝**该 supplement_id 的一切新工作**，
+   直至 CR1 裁定。
+   **（Finding 2 更正）** 前一版这里还写着「并拒绝 MC 生产入口整体」，而 §四.A
+   同时声明「本版只裁 per-id，全局范围留给 Aaron」——**同一份文档里两条互斥的规则，
+   实现者无法从中得到唯一答案**。本版删去建造义务与 falsifier 里的全局阻断断言，
+   **全局范围保持为未裁的开放项**（见 §六）。
 4. **每一条都要变异证红**（Fable 条件 1）。
 5. 悬空 A1 **不需要新机制**——A1 的后继 A2／AX 本就是 main agent 事件，
    现行词表已可闭合。
 
 ## 五、FALSIFIER
 
-- **（继承 Fable）** 真实事故显示悬空 P3 的拒绝以裁定无法快速解除的方式楔死了
-  **无关的** supplement_id ⇒ 拒绝范围（per-id vs 全局）须重设计。本提案有意
-  取偏楔死的一侧（per-id ＋ MC 入口整体 fail-closed），**此偏向可由 Aaron 回调**。
+- **（继承 Fable，本版按 Finding 2 收窄）** 真实事故显示悬空 P3 的 **per-id** 拒绝
+  以裁定无法快速解除的方式楔死了**无关的** supplement_id ⇒ 拒绝范围须重设计。
+  **本版不再断言全局阻断**——那一项未裁，见 §六。
 - **（builder 追加）** 若 §四.A 的谓词落地后，任何**既有**测试变红，说明现行
   套件里存在依赖「被遗弃的链能通过门」的用例 —— 那本身是要报告的发现，
   **不得靠放宽新检查来消音**。
@@ -407,32 +472,40 @@ Sol 复核本提案 → builder 把 R3 正文与 CR1 语法做 **doc-only commit
   或过窄，**以拒得多为安全侧**：多拒一次要 Aaron 裁一句，少拒一次可能放行第二次
   消耗暴露的运行。
 
-## 六、请 fresh Sol 重点看的（第五次交付，已按第四次 HOLD 改过）
+## 六、请 fresh Sol 重点看的（第六次交付，已按第五次 HOLD 改过）
 
-**第四次 HOLD 的四条，本版逐条处理如下**：
+**第五次 HOLD 的五条，逐条处理**：
 
 | Sol 的发现 | 本版做法 |
 |---|---|
-| HIGH 1 CR1/F3 边不对称 | **已修**：F3 转 `ADOPT_AS_CORRECTED_BY_R3`＋显式两行；R3 哈希因此变为 `12105e98…`，`d26cbc3e…` 作废 |
-| HIGH 2 谓词不全＋我的前提陈述不准 | **已修**：我的「悬空 P3 会过 A_PRECHECK」经实测推翻并公开更正（§一.2）；黑名单改白名单，A2／F2v 补入，per-id 与全局阻断拆开 |
-| HIGH 3 CR1 字段域与 canonical 绑定未闭合 | **值域已封闭**（§二.2(d)，取值是我提的）；**canonical 绑定方式仍未定**，明确留给你与 Aaron |
-| MEDIUM 4 禁边非必要＋建造义务不全 | **建造义务已补**（`FORBIDDEN_EDGE_CODES`／`plan_next_short_id`／`_check_field_values`）；**禁边是否保留、以及是否该正面处理真正的重启边 `CR1→P3`，请裁** |
+| HIGH 1 `registry_intact_verification` 前像未定义／自引用 | **已定义**（§二.2(d)＋语法块的 `CR1_REGISTRY_INTACT_PREIMAGE`）：CR1 行**追加之前**读到的整文件字节，不规范化。**该值永不在自己的前像里。** 沿用 `pre_exposure_recheck` 已有的口径，不另立 |
+| HIGH 2 全局阻断自相矛盾 | **已修**：建造义务与 falsifier 里的全局断言删除，**只裁 per-id**，全局保持未裁 |
+| HIGH 3 R3 哈希不绑定 CR1 语法 | **已给构造**：CR1 语法自成 canonical 块（`3154ade6…`），profile 内一行 `RECOMMENDED_CR1_GRAMMAR_SHA256` 绑定它 —— 绑定落在 R3 哈希覆盖内，语法块不含自身哈希 |
+| HIGH 4 测试保障陈述不成立 | **已建**：`tests/test_nd1_profile_revision_chain.py`。**你说对了，而且比你说的更糟**——旧测试里 `R2` 出现**零次**，且它把 **R1** 钉成 `APPROVED_PROFILE_ID` 一直绿着 |
+| MEDIUM 5 漏了「跨字段检查重跑」 | **已补进实施顺序** |
+| ④ `START_ADMISSIBLE` 暗示授权 | **已改名** `CHAIN_STATE_PERMITS_START`，并写明它只是必要条件之一，须与唯一 live P2 合取 |
+| ③ 禁边中间态不可保留 | **已给两个完整选项**（ZERO / FULL），FULL 含真正的重启边 `CR1→P3`；并指出栈内已有 `("F2","P3")`／`("P2S","P3")` 两条重启边先例 |
+
+**R3 哈希已两次作废**：`d26cbc3e…`（v1）、`12105e98…`（v2）。**现行为 `9c8621ac…`**，
+59 行、47 逐字继承、12 处编辑。
 
 **请重点打的**：
 
-1. **§二.2(b)**：R3 改了**两行**已批准字段（P3 后继、F3 语法）。第四次你的意见是
-   「没有超出 amendment 路径，但只能由 Aaron 明示 ratify」——本版把 F3 也拉进来了，
-   **范围更大，请重新判**。
-2. **§四.A 的白名单**：`START_ADMISSIBLE = {P1, P2, F1}`。它是我按你的批评从黑名单
-   改过来的——**改动方向对不对、集合本身有没有漏，请证伪**。
-3. **§二.2(c) 的 canonical 绑定**：`R3_CANONICAL_SHA256` 只覆盖 58 行 profile 块，
-   不覆盖 CR1 的 `EventSpec`。**绑定方式我定不了**，请给出可行形。
-4. **`CR1→P3`**：你指出「永不复活运行」应正面处理真正的重启边。本版**没有**把它
-   加进 `FORBIDDEN_EDGES`——因为它同样不在 CR1 的 successors 里，与 P4／P5 同理。
-   **要么三条都列、要么一条都不列，请裁哪一种。**
-5. **`registry_intact_verification` 取 64-hex SHA-256** 是我的提议，不是任何裁定。
+1. **§二.1b 的绑定构造**：profile 用一行哈希绑住语法块。**这是我提的机制**，
+   Sol 上一轮把它列为 `UNRESOLVED_FOR_AARON`——请判它可不可行，再由 Aaron 定。
+2. **前像定义**：「追加之前的整文件字节」是否真的消除了自引用，且是否**足够精确
+   到可复算**（编码、换行、读取时点）。
+3. **禁边 ZERO vs FULL**：我不选，但指出中间态不可留。
+4. **全局阻断范围**：本版明确未裁，留给 Aaron。
+5. **`CHAIN_STATE_PERMITS_START` 的集合**：`{P1, P2, F1}` 有没有漏。
 
-## 七、常设禁令（对复审席位同样在 force）## 七、常设禁令（对复审席位同样在 force）
+**本版新增的机械保障（可自行复算）**：
+`tests/test_nd1_profile_revision_chain.py` 11 项，覆盖 R1／R2 摘要、R2 对 R1 的
+四处编辑（**§D.11.3 声称已机械化、实则从未有过**）、R3 对 R2 的十二处编辑、
+CR1 双向边、语法块绑定两半一致、前像非自引用、以及各条边界行仍为 NO。
+**八条变异全红**，含第四次 HOLD 的原始缺陷与本次 HIGH 1 的自引用形态。
+
+## 七、常设禁令（对复审席位同样在 force）## 七、常设禁令（对复审席位同样在 force）## 七、常设禁令（对复审席位同样在 force）
 
 - **只读。** 不改文件、不打补丁。
 - **不得在本仓做任何检索**（S1(b)）；需要路径就列出来，由工作会话经
