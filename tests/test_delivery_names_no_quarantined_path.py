@@ -100,8 +100,21 @@ def _live_delivery_documents():
     live = _live_review_ids()
     if not live:
         return []
-    out = []
+    out, seen = [], set()
+    # The register IS the handover list. Searching for the review_id finds
+    # `qros packet` output (which embeds REVIEW_ID) and any document that
+    # cites the review, but a hand-written delivery that never prints its
+    # own id was invisible here — registered, frozen, sent, unscanned.
+    # Measured 2026-08-27 on ops/DECISION_PACKET_ITEM6_OPEN_FABLE.md.
+    if REGISTER.exists():
+        for e in json.loads(REGISTER.read_text(encoding="utf-8"))["under_review"]:
+            p = REPO / e["path"]
+            if p.suffix == ".md" and p.exists() and p not in seen:
+                seen.add(p)
+                out.append((p, p.read_text(encoding="utf-8")))
     for path in sorted(OPS.glob("*.md")) + sorted(OPS.glob("packets/*.packet")):
+        if path in seen:
+            continue
         try:
             text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:

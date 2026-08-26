@@ -78,7 +78,8 @@ BLIND_SEAT_MAY_NOT_SEARCH_THE_REPOSITORY = 是
 ——一次广域符号搜索把片段带了出来；第三个（决裁席）只做了**一次单模式定向 grep**，
 同样触到了。只要隔离内容还在可检索的树里，任何检索都可能带出它。
 
-权威清单：`ops/OUTCOME_CARRYING_ARTIFACTS.json` 的 `carries_outcome`。尤其点名：
+权威清单：`ops/OUTCOME_CARRYING_ARTIFACTS.json` 的 `carries_outcome`。
+**读那个 json，把里面每一条路径当作关闭。** 尤其点名（以下全部为禁区）：
 
 ```
 ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md
@@ -89,8 +90,10 @@ ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md
 **许可起点**：`ops/RECOVERY_ANCHOR.md`（outcome-clean，永不隔离，专为 blind 席位
 可读而写）。
 
-**两条暴露轴，不得合并**：研究轴 `ops/EXPOSURE_LEDGER.md`／席位轴
-`ops/REVIEWER_EXPOSURE_LOG.md`。烧掉一个席位**不消耗研究自由度**。
+**两条暴露轴，不得合并**：研究轴与席位轴分列两份台账。烧掉一个席位
+**不消耗研究自由度**。**研究轴那份本身就在禁区名单上**——需要它的内容时列出路径
+由工作会话提供，不要自己去开。席位轴那份（`ops/REVIEWER_EXPOSURE_LOG.md`）
+outcome-clean，可读。
 
 ---
 
