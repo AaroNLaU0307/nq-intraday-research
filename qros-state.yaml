@@ -130,7 +130,21 @@ cache:
 # manufacturing operational records for events the runtime never witnessed,
 # so they stay out. The pre-attachment review history lives in ops/ and in
 # the master plan's §14 anchor.
-ops_events: []
+# §2.7 ops_events —— 封闭词表，只有 OWNER_HOLD / PACKET_REJECTED_INCOMPLETE /
+# ERRATUM 三种 type。下面两条补记 2026-08-26 的两次复审拒绝：运行时一直有这个
+# 槽位，而此前每一次交付我都没用过它。source=review：两次都是复审席在开工核对
+# 之后拒的，不是 packet 生成失败。
+ops_events:
+  - ts: "2026-08-26T00:00:00Z"
+    type: "PACKET_REJECTED_INCOMPLETE"
+    source: "review"
+    actor: "fresh Sol (ND1 R3 amendment proposal, first delivery)"
+    reason: "No Review Packet v1 and no declared SHA-256 for the proposal — the builder sent the bare file. ORIGIN=BUILDER, CAUSE=SOURCE_CONTENT."
+  - ts: "2026-08-26T00:00:01Z"
+    type: "PACKET_REJECTED_INCOMPLETE"
+    source: "review"
+    actor: "fresh Sol (ND1 R3 amendment proposal, second delivery, rv-6cd8abb41a43-1ddf0617d52e)"
+    reason: "The reviewed set carried no authoritative ratification baseline: the file cited as the ND1 approval record declares NOTHING_HEREIN_IS_APPROVED=YES, and ops/ND1_PROFILE_RATIFICATION.md was absent. ORIGIN=BUILDER, CAUSE=SOURCE_CONTENT."
 session_log: []
 human_decisions: []
 packets:
