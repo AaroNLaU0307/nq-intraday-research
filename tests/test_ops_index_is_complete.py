@@ -23,9 +23,22 @@ HANDOFF = OPS / "NEXT_HANDOFF.md"
 _SELF = {"README.md", "NEXT_HANDOFF.md"}
 
 
+def _ops_documents():
+    """Every governance record under ops/, INCLUDING the quarantine subtree.
+
+    Widened on 2026-08-27 when the R5 migration moved ten quarantined files
+    into `ops/outcome_quarantine/`. A top-level-only glob would have let
+    them fall out of the index silently — the index would still have been
+    "complete" while ten records had no entry anywhere. Quarantined records
+    are exactly the ones a person most needs the index to locate, because
+    they are the ones nobody may go looking for by hand.
+    """
+    return sorted(OPS.rglob("*.md"))
+
+
 def test_every_ops_document_appears_in_the_index():
     text = INDEX.read_text(encoding="utf-8")
-    missing = sorted(p.name for p in OPS.glob("*.md")
+    missing = sorted(p.name for p in _ops_documents()
                      if p.name not in _SELF and p.name not in text)
     assert not missing, (
         "these ops documents are not in ops/README.md:\n  "
@@ -40,7 +53,7 @@ def test_the_index_names_no_document_that_no_longer_exists():
 
     text = INDEX.read_text(encoding="utf-8")
     named = set(re.findall(r"`([A-Z0-9_][A-Za-z0-9_.-]*\.md)`", text))
-    present = {p.name for p in OPS.glob("*.md")}
+    present = {p.name for p in _ops_documents()}
     gone = sorted(n for n in named if n not in present)
     assert not gone, (
         "ops/README.md points at documents that are not there:\n  "

@@ -174,7 +174,8 @@ def test_ledger_reveal_completed_row_is_zero_quantity_crossref():
 
 
 def test_reveal_attestation_exists_and_is_value_free():
-    text = _read(REPO / "ops" / "S0_T001_RESULT_REVEAL_ATTESTATION.md")
+    text = _read(REPO / "ops" / "outcome_quarantine"
+                 / "S0_T001_RESULT_REVEAL_ATTESTATION.md")
     assert "RESULT_VALUES_VIEWED=YES" in text
     assert "RAW_EXPOSURE_COUNT=1575" in text
     assert "RECOMMENDATION=PROCEED_TO_STRATEGY_SPEC" in text
@@ -186,7 +187,8 @@ def test_reveal_attestation_exists_and_is_value_free():
 # Reveal-review correction addendum (2026-08-14): the addendum is the
 # CURRENT verdict semantics; the original memo/attestation stay as history.
 # ---------------------------------------------------------------------------
-ADDENDUM = REPO / "ops" / "S0_T001_RESULT_DECISION_ADDENDUM.md"
+ADDENDUM = (REPO / "ops" / "outcome_quarantine"
+            / "S0_T001_RESULT_DECISION_ADDENDUM.md")
 
 
 def test_addendum_carries_the_corrected_current_verdict():

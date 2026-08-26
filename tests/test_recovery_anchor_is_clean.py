@@ -105,7 +105,8 @@ def test_the_master_plan_carries_the_redirect_banner():
     a banner declares it superseded. Checked by presence of the banner and
     of the old section — if the old section vanished, someone edited an
     append-only anchor instead of appending to it."""
-    plan = REPO / "ops" / "MC_TO_STRATEGY_MASTER_PLAN.md"
+    plan = (REPO / "ops" / "outcome_quarantine"
+            / "MC_TO_STRATEGY_MASTER_PLAN.md")
     text = plan.read_text(encoding="utf-8")
     assert "## 1. 恢复序" in text, (
         "the master plan's original §1 is gone — D-2 condition 2 requires "

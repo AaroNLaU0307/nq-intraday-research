@@ -41,13 +41,13 @@ OUTCOME_CLEAN=是
 |---|---|---|
 | `EXPOSURE_LEDGER.md`（**仓根**） | 13 | 37 |
 | `ops/EXPOSURE_LEDGER.md` | 13 | 37 |
-| `ops/MC_TO_STRATEGY_MASTER_PLAN.md` | 4 | 17 |
-| `ops/MC_FACTORY_BOUNDARY_STAGE_I.md` | 2 | 3 |
-| `ops/ND2_ND3_FABLE_DECISION_PROMPT.md` | 2 | 4 |
-| `ops/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md` | 2 | 10 |
-| `ops/S0_T001_RESULT_DECISION_ADDENDUM.md` | 2 | 8 |
-| `ops/S0_T001_RESULT_REVEAL_ATTESTATION.md` | 2 | 5 |
-| `ops/DECISION_PACKET_ND2_ND3.md` · `ops/MC_DR5_BUILD_PACKET.md` · `ops/ND2_ND3_RULING_REVIEW_FINDINGS.md` · `ops/RULING_FABLE_FOUR_OPEN_2026-08-26.md` | 各 1（仅注册表自指） | 6 / 5 / 6 / 6 |
+| `ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md` | 4 | 17 |
+| `ops/outcome_quarantine/MC_FACTORY_BOUNDARY_STAGE_I.md` | 2 | 3 |
+| `ops/outcome_quarantine/ND2_ND3_FABLE_DECISION_PROMPT.md` | 2 | 4 |
+| `ops/outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md` | 2 | 10 |
+| `ops/outcome_quarantine/S0_T001_RESULT_DECISION_ADDENDUM.md` | 2 | 8 |
+| `ops/outcome_quarantine/S0_T001_RESULT_REVEAL_ATTESTATION.md` | 2 | 5 |
+| `ops/outcome_quarantine/DECISION_PACKET_ND2_ND3.md` · `ops/outcome_quarantine/MC_DR5_BUILD_PACKET.md` · `ops/outcome_quarantine/ND2_ND3_RULING_REVIEW_FINDINGS.md` · `ops/outcome_quarantine/RULING_FABLE_FOUR_OPEN_2026-08-26.md` | 各 1（仅注册表自指） | 6 / 5 / 6 / 6 |
 
 ## 2. **一个裁定没有区分、但必须区分的例外**
 
@@ -84,7 +84,7 @@ OUTCOME_CLEAN=是
    （变异测试，沿 `tests/test_delivery_names_no_quarantined_path.py` 先例）。
 5. `ops/RECOVERY_ANCHOR.md` **追加**一行前缀规则：该前缀下一切路径关闭；
    **注册表仍是权威，前缀是便利不是替代**（Fable 条件 4）。
-6. `ops/MC_TO_STRATEGY_MASTER_PLAN.md` **只准 append 横幅**，既有字节不动。
+6. `ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md` **只准 append 横幅**，既有字节不动。
 7. 全套件必须绿，且**不得靠放宽任何断言换绿**。
 
 ## 4. 它买到什么、不买到什么（Fable 原话，必须随迁移一起记住）

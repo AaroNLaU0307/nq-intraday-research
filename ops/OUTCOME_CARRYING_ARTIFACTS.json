@@ -11,7 +11,7 @@
       ]
     },
     {
-      "path": "ops/DECISION_PACKET_ND2_ND3.md",
+      "path": "ops/outcome_quarantine/DECISION_PACKET_ND2_ND3.md",
       "restates": [
         "addendum feasibility assertion"
       ]
@@ -23,45 +23,45 @@
       ]
     },
     {
-      "path": "ops/MC_DR5_BUILD_PACKET.md",
+      "path": "ops/outcome_quarantine/MC_DR5_BUILD_PACKET.md",
       "restates": [
         "revealed verdict"
       ]
     },
     {
-      "path": "ops/MC_FACTORY_BOUNDARY_STAGE_I.md",
+      "path": "ops/outcome_quarantine/MC_FACTORY_BOUNDARY_STAGE_I.md",
       "restates": [
         "revealed verdict"
       ]
     },
     {
-      "path": "ops/MC_TO_STRATEGY_MASTER_PLAN.md",
+      "path": "ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md",
       "restates": [
         "revealed verdict",
         "cumulative exposure count"
       ]
     },
     {
-      "path": "ops/ND2_ND3_FABLE_DECISION_PROMPT.md",
+      "path": "ops/outcome_quarantine/ND2_ND3_FABLE_DECISION_PROMPT.md",
       "restates": [
         "revealed verdict",
         "cumulative exposure count"
       ]
     },
     {
-      "path": "ops/ND2_ND3_RULING_REVIEW_FINDINGS.md",
+      "path": "ops/outcome_quarantine/ND2_ND3_RULING_REVIEW_FINDINGS.md",
       "restates": [
         "zero-direction cell count"
       ]
     },
     {
-      "path": "ops/RULING_FABLE_FOUR_OPEN_2026-08-26.md",
+      "path": "ops/outcome_quarantine/RULING_FABLE_FOUR_OPEN_2026-08-26.md",
       "restates": [
         "cumulative exposure count"
       ]
     },
     {
-      "path": "ops/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md",
+      "path": "ops/outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md",
       "restates": [
         "revealed verdict",
         "cumulative exposure count",
@@ -71,7 +71,7 @@
       ]
     },
     {
-      "path": "ops/S0_T001_RESULT_DECISION_ADDENDUM.md",
+      "path": "ops/outcome_quarantine/S0_T001_RESULT_DECISION_ADDENDUM.md",
       "restates": [
         "revealed verdict",
         "addendum feasibility assertion",
@@ -79,7 +79,7 @@
       ]
     },
     {
-      "path": "ops/S0_T001_RESULT_REVEAL_ATTESTATION.md",
+      "path": "ops/outcome_quarantine/S0_T001_RESULT_REVEAL_ATTESTATION.md",
       "restates": [
         "revealed verdict",
         "cumulative exposure count"

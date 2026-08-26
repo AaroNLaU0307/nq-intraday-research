@@ -76,7 +76,7 @@ BLIND_SEAT_MAY_NOT_SEARCH_THE_REPOSITORY = 是
 每一条都当作关闭。** 点名两条，只为标记禁区、不是指路：
 
 ```
-OFF-LIMITS   ops/MC_TO_STRATEGY_MASTER_PLAN.md   （DAG／节点台账；旧恢复入口）
+OFF-LIMITS   ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md   （DAG／节点台账；旧恢复入口）
 OFF-LIMITS   ops/EXPOSURE_LEDGER.md              （研究轴台账）
 ```
 

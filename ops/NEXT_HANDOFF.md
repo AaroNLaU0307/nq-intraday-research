@@ -69,7 +69,7 @@ packet，烧掉了第二个复审席位。本文件是那份清单的常驻载�
 **读那个 json，把里面每一条路径当作关闭。** 尤其点名：
 
 ```
-ops/MC_TO_STRATEGY_MASTER_PLAN.md
+ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md
 ```
 
 它**既是 outcome-carrying，又是本项目的恢复锚**（§1「恢复序」是任何会话定位
@@ -130,7 +130,7 @@ BLIND_SEAT_MAY_NOT_SEARCH_THE_REPOSITORY = 是
 路径都当作关闭**。尤其：
 
 ```
-ops/MC_TO_STRATEGY_MASTER_PLAN.md
+ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md
 ```
 
 它既是 outcome-carrying，又是本项目的恢复锚——按常规做一次状态定位就会踩中。
@@ -143,7 +143,7 @@ ops/MC_TO_STRATEGY_MASTER_PLAN.md
 
 `ops/DECISION_PACKET_FOUR_OPEN_2026-08-26.md` 就栽在这上面：它一边写着禁区
 清单，一边在呈交格式一节让复审者「形式沿用
-`ops/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md`」——**而那份文件在隔离名单
+`ops/outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md`」——**而那份文件在隔离名单
 上**。同一份文件里，禁止与指令自相矛盾。Fable 是先查注册表才没被烧，**那是它
 谨慎，不是我做对了**。
 
