@@ -1,4 +1,41 @@
 {
  "_comment": "Frozen while a reviewer holds them. Remove an entry when the review returns; an empty list is the normal state. `unchanged_since` is the commit the declaration pins: no commit after it may touch the path. HEAD itself is NEVER pinned -- committing the review prompt moves HEAD, so a HEAD pin is stale the moment it is written (measured 2026-08-25: a Sol session STOPped on exactly that). Nothing on ops/OUTCOME_CARRYING_ARTIFACTS.json may be listed here. Each entry declares role: \"delivery\" (a document authored for this review; must itself carry the off-limits list) or \"reference\" (pre-existing bytes handed along; scanned for unmarked quarantined paths, but NOT required to carry governance text — requiring that would mean editing an approved record to satisfy a test). Guarded by tests/test_artifacts_under_review_are_frozen.py and tests/test_review_artifacts_are_outcome_clean.py",
- "under_review": []
+ "under_review": [
+  {
+   "path": "ops/DECISION_PACKET_ITEM6_OPEN_FABLE.md",
+   "role": "delivery",
+   "sha256": "dd66600317a66727d03f9e0d9c4ed6eeefa7070b65c0f77316b0decc25bf2f33",
+   "issued_to": "Fable 5, decision seat, fresh top-level session",
+   "issued_at": "2026-08-27",
+   "review_id": "dec-item6-open-2026-08-27",
+   "unchanged_since": "eb000657e0876cd1b4481926bda89171e2f65f66"
+  },
+  {
+   "path": "ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md",
+   "role": "reference",
+   "sha256": "12827d36b1324f46073aa6f56ef9ae2d5da55ab785beaf066535a7425903af28",
+   "issued_to": "Fable 5, decision seat, fresh top-level session",
+   "issued_at": "2026-08-27",
+   "review_id": "dec-item6-open-2026-08-27",
+   "unchanged_since": "eb000657e0876cd1b4481926bda89171e2f65f66"
+  },
+  {
+   "path": "tests/test_nd1_profile_revision_chain.py",
+   "role": "reference",
+   "sha256": "c02baaecfb1d3d1b5c3817e27474406418e6200e9e62024d26758a62f07245f4",
+   "issued_to": "Fable 5, decision seat, fresh top-level session",
+   "issued_at": "2026-08-27",
+   "review_id": "dec-item6-open-2026-08-27",
+   "unchanged_since": "eb000657e0876cd1b4481926bda89171e2f65f66"
+  },
+  {
+   "path": "ops/ND1_PROFILE_RATIFICATION.md",
+   "role": "reference",
+   "sha256": "cf2c3cb2bdb79b34498c2a7ebc53344c70ef89f0686466a010ce62431541d05e",
+   "issued_to": "Fable 5, decision seat, fresh top-level session",
+   "issued_at": "2026-08-27",
+   "review_id": "dec-item6-open-2026-08-27",
+   "unchanged_since": "eb000657e0876cd1b4481926bda89171e2f65f66"
+  }
+ ]
 }
