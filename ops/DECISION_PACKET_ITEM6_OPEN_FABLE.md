@@ -1,6 +1,7 @@
 # 第 6 项的三个开放项 —— 决裁包
 
 ```ini
+REVIEW_ID=dec-item6-open-2026-08-27
 RECOMMENDED_MODEL=Fable 5
 EFFORT_INTENT=HIGH
 RECOMMENDED_EFFORT=high

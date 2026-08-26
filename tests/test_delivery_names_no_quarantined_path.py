@@ -144,6 +144,41 @@ def _marked_lines(text):
     return marked
 
 
+def test_every_registered_artifact_is_actually_reached_by_this_guard():
+    """The false-assurance mode, closed.
+
+    `_live_delivery_documents` finds deliveries by searching ops/*.md for a
+    LIVE review_id. A hand-written packet that never prints its own
+    review_id is therefore invisible here — registered, frozen, sent to a
+    reviewer, and silently skipped by the one guard whose whole job is to
+    check what that reviewer is handed.
+
+    Measured 2026-08-27: registering ops/DECISION_PACKET_ITEM6_OPEN_FABLE.md
+    and then STRIPPING its off-limits marker left this file at 3 passed. The
+    guard was not lenient — it never saw the packet at all. `qros packet`
+    output embeds REVIEW_ID so it was reached; a hand-written one is not.
+
+    So the reachability is asserted rather than assumed: every .md path in
+    the register must be among the documents actually scanned.
+    """
+    import json as _json
+    if not REGISTER.exists():
+        return
+    entries = _json.loads(REGISTER.read_text(encoding="utf-8"))["under_review"]
+    if not entries:
+        return
+    scanned = {p.relative_to(REPO).as_posix()
+               for p, _t in _live_delivery_documents()}
+    unreached = sorted(
+        e["path"] for e in entries
+        if e["path"].endswith(".md") and e["path"] not in scanned)
+    assert not unreached, (
+        "these artifacts are registered as under review but this guard "
+        "never scans them, because their text does not contain their own "
+        "review_id. They are being handed to a reviewer unchecked — print "
+        "REVIEW_ID=<id> in each:\n  " + "\n  ".join(unreached))
+
+
 def test_a_live_delivery_never_names_a_quarantined_path_unmarked():
     quarantined = _quarantined_paths()
     problems = []
