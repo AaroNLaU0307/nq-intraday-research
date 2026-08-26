@@ -70,11 +70,14 @@ _MARKERS = ("OFF-LIMITS", "OFF_LIMITS", "outcome-carrying", "⚠",
             "隔离", "禁区", "不得读", "不得打开", "当作关闭")
 
 
-def _live_review_ids():
+def _entries():
     if not REGISTER.exists():
-        return set()
-    entries = json.loads(REGISTER.read_text(encoding="utf-8"))["under_review"]
-    return {e["review_id"] for e in entries}
+        return []
+    return json.loads(REGISTER.read_text(encoding="utf-8"))["under_review"]
+
+
+def _live_review_ids():
+    return {e["review_id"] for e in _entries()}
 
 
 def _quarantined_paths():
