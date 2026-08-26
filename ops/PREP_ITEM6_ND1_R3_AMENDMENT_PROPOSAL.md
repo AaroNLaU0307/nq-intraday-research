@@ -81,6 +81,14 @@ EventSpec("CR1", "SUPPLEMENT_RUN_CRASH_RESOLVED", NUMBERED, ACTOR_MAIN_AGENT,
 | `incident_required` | `True` | 崩溃必然有事故号 |
 | `recovery_authorization_doc` | 必填 | **复用 A2 的字段模式**（已实测 A2 required_fields 含此字段） |
 
+**builder 已实测（省 Sol 一步）**：按真实 `EventSpec` 签名构造上面这条规格
+**能通过**——8 个位置参数 ＋ `incident_required=True` 与
+`__init__(short_id, token, row_class, actor, required_fields, predecessors,
+successors, terminal, incident_required=False)` 吻合；`short_id="CR1"`
+**未被占用**；`token="SUPPLEMENT_RUN_CRASH_RESOLVED"` **与既有 token 不冲突**
+（全表唯一的重复是 `SUPPLEMENT_PROPOSED`，T1 复用 P1 的词，那是 §D.3.2 的刻意设计）。
+**这只证明它构造得出来，不证明它是对的设计。**
+
 ### A.2 `NON_TERMINAL_TRAPS` 增加 `"CR1"`
 
 ```python

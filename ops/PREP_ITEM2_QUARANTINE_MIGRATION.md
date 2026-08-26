@@ -30,7 +30,8 @@ OUTCOME_CLEAN=是
 
 **「0」这一条最重要，且与索引 §10 的旧说法不同。** 唯一命中 `src/` 的是
 `src/itsf/mc/supplement_runner.py:24`，而那一行**在模块 docstring 里**（散文
-「…or `EXPOSURE_LEDGER.md`.」），不是路径引用。
+「…or `EXPOSURE_LEDGER.md`.」），不是路径引用。**这一条是 AST 实测、不是按行号推断**：`ast.parse` 后模块 docstring 的
+行范围是 1–43，命中行 24 落在其中。
 
 所以那 32 条分布是：**测试文件 ＋ `qros-state.yaml` ＋ `ops/*.json` ＋ 文档**。
 
