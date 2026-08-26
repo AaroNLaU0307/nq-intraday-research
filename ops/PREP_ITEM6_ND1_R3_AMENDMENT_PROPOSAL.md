@@ -218,11 +218,14 @@ R2_LINES=51   R3_LINES=60   INHERITED_VERBATIM=47 / 60   EDITS=13
   added    F3_PERMITTED_PREDECESSOR · F3_PERMITTED_SUCCESSOR               （2 处）
   added    GRAMMAR_CR1 · CR1_GRAMMAR_SHA256 · CR1_PERMITTED_PREDECESSOR ·
            CR1_PERMITTED_SUCCESSOR · CR1_DANGLING_EVENT_DOMAIN ·
-           CR1_REGISTRY_INTACT_VERIFICATION_DOMAIN                          （6 处）
+           CR1_REGISTRY_INTACT_VERIFICATION_DOMAIN ·
+           CR1_REGISTRY_INTACT_CRITERION                                    （7 处）
+  removed  （无）                                                            （0 处）
+  合计 4 + 2 + 7 = 13，与 60 − 47 = 13 相符
 ```
 
 **机械核验已入套件**：`tests/test_nd1_profile_revision_chain.py` 断言 R3 块的
-字节确实算出上面那个哈希、对 R2 恰为 12 处编辑、CR1 的边双向声明、且各条边界行
+字节确实算出上面那个哈希、对 R2 恰为 13 处编辑、CR1 的边双向声明、且各条边界行
 仍为 NO。**五条变异全红，含第四次 HOLD 的那个原始缺陷。**
 
 ### 二.2 三处升级 —— **(a) 是 Sol 判 HOLD 的直接原因**
@@ -568,7 +571,7 @@ commit**（该 commit 即 `APPROVAL_BINDS_DOC_HEAD`）→ Aaron 批准
 CR1 双向边、语法块绑定两半一致、前像非自引用、以及各条边界行仍为 NO。
 **八条变异全红**，含第四次 HOLD 的原始缺陷与本次 HIGH 1 的自引用形态。
 
-## 七、常设禁令（对复审席位同样在 force）## 七、常设禁令（对复审席位同样在 force）## 七、常设禁令（对复审席位同样在 force）
+## 七、常设禁令（对复审席位同样在 force）
 
 - **只读。** 不改文件、不打补丁。
 - **不得在本仓做任何检索**（S1(b)）；需要路径就列出来，由工作会话经
