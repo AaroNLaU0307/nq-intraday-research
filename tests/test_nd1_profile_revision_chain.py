@@ -43,12 +43,12 @@ R1_SHA256 = "0a08319a408f068ce4c92f93c2c4c39e409937dddfd0ef9f7af43618c70b50a5"
 R2_SHA256 = "a3d40b7ce218294b75265622306bb91fc01081f98a0bacce8f8e86a3d3d8741d"
 #: PROPOSED, not approved. Named so nobody mistakes it for a ratified value.
 R3_PROPOSED_SHA256 = (
-    "9c8621acc8a1b9e9b302a19b7fd0f81cc1d81baf1863e0eba9b085aecaeda568")
+    "d40ad864571ec4773d68cdd4049b0eb8423da4cdf3fee7a145705f29c65f0d1d")
 
 #: §D.11.3's claim, now checkable.
 R2_EXPECTED_EDITS = 4
 #: The R3 proposal's own claim, likewise.
-R3_PROPOSED_EXPECTED_EDITS = 12
+R3_PROPOSED_EXPECTED_EDITS = 13
 
 
 def _canonical(text, revision):
@@ -187,7 +187,7 @@ def test_the_proposed_r3_declares_the_cr1_edges_in_both_directions():
 
 
 CR1_GRAMMAR_SHA256 = (
-    "3154ade699eb7dad36fb32ac2a0d7b7a862e845d5d0c3910bcb56f66be5a3879")
+    "c251335f8d8c4dc89bce4ff7fb445f862d29a04b676bb3a90f6ef5ce5d5e3483")
 
 
 def _cr1_grammar(text):

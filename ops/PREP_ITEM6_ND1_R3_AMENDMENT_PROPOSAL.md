@@ -130,11 +130,12 @@ RECOMMENDED_F3_PERMITTED_PREDECESSOR=P1|P2|F1|F2|F2v|AX|CR1
 RECOMMENDED_F3_PERMITTED_SUCCESSOR=T1
 RECOMMENDED_GRAMMAR_T1=ADOPT_AS_WRITTEN
 RECOMMENDED_GRAMMAR_CR1=ADOPT_AS_INTRODUCED_BY_R3
-RECOMMENDED_CR1_GRAMMAR_SHA256=3154ade699eb7dad36fb32ac2a0d7b7a862e845d5d0c3910bcb56f66be5a3879
+RECOMMENDED_CR1_GRAMMAR_SHA256=c251335f8d8c4dc89bce4ff7fb445f862d29a04b676bb3a90f6ef5ce5d5e3483
 RECOMMENDED_CR1_PERMITTED_PREDECESSOR=P3
 RECOMMENDED_CR1_PERMITTED_SUCCESSOR=F3
 RECOMMENDED_CR1_DANGLING_EVENT_DOMAIN=P3
 RECOMMENDED_CR1_REGISTRY_INTACT_VERIFICATION_DOMAIN=SHA256_HEX64_OF_REGISTRY_BYTES_AS_READ_BEFORE_THIS_ROW_IS_APPENDED
+RECOMMENDED_CR1_REGISTRY_INTACT_CRITERION=SUPERSET_OF_THE_WITNESS_NAMED_BY_registry_witness_ref
 RECOMMENDED_GRAMMAR_STATE_MACHINE=ADOPT_AS_WRITTEN
 RECOMMENDED_GRAMMAR_PARSER_FAIL_CLOSED_RULES=ADOPT_AS_WRITTEN
 RECOMMENDED_F1_GATE_NAME_ENUM=DEFER_TO_N04
@@ -171,7 +172,7 @@ END_ND1_RECOMMENDED_PROFILE_R3
 
 ```
 CANONICAL_BYTES=BEGIN 与 END 两行之间的行（不含这两行），LF 结尾，UTF-8，逐行原样
-R3_CANONICAL_SHA256=9c8621acc8a1b9e9b302a19b7fd0f81cc1d81baf1863e0eba9b085aecaeda568
+R3_CANONICAL_SHA256=d40ad864571ec4773d68cdd4049b0eb8423da4cdf3fee7a145705f29c65f0d1d
 ```
 
 ### 二.1b CR1 语法 canonical 块（Finding 3 的答复）
@@ -192,23 +193,27 @@ CR1_TERMINAL=NO
 CR1_INCIDENT_REQUIRED=YES
 CR1_PERMITTED_PREDECESSOR=P3
 CR1_PERMITTED_SUCCESSOR=F3
-CR1_REQUIRED_FIELDS=supplement_id|dangling_event|incident_id|crash_evidence_summary|recovery_authorization_doc|registry_intact_verification
+CR1_REQUIRED_FIELDS=supplement_id|dangling_event|incident_id|crash_evidence_summary|recovery_authorization_doc|registry_intact_verification|registry_witness_ref
 CR1_FIELD_DOMAIN_dangling_event=P3
 CR1_FIELD_DOMAIN_registry_intact_verification=SHA256_HEX64_OF_REGISTRY_BYTES_AS_READ_BEFORE_THIS_ROW_IS_APPENDED
+CR1_FIELD_DOMAIN_registry_witness_ref=THE_LATEST_WITNESS_RECORD_THE_READ_WAS_CHECKED_AGAINST
 CR1_REGISTRY_INTACT_PREIMAGE=the complete on-disk bytes of ops/TRIAL_REGISTRY.md, read once, immediately BEFORE the CR1 row is appended; no normalization, no encoding change, no line-ending rewrite; the value is therefore never part of its own preimage
+CR1_REGISTRY_INTACT_CRITERION=the read is INTACT iff it is a superset of the witness named by registry_witness_ref: its event count is not lower and the witnessed last row is still present. A digest alone proves only that bytes were hashed; the witness is what it is hashed AGAINST
+CR1_REGISTRY_INTACT_COLD_RECOMPUTE=the preimage is recoverable from git history of ops/TRIAL_REGISTRY.md at the commit preceding this row, and the witness file is append-only, so a cold reader can recompute both sides
+CR1_REGISTRY_INTACT_UNRESOLVED=TOCTOU between the read and the append is NOT closed by this grammar; it is the same critical-section gap the D-3 review named, and no lease exists
 CR1_GRAMMAR_CONTAINS_NO_EXECUTION_AUTHORIZATION=YES
 END_ND1_CR1_GRAMMAR_R3
 ```
 
 ```
 CANONICAL_BYTES=同上口径
-CR1_GRAMMAR_SHA256=3154ade699eb7dad36fb32ac2a0d7b7a862e845d5d0c3910bcb56f66be5a3879
+CR1_GRAMMAR_SHA256=c251335f8d8c4dc89bce4ff7fb445f862d29a04b676bb3a90f6ef5ce5d5e3483
 ```
 
 **correction-only 的机械证明**：
 
 ```
-R2_LINES=51   R3_LINES=59   INHERITED_VERBATIM=47 / 59   EDITS=12
+R2_LINES=51   R3_LINES=60   INHERITED_VERBATIM=47 / 60   EDITS=13
   changed  PROFILE_ID / GRAMMAR_P3 / P3_PERMITTED_SUCCESSOR / GRAMMAR_F3   （4 处）
   added    F3_PERMITTED_PREDECESSOR · F3_PERMITTED_SUCCESSOR               （2 处）
   added    GRAMMAR_CR1 · CR1_GRAMMAR_SHA256 · CR1_PERMITTED_PREDECESSOR ·
@@ -242,7 +247,7 @@ Aaron 明示 ratify」。
 
 **(c) `ADOPT_AS_INTRODUCED_BY_R3` 是词表新值，且 canonical 绑定尚未定义。**
 既有取值都预设「§D 里已经写好了语法」，而 CR1 没有。**Sol 另指出**：
-`R3_CANONICAL_SHA256` 只覆盖 58 行 profile 块，**不覆盖 §二.A.1 的 `EventSpec`**；
+`R3_CANONICAL_SHA256` 只覆盖 60 行 profile 块，**不覆盖 §二.A.1 的 `EventSpec`**；
 提案原先所称「同 SHA 绑定」并未被精确定义。doc HEAD 可间接绑定全文，
 **但那是绑定方式的选择，builder 定不了。**
 
@@ -263,6 +268,26 @@ registry，该字段的值就落在自己的前像里——**不可实现的自�
 ops/TRIAL_REGISTRY.md 的完整磁盘字节，读取一次，时点为 CR1 行被追加之前；
 不做规范化、不改编码、不重写换行。该值因此永不属于它自己的前像。
 ```
+
+**第六次 HOLD 的 Finding 2 —— 自引用关了，但「intact」还没有判据。** Sol 说得对：
+**任何损坏或未经授权的 registry 同样能产生一个合法的 64-hex。** 我定义了「对哪些
+字节算哈希」，没定义「与什么比才叫完整」。
+
+**本版给出判据，而且它已经存在**：第 7 项边界 (1) 的**反回退见证**
+（`src/itsf/s0/registry_witness.py`，已 13 测试、6 变异证红）——每次 registry 追加
+后把 `{sha256, 事件计数, 末行}` 写进非同步根。**那就是权威摘要源。**
+
+```
+INTACT ⟺ 读到的 registry 是 registry_witness_ref 所指见证的超集
+         （事件计数不低于它，且被见证的末行仍在）
+```
+
+新增字段 `registry_witness_ref` 把「与哪一条见证比」写进行里。
+**冷读者可复算**：前像取自该行之前那个 commit 的 registry git 历史，见证文件
+append-only，两侧都拿得到。
+
+**一处仍未关，明写在语法块里**：`CR1_REGISTRY_INTACT_UNRESOLVED` —— 读与追加之间的
+**TOCTOU 未被本语法关闭**，那是 D-3 复核指出的同一个临界区缺口，而租约尚不存在。
 
 **「追加之前」这个时点不是新发明**：`pre_exposure_recheck` 比对的
 `registry_sha256` 与 `post_run_started_hook` 记录的
@@ -360,9 +385,33 @@ NON_TERMINAL_TRAPS = ("A1", "AX", "CR1")     # 现为 ("A1", "AX")
    大声可见——点名持有者、楔死时长、裁定程序。
 3. **裁定程序须文档化到「一行决策即可解除」**。否则楔死催生绕行文化，而绕行
    文化才是不变量真正的死法。
-4. FALSIFIER（继承 Fable）：一个季度 ≥3 次陈旧租约裁定且每次同形零信息 ⇒
-   可重开一条**窄**自动路径（仅当第 6 项的持久崩溃标记证明持有者已死），
-   **该重开归 Aaron**。
+4. FALSIFIER（继承前席）：一个季度 ≥3 次陈旧租约裁定且每次同形零信息 ⇒
+   **可由 Aaron 重开**关于窄自动路径的讨论。**该 falsifier 本身不释放任何自动
+   路径**——它只是重新裁定的触发条件。
+
+### 三.5 **本节是非穷尽约束，不是完整的租约安全合同**（第六次 HOLD 的 Finding 4）
+
+Sol 指出两处，都属实：
+
+**(a) 前一版引用了一个本合同未定义的东西。** 它写「仅当**第 6 项的持久崩溃标记**
+证明持有者已死」——**第 6 项没有定义任何持久崩溃标记**。最接近的实物是 S0 运行器
+在 `runner.py:772` 的 `except` 里落的 `HALF_TRANSITION` 标记，那是**另一个生命周期
+的另一个机制**，不能被隔空引用为本节的判据。**该引用已删。**
+
+**(b) 回收规则缺 fencing。** 即使 Aaron 批准了一次回收，**原持有者复活后仍可能
+写入**，形成双写——而双写正是整个租约要防的那一件事。本节没有要求
+generation/fencing token，也没有要求「旧持有者复活后必须被拒写」。
+
+**所以本节明确声明其非完整性**：它是**方向性约束**，不是可实施的租约合同。
+未来实施至少还须定义：
+
+```
+lease key · holder identity · 权威时钟 · stale 判据 ·
+fencing generation / CAS · 逐 incident 的一次性恢复授权 · append-only 审计证据 ·
+以及「旧持有者复活后如何被拒写」
+```
+
+**在这些被定义之前，任何自称实现了本节的租约都不应被采信。**
 
 ## 四、建造义务（ratify 之后才做）
 
@@ -393,8 +442,13 @@ F2v。追下去发现问题比漏项更深：黑名单形式本身是错的** �
 **改为白名单**（实测各事件的 terminal 位与后继得出）：
 
 ```
-CHAIN_STATE_PERMITS_START(chain) == last ∈ {"P1", "P2", "F1"}
+CHAIN_STATE_PERMITS_START(chain) == last ∈ {"P1", "P2", "F1", "T1"}
 ```
+
+**`T1` 是第六次 HOLD 补入的**：`_walk_chain:1266` 的
+`if short not in ("P1", "T1")` 明确把它与 P1 并列为合法链起点，而前一版把它
+漏在白名单外——**方向仍是 fail-closed（漏掉只会多拒），但它会把一条完全正当的
+「取代后重新提议」误报成拒绝**，这与「各状态命名不同」的诊断承诺相抵。
 
 **改名自 `START_ADMISSIBLE`（Sol Finding ④）**：旧名暗示「可以开跑」，而
 **它只是必要条件之一，不是许可**。P1 仅表示「仍在 pre-start 生命周期」；真正开跑
@@ -404,7 +458,10 @@ CHAIN_STATE_PERMITS_START(chain) == last ∈ {"P1", "P2", "F1"}
 
 | last | 状态 | 可否开新运行 | 拒绝时该说什么（Sol 要求各状态命名不同） |
 |---|---|---|---|
-| `P1` / `P2` | 已提议／已授权，**未开跑** | **可以** | —— |
+| `P1` | 已提议，**未授权** | **可以** | —— |
+| `P2` | 已授权，**未开跑** | **可以** | —— |
+| **`P2S`** | 授权被取代，`successors=('P2',)` | 否 | **`AWAITING_REAUTHORIZATION`** —— 需新 P2。**（第六次 HOLD 补入）** |
+| **`T1`** | 后继登记，`predecessors=('F3',)`、`successors=('P2',)`；**`_walk_chain:1266` 明认它与 P1 同为合法链起点** | **可以** | ——。与 P1 的差别：P1 是**首次**提议，T1 是**取代之后**的提议，两者都待 P2。**（第六次 HOLD 补入）** |
 | `F1` | 开跑前尝试失败 | **可以**（重试是设计内的） | —— |
 | **`P3`** | 已开跑、无任何终止事件 | 否 | **`ABANDONED_RUN`** —— 需 CR1 裁定 |
 | `P4` | 已封存 | 否 | `AWAITING_INDEPENDENT_VERIFICATION`（待 P5／F2v） |
@@ -439,8 +496,14 @@ commit**（该 commit 即 `APPROVAL_BINDS_DOC_HEAD`）→ Aaron 批准
 **然后**才轮到下列代码转录：
 
 1. `EVENTS` 加 CR1 **并把 CR1 加进 `EVENTS["F3"].predecessors`**；
-   `NON_TERMINAL_TRAPS` 加 CR1；`FORBIDDEN_EDGES` 加两条
+   `NON_TERMINAL_TRAPS` 加 CR1；`FORBIDDEN_EDGES` **按 §A.3 被采纳的那一个选项
+   转录——ZERO（0 条）或 FULL（3 条），没有第三种**
    ——**逐字转录已批准的 R3 正文，不得反过来由代码定义 profile**。
+
+   > **（第六次 HOLD 的 Finding 1）** 本条前一版写的是「加两条」，而 §A.3 同时
+   > 声明只允许 ZERO 或 FULL。**我改了 §A.3 却没改这里——留下的正是我声称已经
+   > 消除的那个缺一条中间态。** 实施者从本文得不到唯一答案，这一条因此本身就是
+   > 阻断项。已改为「按被采纳的选项转录」，**在 Aaron 选定之前，本条无可执行内容**。
 1b. **（Sol 第四次复核补出，第一版漏列）**
    · 每条新 `FORBIDDEN_EDGES` 必须在 `supplement_registry.FORBIDDEN_EDGE_CODES`
      配专用拒绝码，并进 `REFUSAL_CODES`（实测该映射在 `:420`，码集在 `:505`）。
@@ -486,8 +549,8 @@ commit**（该 commit 即 `APPROVAL_BINDS_DOC_HEAD`）→ Aaron 批准
 | ④ `START_ADMISSIBLE` 暗示授权 | **已改名** `CHAIN_STATE_PERMITS_START`，并写明它只是必要条件之一，须与唯一 live P2 合取 |
 | ③ 禁边中间态不可保留 | **已给两个完整选项**（ZERO / FULL），FULL 含真正的重启边 `CR1→P3`；并指出栈内已有 `("F2","P3")`／`("P2S","P3")` 两条重启边先例 |
 
-**R3 哈希已两次作废**：`d26cbc3e…`（v1）、`12105e98…`（v2）。**现行为 `9c8621ac…`**，
-59 行、47 逐字继承、12 处编辑。
+**R3 哈希已两次作废**：`d26cbc3e…`（v1）、`12105e98…`（v2）、`9c8621ac…`（v3）。**现行为 `d40ad864…`**，
+60 行、47 逐字继承、13 处编辑。
 
 **请重点打的**：
 
