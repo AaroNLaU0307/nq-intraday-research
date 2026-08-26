@@ -50,10 +50,35 @@ DECISION_ID  dec-eight-open-2026-08-26        DELEGATED=YES
 永不建目录（变异证红）。接入会改变运行期行为，而运行期行为依赖那个尚未授权的
 见证根。
 
-### ③ 等八项落定### ③ 等八项落定### ③ 等 D-3 落定### ③ 等 D-3 落定 —— N09 的 R3 设计
+### ③ N09 的 R3 设计 —— **已完成**（2026-08-27）
 
-Sol 对 R2 的 High #2 认定：执行路径的可建范围取决于 D-3 怎么裁。**所以 R3 在 ①
-返回之前写不了**，现在能建的只有一个永远拒绝的骨架。
+**这一段此前是错的，2026-08-27 改正。** 原文写「R3 在 ① 返回之前写不了」——
+那是对 High #2 的转述，而 Sol 原文说的是 the claimed execution path 建不了，
+并明确给出第二分支：`or limit the authorized build explicitly to an
+always-refusing scaffold`。五条最小解阻条件里 **1／2／4／5 全是 builder 的活**，
+第 3 条自带 builder 可走的分支。裁定全文与逐条复现见
+`ops/RULING_SOL_N09_R2_HOLD_2026-08-26.md`。
+
+**R3 已写完**：`ops/N09_EXECUTION_PATH_DESIGN_R3.md`，范围取条件 3 的第二分支
+（`BUILD_SCOPE=DEFAULT_REFUSE_SCAFFOLD_ONLY`），五条最小解阻条件逐条应答：
+
+```
+条件 1  三个 checkpoint 各自的副作用断言（R2 那条统一断言对 C_BUILD_2/3 不成立）
+条件 2  冻结 A1/F2/indeterminate 矩阵 —— 并暴露一个真实缺陷：archive_policy_a
+        是一道门，其拒绝经路由器 A 发 F2，而已批准政策要求这一格发 A1
+条件 3  取第二分支：默认拒绝骨架
+条件 4  钉死 structural-only 调用图（loader → build_universe →
+        build_vol20_regime_mapping_from_universe → build_event_stratum_map），
+        AST 层面禁止 build_s0_dataset / compute_day / labels / Oracle / study
+条件 5  点名 atoms.canonical_json；落点进封存清单；P3 之前绑定；
+        P3 之后落盘失败 = INDETERMINATE 走 Aaron
+```
+
+R3 对现有代码的每条断言由 `tests/test_n09_r3_design_facts.py` 机械钉住
+（21 项，4 条变异证红）。**仍是设计，`STATUS=NOTHING_IMPLEMENTED`。**
+
+**越过骨架仍需 Aaron 的四项**（R3 §7，builder 不代填）：P3／失败事件的写者、
+目录创建授权的四要素、D-3 的五项 `UNRESOLVED_FOR_AARON`、N09 的 P2。
 
 ---
 
@@ -157,7 +182,7 @@ ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md
 | 何时 | 交给谁 | 什么 | 结果 |
 |---|---|---|---|
 | 2026-08-26 | Fable | 四项待裁决策包 | **全部返回** —— D-1=A、D-2=C、D-3=C（三步之第一步，故成为上面 ①）、D-4=改；裁决全文是隔离件，D-3 一节的干净副本见 `ops/D3_REGISTRY_WRITER_PROPOSAL.md` |
-| 2026-08-26 | fresh Sol | R2 设计审（Review Packet v1，`rv-3651f9fe0b68-da56aecb6991`） | **HOLD** —— 三条 High 全部经 builder 独立复核成立；记录 `ops/A2_N09_SOL_EXPOSURE_AND_REDESIGN_2026-08-25.md` 与 `ops/REVIEWER_EXPOSURE_LOG.md` 第 2 行 |
+| 2026-08-26 | fresh Sol | R2 设计审（Review Packet v1，`rv-3651f9fe0b68-da56aecb6991`） | **HOLD** —— 三条 High 全部经 builder 独立复核成立；**四条 finding（3 High＋1 Medium）全部经 builder 独立复现成立**；裁定全文记录 `ops/RULING_SOL_N09_R2_HOLD_2026-08-26.md`（此前本格误指 `A2_N09_SOL_EXPOSURE_AND_REDESIGN_2026-08-25.md`，那份装的是 08-25 那轮的六条 REDESIGN）；席位暴露记 `ops/REVIEWER_EXPOSURE_LOG.md` 第 2 行 |
 | 2026-08-25 | fresh Sol | MC-REG-COLLISION-001 批准 | **RATIFIED_AS_MODIFIED**（C2 被整条替换）→ 已实现，记录 `ops/RULING_MC_REG_COLLISION_SOL_RATIFICATION_2026-08-25.md` |
 | 2026-08-25 | Fable | MC-REG-COLLISION-001 提案 | R2 提案 → 记录 `ops/RULING_PROPOSAL_MC_REG_COLLISION_FABLE_2026-08-25.md` |
 

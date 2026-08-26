@@ -79,6 +79,8 @@
 | [`RULING_FABLE_REMAINING_2026-08-26.md`](RULING_FABLE_REMAINING_2026-08-26.md) | **其余十项裁定全文**（R1–R10，逐字）＋ builder 审核。R4／R6／R7 判 `DELEGABLE=NO`，仍等 Aaron；两条机械条件已跑，均成立 |
 | [`RULING_FABLE_EIGHT_OPEN_2026-08-26.md`](RULING_FABLE_EIGHT_OPEN_2026-08-26.md) | **八项裁定全文**（逐字）＋ builder 逐条复现审核；含一处经复核的论证更正 |
 | [`RULING_SOL_D3_HOLD_2026-08-26.md`](RULING_SOL_D3_HOLD_2026-08-26.md) | **D-3 复核结果 = HOLD**（4 High／1 Medium，五项留给 Aaron）＋ builder 逐条复现记录。outcome-clean |
+| [`RULING_SOL_N09_R2_HOLD_2026-08-26.md`](RULING_SOL_N09_R2_HOLD_2026-08-26.md) | **N09 执行路径设计 R2 复审结果 = HOLD**（3 High／1 Medium，四条全部经 builder 复现）＋裁定原文逐字转录。**此前该轮裁定只存在于聊天里**，2026-08-27 落盘。outcome-clean |
+| [`N09_EXECUTION_PATH_DESIGN_R3.md`](N09_EXECUTION_PATH_DESIGN_R3.md) | **N09 执行路径设计 R3**——回应 R2 的 HOLD：三个 checkpoint 各自的副作用断言、冻结的 A1/F2/indeterminate 矩阵、钉死的 structural-only 调用图、precheck 证据规则。`BUILD_SCOPE=DEFAULT_REFUSE_SCAFFOLD_ONLY`，`STATUS=NOTHING_IMPLEMENTED`。outcome-clean |
 | [`A2_N09_SOL_EXPOSURE_AND_REDESIGN_2026-08-25.md`](A2_N09_SOL_EXPOSURE_AND_REDESIGN_2026-08-25.md) | N09 首轮：席位暴露 ＋ 非正式 REDESIGN |
 | [`N09_EXECUTION_PATH_DESIGN.md`](N09_EXECUTION_PATH_DESIGN.md) | R1（已被 R2 取代，正文保留原样） |
 | [`N06_HOLD_RED_PROOF.md`](N06_HOLD_RED_PROOF.md) | N06 四个 High 的红证 |
