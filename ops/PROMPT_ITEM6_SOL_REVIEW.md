@@ -1,4 +1,4 @@
-# ND1 R3 修订提案复核 —— fresh Sol（**第三次交付**）
+# ND1 R3 修订提案复核 —— fresh Sol（**第四次交付**）
 
 ```ini
 RECOMMENDED_MODEL=Codex GPT-5.6 Sol
@@ -13,16 +13,16 @@ OUTCOME_EXPOSED=NONE
 PREREG_SEALED=N/A（本件不动 preregistration）
 ```
 
-**REVIEW_ID=rv-2469d0cff91a-31fed17a5401**（gate=`TIER1_DISCRETIONARY`）
+**REVIEW_ID=rv-fb781d61bdde-c74d22184336**（gate=`TIER1_DISCRETIONARY`）
 
 > **本文件必须从磁盘读取（read it from disk）。绝对路径：**
 > `C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework\ops\PROMPT_ITEM6_SOL_REVIEW.md`
-> **line 88 of it must read** `REVIEWED_SET_UNCHANGED_SINCE=…`。
+> **line 104 of it must read** `REVIEWED_SET_UNCHANGED_SINCE=…`。
 > 行号或内容对不上 ⇒ 你手里是旧副本，**STOP**。
 
 ---
 
-## 0. **前两次交付都被判 `REJECTED_INCOMPLETE`，两次都判得对**
+## 0. **前三次交付都没走完，三次的成因都在 builder**
 
 前一个 fresh Sol 会话的裁定，逐字：
 
@@ -56,9 +56,25 @@ ops/ND1_PROFILE_RATIFICATION.md，但该文件不在送审集内。
 但**同一份文件的 §7 写死了修订路径**，而**前一版提案没走那条路**——它提的是
 「批准后改代码」，可代码是批准之后的**转录**，不是批准的**对象**。
 
-**本次交付**：`ops/ND1_PROFILE_RATIFICATION.md` 已入冻结集；提案已按 §7 重写为
-「R3 canonical 正文 ＋ 其 SHA-256」；并带出两处**升级**（§二.2），是照规矩做才
-浮出来的。
+**第三次交付根本没被审。** builder 执行了一次**另行授权的**隔离件迁移，而那次
+迁移必须改的注册表 `ops/OUTCOME_CARRYING_ARTIFACTS.json` **正是第三次交付冻结
+送审集里的一件**。改它 ⇒ 送审集当场失效。冻结守卫打红并点名了它。
+
+```
+ops/OUTCOME_CARRYING_ARTIFACTS.json: sent 6bcafa9c… to fresh Sol（第三次交付），
+now a61c125b…
+```
+
+**这不是工件有缺陷，是 builder 让两条各自获授权的工作线撞在了同一个文件上。**
+
+**本次（第四次）交付**：`ops/ND1_PROFILE_RATIFICATION.md` 在冻结集内；提案已按
+§7 重写为「R3 canonical 正文 ＋ 其 SHA-256」，并带出两处**升级**（§二.2）；
+钉子重新派生于迁移之后。
+
+> **给你的一条提醒**：`ops/OUTCOME_CARRYING_ARTIFACTS.json` 的 `path` 字段在
+> 迁移中变过——十条隔离路径现在住在 `ops/outcome_quarantine/` 下，**两份
+> `EXPOSURE_LEDGER.md`（**OFF-LIMITS**）仍在原地**。**注册表始终是权威，前缀不是**：
+> 只按前缀判断会漏掉那两条。
 
 ## 1. 开工之前：你可能被烧掉
 
@@ -85,7 +101,7 @@ OFF-LIMITS   ops/EXPOSURE_LEDGER.md              （研究轴台账）
 ## 2. 传输核对（先做，不通过就 STOP）
 
 ```
-REVIEWED_SET_UNCHANGED_SINCE=025c771b9d9f083df5893c64af68d6b95ee4a55d
+REVIEWED_SET_UNCHANGED_SINCE=96225c5d222a630a19bf575753d071c687b215da
 ```
 
 **语义**：该 commit **之后**没有任何 commit 触碰过下表任一送审路径。它不是当前
@@ -93,25 +109,25 @@ REVIEWED_SET_UNCHANGED_SINCE=025c771b9d9f083df5893c64af68d6b95ee4a55d
 下表路径。**这一条命令是允许的**（范围核对，不是检索）：
 
 ```bash
-git log --oneline 025c771b9d9f083df5893c64af68d6b95ee4a55d..HEAD -- ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md ops/ND1_PROFILE_RATIFICATION.md ops/DECISION_PACKET_N00_AND_ND1.md src/itsf/mc/supplement_contract.py src/itsf/mc/supplement_runner.py src/itsf/mc/supplement_registry.py ops/OUTCOME_CARRYING_ARTIFACTS.json tests/test_mc_supplement_registry.py tests/test_mc_supplement_runner.py tests/test_mc_supplement_integration.py tests/test_registry_boundary.py
+git log --oneline 96225c5d222a630a19bf575753d071c687b215da..HEAD -- ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md ops/ND1_PROFILE_RATIFICATION.md ops/DECISION_PACKET_N00_AND_ND1.md src/itsf/mc/supplement_contract.py src/itsf/mc/supplement_runner.py src/itsf/mc/supplement_registry.py ops/OUTCOME_CARRYING_ARTIFACTS.json tests/test_mc_supplement_registry.py tests/test_mc_supplement_runner.py tests/test_mc_supplement_integration.py tests/test_registry_boundary.py
 ```
 
 **必须为空。** 非空 ⇒ 工件在你手里动了 ⇒ STOP。
 
 | SHA-256 | 字节 | 路径 | 为什么给你 |
 |---|---|---|---|
-| `24093464e03f499a59a7f89558156f9e8555d2bb19a1227ae8626c46b1547384` | 19774 | `ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md` | 被复核的提案（已重写到 §7 路径上） |
-| `cf2c3cb2bdb79b34498c2a7ebc53344c70ef89f0686466a010ce62431541d05e` | 8277 | `ops/ND1_PROFILE_RATIFICATION.md` | **上次缺的权威基线** —— §8 是 R2 的批准记录，§7 是修订路径 |
-| `da64a3d68454e6f129287412f200ea51309ee85daad9d9bdb7465d9765e47991` | 86999 | `ops/DECISION_PACKET_N00_AND_ND1.md` | R2 canonical 正文所在（1613–1665 行）；其第 1 行自陈不含已批准值 |
+| `24093464e03f499a59a7f89558156f9e8555d2bb19a1227ae8626c46b1547384` | 19774 | `ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md` | 被复核的提案（已在 §7 路径上） |
+| `cf2c3cb2bdb79b34498c2a7ebc53344c70ef89f0686466a010ce62431541d05e` | 8277 | `ops/ND1_PROFILE_RATIFICATION.md` | 权威基线 —— §8 是 R2 批准记录，§7 是修订路径 |
+| `da64a3d68454e6f129287412f200ea51309ee85daad9d9bdb7465d9765e47991` | 86999 | `ops/DECISION_PACKET_N00_AND_ND1.md` | R2 canonical 正文所在；其第 1 行自陈不含已批准值 |
 | `c6d5b46f71404044d3e0d2ce770bfda2f4eaa88b3448e397d035b3ec8aff7298` | 20014 | `src/itsf/mc/supplement_contract.py` | EVENTS／TRAPS／FORBIDDEN_EDGES —— 批准后的转录物 |
-| `3cb698aef52dcc14ee0987e585ee5b46705a3046e7e53ea42d3db69e001cf746` | 45975 | `src/itsf/mc/supplement_runner.py` | assert_chain_closed:739、A_PRECHECK 门:279、748-749 写死提示 |
+| `3cb698aef52dcc14ee0987e585ee5b46705a3046e7e53ea42d3db69e001cf746` | 45975 | `src/itsf/mc/supplement_runner.py` | assert_chain_closed:739、A_PRECHECK 门:279、748-749 |
 | `e8dd4942645e0d127ff7d388be79ea0fd180a7adf2f0905f60bcf6eaa1f5dfb2` | 65735 | `src/itsf/mc/supplement_registry.py` | 链解析；ChainResolution.closed:245 |
-| `6bcafa9cb7aec7e386cef2311e709c4ebfdafac73db1ce549ed25c91bf0a105b` | 2373 | `ops/OUTCOME_CARRYING_ARTIFACTS.json` | 隔离名单权威 |
+| `a61c125b4e2e551955ce59816c9ccbc6a449a91d7f7701095eeb586e5c155f4b` | 2563 | `ops/OUTCOME_CARRYING_ARTIFACTS.json` | 隔离名单权威。**其 path 字段刚因迁移变过**，见 §0 |
 | `5737f5141c57fd687a737b9af4b48e97b16c0f6c2b1f1ccd045340d463957eba` | 48061 | `tests/test_mc_supplement_registry.py` | 链解析／trap／forbidden edges |
 | `3dc719db3f34e8a60a0f71fb5b1c6f31e8a9bf32f655063b3c2d2aa9f4ab7d13` | 36141 | `tests/test_mc_supplement_runner.py` | assert_chain_closed／A_PRECHECK |
 | `f6b0ff3bd0280f814209aee87f970ff24b235e8e3bce1b2a9944f140b5f70a9b` | 27139 | `tests/test_mc_supplement_integration.py` | **逐行比对 R1/R2 并断言差异恰为四行** —— R3 须同形 |
 | `4ae818b6699386df3a5d1d27d32765207f1f1ba15a831f13ef2d9ee2267037b8` | 13738 | `tests/test_registry_boundary.py` | C2 边界 |
-| `3f03814fa97b4e7b30ada72397a2ccc6d804f015910af57df20b5f61e4b6e313` | 16525 | `ops/packets/rv-2469d0cff91a-31fed17a5401.packet` | Review Packet v1 本体（**不冻结**，见表下说明） |
+| `27085e8654338c39189636d5ed581b0dec33c5c6ca62a87dd5d0feb7c9c1ce53` | 15426 | `ops/packets/rv-fb781d61bdde-c74d22184336.packet` | Review Packet v1 本体（**不冻结**，见表下说明） |
 
 **逐个重算并比对。** packet 内的 `GENERATED_BLOCK_SHA256` 亦请重算——
 前像是**字段行本身**（不含章节标题与空行），见 `packet.py:1154` 的 `_render`。
@@ -124,6 +140,8 @@ git log --oneline 025c771b9d9f083df5893c64af68d6b95ee4a55d..HEAD -- ops/PREP_ITE
 > **所以上面那条 `git log` 只列前 11 条，请照抄，不要把 packet 加进去。**
 > 把 packet 加进去会得到一条非空结果（创建它的那个 commit），那不是工件被动过。
 > **packet 只按哈希核，不按范围核。**
+>
+> **packet 的 `FILE_MANIFEST=EMPTY` 是刻意的。** `SCOPE_BASE` 取 HEAD——若取迁移之前的 base，那十个刚被移动的隔离件会作为 rename 全部进 manifest，**机械地把隔离路径摆到你面前，没有任何人手打过它们**。送审范围由下表十一个哈希界定，不由 diff 界定。
 
 ## 3. 你要复核什么
 
@@ -158,7 +176,7 @@ git log --oneline 025c771b9d9f083df5893c64af68d6b95ee4a55d..HEAD -- ops/PREP_ITE
 
 ```
 ITEM=6+8
-REVIEW_ID=rv-2469d0cff91a-31fed17a5401
+REVIEW_ID=rv-fb781d61bdde-c74d22184336
 TRANSPORT_PRECHECK=PASS|STOP（逐个哈希 ＋ 上面那条 git log 为空 ＋ 重算 packet 生成块）
 VERDICT=PASS | HOLD | REJECTED_INCOMPLETE
 STRONGEST_OBJECTION=<即使 PASS 也要写出最强的反对>

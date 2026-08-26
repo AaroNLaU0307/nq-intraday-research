@@ -1,0 +1,141 @@
+1. GENERATED           assembled by qros; EVERY FIELD ORIGIN-TAGGED (§5.2)
+
+REVIEW_ID=rv-fb781d61bdde-c74d22184336 [MECH]
+RESEARCH_ID=ITSF-S0 [DECLARED]
+LANE=FULL [DECLARED]
+STAGE=C [DECLARED]
+DECISION_REQUESTED=Review the ND1 R3 amendment proposal (fourth delivery — the third was invalidated by a builder-side migration, not by any defect in the artifact). <selector: builder> [SELECTED]
+HEAD=96225c5d222a630a19bf575753d071c687b215da [MECH]
+BASIS=WORKTREE [MECH]
+WORKTREE=DIRTY(2 modified, 0 untracked) [MECH]
+SCOPE_KIND=TIER1_BATCH [MECH]
+SCOPE_BASE=96225c5d222a630a19bf575753d071c687b215da (composition: selected base · MECH resolution of it) [MIXED]
+SCOPE_BASE_ORIGIN=selected [MECH]
+SUPPLEMENTAL_SCOPE=NONE [SELECTED]
+FILE_MANIFEST=EMPTY [MECH]
+PREREG_REF=STUDY_0_PREREGISTRATION.md [DECLARED]
+SEAL_REVISION=c685ebc1ed65e0c6fc9b9b7212a054289d1b37fd [DECLARED]
+SEAL=VERIFIED [MECH]
+LINEAGE_ANCHOR=修订记录 [DECLARED]
+LINEAGE_AMENDMENTS=ABSENT [CANON]
+MATERIAL_DESIGN_CONTRIBUTOR=UNKNOWN (composition: CANON record · MECH parse — the Lineage/Amendments excerpt does not resolve) [MIXED]
+INDEPENDENCE_UNKNOWN=YES [MECH]
+TRIAL_ACCOUNTING_REF=ops/TRIAL_REGISTRY.md + anchor ## S0-T001（FIRST_REAL_S0_FULL_DEVELOPMENT_RUN，exposure_seq 1） [DECLARED]
+TRIAL_ACCOUNTING_RESOLUTION=ops/TRIAL_REGISTRY.md · ee9da33fdbb47725dc036243adc76d7d9ba69ff06df0df443b09103f897353d6 · anchor found [MECH]
+TRIAL_ACCOUNTING_EXCERPT= [CANON]
+  TRIAL_ACCOUNTING_EXCERPT=## S0-T001（FIRST_REAL_S0_FULL_DEVELOPMENT_RUN，exposure_seq 1）
+  TRIAL_ACCOUNTING_EXCERPT=
+  TRIAL_ACCOUNTING_EXCERPT=| # | utc | event | commit | actor | 原因/备注 |
+  TRIAL_ACCOUNTING_EXCERPT=|---|---|---|---|---|---|
+  TRIAL_ACCOUNTING_EXCERPT=| 1 | 2026-07-31 | TRIAL_REGISTERED | 79d7ca3 | main agent | 授权包起草，登记 S0-T001，状态 PACKET_DRAFTED |
+  TRIAL_ACCOUNTING_EXCERPT=| 2 | 2026-07-31 | GOVERNANCE_FRAMEWORK_APPROVED | （本次修订 commit） | Aaron（main agent 代录） | Aaron 批准治理框架＋八条修订；包状态保持 PACKET_DRAFTED，待 runner 落地后重渲染最终包 |
+  TRIAL_ACCOUNTING_EXCERPT=
+  TRIAL_ACCOUNTING_EXCERPT=| 3 | 2026-07-31 | **PACKET_APPROVED** | （M5-T0 commit） | Aaron | "Approved for runner implementation only"；real_s0 = REAL_S0_NOT_AUTHORIZED；PACKET_APPROVED != RUN_AUTHORIZED——仅允许实现与测试 runner，禁止真实 S0/Oracle/收益/EV/MC/Checkpoint 0 |
+  TRIAL_ACCOUNTING_EXCERPT=
+  TRIAL_ACCOUNTING_EXCERPT=| 4 | 2026-08-01 | **RUNNER_IMPLEMENTED** | 79606038066152c66e63fad9a8184067db170ff1 | main agent | M5-T5 完成：SA-11 八项（N-A..N-H）修复→SA-12 全面审计判 N-B/N-G PARTIAL→二轮修复（§三闭包模块级工厂化＋缺键分支）→SA-13 聚焦复审 ALL_CLOSED（两项判定性变异验收均红、回归扫掠零回归、包哈希 12/12）。电池：pytest 509/509、0 skipped、冻结哈希 OK、三扫描 CLEAN，全 exit-code 门控 |
+  TRIAL_ACCOUNTING_EXCERPT=| 5 | 2026-08-01 | **READY_FOR_RUN_AUTHORIZATION** | 79606038066152c66e63fad9a8184067db170ff1 | main agent | final-readiness 条件全满足（SA-13 ALL_CLOSED @7960603）。等待 Aaron 发 §10 精确语句（含完整 40 位 commit hash）方可进入 RUN_AUTHORIZED；在此之前禁止真实 S0/Oracle/收益/EV/MC/Checkpoint 0。SA-13 留一非阻塞观察（hook 新鲜度子性质非变异判定性，备选一行测试补强）已交 Aaron 记录 |
+  TRIAL_ACCOUNTING_EXCERPT=
+  TRIAL_ACCOUNTING_EXCERPT=| 6 | 2026-08-01 | **RUN_AUTHORIZED** | 524c9ab94eea8cbf2e906f3016f63cffde86e2c5 | Aaron | 启动第一次真实S0，授权trial_id: S0-T001，使用commit: 524c9ab94eea8cbf2e906f3016f63cffde86e2c5 |
+  TRIAL_ACCOUNTING_EXCERPT=
+  TRIAL_ACCOUNTING_EXCERPT=<!-- 只允许在此表之下追加新事件行；上方内容一经提交不得改动。 -->
+  TRIAL_ACCOUNTING_EXCERPT=| + | 2026-08-01T12:17:30+00:00 | PRE_RUN_ATTEMPT_FAILURE | 524c9ab | main agent (s0_real_run) | [S0-T001] stage A_PRECHECK gate 'full_pytest': RunGateError (incident INC-e6fe49ec63de; exposure NOT consumed; artifacts in S0-T001-A20260801T121730Z) |
+  TRIAL_ACCOUNTING_EXCERPT=| 7 | 2026-08-01 | **RUN_AUTHORIZATION_SUPERSEDED** | 524c9ab94eea8cbf2e906f3016f63cffde86e2c5 | main agent（Aaron 批复 DECISION_PACKET_RUNTIME_SELFBLOCK §三） | [S0-T001] supersedes_event_sequence: 6; superseded_commit: 524c9ab94eea8cbf2e906f3016f63cffde86e2c5; reason_code: RUNTIME_SELFBLOCK_FIX; incident_id: INC-e6fe49ec63de |
+  TRIAL_ACCOUNTING_EXCERPT=| 8 | 2026-08-01 | **READY_FOR_RUN_AUTHORIZATION** | 36c7b581e4d4403d1d03870b12a2400749fa684f | main agent | IR-25 收口（Aaron 批复 §五）：修复 commit 12dd436→SA-14 审计否证运行可满足性（双状态测试自身为第二自锁）→SA-14 验证方案修复于 36c7b58→SA-15 聚焦复审 ALL_CLOSED（布局 A/B 双套件 519 绿、13/13 门全过含 full_pytest、父 commit 证伪复现、布局 C 下次运行真实形态亦绿、包哈希 12/12）。SA-14/15 共六条非阻塞观察入 P3 backlog。等待 Aaron 对新 HEAD 重发 §10 精确语句；此前禁真实 S0/Oracle/收益/EV/MC/CP0。S0-T001 未消耗，仍为首次真实 trial |
+  TRIAL_ACCOUNTING_EXCERPT=| 9 | 2026-08-01 | **RUN_AUTHORIZED** | 08e74235afb4868acc7df80bbe0e0a13a1b5ba5a | Aaron | 启动第一次真实S0，授权trial_id: S0-T001，使用commit: 08e74235afb4868acc7df80bbe0e0a13a1b5ba5a |
+  TRIAL_ACCOUNTING_EXCERPT=| + | 2026-08-01T16:20:47+00:00 | PRE_RUN_ATTEMPT_FAILURE | 08e7423 | main agent (s0_real_run) | [S0-T001] stage B_LOAD_VALIDATE gate 'preflight_assertions_match': RunGateError (incident INC-fa9234e0e541; exposure NOT consumed; artifacts in S0-T001-A20260801T162047Z) |
+  TRIAL_ACCOUNTING_EXCERPT=| 10 | 2026-08-01 | **RUN_AUTHORIZATION_SUPERSEDED** | 08e74235afb4868acc7df80bbe0e0a13a1b5ba5a | main agent（Aaron 批复 DECISION_PACKET_VENDOR_DEGRADED_ANCHOR / IR-26 E2） | [S0-T001] supersedes_event_sequence: 9; superseded_commit: 08e74235afb4868acc7df80bbe0e0a13a1b5ba5a; reason_code: STAGE_B_ANCHOR_SEMANTICS_FIX; incident_id: INC-fa9234e0e541 |
+  TRIAL_ACCOUNTING_EXCERPT=| 11 | 2026-08-01 | **READY_FOR_RUN_AUTHORIZATION** | 6cb7eb718c903d119b7e51c7171e6db6f43aca67 | main agent | IR-26 收口（Aaron E5）：SA-16 只读审计判 IR-26 修复全 CLOSED——八条规则逐条映射核验、真实数据 66 断言 all_pass、18 缺失日与锁定 json 逐字节一致、diagnostic sidecar=6、两判定性变异均红、隔离授权态探针 Stage A 13/13＋Stage B 5/5 全过（含 preflight_assertions_match 66/66）未入 Stage C。SA-16 唯一 OPEN=untracked 评审包会触发 git_clean 门（第三自锁，修复之外）——已随本事件 commit 入库闭合。N1（实施边界无回归守卫）等入 P3 backlog。等待 Aaron 对新 HEAD 发第三次 §10；此前禁真实 S0。S0-T001 未消耗 |
+  TRIAL_ACCOUNTING_EXCERPT=| 12 | 2026-08-13T16:41:04+00:00 | **READY_FOR_RUN_AUTHORIZATION** | 876c1b74131b4ab1a89dce433ecce646ba481f8c | Fable main agent（依 Aaron 具名提示词 START_S0_READY_APPEND_AFTER_CODEX_OPERATIONS_PASS 执行） | [S0-T001] CODEX_OPERATIONS_FINAL_REVIEW=PASS；CODEX_EXACT_TREE_FULL_SUITE=2621/0/0；OUTPUT_ROOTS_ATTESTED=YES；DR5_STATUS=PARTIAL_BY_RULING；DR5_MC_CONSUMER=ABSENT；REAL_S0_NOT_AUTHORIZED；AWAITING_AARON_SECTION_10_EXACT_AUTHORIZATION。本 READY 仅覆盖基础 S0-T001 首次真实运行；不含 MC、策略 build、第二次 trial 或任何运行授权；运行仅由 Aaron §10 精确语句触发。attestation 证据：ops/OUTPUT_ROOTS_READINESS_CHECKLIST.md＋ops/S0_OUTPUT_ROOTS_OPERATIONS_DECISION.md |
+  TRIAL_ACCOUNTING_EXCERPT=| 13 | 2026-08-14 | **RUN_AUTHORIZED** | 876c1b74131b4ab1a89dce433ecce646ba481f8c | Aaron | 启动第一次真实S0，授权trial_id: S0-T001，使用commit: 876c1b74131b4ab1a89dce433ecce646ba481f8c |
+  TRIAL_ACCOUNTING_EXCERPT=| + | 2026-08-13T17:04:32+00:00 | RUN_STARTED | 876c1b7 | main agent (s0_real_run) | [S0-T001] Stage C entry; researcher exposure seq consumed |
+  TRIAL_ACCOUNTING_EXCERPT=| + | 2026-08-13T17:04:32+00:00 | COMPLETED | 876c1b7 | main agent (s0_real_run) | [S0-T001] S0 report sealed |
+INPUT_FRESHNESS= [MECH]
+  INPUT_FRESHNESS=exposure_record=FRESH row=TBL-FRESHNESS.R02 BASIS=HEAD
+  INPUT_FRESHNESS=prereg=FRESH row=TBL-FRESHNESS.R02 BASIS=HEAD
+  INPUT_FRESHNESS=trial_accounting=FRESH row=TBL-FRESHNESS.R02 BASIS=HEAD
+TESTS_RUN= [BUILDER]
+  TESTS_RUN=full suite 4237 passed / 0 failed at 96225c5, worktree untouched during the run
+VALIDATORS_RUN= [BUILDER]
+  VALIDATORS_RUN=qros check --project ITSF-S0: SEAL=VERIFIED, all inputs FRESH, no rejection
+REPRO_COMMANDS= [BUILDER]
+  REPRO_COMMANDS=python -m pytest tests -q
+OUTCOME_EXPOSURE_SCOPE=HISTORICAL_CUMULATIVE [DECLARED]
+OUTCOME_EXPOSURE_DECLARED=TARGET_METRIC [DECLARED]
+OUTCOME_EXPOSURE_CANONICAL=TARGET_METRIC (composition: CANON record bytes · DECLARED normalization rule · MECH classification and aggregation) [MIXED]
+EXPOSURE_CONFLICT= [MECH]
+  EXPOSURE_CONFLICT=NO
+  EXPOSURE_CONFLICT=The runtime detects only **recorded** exposure and **contradiction between record and declaration**. It cannot detect exposure that was never written down — in-context exposure has no artifact witness. **A clean exposure check is never evidence that no exposure occurred**; it is evidence that the records on file agree with each other. The residual defense is procedural: failing to append an exposure event is a per-se process violation, and Stage I's task list includes an exposure-log plausibility check.
+TRIGGERS= [MIXED]
+  TRIGGERS=composition: MECH path and diff-breadth detection · DECLARED state, event and judgment sources · CANON external-KB relationship counts
+  TRIGGERS=matched=0
+  TRIGGERS=path-clear=0
+  TRIGGERS=unassessed=14
+EXECUTOR_ESCALATION=NONE [MECH]
+TRANSITION_ELIGIBILITY=UNKNOWN [MECH]
+REGENERATION_INPUTS= [MECH]
+  REGENERATION_INPUTS=runtime_version=qros-runtime 0.1.0 (§9.2 step 7a core)
+  REGENERATION_INPUTS=spec_revision=Rev18
+  REGENERATION_INPUTS=effective_table_bundle_identity=5008F5253E47F2196B5DA541038DB08C7B096C0C2D8F65FFD2507404F3637B5F
+  REGENERATION_INPUTS=HEAD=96225c5d222a630a19bf575753d071c687b215da
+  REGENERATION_INPUTS=BASIS=WORKTREE
+  REGENERATION_INPUTS=SCOPE_BASE=96225c5d222a630a19bf575753d071c687b215da
+  REGENERATION_INPUTS=packet_content_identity=fb781d61bddeb6b10dbf19461140e6c007166099af71489b2780dc66910c386c
+  REGENERATION_INPUTS=packet_attempt_identity=c74d22184336
+  REGENERATION_INPUTS=input.exposure_record=2afeebc27a2e7e6dfa93509a0ad3dce784a97c7e609044133ca61ddecb11f25b@5d3574145b6291594e4eb072ac654be3b92fc402
+  REGENERATION_INPUTS=input.prereg=6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132@5d3574145b6291594e4eb072ac654be3b92fc402
+  REGENERATION_INPUTS=input.trial_accounting=ee9da33fdbb47725dc036243adc76d7d9ba69ff06df0df443b09103f897353d6@5d3574145b6291594e4eb072ac654be3b92fc402
+  REGENERATION_INPUTS=hash.RESEARCH_ID=eea604da6f645e7792dd7277aba68740e3dba856d680f6e9bec27b699a68fa13
+  REGENERATION_INPUTS=hash.LANE=cb6839cad0217d04d215050e8d6306dd9d4904dddc86a6b36e377d08509e5240
+  REGENERATION_INPUTS=hash.STAGE=6b23c0d5f35d1b11f9b683f0b0a617355deb11277d91ae091d399c655b87940d
+  REGENERATION_INPUTS=hash.DECISION_REQUESTED=d01b3a23c666ca1db6408c2f1a6878e3d6d9f9d3bde0db70cb552249872640e1
+  REGENERATION_INPUTS=hash.SUPPLEMENTAL_SCOPE=dc937b59892604f5a86ac96936cd7ff09e25f18ae6b758e8014a24c7fa039e91
+  REGENERATION_INPUTS=hash.PREREG_REF=86eb48a583d16ee1a064186baa8d5ff3b63da3fec38278edbcb032d86c40e69f
+  REGENERATION_INPUTS=hash.SEAL_REVISION=a49032cf338b99b73480ce3fd710c9aaa51c33774b186c19cdee6dd68aefed69
+  REGENERATION_INPUTS=hash.LINEAGE_ANCHOR=3b3cead32bcb7a9ac67f66cc8d6368233c3fc233741b143d38413e9e763b7568
+  REGENERATION_INPUTS=hash.TRIAL_ACCOUNTING_REF=1f322c33a0ef96c654c68df84482a26ad47022a0b7d700704682aee39c23dad6
+  REGENERATION_INPUTS=hash.TESTS_RUN=6e393e8cce11b5aac58a0573fd9c9f5a2bd53ee18552164e20e277d6bbfe565e
+  REGENERATION_INPUTS=hash.VALIDATORS_RUN=3ae0a91c8208dbe655fbf851c9670c8765a90df4acf003a6ef5398dd06dbde8a
+  REGENERATION_INPUTS=hash.REPRO_COMMANDS=9f546d24645f3586de4f10a85a3ac9f29868eb21453ed7203cbdf695cb0b57a0
+  REGENERATION_INPUTS=hash.OUTCOME_EXPOSURE_SCOPE=ac1c5b5854470ac6f6567a41cdaf82385eb45a7ceaad9007de24866f430bce2f
+  REGENERATION_INPUTS=hash.OUTCOME_EXPOSURE_DECLARED=bb5c725bff4b5f7fef6251842055b98f7913eef55f164d6662fbdebed3baa9ff
+GENERATED_BLOCK_SHA256=0a26735acbb8f39add8e92fd8a169f38f5afa69f0e155f41501a6b1dc9b36968 [MECH]
+
+2. BUILDER-SUPPLIED    visibly self-reported
+
+CLAIM_BEING_EVALUATED       ESCALATION 2: ADOPT_AS_INTRODUCED_BY_R3 is a value the profile vocabulary has never held; existing values presume section D already carries the grammar, and CR1 has none.
+KNOWN_FAILURES
+  Delivery 1: REJECTED_INCOMPLETE, origin BUILDER — bare file, no packet, no declared hash.
+  Delivery 2: REJECTED_INCOMPLETE, origin BUILDER, cause SOURCE_CONTENT — no authoritative ratification baseline. Chasing that stop revealed the amendment ROUTE the proposal now follows.
+  Delivery 3: never reviewed. An authorized migration edited a file inside its own frozen set. The freeze guard caught it and named the file.
+KNOWN_ASSUMPTIONS           NONE_CLAIMED
+UNRESOLVED_UNCERTAINTIES
+  Whether editing a line R2 had just ratified exceeds what an amendment may do.
+  P4 and F2 in the ABANDONED predicate table remain undecided.
+  Whether CR1 belongs in NON_TERMINAL_TRAPS — builder inference, not a ruling.
+COUNTERFACTUAL              If editing P3's successor line is out of bounds, CR1 is unreachable and the dangling-P3 gap stays open.
+BUILDER_RECOMMENDATION      Recompute R3's canonical hash first, then rule on the two escalations. Section 4A remains the section most likely to still contain an error.
+
+3. REVIEWER CONTRACT   what the reviewer is asked to do, and must not do
+
+REVIEWER_TASK           discretionary phase-boundary review; it releases no transition and is never a requirement's gate
+MUST_NOT_DO
+  author
+  repair
+  approve its own prior work
+  accept a summary in place of bytes
+  treat a DECLARED, BUILDER, or SELECTED field as verified
+  accept a narrowed Tier-2 base
+  read UNKNOWN provenance as reviewer_only
+  claim unscoped independence (INV-8)
+REQUIRED_OUTPUT_SCHEMA
+  VERDICT: PASS | HOLD | REJECTED_INCOMPLETE  (§5.5.2, its sole normative site; this HOLD is a different field from TRANSITION_ELIGIBILITY's HOLD)
+  STRONGEST_OBJECTION: the best case against passing, stated even on PASS
+  PATHS_PULLED: every path whose bytes were read — the actual paths, listed individually. A count is not a substitute
+  INDEPENDENCE_STATEMENT: scoped per dimension and per target (QROS §3.1)
+    INDEPENDENCE_UNKNOWN=YES — the affected certification must be reported as scoped-unknown or explicitly non-independent, or the separate certification obtained must be named
+  ON a rejection verdict, additionally:
+    REJECTION_ORIGIN_CLASS: vocabulary source [TBL-PACKET-ORIGINS]
+    REJECTION_CAUSE_CLASS: RUNTIME_MECHANICAL_DEFECT | SOURCE_CONTENT | REVIEWER_DISCRETION | OTHER
+PULL_PROTOCOL           the reviewer lists the paths it needs; the working session supplies verbatim bytes; refusal or inability to supply ⇒ a rejection verdict
+
+REQUIRED SAVE PATH: runs/packets/rv-fb781d61bdde-c74d22184336.packet
