@@ -54,8 +54,26 @@ F3 的前驱     = ("P1","P2","F1","F2","F2v","AX")   ——不含 P3
   （`supplement_runner.py:279`）**只查 `chain.problem`**，而悬空链的
   `problem` 是空串。
 
-**结论：悬空 P3 今天会通过 A_PRECHECK。** 不是因为没人写过检查，是因为写好的
-检查没接到门上。
+> **更正（fresh Sol，2026-08-27，第四次交付的 HOLD）。** 本节前一版的结论写的是
+> 「悬空 P3 今天会通过 A_PRECHECK」。**那句是假的**，Sol 指出并经 builder 实测推翻：
+>
+> ```
+> 链 (P1,P2)        live_authorizations = 1
+> 链 (P1,P2,P3)     live_authorizations = 0      <- P3 消费掉了那条 live P2
+> ```
+>
+> `_g_live_authorization_unique`（`supplement_runner.py:299`）在零条 live 授权时
+> 以 `SupplementRunNotAuthorized` 拒绝。**所以完整的 A_PRECHECK 确实会拒**，
+> 只是不经 `registry_chain_resolvable` 那道门。
+
+**修正后的结论，弱得多但为真**：
+
+- **成立**：`assert_chain_closed` 生产零调用、`ChainResolution.closed` 生产零读取、
+  `registry_chain_resolvable` 只查 `problem`（悬空链为空串）。
+- **不成立**：「悬空 P3 会通过 A_PRECHECK」。
+- **真正的残留价值**：拒绝**存在但诊断错误**——操作者被告知的是「没有 live 授权」，
+  而真相是「有一次运行被遗弃了」。**一条把崩溃说成未授权的拒绝信息，会把人引向
+  重发授权，而不是引向事故裁定。**
 
 **这一半原以为可以独立于修订先落地——实测推翻了，见 §四.A。** 闭合检查不能直接
 接上去：它会拒掉 `('P1','P2')`，而那是开跑前的正常态。真正要定的是「遗弃」谓词，
@@ -83,6 +101,9 @@ ND1_RECOMMENDED_PROFILE_R2 → 跨字段检查重跑 → 新 canonical SHA-256 �
 
 ## 二.1 R3 候选正文（correction-only，由 R2 字节构造）
 
+> **本节为第二版。** 第一版被 fresh Sol 判 HOLD，`STRONGEST_OBJECTION` 是
+> **CR1→F3 单向声明**——见 §二.2(a)。第一版的 `d26cbc3e…` 作废。
+
 ```
 BEGIN_ND1_RECOMMENDED_PROFILE_R3
 PROFILE_ID=ND1_RECOMMENDED_PROFILE_R3
@@ -103,11 +124,15 @@ RECOMMENDED_GRAMMAR_AX=ADOPT_AS_WRITTEN
 RECOMMENDED_GRAMMAR_F1=ADOPT_AS_WRITTEN
 RECOMMENDED_GRAMMAR_F2=ADOPT_AS_WRITTEN
 RECOMMENDED_GRAMMAR_F2V=ADOPT_AS_WRITTEN
-RECOMMENDED_GRAMMAR_F3=ADOPT_AS_WRITTEN
+RECOMMENDED_GRAMMAR_F3=ADOPT_AS_CORRECTED_BY_R3
+RECOMMENDED_F3_PERMITTED_PREDECESSOR=P1|P2|F1|F2|F2v|AX|CR1
+RECOMMENDED_F3_PERMITTED_SUCCESSOR=T1
 RECOMMENDED_GRAMMAR_T1=ADOPT_AS_WRITTEN
 RECOMMENDED_GRAMMAR_CR1=ADOPT_AS_INTRODUCED_BY_R3
 RECOMMENDED_CR1_PERMITTED_PREDECESSOR=P3
 RECOMMENDED_CR1_PERMITTED_SUCCESSOR=F3
+RECOMMENDED_CR1_DANGLING_EVENT_DOMAIN=P3
+RECOMMENDED_CR1_REGISTRY_INTACT_VERIFICATION_DOMAIN=64HEX_SHA256_OF_REGISTRY_AT_RESOLUTION
 RECOMMENDED_GRAMMAR_STATE_MACHINE=ADOPT_AS_WRITTEN
 RECOMMENDED_GRAMMAR_PARSER_FAIL_CLOSED_RULES=ADOPT_AS_WRITTEN
 RECOMMENDED_F1_GATE_NAME_ENUM=DEFER_TO_N04
@@ -144,42 +169,62 @@ END_ND1_RECOMMENDED_PROFILE_R3
 
 ```
 CANONICAL_BYTES=BEGIN 与 END 两行之间的行（不含这两行），LF 结尾，UTF-8，逐行原样
-R3_CANONICAL_SHA256=d26cbc3e68eaecc382f3cc5a008d2e2177c90d4b04bfd2d20921cf5ab5433ed2
+R3_CANONICAL_SHA256=12105e98438c6a547d2264f195b59f0bb5e2831342c536a7aa87e0cfc9a8873c
 ```
 
 **correction-only 的机械证明（沿 §D.11.3 的形式）**：
 
 ```
 R2_LINES=51
-R3_LINES=54
-INHERITED_VERBATIM=48 / 54
-EDITS=6
-  changed  PROFILE_ID=ND1_RECOMMENDED_PROFILE_R2
-        -> PROFILE_ID=ND1_RECOMMENDED_PROFILE_R3
+R3_LINES=58
+INHERITED_VERBATIM=47 / 58
+EDITS=11
+  changed  PROFILE_ID=..._R2 -> ..._R3
   changed  RECOMMENDED_GRAMMAR_P3=ADOPT_AS_CORRECTED_BY_R2
         -> RECOMMENDED_GRAMMAR_P3=ADOPT_AS_CORRECTED_BY_R2_THEN_R3
-  changed  RECOMMENDED_P3_PERMITTED_SUCCESSOR=P4|A1|F2
-        -> RECOMMENDED_P3_PERMITTED_SUCCESSOR=P4|A1|F2|CR1
+  changed  RECOMMENDED_P3_PERMITTED_SUCCESSOR=P4|A1|F2 -> P4|A1|F2|CR1
+  changed  RECOMMENDED_GRAMMAR_F3=ADOPT_AS_WRITTEN -> ADOPT_AS_CORRECTED_BY_R3
+  added    RECOMMENDED_F3_PERMITTED_PREDECESSOR=P1|P2|F1|F2|F2v|AX|CR1
+  added    RECOMMENDED_F3_PERMITTED_SUCCESSOR=T1
   added    RECOMMENDED_GRAMMAR_CR1=ADOPT_AS_INTRODUCED_BY_R3
   added    RECOMMENDED_CR1_PERMITTED_PREDECESSOR=P3
   added    RECOMMENDED_CR1_PERMITTED_SUCCESSOR=F3
+  added    RECOMMENDED_CR1_DANGLING_EVENT_DOMAIN=P3
+  added    RECOMMENDED_CR1_REGISTRY_INTACT_VERIFICATION_DOMAIN=64HEX_SHA256_OF_REGISTRY_AT_RESOLUTION
 ```
 
-### 二.2 **两处必须由复审席正面回答的升级**
+### 二.2 三处升级 —— **(a) 是 Sol 判 HOLD 的直接原因**
 
-**(a) 这不是纯增补——它改了一行 R2 刚刚批准的字段。**
-`RECOMMENDED_P3_PERMITTED_SUCCESSOR` 从 `P4|A1|F2` 改成 `P4|A1|F2|CR1`。
-而 R2 的**全部意义**就是把 P3 的前驱/后继逐字钉死（`R1_STATUS=
-SUPERSEDED_BY_R2_FOR_P3_ONLY`）。**R3 动的正是 R2 唯一动过的那一行。**
-若 CR1 的入边不加进 P3 的后继表，CR1 在语法层就不可达；若加，就是对刚批准值的修改。
-**builder 认为必须加，但这是升级，不是形式修补——请复审席正面裁。**
+**(a) CR1→F3 必须双向声明，第一版漏了，而且我还明写「F3 不动」。**
 
-**(b) `ADOPT_AS_INTRODUCED_BY_R3` 是新取值，R1／R2 都没有过。**
-既有取值只有 `ADOPT_AS_WRITTEN`（照决策包 §D 已写的语法采纳）与
-`ADOPT_AS_CORRECTED_BY_R2`。**CR1 是全新事件，§D 里根本没有它的语法正文**，
-所以「照已写的采纳」无物可采。R3 必须**同时提供 CR1 的语法正文**（§二.A.1 的
-`EventSpec` 即其候选形），且该正文须与 profile 同 commit 落盘、同 SHA 绑定。
-**这个取值的命名与其绑定方式，builder 定不了。**
+`tests/test_mc_supplement_integration.py:208`
+`test_predecessor_and_successor_declarations_agree_with_each_other` **强制每条边
+双向声明**。第一版 R3 给了 CR1 `successors=("F3",)` 却没把 CR1 加进 F3 的
+predecessors，而 §二.A.4 还把 F3 列进「明确不动的」——**提案自相矛盾，ratify 后
+必然打红那条不变量**。
+
+**本版已修**：`RECOMMENDED_GRAMMAR_F3` 转 `ADOPT_AS_CORRECTED_BY_R3`，并显式声明
+F3 的 predecessor／successor 两行（沿 R2 为 P3 做的先例）。**F3 因此不再是「不动」
+的**，§二.A.4 已相应更正。
+
+**(b) 这不是纯增补——它改了两行已批准字段。**
+`RECOMMENDED_P3_PERMITTED_SUCCESSOR`（R2 刚钉死的那一行）与
+`RECOMMENDED_GRAMMAR_F3`。**请复审席正面裁：改一行 R2 刚批准的字段，是否仍在
+「修订」的范围之内。** Sol 第四次复核的意见是「没有超出 amendment 路径，但只能由
+Aaron 明示 ratify」。
+
+**(c) `ADOPT_AS_INTRODUCED_BY_R3` 是词表新值，且 canonical 绑定尚未定义。**
+既有取值都预设「§D 里已经写好了语法」，而 CR1 没有。**Sol 另指出**：
+`R3_CANONICAL_SHA256` 只覆盖 58 行 profile 块，**不覆盖 §二.A.1 的 `EventSpec`**；
+提案原先所称「同 SHA 绑定」并未被精确定义。doc HEAD 可间接绑定全文，
+**但那是绑定方式的选择，builder 定不了。**
+
+**(d) 两个字段的值域，本版已按 Sol 要求封闭（取值是 builder 的提议）**：
+
+- `RECOMMENDED_CR1_DANGLING_EVENT_DOMAIN=P3` —— 否则可在 P3 之后声称任意 dangling
+  event。
+- `RECOMMENDED_CR1_REGISTRY_INTACT_VERIFICATION_DOMAIN=64HEX_SHA256_OF_REGISTRY_AT_RESOLUTION`
+  —— 一个可复算的证明，而不是一个 `YES`。**这个取值是我提的，请裁。**
 
 ## 二、Part A —— CR1 的语法正文（随 R3 profile 一并批准）
 
@@ -241,7 +286,9 @@ NON_TERMINAL_TRAPS = ("A1", "AX", "CR1")     # 现为 ("A1", "AX")
 
 ### A.4 明确**不动**的
 
-- P3／P4／A1／F1／F2／A2／AX／F3／P5／T1 的任何字段，含 actor（第 5 项裁定：保留）。
+- P3／P4／A1／F1／F2／A2／AX／P5／T1 的任何字段，含 actor（第 5 项裁定：保留）。
+  **F3 已从本清单移出** —— §二.2(a)：CR1→F3 必须双向声明，F3 的 predecessor
+  因此必须改。前一版把 F3 列在这里，与它自己新增的边直接矛盾。
 - `TERMINAL_SHORT_IDS = ("P5", "F3")`。
 - `plan_failure_event` 的 `ACTOR_RUNNER` 硬编码。
 - `scripts/s0_real_run.py` 的 S0 先例代码。
@@ -283,30 +330,40 @@ NON_TERMINAL_TRAPS = ("A1", "AX", "CR1")     # 现为 ("A1", "AX")
 会拒掉**每一次正当运行**。`ChainResolution.closed` 同理——它对 P2 链与悬空 P3
 链**都**是 `False`，**分辨不了这两者**。
 
-**所以判据不能是「是否闭合」，必须是「是否被遗弃」。** 提议谓词：
+**第一版提议的是一个「遗弃」黑名单。fresh Sol 判 HOLD 并指出它至少漏了 A2 与
+F2v。追下去发现问题比漏项更深：黑名单形式本身是错的** —— 日后新增任何事件都会
+**默认可放行**，这与整栈的 fail-closed 方向相反。
+
+**改为白名单**（实测各事件的 terminal 位与后继得出）：
 
 ```
-ABANDONED(chain) ==  last ∈ {"P3"} ∪ NON_TERMINAL_TRAPS
+START_ADMISSIBLE(chain) == last ∈ {"P1", "P2", "F1"}
 ```
 
-理由（每个事件的后继实测如下，谓词从中推出）：
+即：**只有尚未开跑的三种状态允许开新运行**，其余一律拒绝。**新增事件默认落在
+拒绝侧**，这正是白名单相对黑名单的全部价值。
 
-| last | 含义 | 可否在此状态下开新工作 |
-|---|---|---|
-| `P1` / `P2` | 已提议／已授权，**尚未开跑** | **可以**——这就是开跑前的正常态 |
-| `F1` | 开跑前尝试失败，`successors=('P3','P2S','F3')` | **可以**——重试是设计内的 |
-| **`P3`** | **已开跑、已消耗暴露，无任何终止事件** | **不可以 ⇒ 遗弃** |
-| **`A1` / `AX`** | 非终态陷阱（现行 `NON_TERMINAL_TRAPS`） | **不可以 ⇒ 须先裁定** |
-| `P4` | 已封存，待独立验证 | **存疑，见下** |
-| `F2` | 开跑后失败，`successors=('F3',)` | 存疑，见下 |
-| `P5` / `F3` | 已闭合 | 不适用（该 id 已终结） |
+| last | 状态 | 可否开新运行 | 拒绝时该说什么（Sol 要求各状态命名不同） |
+|---|---|---|---|
+| `P1` / `P2` | 已提议／已授权，**未开跑** | **可以** | —— |
+| `F1` | 开跑前尝试失败 | **可以**（重试是设计内的） | —— |
+| **`P3`** | 已开跑、无任何终止事件 | 否 | **`ABANDONED_RUN`** —— 需 CR1 裁定 |
+| `P4` | 已封存 | 否 | `AWAITING_INDEPENDENT_VERIFICATION`（待 P5／F2v） |
+| `F2` | 开跑后失败 | 否 | `AWAITING_RETIREMENT`（待 F3） |
+| `A1` | 归档失败 | 否 | `AWAITING_ARCHIVE_RESOLUTION`（待 A2／AX） |
+| `AX` | 归档永久失败 | 否 | `AWAITING_RETIREMENT`（待 F3） |
+| **`A2`** | 归档已恢复 | 否 | `AWAITING_INDEPENDENT_VERIFICATION`（待 P5）**（第一版漏列）** |
+| **`F2v`** | 验证失败 | 否 | `AWAITING_RETIREMENT`（待 F3）**（第一版漏列）** |
+| `CR1` | 崩溃已裁定 | 否 | `AWAITING_RETIREMENT`（待 F3） |
+| `P5` / `F3` | 已闭合 | 否 | 该 id 已终结，新运行须用新 id |
 
-**两处 builder 定不了、请 Sol 裁的**：
+**两条 Sol 强调、本版采纳的分界**：
 
-1. **`P4`**：链已封存待 P5 验证。它不是「遗弃」，但也不该允许同一 supplement_id
-   开新运行。这是「遗弃」之外的**第二种拒绝理由**，还是根本不该由这个门管？
-2. **`F2`**：开跑后失败且只能走向 F3。同一 id 还能再跑吗？（我的判断：不能，
-   但 `F2` 不在 `NON_TERMINAL_TRAPS` 里，所以现行词表没这么说。）
+1. **`NON_TERMINAL_TRAPS` 是闭链诊断集合，不得直接充当启动授权政策集合。** 前者
+   回答「这条链闭上了吗」，后者回答「能不能在这个 id 上开新运行」。本版把两者
+   彻底分开：白名单是政策，traps 仍只供 `assert_chain_closed` 诊断。
+2. **per-id 拒绝与「是否阻断整个 MC 入口」是两个政策决定，不得藏在一个布尔谓词里。**
+   本版只裁 per-id；**全局阻断范围留给 Aaron**（见 §六）。
 
 **为什么仍值得先落地**：谓词一旦定下，实现是加性 fail-closed，且**今天落地
 可观测行为零变化**——`run_supplement_production` 本就 gate-first 拒绝，没有 MC
@@ -320,9 +377,18 @@ Sol 复核本提案 → builder 把 R3 正文与 CR1 语法做 **doc-only commit
 即 `APPROVAL_BINDS_DOC_HEAD`）→ Aaron 批准 `id + sha256 + 精确 doc HEAD` →
 **然后**才轮到下列代码转录：
 
-1. `EVENTS` 加 CR1；`NON_TERMINAL_TRAPS` 加 CR1；`FORBIDDEN_EDGES` 加两条
+1. `EVENTS` 加 CR1 **并把 CR1 加进 `EVENTS["F3"].predecessors`**；
+   `NON_TERMINAL_TRAPS` 加 CR1；`FORBIDDEN_EDGES` 加两条
    ——**逐字转录已批准的 R3 正文，不得反过来由代码定义 profile**。
-2. 修 `assert_chain_closed:748-749` 的写死提示语，使其覆盖 CR1。
+1b. **（Sol 第四次复核补出，第一版漏列）**
+   · 每条新 `FORBIDDEN_EDGES` 必须在 `supplement_registry.FORBIDDEN_EDGE_CODES`
+     配专用拒绝码，并进 `REFUSAL_CODES`（实测该映射在 `:420`，码集在 `:505`）。
+   · `supplement_runner.plan_next_short_id`（`:679`）必须支持 `CR1→F3`。
+   · CR1 的两个字段值域必须由 `supplement_registry._check_field_values`（`:848`）
+     实际强制，不能只写在 profile 里。
+2. 修 `assert_chain_closed:748-749` 的写死提示语 —— **Sol 要求提示语由 successor
+   数据生成，不再扩展那个硬编码三元表达式**。加一个事件就要改一次字符串，是同一
+   缺陷的第三次重演。
 3. bootstrap 悬链拒绝：链尾为 P3 且无后继 ⇒ 拒绝**该 supplement_id 的一切新
    工作**，并拒绝 **MC 生产入口整体**，直至裁定。
 4. **每一条都要变异证红**（Fable 条件 1）。
@@ -341,26 +407,32 @@ Sol 复核本提案 → builder 把 R3 正文与 CR1 语法做 **doc-only commit
   或过窄，**以拒得多为安全侧**：多拒一次要 Aaron 裁一句，少拒一次可能放行第二次
   消耗暴露的运行。
 
-## 六、请 fresh Sol 重点看的
+## 六、请 fresh Sol 重点看的（第五次交付，已按第四次 HOLD 改过）
 
-1. **§二.A.2 是 builder 的提议，不是 Fable 裁定的一部分**：CR1 该不该进
-   `NON_TERMINAL_TRAPS`？我按与 AX 的形状同构推的。
-2. **§一.2 的接线缺口**请独立复核——我的证据是实测输出，但「生产零调用」是
-   一次全仓检索的结论，请自行确认口径。
-2b. **§四.A 的 `ABANDONED` 谓词**——尤其 `P4` 与 `F2` 两栏我明说定不了。
-   这一节的第一版是错的（写成「把闭合检查接上去」，而闭合检查会拒掉 `('P1','P2')`
-   即开跑前的正常态），更正逐字保留在原处。**请当作最可能还藏着错的一节看。**
-3. `predecessors=("P3",)` 是否过窄：P4 之后、A1 之后的崩溃走什么路？
-   （我的判断：P4 之后链已封存，A1 有 A2／AX，都不悬空——请证伪。）
-4. CR1 → F3 强制走取代流程，是否对「崩溃后只想重跑一次」的场景过重。
-5. **§二.2(a)：改一行 R2 刚批准的字段（P3 后继表）算不算超出「修订」的范围？**
-   R2 的全部意义就是钉死 P3 那两行，R3 动的正是其中一行。
-6. **§二.2(b)：`ADOPT_AS_INTRODUCED_BY_R3` 这个新取值该叫什么、怎么与 CR1 的语法
-   正文绑定？** 既有取值都预设「§D 里已经写好了语法」，而 CR1 没有。
-7. **R3 候选正文的 canonical SHA-256 `d26cbc3e…` 请自行重算**——口径见 §二.1，
-   与我复算 R2 得到 `a3d40b7c…` 用的是同一台机器。
+**第四次 HOLD 的四条，本版逐条处理如下**：
 
-## 七、常设禁令（对复审席位同样在 force）
+| Sol 的发现 | 本版做法 |
+|---|---|
+| HIGH 1 CR1/F3 边不对称 | **已修**：F3 转 `ADOPT_AS_CORRECTED_BY_R3`＋显式两行；R3 哈希因此变为 `12105e98…`，`d26cbc3e…` 作废 |
+| HIGH 2 谓词不全＋我的前提陈述不准 | **已修**：我的「悬空 P3 会过 A_PRECHECK」经实测推翻并公开更正（§一.2）；黑名单改白名单，A2／F2v 补入，per-id 与全局阻断拆开 |
+| HIGH 3 CR1 字段域与 canonical 绑定未闭合 | **值域已封闭**（§二.2(d)，取值是我提的）；**canonical 绑定方式仍未定**，明确留给你与 Aaron |
+| MEDIUM 4 禁边非必要＋建造义务不全 | **建造义务已补**（`FORBIDDEN_EDGE_CODES`／`plan_next_short_id`／`_check_field_values`）；**禁边是否保留、以及是否该正面处理真正的重启边 `CR1→P3`，请裁** |
+
+**请重点打的**：
+
+1. **§二.2(b)**：R3 改了**两行**已批准字段（P3 后继、F3 语法）。第四次你的意见是
+   「没有超出 amendment 路径，但只能由 Aaron 明示 ratify」——本版把 F3 也拉进来了，
+   **范围更大，请重新判**。
+2. **§四.A 的白名单**：`START_ADMISSIBLE = {P1, P2, F1}`。它是我按你的批评从黑名单
+   改过来的——**改动方向对不对、集合本身有没有漏，请证伪**。
+3. **§二.2(c) 的 canonical 绑定**：`R3_CANONICAL_SHA256` 只覆盖 58 行 profile 块，
+   不覆盖 CR1 的 `EventSpec`。**绑定方式我定不了**，请给出可行形。
+4. **`CR1→P3`**：你指出「永不复活运行」应正面处理真正的重启边。本版**没有**把它
+   加进 `FORBIDDEN_EDGES`——因为它同样不在 CR1 的 successors 里，与 P4／P5 同理。
+   **要么三条都列、要么一条都不列，请裁哪一种。**
+5. **`registry_intact_verification` 取 64-hex SHA-256** 是我的提议，不是任何裁定。
+
+## 七、常设禁令（对复审席位同样在 force）## 七、常设禁令（对复审席位同样在 force）
 
 - **只读。** 不改文件、不打补丁。
 - **不得在本仓做任何检索**（S1(b)）；需要路径就列出来，由工作会话经
