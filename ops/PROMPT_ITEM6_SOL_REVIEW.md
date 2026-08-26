@@ -1,4 +1,4 @@
-# ND1 R3 修订提案复核 —— fresh Sol（**第五次交付**）
+# ND1 R3 修订提案复核 —— fresh Sol（**第六次交付**）
 
 ```ini
 RECOMMENDED_MODEL=Codex GPT-5.6 Sol
@@ -13,7 +13,7 @@ OUTCOME_EXPOSED=NONE
 PREREG_SEALED=N/A（本件不动 preregistration）
 ```
 
-**REVIEW_ID=rv-1e3dda5606e5-bd9867aa9fda**（gate=`TIER1_DISCRETIONARY`）
+**REVIEW_ID=rv-c257c88e8228-ccd9f84da420**（gate=`TIER1_DISCRETIONARY`）
 
 > **本文件必须从磁盘读取（read it from disk）。绝对路径：**
 > `C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework\ops\PROMPT_ITEM6_SOL_REVIEW.md`
@@ -112,7 +112,7 @@ OFF-LIMITS   ops/EXPOSURE_LEDGER.md              （研究轴台账）
 ## 2. 传输核对（先做，不通过就 STOP）
 
 ```
-REVIEWED_SET_UNCHANGED_SINCE=0cec2c392c996d449d995920caf2f6498fb736bc
+REVIEWED_SET_UNCHANGED_SINCE=f4f00a57635f5b3218dd297ed6c0e3d08226d9c1
 ```
 
 **语义**：该 commit **之后**没有任何 commit 触碰过下表任一送审路径。它不是当前
@@ -120,14 +120,14 @@ REVIEWED_SET_UNCHANGED_SINCE=0cec2c392c996d449d995920caf2f6498fb736bc
 下表路径。**这一条命令是允许的**（范围核对，不是检索）：
 
 ```bash
-git log --oneline 0cec2c392c996d449d995920caf2f6498fb736bc..HEAD -- ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md ops/ND1_PROFILE_RATIFICATION.md ops/DECISION_PACKET_N00_AND_ND1.md src/itsf/mc/supplement_contract.py src/itsf/mc/supplement_runner.py src/itsf/mc/supplement_registry.py ops/OUTCOME_CARRYING_ARTIFACTS.json tests/test_mc_supplement_registry.py tests/test_mc_supplement_runner.py tests/test_mc_supplement_integration.py tests/test_registry_boundary.py
+git log --oneline f4f00a57635f5b3218dd297ed6c0e3d08226d9c1..HEAD -- ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md ops/ND1_PROFILE_RATIFICATION.md ops/DECISION_PACKET_N00_AND_ND1.md src/itsf/mc/supplement_contract.py src/itsf/mc/supplement_runner.py src/itsf/mc/supplement_registry.py ops/OUTCOME_CARRYING_ARTIFACTS.json tests/test_mc_supplement_registry.py tests/test_mc_supplement_runner.py tests/test_mc_supplement_integration.py tests/test_registry_boundary.py tests/test_nd1_profile_revision_chain.py
 ```
 
 **必须为空。** 非空 ⇒ 工件在你手里动了 ⇒ STOP。
 
 | SHA-256 | 字节 | 路径 | 为什么给你 |
 |---|---|---|---|
-| `faae6b4f2bbd8819df6067d5bba7ad70c2f77de12e24ac90d341a70254af7e4c` | 24601 | `ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md` | 被复核的提案（已在 §7 路径上） |
+| `731cb2ff060c7e8ad3e3b032220640fdfed57c5d06537515ba722e0d1eb9b7a5` | 29623 | `ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md` | 被复核的提案（已在 §7 路径上） |
 | `cf2c3cb2bdb79b34498c2a7ebc53344c70ef89f0686466a010ce62431541d05e` | 8277 | `ops/ND1_PROFILE_RATIFICATION.md` | 权威基线 —— §8 是 R2 批准记录，§7 是修订路径 |
 | `da64a3d68454e6f129287412f200ea51309ee85daad9d9bdb7465d9765e47991` | 86999 | `ops/DECISION_PACKET_N00_AND_ND1.md` | R2 canonical 正文所在；其第 1 行自陈不含已批准值 |
 | `c6d5b46f71404044d3e0d2ce770bfda2f4eaa88b3448e397d035b3ec8aff7298` | 20014 | `src/itsf/mc/supplement_contract.py` | EVENTS／TRAPS／FORBIDDEN_EDGES —— 批准后的转录物 |
@@ -138,17 +138,18 @@ git log --oneline 0cec2c392c996d449d995920caf2f6498fb736bc..HEAD -- ops/PREP_ITE
 | `3dc719db3f34e8a60a0f71fb5b1c6f31e8a9bf32f655063b3c2d2aa9f4ab7d13` | 36141 | `tests/test_mc_supplement_runner.py` | assert_chain_closed／A_PRECHECK |
 | `f6b0ff3bd0280f814209aee87f970ff24b235e8e3bce1b2a9944f140b5f70a9b` | 27139 | `tests/test_mc_supplement_integration.py` | **逐行比对 R1/R2 并断言差异恰为四行** —— R3 须同形 |
 | `4ae818b6699386df3a5d1d27d32765207f1f1ba15a831f13ef2d9ee2267037b8` | 13738 | `tests/test_registry_boundary.py` | C2 边界 |
-| `8e223cb46d5cebc0823f663607f1faaac074e7833e6d3569ae656bd199c4ee04` | 15714 | `ops/packets/rv-1e3dda5606e5-bd9867aa9fda.packet` | Review Packet v1 本体（**不冻结**，见表下说明） |
+| `a35269b2c8d4bd119bbf7872808065793bae43f1e79934de7e9f4ade7da4f2f8` | 11817 | `tests/test_nd1_profile_revision_chain.py` | **本轮新建** —— Finding 4 的答复：profile 修订链的机械保障 |
+| `5ccd54979d977e2cc975a4a3a875a96cab43fd5cd68b92550dea23511e46217f` | 15688 | `ops/packets/rv-c257c88e8228-ccd9f84da420.packet` | Review Packet v1 本体（**不冻结**，见表下说明） |
 
 **逐个重算并比对。** packet 内的 `GENERATED_BLOCK_SHA256` 亦请重算——
 前像是**字段行本身**（不含章节标题与空行），见 `packet.py:1154` 的 `_render`。
 
-> **表有 12 行，但冻结的是前 11 行。最后一行是 packet 本体，它不在冻结集里，
+> **表有 13 行，但冻结的是前 12 行。最后一行是 packet 本体，它不在冻结集里，
 > 也不该在。** packet 由本次交付创建，**必然晚于钉子**——这是固定点问题：
 > packet 记录分支头，而提交 packet 会推动分支头，所以它永远无法在「已包含自己」
 > 的树上被钉住。
 >
-> **所以上面那条 `git log` 只列前 11 条，请照抄，不要把 packet 加进去。**
+> **所以上面那条 `git log` 只列前 12 条，请照抄，不要把 packet 加进去。**
 > 把 packet 加进去会得到一条非空结果（创建它的那个 commit），那不是工件被动过。
 > **packet 只按哈希核，不按范围核。**
 >
@@ -187,7 +188,7 @@ git log --oneline 0cec2c392c996d449d995920caf2f6498fb736bc..HEAD -- ops/PREP_ITE
 
 ```
 ITEM=6+8
-REVIEW_ID=rv-1e3dda5606e5-bd9867aa9fda
+REVIEW_ID=rv-c257c88e8228-ccd9f84da420
 TRANSPORT_PRECHECK=PASS|STOP（逐个哈希 ＋ 上面那条 git log 为空 ＋ 重算 packet 生成块）
 VERDICT=PASS | HOLD | REJECTED_INCOMPLETE
 STRONGEST_OBJECTION=<即使 PASS 也要写出最强的反对>
