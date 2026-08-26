@@ -230,7 +230,24 @@ def test_a_live_delivery_carries_the_register_itself():
     record to make a guard green is backwards, so the guard learned the
     distinction instead.
     """
-    deliveries = {e["path"] for e in _entries()
+    entries = _entries()
+    by_review = {}
+    for e in entries:
+        by_review.setdefault(e["review_id"], []).append(e)
+    # Without this, the role split becomes the loophole it was meant to
+    # avoid: marking EVERY entry `reference` leaves no document required to
+    # carry the off-limits list, and the whole file passes. Measured
+    # 2026-08-27 — demoting the packet to `reference` went green.
+    no_delivery = sorted(
+        rid for rid, group in by_review.items()
+        if not any(e.get("role", "delivery") == "delivery" for e in group))
+    assert not no_delivery, (
+        "these review sets have no entry with role 'delivery', so nothing "
+        "in them is required to carry the off-limits list — a reviewer "
+        "could be handed the whole set and never be told what is "
+        "quarantined:\n  " + "\n  ".join(no_delivery))
+
+    deliveries = {e["path"] for e in entries
                   if e.get("role", "delivery") == "delivery"}
     missing = [p.relative_to(REPO).as_posix()
                for p, text in _live_delivery_documents()
