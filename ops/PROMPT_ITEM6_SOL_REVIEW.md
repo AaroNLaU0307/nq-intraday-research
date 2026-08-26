@@ -96,6 +96,15 @@ git log --oneline acf5a26f3b3cee0cd1d58049eab7ed73ed2ce8cd..HEAD -- ops/PREP_ITE
 **逐个重算并比对。** packet 内的 `GENERATED_BLOCK_SHA256` 亦请重算——
 前像是**字段行本身**（不含章节标题与空行），见 `packet.py:1154` 的 `_render`。
 
+> **表有 11 行，但冻结的是前 10 行。最后一行是 packet 本体，它不在冻结集里，
+> 也不该在。** packet 由本次交付创建，**必然晚于钉子**——这是固定点问题：
+> packet 记录分支头，而提交 packet 会推动分支头，所以它永远无法在「已包含自己」
+> 的树上被钉住。
+>
+> **所以上面那条 `git log` 只列前 10 条，请照抄，不要把 packet 加进去。**
+> 把 packet 加进去会得到一条非空结果（创建它的那个 commit），那不是工件被动过。
+> **packet 只按哈希核，不按范围核。**
+
 ## 3. 你要复核什么
 
 **读 `ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md` 全文。** 它含：两个缺口

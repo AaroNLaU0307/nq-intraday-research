@@ -90,6 +90,78 @@
       "review_id": "rv-6cd8abb41a43-1ddf0617d52e",
       "unchanged_since": "acf5a26f3b3cee0cd1d58049eab7ed73ed2ce8cd",
       "why": "C2 边界：A_PRECHECK 与链解析的单一入口"
+    },
+    {
+      "path": "ops/PREP_ITEM1_L6_EXPOSURE_TEXT.md",
+      "sha256": "536317a3233c31e5eaf39a9511b79f5a968b08c53946362b4731727bb6128691",
+      "issued_to": "Fable 5（决裁席，其余决定；Aaron 2026-08-26 再次委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-remaining-2026-08-26",
+      "unchanged_since": "acf5a26f3b3cee0cd1d58049eab7ed73ed2ce8cd",
+      "why": "第 1 项：逐字终稿＋条件 2 核验证据"
+    },
+    {
+      "path": "ops/PREP_ITEM2_QUARANTINE_MIGRATION.md",
+      "sha256": "58639de5add0f30f600240a7e5e8f39a4af25d2a76974c6411981686f8b6d970",
+      "issued_to": "Fable 5（决裁席，其余决定；Aaron 2026-08-26 再次委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-remaining-2026-08-26",
+      "unchanged_since": "acf5a26f3b3cee0cd1d58049eab7ed73ed2ce8cd",
+      "why": "第 2 项：可行性实测（含仓根台账例外）＋迁移计划"
+    },
+    {
+      "path": "ops/PREP_ITEM3_SAVE_DIR_CONFIGURABLE.md",
+      "sha256": "aacd058f305d9ec0d0f0b1921aee03340367f729c32cdd08e73b338e3110ac77",
+      "issued_to": "Fable 5（决裁席，其余决定；Aaron 2026-08-26 再次委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-remaining-2026-08-26",
+      "unchanged_since": "acf5a26f3b3cee0cd1d58049eab7ed73ed2ce8cd",
+      "why": "第 3 项：补丁设计＋`header.py:201` 范围发现"
+    },
+    {
+      "path": "ops/REGISTRY_SYNC_FAILURE_MODEL.md",
+      "sha256": "8734c430534314e8c7592c998e43a0485b90c37b9b0fb9df5d5736200d979424",
+      "issued_to": "Fable 5（决裁席，其余决定；Aaron 2026-08-26 再次委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-remaining-2026-08-26",
+      "unchanged_since": "acf5a26f3b3cee0cd1d58049eab7ed73ed2ce8cd",
+      "why": "第 7 项边界 (3)(4)；两条致命通道"
+    },
+    {
+      "path": "ops/REVIEWER_EXPOSURE_LOG.md",
+      "sha256": "14610486a4b823452c93164986a2485bb8eaacf3d6f618cb0f35d8288c4d4826",
+      "issued_to": "Fable 5（决裁席，其余决定；Aaron 2026-08-26 再次委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-remaining-2026-08-26",
+      "unchanged_since": "acf5a26f3b3cee0cd1d58049eab7ed73ed2ce8cd",
+      "why": "席位轴台账：第 3／4／5 行待分类"
+    },
+    {
+      "path": "ops/OWNER_DECISIONS_2026-08-26.md",
+      "sha256": "41c69205401aa1e1516ab46c0ee4a2a9b4276f1f6a3fe7de130293c001287d03",
+      "issued_to": "Fable 5（决裁席，其余决定；Aaron 2026-08-26 再次委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-remaining-2026-08-26",
+      "unchanged_since": "acf5a26f3b3cee0cd1d58049eab7ed73ed2ce8cd",
+      "why": "Aaron 采纳八项的记录＋逐项结算表"
+    },
+    {
+      "path": "ops/D124_RULINGS_CLEAN_EXTRACT.md",
+      "sha256": "5d6e8b65b4a7f9d030d13a074f40a9c388bad763e17c610b9c529d14e5634745",
+      "issued_to": "Fable 5（决裁席，其余决定；Aaron 2026-08-26 再次委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-remaining-2026-08-26",
+      "unchanged_since": "acf5a26f3b3cee0cd1d58049eab7ed73ed2ce8cd",
+      "why": "D-1／D-2／D-4 裁决逐字副本（原件隔离）"
+    },
+    {
+      "path": "ops/RULING_FABLE_EIGHT_OPEN_2026-08-26.md",
+      "sha256": "5116f7b03dabe6cc4a8a2357b02b4b30e3a9227d050e41d9c1f0943262ed7dd3",
+      "issued_to": "Fable 5（决裁席，其余决定；Aaron 2026-08-26 再次委托）",
+      "issued_at": "2026-08-26T00:00:00Z",
+      "review_id": "dec-remaining-2026-08-26",
+      "unchanged_since": "acf5a26f3b3cee0cd1d58049eab7ed73ed2ce8cd",
+      "why": "上一轮 Fable 八项裁定全文＋builder 审核"
     }
   ]
 }
