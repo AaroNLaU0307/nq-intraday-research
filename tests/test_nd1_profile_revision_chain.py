@@ -106,6 +106,31 @@ def test_the_ratification_record_carries_the_r2_approval():
         assert line in text, f"ratification record lost {line}"
 
 
+def test_no_approval_line_in_the_record_disagrees_with_another():
+    """MEASURED GAP, 2026-08-27. The check above is a substring test, and
+    `APPROVED_PROFILE_ID=ND1_RECOMMENDED_PROFILE_R2` appears TWICE in the
+    ratification record. Flipping one occurrence to R1 left the record
+    internally contradictory and this file green — the surviving line
+    satisfied the `in`.
+
+    Found by measuring which mutations the file actually catches, after
+    the proposal claimed "five" in one section and "eight" in another and
+    neither number had been measured."""
+    text = RATIFICATION.read_text(encoding="utf-8")
+    values = {ln.split("=", 1)[1].strip()
+              for ln in text.splitlines()
+              if ln.strip().startswith("APPROVED_PROFILE_ID=")}
+    assert values == {"ND1_RECOMMENDED_PROFILE_R1",
+                      "ND1_RECOMMENDED_PROFILE_R2"}, (
+        "the ratification record's APPROVED_PROFILE_ID lines carry %r; the "
+        "record covers exactly the R1 approval and the R2 approval that "
+        "superseded it" % (sorted(values),))
+    r2_lines = text.count("APPROVED_PROFILE_ID=ND1_RECOMMENDED_PROFILE_R2")
+    assert r2_lines == 2, (
+        "the R2 approval id appears %d times, not 2; a changed count means "
+        "an approval line was added or lost" % r2_lines)
+
+
 def test_r1_is_recorded_as_superseded_rather_than_deleted():
     """The record is append-only by ruling: R2 supersedes R1 for P3 and
     R1's own record stays. If either half stops being true, the chain has
@@ -155,13 +180,26 @@ def test_the_proposed_r3_is_correction_only_against_r2():
     """The R2 -> R3 canonical diff test the reviewer asked for."""
     r2 = _lines(PACKET.read_text(encoding="utf-8"), "R2")
     r3 = _lines(PROPOSAL.read_text(encoding="utf-8"), "R3")
-    added, _removed = _edit_count(r2, r3)
+    added, removed = _edit_count(r2, r3)
     assert added == R3_PROPOSED_EXPECTED_EDITS, (
         f"the proposed R3 adds/changes {added} lines against R2; the "
         f"proposal claims {R3_PROPOSED_EXPECTED_EDITS}")
     inherited = sum(1 for ln in r3 if ln in r2)
     assert inherited == len(r3) - added, (
         "inherited + edited must account for every line of R3")
+    # Decision-seat ruling R-B, condition 3. `_removed` was computed and
+    # discarded, so a future R3' that DELETED a ratified line while adding
+    # enough elsewhere to keep `added` at its constant would pass a test
+    # named "correction only". Every removal must be the preimage of a
+    # changed line: same key, different value. A pure deletion is zero.
+    keys = lambda lines: {ln.split("=", 1)[0] for ln in lines}
+    removed_lines = [ln for ln in r2 if ln not in r3]
+    assert len(removed_lines) == removed, "removal count disagrees"
+    pure_deletions = sorted(keys(removed_lines) - keys(r3))
+    assert not pure_deletions, (
+        "the proposed R3 DELETES ratified assignment(s) rather than "
+        "correcting them, which is not correction-only: "
+        + ", ".join(pure_deletions))
 
 
 def test_the_proposed_r3_declares_the_cr1_edges_in_both_directions():
@@ -216,6 +254,42 @@ def test_the_cr1_grammar_block_is_bound_by_a_hash_inside_the_profile():
     assert prof["RECOMMENDED_CR1_GRAMMAR_SHA256"] == CR1_GRAMMAR_SHA256, (
         "the profile binds a different digest than the grammar block "
         "produces — the two halves of the binding disagree")
+
+
+def test_each_canonical_marker_appears_exactly_once():
+    """DECISION-SEAT RULING R-B, CONDITION 1 — the decoy-block path.
+
+    `_canonical` takes `text.index()`, so it reads the FIRST occurrence and
+    a second `BEGIN_ND1_CR1_GRAMMAR_R3 ... END` block appended later would
+    leave every hash test green while a cold reader could take the decoy
+    for the canonical bytes. Not a content-tampering path — the first
+    block's bytes stay pinned — but a canonicity-ambiguity one, and
+    "the first occurrence wins" lived only inside this file's
+    implementation, asserted nowhere and stated in no CANONICAL_BYTES
+    clause.
+
+    Measured at the time of the ruling: all four markers appeared exactly
+    once. Uniqueness was true and unasserted, which is the same shape as
+    the D.11.3 defect this whole chain exists to close.
+    """
+    proposal = PROPOSAL.read_text(encoding="utf-8")
+    for marker in ("BEGIN_ND1_RECOMMENDED_PROFILE_R3",
+                   "END_ND1_RECOMMENDED_PROFILE_R3",
+                   "BEGIN_ND1_CR1_GRAMMAR_R3",
+                   "END_ND1_CR1_GRAMMAR_R3"):
+        count = proposal.count(marker)
+        assert count == 1, (
+            "%s appears %d times in the proposal; the canonical block is "
+            "whichever comes first, so a second one makes canonicity "
+            "ambiguous to any reader who is not this test" % (marker, count))
+    packet = PACKET.read_text(encoding="utf-8")
+    for marker in ("BEGIN_ND1_RECOMMENDED_PROFILE_R1",
+                   "END_ND1_RECOMMENDED_PROFILE_R1",
+                   "BEGIN_ND1_RECOMMENDED_PROFILE_R2",
+                   "END_ND1_RECOMMENDED_PROFILE_R2"):
+        count = packet.count(marker)
+        assert count == 1, (
+            "%s appears %d times in the decision packet" % (marker, count))
 
 
 def test_the_registry_intact_preimage_is_not_self_referential():

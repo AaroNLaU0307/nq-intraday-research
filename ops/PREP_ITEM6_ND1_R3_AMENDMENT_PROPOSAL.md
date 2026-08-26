@@ -226,7 +226,32 @@ R2_LINES=51   R3_LINES=60   INHERITED_VERBATIM=47 / 60   EDITS=13
 
 **机械核验已入套件**：`tests/test_nd1_profile_revision_chain.py` 断言 R3 块的
 字节确实算出上面那个哈希、对 R2 恰为 13 处编辑、CR1 的边双向声明、且各条边界行
-仍为 NO。**五条变异全红，含第四次 HOLD 的那个原始缺陷。**
+仍为 NO。**七条变异已实测全红**（2026-08-27 复算：CR1 后继、F3 前驱、CR1 token、
+profile 内绑定哈希、no-execution-authorization 行、preimage 自引用、R2 canonical
+块字节）。含第四次 HOLD 的那个原始缺陷。
+
+### 二.1c 变异实测 —— 7 红 ＋ 1 空档（2026-08-27）
+
+**此前 §二.1b 写「五条」、§六 写「八条」，两个数都不是测出来的。** 逐条重跑：
+
+```
+M1 CR1 后继 F3 -> P4                      红（2 项）
+M2 F3 前驱 P1 -> P9                       红
+M3 CR1_TOKEN 篡改                          红
+M4 profile 内 CR1_GRAMMAR_SHA256 篡改       红（2 项）
+M5 no-execution-authorization YES -> NO    红
+M6 preimage 改成自引用                      红
+M7 R2 canonical 块内字节篡改                红
+M8 批准记录里两条 APPROVED_PROFILE_ID 之一
+   翻成 R1                                 **绿 —— 空档**
+```
+
+**M8 的空档是真的，机制清楚**：`test_the_ratification_record_carries_the_r2_approval`
+用的是子串 `in` 检查，而 `APPROVED_PROFILE_ID=ND1_RECOMMENDED_PROFILE_R2` 在
+`ops/ND1_PROFILE_RATIFICATION.md` 里出现两次（第 135、157 行）。翻掉其中一条，
+另一条仍让断言成立——记录内部自相矛盾，守卫看不见。
+
+已加计数断言闭合（见 `tests/test_nd1_profile_revision_chain.py`）。
 
 ### 二.2 三处升级 —— **(a) 是 Sol 判 HOLD 的直接原因**
 
@@ -350,7 +375,15 @@ NON_TERMINAL_TRAPS = ("A1", "AX", "CR1")     # 现为 ("A1", "AX")
 普通 transition 检查已会拒 `CR1→P4/P5`）；若要作为具名政策保留，**当前又缺一条
 ——真正的重启边 `CR1→P3`**。它明确说：**不能保留这个缺一条的中间态。**
 
-**builder 不替任何人选，但把两个完整形都写出来**：
+**已裁：FULL**（决裁包 `dec-item6-open-2026-08-27` 的 R-A，Aaron 2026-08-27 采纳）。
+理由是决裁席逐字核对 `supplement_contract.py:200-293` 后确认的一件事：**既有 8 条
+`FORBIDDEN_EDGES` 全部与 closed successor list 冗余，无一例外**——这张表自始就是
+具名政策层，不是强制正确性机制（`:346-347` 注释自述）。取 ZERO 会让 CR1 成为
+全表唯一的例外。裁定全文见 `ops/RULING_FABLE_ITEM6_OPEN_2026-08-27.md`。
+
+**转录发生在 Aaron ratify R3 之后**（§四.B 顺序）；本裁定只选定本节参数，不授权动 `EVENTS`。
+
+两个完整形原文保留如下：
 
 ```
 选项 ZERO  —— 一条不加。完全依赖 closed successor list。
@@ -482,7 +515,12 @@ CHAIN_STATE_PERMITS_START(chain) == last ∈ {"P1", "P2", "F1", "T1"}
    回答「这条链闭上了吗」，后者回答「能不能在这个 id 上开新运行」。本版把两者
    彻底分开：白名单是政策，traps 仍只供 `assert_chain_closed` 诊断。
 2. **per-id 拒绝与「是否阻断整个 MC 入口」是两个政策决定，不得藏在一个布尔谓词里。**
-   本版只裁 per-id；**全局阻断范围留给 Aaron**（见 §六）。
+   **已裁：PER_ID_ONLY**（R-C，Aaron 2026-08-27 采纳，`CONFIDENCE=MEDIUM`）。
+   关键理由：P3 是 UNNUMBERED、不占暴露槽，悬空 P3 是该 id 生命周期未闭，
+   **不是 registry 完整性事件**；registry 真损坏已有条件触发的全局 fail-closed
+   覆盖（witness 超集判据、A_PRECHECK 重解析），比毯子式 GLOBAL 更对症。
+   且 P2 的 actor 是 `ACTOR_AARON`——事故期间不签 P2 即达成全局阻断，
+   零代码、零解楔裁定。**GLOBAL-by-governance 仍然可用；被拒绝的是把它硬编码。**
 
 **为什么仍值得先落地**：谓词一旦定下，实现是加性 fail-closed，且**今天落地
 可观测行为零变化**——`run_supplement_production` 本就 gate-first 拒绝，没有 MC
@@ -546,7 +584,7 @@ commit**（该 commit 即 `APPROVAL_BINDS_DOC_HEAD`）→ Aaron 批准
 |---|---|
 | HIGH 1 `registry_intact_verification` 前像未定义／自引用 | **已定义**（§二.2(d)＋语法块的 `CR1_REGISTRY_INTACT_PREIMAGE`）：CR1 行**追加之前**读到的整文件字节，不规范化。**该值永不在自己的前像里。** 沿用 `pre_exposure_recheck` 已有的口径，不另立 |
 | HIGH 2 全局阻断自相矛盾 | **已修**：建造义务与 falsifier 里的全局断言删除，**只裁 per-id**，全局保持未裁 |
-| HIGH 3 R3 哈希不绑定 CR1 语法 | **已给构造**：CR1 语法自成 canonical 块（`3154ade6…`），profile 内一行 `RECOMMENDED_CR1_GRAMMAR_SHA256` 绑定它 —— 绑定落在 R3 哈希覆盖内，语法块不含自身哈希 |
+| HIGH 3 R3 哈希不绑定 CR1 语法 | **已给构造**：CR1 语法自成 canonical 块（`c251335f…`），profile 内一行 `RECOMMENDED_CR1_GRAMMAR_SHA256` 绑定它 —— 绑定落在 R3 哈希覆盖内，语法块不含自身哈希 |
 | HIGH 4 测试保障陈述不成立 | **已建**：`tests/test_nd1_profile_revision_chain.py`。**你说对了，而且比你说的更糟**——旧测试里 `R2` 出现**零次**，且它把 **R1** 钉成 `APPROVED_PROFILE_ID` 一直绿着 |
 | MEDIUM 5 漏了「跨字段检查重跑」 | **已补进实施顺序** |
 | ④ `START_ADMISSIBLE` 暗示授权 | **已改名** `CHAIN_STATE_PERMITS_START`，并写明它只是必要条件之一，须与唯一 live P2 合取 |
@@ -567,9 +605,11 @@ commit**（该 commit 即 `APPROVAL_BINDS_DOC_HEAD`）→ Aaron 批准
 
 **本版新增的机械保障（可自行复算）**：
 `tests/test_nd1_profile_revision_chain.py` 11 项，覆盖 R1／R2 摘要、R2 对 R1 的
-四处编辑（**§D.11.3 声称已机械化、实则从未有过**）、R3 对 R2 的十二处编辑、
+四处编辑（**§D.11.3 声称已机械化、实则从未有过**）、R3 对 R2 的 13 处编辑、
 CR1 双向边、语法块绑定两半一致、前像非自引用、以及各条边界行仍为 NO。
-**八条变异全红**，含第四次 HOLD 的原始缺陷与本次 HIGH 1 的自引用形态。
+**七条变异已实测全红**（逐条见 §二.1b），含第四次 HOLD 的原始缺陷与本次 HIGH 1 的
+自引用形态。**此前本节写「八条」而 §二.1b 写「五条」——两个数都不是测出来的**；
+2026-08-27 逐条重跑，实测 7 红 ＋ 1 空档（见 §二.1c）。
 
 ## 七、常设禁令（对复审席位同样在 force）
 
