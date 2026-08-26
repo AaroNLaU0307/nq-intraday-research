@@ -215,10 +215,24 @@ def test_a_live_delivery_never_names_a_quarantined_path_unmarked():
 def test_a_live_delivery_carries_the_register_itself():
     """Naming the marked exceptions is not enough — the delivery has to say
     where the authoritative list lives, because the list changes and the
-    document does not."""
+    document does not.
+
+    ROLE-SCOPED, and the scoping is the point. The register distinguishes a
+    `delivery` (a document authored for this review) from a `reference`
+    (pre-existing bytes handed along). Only a delivery must carry the list.
+
+    Measured 2026-08-27: requiring it of every registered file demanded that
+    ops/ND1_PROFILE_RATIFICATION.md — Aaron's verbatim approval record —
+    grow a governance paragraph to satisfy a test. Editing an approved
+    record to make a guard green is backwards, so the guard learned the
+    distinction instead.
+    """
+    deliveries = {e["path"] for e in _entries()
+                  if e.get("role", "delivery") == "delivery"}
     missing = [p.relative_to(REPO).as_posix()
                for p, text in _live_delivery_documents()
                if p.suffix == ".md"
+               and p.relative_to(REPO).as_posix() in deliveries
                and "OUTCOME_CARRYING_ARTIFACTS.json" not in text]
     assert not missing, (
         "these live delivery documents never name the quarantine register, "
