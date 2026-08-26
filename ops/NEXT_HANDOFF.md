@@ -34,6 +34,8 @@ DECISION_ID  dec-eight-open-2026-08-26        DELEGATED=YES
 5. **见证目录的单独目录创建授权**，若落在 `C:\Users\Aaron\quant-data\` 下（第 7 项）
 6. **席位台账分类**：第 3 行终分类、第 4 行 `NOT_EXPOSED` 值的存废、第 5 行终分类
 
+**Aaron 2026-08-26 已把上述 1–6 之外的决定再次委托 Fable**（第 6 项走 Sol 复核，不在委托范围内）。决策包见 `ops/DECISION_PACKET_REMAINING_FABLE.md`。
+
 ### 准备进度（Aaron 2026-08-26：「全部都可以开始准备做了」）
 
 | 项 | 备妥了什么 | 落地还欠 |
@@ -42,7 +44,7 @@ DECISION_ID  dec-eight-open-2026-08-26        DELEGATED=YES
 | **7** | `ops/REGISTRY_SYNC_FAILURE_MODEL.md`（边界 3+4）＋ `src/itsf/s0/registry_witness.py`（边界 1+2，13 测试、6 变异全红） | 见证根的目录创建授权；之后才接入生产门 |
 | **2** | `ops/PREP_ITEM2_QUARANTINE_MIGRATION.md` —— 可行性已测（生产代码零路径引用，32 条待改全在测试／配置／文档）＋迁移计划 | carve-out 文本、hold 范围确认、**外加仓根台账三选一**（裁定没区分它） |
 | **3** | `ops/PREP_ITEM3_SAVE_DIR_CONFIGURABLE.md` —— 补丁设计已出；接缝已在（`required_save_path` 早就收 `repo` 却没用） | 开维护窗，**外加范围三选一**（`header.py:201` 是同一缺陷的第二处，D-4 未点名） |
-| **6＋8** | `ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md` —— 可直发 Sol。**§四.A 已自我更正**：闭合检查不能直接接到门上（会拒掉开跑前的正常态），真正要定的是「遗弃」谓词 | 你把它发给 Sol；Sol 过后你 ratify |
+| **6＋8** | **`ops/PROMPT_ITEM6_SOL_REVIEW.md`** —— 完整 packet＋十条冻结送审集。第一次交付裸文件被判 `REJECTED_INCOMPLETE`（origin=BUILDER），**那是我的错**，本次是补正 | 把提示整份发给新 Sol；Sol 过后你 ratify |
 
 **第 7 项的代码刻意未接入任何门**：`witness_path` 是必填参数、无默认值，模块
 永不建目录（变异证红）。接入会改变运行期行为，而运行期行为依赖那个尚未授权的
