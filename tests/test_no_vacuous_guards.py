@@ -61,7 +61,17 @@ _JUSTIFIED = {
         "the premise lives in test_the_scan_actually_reaches_files, in the "
         "same class: it asserts the identical SRC.rglob('*.py') reaches >20 "
         "modules, so this guard's scan cannot be silently empty either",
-    #: The line above is the whole point of an allowlist ENTRY rather than a
+    "tests/test_n09_scaffold_criteria.py::test_the_forbidden_names_are_real":
+        "fails safe rather than vacuously: an empty scan leaves `defined` "
+        "empty, so `missing` becomes NON-empty and the assertion goes RED. "
+        "The detector cannot see that the emptiness it worries about "
+        "produces the opposite verdict here",
+    "tests/test_n09_scaffold_criteria.py::"
+    "test_the_production_entry_creates_nothing_before_it_refuses":
+        "the empty set IS the property under test — R3 §1's C_BUILD_1 "
+        "assertion is that the probe root stays empty. A non-empty premise "
+        "would contradict the assertion it is supposed to support",
+    #: The lines above are the whole point of an allowlist ENTRY rather than a
     #: suppression: it names the test that carries the proof, and if that
     #: test is deleted this reason becomes checkably false.
     #:

@@ -307,4 +307,65 @@ PASS ＋ Aaron 授权。D-3 现在是 HOLD，五项 `UNRESOLVED_FOR_AARON` 全�
 不追加 registry 行；不动 exposure；不填 P2 占位符；不改样本／标签／NA 政策／
 成本／Primary／Oracle／feasibility／运行定义；不释放任何 gate。
 
-**R3 是设计，不是实现。** `STATUS=NOTHING_IMPLEMENTED` 逐字仍真。
+**R3 是设计，不是实现。** `STATUS=NOTHING_IMPLEMENTED` 在写下时逐字为真。
+
+---
+
+## 9. 2026-08-27 追加 —— §6 的四条判据现在有机制了
+
+**先把话说准，免得这一节被读成「骨架建好了」**：
+
+```
+已有机制的   §6 的四条判据（它们自称「机械可检查，不靠自陈」，此前没有机制）
+             §1 的 C_BUILD_1 零副作用断言（三个 checkpoint 里唯一今天可测的那个）
+             §4 的 structural-only 调用图（AST 钉死，含禁用名的存在性自检）
+             §2／§3 的 CHECKPOINT_OF／ROUTER_OF 两层（当日早些时候建，另有 11 项测试）
+             §4 末尾的词表判据（EVENT_STRATA 按集合比对，并钉住两边顺序确实不同 ——
+             否则那条「不得按顺序比」的告诫会在有人「简化」时悄悄失去依据）
+
+仍未建的     骨架在各出口处的其余结构。**本次加的是守卫，不是骨架本身。**
+```
+
+守卫：`tests/test_n09_scaffold_criteria.py`（17 项）。
+
+**变异证据（六条，含一次我自己打错的变异）**：
+
+```
+在边界模块里加一个写            -> 红
+边界暴露一个名字像写的函数       -> 红
+加第二个目录创建者              -> 红
+让 runner 触到禁用名            -> 红
+拒绝消息不再点名授权字段         -> 红   ← 判据 3，R3 称为承重的那条
+把拒绝改成放行                  -> 红
+```
+
+**第五条第一次跑出来是绿的**，因为我的变异改的是第 16 行 docstring 里那次出现，
+而消息插值的是第 78 行的常量。**是变异打错了，不是守卫弱。** 记下来，
+因为「变异证绿」若不追究，会被当成守卫失效而去改守卫 —— 那才是真正的损失。
+
+### 判据 1 的证明是两半，两半都机械
+
+```
+(a) 只有一个模块拼得出受治路径  —— test_registry_path_single_construction.py
+                                （不变量 5，dec-registry-migration-2026-08-27）
+(b) 那个模块不执行任何写，也不暴露任何名字像写的函数 —— 本次新增
+```
+
+合起来才闭合：**写不到一个它拼不出的路径。** 任何一半单独都不够 ——
+所以 (a) 是被断言存在的，不是被记住的：它若被删，(b) 仍会全绿而什么都没证明。
+
+### 判据 3 实测到的一件事，如实记录
+
+三个生产入口点名的**不是同一类词**：
+
+```
+run_supplement_production  -> SUPPLEMENT_EXECUTION_AUTHORIZED（ND1 效力边界字段）
+run_real_mc                -> MC_RUN_AUTHORIZED
+prepare_real_mc_input      -> MC_RUN_AUTHORIZED（registry 语法词）
+```
+
+两者都为真，且是两个不同的事实：一个说 Aaron 未授权该效果，另一个说 registry
+语法里没有这个词。**按实测钉住。** MC 那两个是否也该点名 `MC_EXECUTION_AUTHORIZED`
+属于改门语义，裁定明确不归 builder。
+
+**§7 的四项仍全部在 Aaron 手里，本节不触及其中任何一项。**
