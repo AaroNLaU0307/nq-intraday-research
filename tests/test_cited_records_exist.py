@@ -24,10 +24,14 @@ THREE CLASSES, and they are not the same fact:
                            collides with failure-model boundary (2) and is
                            currently before a decision seat.
   PROSE_PLACEHOLDER        `ops/...md` in running text. Not a citation.
-  CITED_BUT_NEVER_EXISTED  measured: never added and never deleted anywhere
-                           in git history, and absent from the worktree. This
-                           is the R2-ruling shape and is recorded as an OPEN
-                           finding, not as an accepted state.
+  CITED_BUT_NEVER_EXISTED  never added and never deleted anywhere in git
+                           history, absent from the worktree, AND cited as
+                           though it existed. CURRENTLY EMPTY — all three
+                           original members turned out to be proposals when
+                           someone finally read the citing lines. Kept as a
+                           class because the shape is real (2026-08-26: a
+                           ruling that existed only in chat), not because
+                           anything is in it.
 
 The remediation of the stale citations is deliberately NOT done here. How an
 outcome-clean extract should cite a quarantined source is a quarantine-
@@ -43,6 +47,14 @@ REPO = Path(__file__).resolve().parents[1]
 OPS = REPO / "ops"
 QUARANTINE = OPS / "outcome_quarantine"
 
+#: SCOPE, stated because the decision seat asked for it to be. This matches
+#: the FORWARD-SLASH `ops/...` form only. A backslash path or a bare filename
+#: is not covered, so "pinned, cannot grow" means: cannot grow IN THIS FORM.
+#:
+#: That limit is load-bearing rather than accidental — it is the same edge as
+#: ruling C1, whose markers keep the BARE filename precisely so they do not
+#: read as citations. One blade, two sides: what the regex ignores is exactly
+#: what a marker is allowed to say.
 _REF = re.compile(r"`?(ops/[A-Za-z0-9_./-]+\.(?:md|json|py))`?")
 
 _KNOWN = {
@@ -60,9 +72,41 @@ _KNOWN = {
     "ops/RULING_FABLE_FOUR_OPEN_2026-08-26.md": "QUARANTINED_MOVED",
     "ops/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md": "QUARANTINED_MOVED",
     "ops/S0_T001_RESULT_DECISION_ADDENDUM.md": "QUARANTINED_MOVED",
-    "ops/MC_RUN_REGISTRY.md": "CITED_BUT_NEVER_EXISTED",
-    "ops/STRATEGY_COUNCIL_ROUND4_LOCK.md": "CITED_BUT_NEVER_EXISTED",
-    "ops/SUPPLEMENT_LEDGER.md": "CITED_BUT_NEVER_EXISTED",
+    #: RECLASSIFIED 2026-08-27, and the reclassification is the finding.
+    #:
+    #: All three were first recorded as CITED_BUT_NEVER_EXISTED on the
+    #: strength of a claim this file's author made without checking: that
+    #: they read as citations of existing records. They do not. Reading the
+    #: surrounding lines — which the first pass never did — each one is an
+    #: option or a target:
+    #:
+    #:   MC_RUN_REGISTRY            "### R1 — a separate MC registry file",
+    #:                              one of three options in an open collision
+    #:                              decision. Its RULING_PROPOSAL says
+    #:                              `RULING=R2`, so R1 was DECLINED: this file
+    #:                              is a rejected option's hypothetical and
+    #:                              will never exist by design.
+    #:   STRATEGY_COUNCIL_ROUND4_LOCK
+    #:                              the declared landing target of the
+    #:                              recovery path already recorded in
+    #:                              DECISION_PACKET_N00_AND_ND1 §D.1.3,
+    #:                              waiting on Aaron's sealed proposal text.
+    #:                              N00_N08_PROVENANCE_AUDIT_2026-08-25
+    #:                              already searched exhaustively for it and
+    #:                              recorded its absence — two days before
+    #:                              this file claimed nobody had noticed.
+    #:   SUPPLEMENT_LEDGER          "1. 是否新建 ops/SUPPLEMENT_LEDGER.md
+    #:                              (…工程建议：建)" — literally an open
+    #:                              question with a recommendation.
+    #:
+    #: THE LESSON, since it cost a decision seat a wasted item: the mechanical
+    #: half (absent from history) was measured and correct. The intent half
+    #: (cited as existing vs proposed) was ASSERTED — in the same document
+    #: that argued intent cannot be inferred mechanically. Being right that a
+    #: distinction is unmechanisable does not license guessing it by eye.
+    "ops/MC_RUN_REGISTRY.md": "PROPOSED_NOT_YET_EXISTING",
+    "ops/STRATEGY_COUNCIL_ROUND4_LOCK.md": "PROPOSED_NOT_YET_EXISTING",
+    "ops/SUPPLEMENT_LEDGER.md": "PROPOSED_NOT_YET_EXISTING",
 }
 
 
@@ -102,8 +146,12 @@ class TestNoUnrecordedDanglingCitation(unittest.TestCase):
     def test_no_recorded_entry_has_gone_stale(self):
         fixed = sorted(set(_KNOWN) - set(_dangling()))
         self.assertEqual([], fixed,
-                         "these are recorded as dangling but now resolve; "
-                         "delete the entries:\n  " + "\n  ".join(fixed))
+                         "these are recorded as dangling but are no longer "
+                         "SCANNED as dangling. Two ways that happens and the "
+                         "old wording named only one: the path now resolves, "
+                         "OR every citation of it became a marker (ruling C3 "
+                         "— expected; delete the entry in the same "
+                         "change):\n  " + "\n  ".join(fixed))
 
 
 class TestEachClassificationIsCheckable(unittest.TestCase):
@@ -140,10 +188,23 @@ class TestEachClassificationIsCheckable(unittest.TestCase):
         WHAT IS NOT MECHANICAL, said plainly rather than faked: which of the
         two applies is a judgement about intent — a plan proposing a path
         versus a document citing a record as though it existed. Both look
-        identical on disk. Keying it off the citing document's name was
-        tried and rejected: `DECISION_PACKET_N00_AND_ND1.md` cites
-        `SUPPLEMENT_LEDGER.md`, so a PACKET-means-proposal rule would
-        silently reclassify a real missing record as a legitimate proposal.
+        identical on disk.
+
+        THE COUNTER-EXAMPLE THIS DOCSTRING USED TO GIVE WAS FALSE, and the
+        correction matters more than the original point. It argued that a
+        "PACKET means proposal" rule would misclassify, citing
+        `DECISION_PACKET_N00_AND_ND1.md` naming `SUPPLEMENT_LEDGER.md` as a
+        supposedly real missing record. The actual line reads
+        "1. 是否新建 ops/SUPPLEMENT_LEDGER.md (…工程建议：建)" — an open
+        question with a recommendation. On that example the name-based rule
+        would have been RIGHT, and the eyeball classification was wrong.
+
+        The name-based rule is still rejected, for a better reason: it keys
+        on the container instead of the sentence, so it would be right by
+        accident here and wrong wherever a packet cites a genuinely missing
+        record. But the honest statement is that intent lives in the
+        surrounding LINES — which are readable, and were simply not read.
+        Nothing about the distinction was unmechanisable; it was unmeasured.
         """
         import subprocess
         present = []
@@ -183,26 +244,30 @@ class TestEachClassificationIsCheckable(unittest.TestCase):
                  if kind == "QUARANTINED_MOVED" and (OPS / Path(ref).name).exists()]
         self.assertEqual([], wrong, "\n  ".join(wrong))
 
-    def test_the_never_existed_ones_are_still_absent_from_history(self):
-        """MEASURED, and re-measured every run: `git log --diff-filter=AD`
-        over all refs returns nothing for these paths, so they were never
-        added and never deleted — they were cited into existence."""
-        import subprocess
-        appeared = []
-        for ref, kind in sorted(_KNOWN.items()):
-            if kind != "CITED_BUT_NEVER_EXISTED":
-                continue
-            out = subprocess.run(
-                ["git", "-C", str(REPO), "log", "--all", "--oneline",
-                 "--diff-filter=AD", "--", ref],
-                capture_output=True, text=True, errors="replace").stdout.strip()
-            if out:
-                appeared.append(f"{ref}: {out.splitlines()[0]}")
-        self.assertEqual([], appeared,
-                         "these are recorded as never having existed, but git "
-                         "history now shows them added or deleted; the "
-                         "classification needs revisiting:\n  "
-                         + "\n  ".join(appeared))
+    def test_the_cited_but_never_existed_class_is_currently_empty(self):
+        """DELETED THE GUARD THAT USED TO SIT HERE, and this replaces it.
+
+        `test_the_never_existed_ones_are_still_absent_from_history` filtered
+        `_KNOWN` for CITED_BUT_NEVER_EXISTED and asserted over the result. The
+        reclassification emptied that class, so the test began passing over
+        zero items — green, permanently, checking nothing. It was also
+        strictly subsumed by the guard above, which covers both absent
+        classes.
+
+        A dormant guard reporting green is the failure this suite was built
+        to find, so it is gone. What is pinned instead is the FACT that the
+        class is empty: nothing in this repository is currently believed to
+        have been cited into existence. If an entry ever joins the class this
+        assertion fails, which is the right moment to look at it again — and
+        the guard above already covers it mechanically from that instant."""
+        cited = sorted(r for r, k in _KNOWN.items()
+                       if k == "CITED_BUT_NEVER_EXISTED")
+        self.assertEqual(
+            [], cited,
+            "something is classified CITED_BUT_NEVER_EXISTED again. That "
+            "class was emptied on 2026-08-27 when all three members turned "
+            "out to be proposals; re-read the citing LINES before trusting "
+            "the label:\n  " + "\n  ".join(cited))
 
 
 class TestTheOffLimitsListItselfResolves(unittest.TestCase):
@@ -258,9 +323,20 @@ class TestTheOffLimitsListItselfResolves(unittest.TestCase):
 
 class TestTheDetectorDetects(unittest.TestCase):
 
-    def test_a_reference_to_a_missing_file_is_found(self):
+    def _tmp(self):
+        """Cleaned up. Flagged by the decision seat as hygiene — and hygiene
+        here has teeth: a suite that leaves temp trees behind on a machine
+        whose Desktop is a synced OneDrive tree is feeding the sync engine
+        garbage, which is the failure family this project is migrating away
+        from."""
+        import shutil
         import tempfile
         d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        return d
+
+    def test_a_reference_to_a_missing_file_is_found(self):
+        d = self._tmp()
         (d / "ops").mkdir()
         (d / "ops" / "a.md").write_text("see `ops/NOPE.md`\n", encoding="utf-8")
         refs = [r for r in _REF.findall((d / "ops" / "a.md").read_text(
@@ -268,8 +344,7 @@ class TestTheDetectorDetects(unittest.TestCase):
         self.assertEqual(["ops/NOPE.md"], refs)
 
     def test_a_reference_that_resolves_is_not_flagged(self):
-        import tempfile
-        d = Path(tempfile.mkdtemp())
+        d = self._tmp()
         (d / "ops").mkdir()
         (d / "ops" / "b.md").write_text("x\n", encoding="utf-8")
         (d / "ops" / "a.md").write_text("see `ops/b.md`\n", encoding="utf-8")

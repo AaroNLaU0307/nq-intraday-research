@@ -182,3 +182,27 @@ classification 值。若认为不该混记，请裁，我按 append-only 追加�
 **二、它自己指出了一个我造成的循环，并且拒绝用它。** R8 要裁的是「累计计数值算不算
 outcome 暴露」，而那个值就在我送去给它读的文件里。它**先申报接触、再裁那个值、然后
 明说自己这一行不由自己的裁定决定**。这个顺序是对的；我把台账放进送审集时没想到这层。
+
+## 第 7 行与第 8 行 —— 2026-08-27 的两个决裁席，两条都由席位主动申报
+
+两席均在 `INDEPENDENCE_STATEMENT` / `SEAT_STATUS` 中**自陈 BLIND 并主动披露**接触面，
+且均因 §6 READ_ONLY 禁令而明说「席位轴事件由工作会话追加」。本节即依此追加。
+两条披露都不是事故：**都是「持久记忆索引里带着本项目的治理状态」这一同一形态**，
+而它随 fresh 会话重置模型上下文却不重置研究史（session-conventions §1）。
+
+| # | ts | seat | artifact_read | what_was_seen | classification | consequence | cause |
+|---|---|---|---|---|---|---|---|
+| 7 | 2026-08-27 | Fable 5，决裁席（`dec-s5-r4-2026-08-27`） | 决裁包本体 ＋ §1 五份哈希核证件 ＋ 禁区表本身；零 grep、零 glob、零广域检索 | **一项主动申报**：包内强制阅读集含「S0-T001 完成封存、BURNED/ABORTED/VOID 计 0、消耗一次 exposure seq」的**运营事实**。席位明确列举了**未**抵达的四类：verdict 方向、目标指标、端点差值、zero-direction 计数 | **`NOT_EXPOSED`** —— 与第 6 行的裁定同一依据：**累计/计数类事实属 TRIAL_ACCOUNTING 记账轴，不属 outcome 轴；三条正交轴永不由一轴推另一轴。**「BURNED 计 0」是记账事实，非 outcome 值 | 无 —— outcome-blind 资格按内容轴不烧 | 无事故。接触源于 builder 把更正件（其主题正是 registry 事件计数）放进强制阅读集，**而不放它，席位就无法核对那句被更正的错话** |
+| 8 | 2026-08-27 | Fable 5，决裁席（`dec-citations-2026-08-27`） | 包本体 ＋ 三份钉死文件；零搜索、零隔离件接触 | **一项主动申报**：会话启动时自动载入的持久记忆索引含本项目一行历史状态，内含 `MC_TO_STRATEGY_MASTER_PLAN` 的**旧路径字符串**（作恢复锚名）及若干治理标识（N08 DROP、N00 保留、MC-REG-COLLISION-001 待批） | **`NOT_EXPOSED`** —— 席位自行对照禁区表五类 outcome 内容（revealed verdict / cumulative exposure count / endpoint spread value / zero-direction cell count / addendum feasibility assertion）逐条排除，接触的是**文件名与治理标识**；按禁区表自己的准则，文件名不是内容 | 无 | 无事故。**成因是 builder 的全局记忆索引里存着旧路径**——该路径在隔离迁移时已失效，而记忆没跟着更新。这与今天 findings 记录的 8 处陈旧引用是**同一形态，只是发生在记忆里而不是仓里** |
+
+### 两条要记住的
+
+**一、第 8 行的成因不在仓里，在我的记忆索引里。** 今天整天在修「引用没跟着文件移动」，
+而同一个缺陷在持久记忆里也有一份 —— 它让每一个 fresh 席位启动时就带上一个失效的隔离路径。
+仓内的机械保障管不到那里。
+
+**二、模型多样性已第四连**（`dec-four-owner`、`dec-scope-boundary`、
+`dec-registry-migration`、`dec-s5-r4`，再加 `dec-citations` 为第五连），
+**全部 Fable 5**。第 7 行席位自陈了这一点并要求 Aaron 知悉后再追认。
+缓解事实同样记录：本轮被裁的 HOLD 出自 fresh Sol（跨家族制衡在环内运转），
+且第 7 行席位在第 2 件上**站在 Sol 一侧推翻了同模型前席的缓解方案**。
