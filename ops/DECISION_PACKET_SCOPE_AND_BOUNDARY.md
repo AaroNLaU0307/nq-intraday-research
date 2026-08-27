@@ -1,6 +1,7 @@
 # 两个边界问题 —— 决裁包
 
 ```ini
+DELIVERY_STATUS=RETURNED
 REVIEW_ID=dec-scope-boundary-2026-08-27
 RECOMMENDED_MODEL=Fable 5
 EFFORT_INTENT=HIGH

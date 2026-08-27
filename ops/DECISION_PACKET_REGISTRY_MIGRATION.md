@@ -1,6 +1,7 @@
 # registry 迁出 OneDrive —— 迁移设计与决裁包
 
 ```ini
+DELIVERY_STATUS=RETURNED
 REVIEW_ID=dec-registry-migration-2026-08-27
 RECOMMENDED_MODEL=Fable 5
 EFFORT_INTENT=HIGH

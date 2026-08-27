@@ -1,6 +1,7 @@
 # Aaron 手上仅剩的四件 —— 决裁包
 
 ```ini
+DELIVERY_STATUS=RETURNED
 REVIEW_ID=dec-four-owner-2026-08-27
 RECOMMENDED_MODEL=Fable 5
 EFFORT_INTENT=HIGH

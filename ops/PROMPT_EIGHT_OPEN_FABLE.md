@@ -1,6 +1,8 @@
 # 八项待裁 —— 交 Fable 决裁席（Aaron 明示委托）
 
 ```ini
+REVIEW_ID=dec-eight-open-2026-08-26
+DELIVERY_STATUS=RETURNED
 RECOMMENDED_MODEL=Fable 5
 EFFORT_INTENT=VERY_HIGH
 RECOMMENDED_EFFORT=xhigh

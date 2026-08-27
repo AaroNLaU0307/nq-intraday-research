@@ -1,6 +1,8 @@
 # registry 迁移方案（路线 A）—— fresh Sol 复审
 
 ```ini
+REVIEW_ID=rv-migration-plan-2026-08-27
+DELIVERY_STATUS=RETURNED
 RECOMMENDED_MODEL=Codex GPT-5.6 Sol
 EFFORT_INTENT=VERY_HIGH
 RECOMMENDED_EFFORT=Extra High

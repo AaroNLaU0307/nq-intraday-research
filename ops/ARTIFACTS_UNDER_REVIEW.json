@@ -1,4 +1,59 @@
 {
  "_comment": "Frozen while a reviewer holds them. Remove an entry when the review returns; an empty list is the normal state. `unchanged_since` is the commit the declaration pins: no commit after it may touch the path. HEAD itself is NEVER pinned -- committing the review prompt moves HEAD, so a HEAD pin is stale the moment it is written (measured 2026-08-25: a Sol session STOPped on exactly that). Nothing on ops/OUTCOME_CARRYING_ARTIFACTS.json may be listed here. Each entry declares role: \"delivery\" (a document authored for this review; must itself carry the off-limits list) or \"reference\" (pre-existing bytes handed along; scanned for unmarked quarantined paths, but NOT required to carry governance text — requiring that would mean editing an approved record to satisfy a test). Guarded by tests/test_artifacts_under_review_are_frozen.py and tests/test_review_artifacts_are_outcome_clean.py",
- "under_review": []
+ "under_review": [
+  {
+   "path": "ops/DECISION_PACKET_S5_AND_R4.md",
+   "role": "delivery",
+   "sha256": "a2fa083c6dfabb30669aef2084a68d4d7c7eeecc00233fa839ee86cbf128e041",
+   "issued_to": "Fable 5, decision seat, fresh top-level session",
+   "issued_at": "2026-08-27",
+   "review_id": "dec-s5-r4-2026-08-27",
+   "unchanged_since": "d6e85102b66253cd05ed5db9a664bff04be0c9c5"
+  },
+  {
+   "path": "ops/REGISTRY_MIGRATION_PLAN_ROUTE_A.md",
+   "role": "reference",
+   "sha256": "228103a46c51dbbb1004572e6a07d2c45a3767fb4e547702f4fe6c905a281b8f",
+   "issued_to": "Fable 5, decision seat, fresh top-level session",
+   "issued_at": "2026-08-27",
+   "review_id": "dec-s5-r4-2026-08-27",
+   "unchanged_since": "d6e85102b66253cd05ed5db9a664bff04be0c9c5"
+  },
+  {
+   "path": "ops/REGISTRY_SYNC_FAILURE_MODEL.md",
+   "role": "reference",
+   "sha256": "8734c430534314e8c7592c998e43a0485b90c37b9b0fb9df5d5736200d979424",
+   "issued_to": "Fable 5, decision seat, fresh top-level session",
+   "issued_at": "2026-08-27",
+   "review_id": "dec-s5-r4-2026-08-27",
+   "unchanged_since": "d6e85102b66253cd05ed5db9a664bff04be0c9c5"
+  },
+  {
+   "path": "ops/RULING_FABLE_SCOPE_AND_MIGRATION_2026-08-27.md",
+   "role": "reference",
+   "sha256": "a62030d72113a3c16a8190449fc42f2623c38bdd254c8de6a40a697e1ff86538",
+   "issued_to": "Fable 5, decision seat, fresh top-level session",
+   "issued_at": "2026-08-27",
+   "review_id": "dec-s5-r4-2026-08-27",
+   "unchanged_since": "d6e85102b66253cd05ed5db9a664bff04be0c9c5"
+  },
+  {
+   "path": "ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md",
+   "role": "reference",
+   "sha256": "eb8b6567d99760ee7438e8105e08f48a0584e0798175a9a236a6be5bf73b96b0",
+   "issued_to": "Fable 5, decision seat, fresh top-level session",
+   "issued_at": "2026-08-27",
+   "review_id": "dec-s5-r4-2026-08-27",
+   "unchanged_since": "d6e85102b66253cd05ed5db9a664bff04be0c9c5"
+  },
+  {
+   "path": "ops/CORRECTION_NO_TRIAL_WAS_BURNED_2026-08-27.md",
+   "role": "reference",
+   "sha256": "fd3cd89ad03e60a5606730b5d3447a67ea04e36916afeb20033ea7e08e989771",
+   "issued_to": "Fable 5, decision seat, fresh top-level session",
+   "issued_at": "2026-08-27",
+   "review_id": "dec-s5-r4-2026-08-27",
+   "unchanged_since": "d6e85102b66253cd05ed5db9a664bff04be0c9c5"
+  }
+ ]
 }
