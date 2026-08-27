@@ -358,6 +358,67 @@ ND3_STILL_REFUSED_BY_NAME = tuple(
 TERMINAL_SHORT_IDS = ("P5", "F3")
 NON_TERMINAL_TRAPS = ("A1", "AX", "CR1")
 
+#: DECISION-SEAT RULING, 第 1 件 of dec-four-owner-2026-08-27 — executor
+#: provenance, formalised rather than added.
+#:
+#: THE CONTRADICTION IT RESOLVES. The approved actor table assigns A1/F1/F2
+#: to `main agent (mc_ds_runner)` while global boundary 4 says only the main
+#: agent writes the registry. Those read as conflicting only if both are
+#: about the same thing. They are not: boundary 4 states OWNERSHIP, and the
+#: parenthesis states the EXECUTING PROCESS. The convention was already
+#: here, in every actor string, and was never written down.
+#:
+#: TWO CLASSES, AND THE SPLIT IS EXACT (measured 2026-08-27):
+#:
+#:   runtime, written by a live process   P3 P4 A1 F1 F2  -> "role (process)"
+#:   governance, appended by hand         P1 A2 AX CR1 F3 T1 -> "role"
+#:
+#: The ruling's §1.3 wording asked for `main agent (<process>)` uniformly;
+#: taken literally that rejects nine of fifteen events. The two-class form
+#: below is the model the same ruling states in its own
+#: CROSS_ITEM_CONSISTENCY section, and it is what the actor strings already
+#: encode. Its own falsifier — "if P3/A1/F1/F2 are not in `role (executor)`
+#: form" — was run and did not fire.
+ACTOR_FORM_RUNTIME = "runtime"        # role (process): a live process wrote it
+ACTOR_FORM_GOVERNANCE = "governance"  # bare role: appended by hand
+ACTOR_FORM_OWNER = "owner"            # Aaron
+ACTOR_FORM_ALTERNATION = "alternation"  # either of two roles
+ACTOR_FORM_PLACEHOLDER = "placeholder"  # the seat is not yet named
+
+_ACTOR_RUNTIME_RE = re.compile(r"^[a-z][a-z ]*\(([A-Za-z0-9_.]+)\)\Z")
+_ACTOR_GOVERNANCE_RE = re.compile(r"^[a-z][a-z ]*[a-z]\Z")
+_ACTOR_PLACEHOLDER_RE = re.compile(r"^<[a-z]+>\Z")
+
+
+def actor_form(actor: str) -> str:
+    """Which of the five shapes an actor string is, or raise.
+
+    Fail-closed: an actor in none of the shapes is a refusal, not a
+    default. A sixth shape appearing silently is how an executor stops
+    being recorded."""
+    if actor == ACTOR_AARON:
+        return ACTOR_FORM_OWNER
+    if "|" in actor:
+        return ACTOR_FORM_ALTERNATION
+    if _ACTOR_PLACEHOLDER_RE.match(actor):
+        return ACTOR_FORM_PLACEHOLDER
+    if _ACTOR_RUNTIME_RE.match(actor):
+        return ACTOR_FORM_RUNTIME
+    if _ACTOR_GOVERNANCE_RE.match(actor):
+        return ACTOR_FORM_GOVERNANCE
+    raise SupplementGrammarError(
+        "actor_form_unrecognised",
+        "%r is in none of the five ratified actor shapes; an executor that "
+        "cannot be classified is an executor that is not recorded" % actor)
+
+
+def executor_of(actor: str) -> str | None:
+    """The executing process an actor string names, or `None` when it names
+    no process — which is itself the fact that it was appended by hand."""
+    m = _ACTOR_RUNTIME_RE.match(actor)
+    return m.group(1) if m else None
+
+
 #: DECISION-SEAT RULING R-C (dec-item6-open-2026-08-27) = PER_ID_ONLY.
 #:
 #: Whether a chain's LAST event leaves the id able to start new work. A

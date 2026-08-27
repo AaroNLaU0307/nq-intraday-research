@@ -84,6 +84,8 @@
 | [`RULING_FABLE_ITEM6_OPEN_2026-08-27.md`](RULING_FABLE_ITEM6_OPEN_2026-08-27.md) | **第 6 项三项开放项的裁定（生效）**：R-A=FULL · R-B=接受构造＋三条 CONDITIONS（已全部执行）· R-C=PER_ID_ONLY。**R3 的 ratify 仍 `STILL_AARON_ONLY`。** outcome-clean |
 | [`P2_AUTHORIZATION_PREPARATION.md`](P2_AUTHORIZATION_PREPARATION.md) | **N09 的 P2 要什么，以及为什么今天签了也生效不了**——四必填字段、四条实测阻断（无前驱／registry 追加未授权／目录创建未授权／执行路径仍是拒绝骨架）、正确顺序。**不签、不代填。** outcome-clean |
 | [`DECISION_PACKET_FOUR_OWNER_ITEMS.md`](DECISION_PACKET_FOUR_OWNER_ITEMS.md) | **Aaron 仅剩四件的决裁包**（P3 写者 · 目录创建四要素 · D-3 五项 · P2 排序与 P1 路径）。自带禁区清单。**P2 的签署与 verbatim 语句明令不可代裁。** outcome-clean |
+| [`RULING_FABLE_FOUR_OWNER_2026-08-27.md`](RULING_FABLE_FOUR_OWNER_2026-08-27.md) | **四件的裁定（生效）**：executor provenance 成文化（不加新字段）· 目录创建五槽 · D-3 五项逐项 · P2 排最后＋P1 走主代理手工。**含两条独立性披露与一条 STRONGEST_OBJECTION。** outcome-clean |
+| [`DIRECTORY_CREATION_GRANTS.md`](DIRECTORY_CREATION_GRANTS.md) | **目录创建授权的 append-only 记录件**（第 2 件裁定所要求，由 builder 建）。**今天为空，`GRANTS_RECORDED=0`；建立本件不授权任何创建。** outcome-clean |
 | [`R3_CROSS_FIELD_RECHECK_2026-08-27.md`](R3_CROSS_FIELD_RECHECK_2026-08-27.md) | **§7 路线的 builder 步骤**：R3 的 C1–C10 跨字段检查重跑（7 PASS／3 不适用／0 FAIL）＋ CR1 双向边闭合 ＋ 两个 canonical SHA-256。**批准未发生，`PROFILE_STATUS=PROPOSED_NOT_EFFECTIVE`。** outcome-clean |
 | [`N09_EXECUTION_PATH_DESIGN_R3.md`](N09_EXECUTION_PATH_DESIGN_R3.md) | **N09 执行路径设计 R3**——回应 R2 的 HOLD：三个 checkpoint 各自的副作用断言、冻结的 A1/F2/indeterminate 矩阵、钉死的 structural-only 调用图、precheck 证据规则。`BUILD_SCOPE=DEFAULT_REFUSE_SCAFFOLD_ONLY`，`STATUS=NOTHING_IMPLEMENTED`。outcome-clean |
 | [`A2_N09_SOL_EXPOSURE_AND_REDESIGN_2026-08-25.md`](A2_N09_SOL_EXPOSURE_AND_REDESIGN_2026-08-25.md) | N09 首轮：席位暴露 ＋ 非正式 REDESIGN |
