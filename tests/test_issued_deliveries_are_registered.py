@@ -72,26 +72,39 @@ def _entries():
     return json.loads(REGISTER.read_text(encoding="utf-8"))["under_review"]
 
 
-def _in_head(rel):
-    """Is this path already recorded in HEAD?
+def _settled_in_head(rel):
+    """Is this delivery's content already settled in HEAD — same bytes?
 
-    THE DEADLOCK THIS RESOLVES, hit while creating the next packet. A
-    delivery must be registered, and a register entry needs `unchanged_since`
-    — the commit that last touched the path. For a file that has never been
-    committed there is no such commit, and the commit that would create one
-    is the commit this guard refuses. A new delivery could therefore never be
-    made without `--no-verify`, and a rule whose normal use requires
-    bypassing it is not a rule.
+    THE DEADLOCK THIS RESOLVES. A delivery must be registered, and a register
+    entry needs `unchanged_since`: the commit that last touched the path. That
+    commit is the one being made. So arming ALWAYS lags the delivery's own
+    commit by exactly one commit — that is the workflow, not a shortcut, and
+    without an exemption no delivery could ever be committed without
+    `--no-verify`. A rule whose normal use requires bypassing it is not a rule.
 
-    So the commit that INTRODUCES a delivery is allowed through, and every
-    commit after it is blocked until the register is armed. The exemption is
-    exactly one commit wide and closes by itself; nothing can sit issued and
-    unregistered, because the next commit — any commit — fails.
+    HIT TWICE, WIDENED ONCE. The first version asked only "does HEAD have this
+    path", which covered CREATING a delivery and not RE-ISSUING one: a packet
+    already in HEAD, retracted for repair, is ISSUED-and-unarmed at the moment
+    its repair is committed. Same wall, one hour later.
+
+    So the exemption is: the bytes are changing in THIS commit. It closes the
+    instant they stop, which is the next commit, always.
+
+    NOT a standing loophole. Staying exempt would mean editing the delivery in
+    every single commit — and the bytes a reviewer holds changing on every
+    commit is the incident itself, not a way around it.
     """
     import subprocess
-    return subprocess.run(
-        ["git", "-C", str(REPO), "cat-file", "-e", "HEAD:" + rel],
-        capture_output=True).returncode == 0
+    out = subprocess.run(["git", "-C", str(REPO), "show", "HEAD:" + rel],
+                         capture_output=True)
+    if out.returncode != 0:
+        return False                      # not in HEAD at all: being created
+    try:
+        now = (REPO / rel).read_bytes()
+    except OSError:
+        return False
+    nl = b"\r\n"
+    return out.stdout.replace(nl, b"\n") == now.replace(nl, b"\n")
 
 
 class TestEveryDeliveryDeclaresItsStatus(unittest.TestCase):
@@ -132,8 +145,8 @@ class TestAnIssuedDeliveryIsArmed(unittest.TestCase):
             if not status or not review:
                 continue          # the tests above own that failure
             rel = path.relative_to(REPO).as_posix()
-            if not _in_head(rel):
-                continue          # the commit that introduces it; see _in_head
+            if not _settled_in_head(rel):
+                continue          # see _settled_in_head
             if status.group(1) == "ISSUED" and review.group(1) not in live:
                 unarmed.append(f"{rel} (review_id {review.group(1)})")
         self.assertEqual([], unarmed,
@@ -142,7 +155,7 @@ class TestAnIssuedDeliveryIsArmed(unittest.TestCase):
                          "is protecting:\n  " + "\n  ".join(unarmed))
 
     def test_the_new_file_exemption_is_exactly_one_commit_wide(self):
-        """The exemption in `_in_head` is the only way past this guard, so
+        """The exemption in `_settled_in_head` is the only way past this guard, so
         its width is the thing to prove rather than assert.
 
         Measured against the repository itself: every delivery that HAS been
@@ -151,20 +164,20 @@ class TestAnIssuedDeliveryIsArmed(unittest.TestCase):
         guard above would simply skip everything."""
         committed = [p.relative_to(REPO).as_posix()
                      for p, _t, _r in _deliveries()
-                     if _in_head(p.relative_to(REPO).as_posix())]
+                     if _settled_in_head(p.relative_to(REPO).as_posix())]
         self.assertGreater(
             len(committed), 8,
             f"only {len(committed)} deliveries are in HEAD; the new-file "
             "exemption is covering more than it should")
 
     def test_a_delivery_in_head_is_not_exempt(self):
-        """Directly: pick a committed ISSUED delivery and confirm `_in_head`
+        """Directly: pick a committed ISSUED delivery and confirm `_settled_in_head`
         says so, i.e. it went through the check rather than around it."""
         issued_in_head = [
             p.relative_to(REPO).as_posix()
             for p, t, _r in _deliveries()
             if (_STATUS.search(t) and _STATUS.search(t).group(1) == "ISSUED"
-                and _in_head(p.relative_to(REPO).as_posix()))]
+                and _settled_in_head(p.relative_to(REPO).as_posix()))]
         armed = {e["review_id"] for e in _entries()}
         for rel in issued_in_head:
             text = (REPO / rel).read_text(encoding="utf-8")
@@ -201,7 +214,7 @@ class TestAnIssuedDeliveryIsArmed(unittest.TestCase):
                 continue
             registered = by_review.get(review.group(1), set())
             me = path.relative_to(REPO).as_posix()
-            if not _in_head(me):
+            if not _settled_in_head(me):
                 continue
             if me not in registered:
                 gaps.append(f"{me}: the delivery document itself is not "

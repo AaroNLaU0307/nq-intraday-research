@@ -55,46 +55,6 @@
    "issued_at": "2026-08-27",
    "review_id": "dec-s5-r4-2026-08-27",
    "unchanged_since": "ae104e889d3698693402dbad69f48a68727d357f"
-  },
-  {
-   "path": "ops/DECISION_PACKET_CITATION_REMEDIATION.md",
-   "sha256": "4044e5262a93ed3136c7015cc49634b28fab42ab97939691dd0c770c77eb4d82",
-   "issued_to": "Fable 5, decision seat, fresh top-level session",
-   "issued_at": "2026-08-27",
-   "review_id": "dec-citations-2026-08-27",
-   "unchanged_since": "a90d14c6a4eae34e4ef6958c1760c4697e781869"
-  },
-  {
-   "path": "ops/FINDINGS_DANGLING_CITATIONS_2026-08-27.md",
-   "sha256": "c2d51f80dce7a8aa47f274fd1867c4404ef30d53cb52c7cb30e00a8c04e014a0",
-   "issued_to": "Fable 5, decision seat, fresh top-level session",
-   "issued_at": "2026-08-27",
-   "review_id": "dec-citations-2026-08-27",
-   "unchanged_since": "a90d14c6a4eae34e4ef6958c1760c4697e781869"
-  },
-  {
-   "path": "tests/test_cited_records_exist.py",
-   "sha256": "eb3b089f30f3a6b6c3dfb371e27733eb959d02323f031fa8a1c0801a3f1b67fb",
-   "issued_to": "Fable 5, decision seat, fresh top-level session",
-   "issued_at": "2026-08-27",
-   "review_id": "dec-citations-2026-08-27",
-   "unchanged_since": "a90d14c6a4eae34e4ef6958c1760c4697e781869"
-  },
-  {
-   "path": "ops/OUTCOME_CARRYING_ARTIFACTS.json",
-   "sha256": "a61c125b4e2e551955ce59816c9ccbc6a449a91d7f7701095eeb586e5c155f4b",
-   "issued_to": "Fable 5, decision seat, fresh top-level session",
-   "issued_at": "2026-08-27",
-   "review_id": "dec-citations-2026-08-27",
-   "unchanged_since": "a90d14c6a4eae34e4ef6958c1760c4697e781869"
-  },
-  {
-   "path": "ops/D124_RULINGS_CLEAN_EXTRACT.md",
-   "sha256": "5d6e8b65b4a7f9d030d13a074f40a9c388bad763e17c610b9c529d14e5634745",
-   "issued_to": "Fable 5, decision seat, fresh top-level session",
-   "issued_at": "2026-08-27",
-   "review_id": "dec-citations-2026-08-27",
-   "unchanged_since": "a90d14c6a4eae34e4ef6958c1760c4697e781869"
   }
  ]
 }

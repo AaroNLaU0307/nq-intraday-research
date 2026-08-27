@@ -79,8 +79,9 @@ ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md
 
 ## 3. 第 1 件 · 8 处指向隔离件的陈旧引用
 
-文件移进了 `ops/outcome_quarantine/`，引用留在原处写着 `ops/X.md`。
-**这 8 个对象全部在 `carries_outcome` 表上** —— 陈旧引用指向的，恰是会烧席位的那批。
+文件移进了 `ops/outcome_quarantine/`，引用留在原处写着 `ops/<名>.md`。
+**这 8 个对象全部在 `carries_outcome` 表上，一律视为禁区，不得打开。**
+下列为其**陈旧引用路径**（对应实体已隔离）—— 列出是为了让你判断如何引用它们：
 
 ```
 ops/DECISION_PACKET_ND2_ND3.md              ops/ND2_ND3_RULING_REVIEW_FINDINGS.md
@@ -97,7 +98,7 @@ ops/ND2_ND3_FABLE_DECISION_PROMPT.md        ops/S0_T001_RESULT_DECISION_ADDENDUM
 ### 三个选项
 
 ```
-选项 REPOINT   —— 引用改指 ops/outcome_quarantine/X.md
+选项 REPOINT   —— 引用改指 ops/outcome_quarantine/<名>.md
   优点：引用可解析，读者不必搜索；且与现行惯例一致（S5/R4 包 §2 就逐字点名
         隔离路径作为禁区）。
   代价：把隔离路径写进了更多文档，其中包括刻意做成 outcome-clean 的那些。
@@ -118,8 +119,8 @@ ops/ND2_ND3_FABLE_DECISION_PROMPT.md        ops/S0_T001_RESULT_DECISION_ADDENDUM
 ### 争议焦点：`ops/D124_RULINGS_CLEAN_EXTRACT.md`（已随包）
 
 这份是**刻意做成 outcome-clean 的裁定摘录**，目的正是让席位不必去碰隔离原件。
-它当前引用 `ops/MC_TO_STRATEGY_MASTER_PLAN.md` 与
-`ops/RULING_FABLE_FOUR_OPEN_2026-08-26.md` 两个陈旧路径。
+它当前引用两个陈旧路径（对应实体均在禁区表上，不得打开）：
+`ops/MC_TO_STRATEGY_MASTER_PLAN.md` 禁区 · `ops/RULING_FABLE_FOUR_OPEN_2026-08-26.md` 禁区。
 
 **把它的引用改指进隔离区，与它存在的目的相反。**
 这正是 builder 不自行统一处理的原因：同一处改动，在决裁包里是对的，在这里可能是错的。

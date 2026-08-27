@@ -237,9 +237,18 @@ class TestTheOffLimitsListItselfResolves(unittest.TestCase):
     def test_every_quarantined_file_on_disk_is_on_the_list(self):
         """The direction that matters most: a file sitting in the quarantine
         and NOT declared outcome-carrying is one a seat has no instruction
-        to avoid."""
+        to avoid.
+
+        The count is not decoration: `assertEqual([], undeclared)` is true of
+        an empty quarantine, so a wrong QUARANTINE root would report this
+        clean forever. Flagged by test_no_vacuous_guards on its first full
+        run — by the guard written hours earlier, in this same file's
+        sibling, for exactly this shape."""
         listed = {Path(p).name for p in self._paths()}
         on_disk = {p.name for p in QUARANTINE.glob("*.md")}
+        self.assertGreater(len(on_disk), 5,
+                           f"the quarantine scan found {len(on_disk)} files; "
+                           "at that count this proves nothing")
         undeclared = sorted(on_disk - listed)
         self.assertEqual([], undeclared,
                          "these sit in ops/outcome_quarantine/ but are not in "
