@@ -358,6 +358,66 @@ ND3_STILL_REFUSED_BY_NAME = tuple(
 TERMINAL_SHORT_IDS = ("P5", "F3")
 NON_TERMINAL_TRAPS = ("A1", "AX", "CR1")
 
+#: N09 EXECUTION PATH R3 §2 and §3 — the two layers that sit ON TOP of the
+#: approved closed enums without editing them.
+#:
+#: CHECKPOINT_OF. The five C_BUILD gates belong to three distinct MOMENTS,
+#: and `run_stage_gates` runs them in one call on one context. R2 was HOLD'd
+#: for asserting one zero-side-effect rule across all three: staging writes
+#: `.partial` before it can verify it, so "no writes" is false for
+#: C_BUILD_2 by construction, and the archive attempt has already happened
+#: by C_BUILD_3.
+#:
+#: ROUTER_OF. `archive_policy_a` is a GATE, so a refusal there routes
+#: through `plan_failure_event` to F2 — while ratified
+#: `ND1_ARCHIVE_FAILURE_POLICY=A` requires A1. Measured, not hypothetical:
+#: `test_routing_it_as_an_ordinary_gate_contradicts_policy_a` executes it.
+#: Router B (`decide_after_seal`) owns that gate's outcome instead.
+#:
+#: GATE_TABLE IS NOT TOUCHED. It is an approved closed enum; these are
+#: separate mappings over the same names. Editing the enum would be an
+#: R4-level act and does not ride along with this.
+CHECKPOINT_C_BUILD_1 = "C_BUILD_1"   # before the first write
+CHECKPOINT_C_BUILD_2 = "C_BUILD_2"   # during staging
+CHECKPOINT_C_BUILD_3 = "C_BUILD_3"   # after an archive attempt
+
+CHECKPOINT_OF = MappingProxyType({
+    "row_schema_blind": CHECKPOINT_C_BUILD_1,
+    "day_set_exact": CHECKPOINT_C_BUILD_1,
+    "rows_digest_recompute": CHECKPOINT_C_BUILD_1,
+    "seal_staging_partial": CHECKPOINT_C_BUILD_2,
+    "archive_policy_a": CHECKPOINT_C_BUILD_3,
+})
+
+#: Which router decides what a gate's refusal becomes.
+ROUTER_GATE_FAILURE = "A"    # plan_failure_event: F1 or F2 by the P3 boundary
+ROUTER_POST_SEAL = "B"       # decide_after_seal: P4, A1, or INDETERMINATE
+
+ROUTER_OF = MappingProxyType({"archive_policy_a": ROUTER_POST_SEAL})
+
+
+def router_of(gate_name: str) -> str:
+    """Router A unless a gate is explicitly assigned to B. Fail-closed on an
+    unknown gate: a name with no gate is a typo, and a typo that defaulted
+    to A would route an archive failure to F2 silently."""
+    if not any(gate_name in GATE_TABLE[stage] for stage in STAGE_ENUM):
+        raise SupplementGrammarError(
+            "gate_name_not_declared",
+            "%r is in no stage's gate table" % gate_name)
+    return ROUTER_OF.get(gate_name, ROUTER_GATE_FAILURE)
+
+
+def checkpoint_of(gate_name: str) -> str:
+    """Which of C_BUILD's three moments a gate runs at. Only C_BUILD gates
+    have one; asking about another stage's gate is a refusal, not None."""
+    if gate_name not in GATE_TABLE["C_BUILD"]:
+        raise SupplementGrammarError(
+            "gate_not_in_c_build",
+            "%r is not a C_BUILD gate; checkpoints partition C_BUILD only"
+            % gate_name)
+    return CHECKPOINT_OF[gate_name]
+
+
 #: DECISION-SEAT RULING, 第 1 件 of dec-four-owner-2026-08-27 — executor
 #: provenance, formalised rather than added.
 #:
