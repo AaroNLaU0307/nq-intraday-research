@@ -237,7 +237,7 @@ _SPECS = (
     # be live at the retry.
     EventSpec("P3", "SUPPLEMENT_RUN_STARTED", UNNUMBERED, ACTOR_RUNNER,
               ("supplement_id", "atomic_start_marker"),
-              ("P2", "F1"), ("P4", "A1", "F2"), False),
+              ("P2", "F1"), ("P4", "A1", "F2", "CR1"), False),
     EventSpec("P4", "SUPPLEMENT_SEALED", UNNUMBERED, ACTOR_RUNNER,
               ("supplement_id", "sealed_sha256", "rows_digest",
                "day_universe_digest", "source_input_sha256",
@@ -279,11 +279,27 @@ _SPECS = (
               ("supplement_id", "failure_code", "detail",
                "sealed_artifact_deleted", "supersession_required"),
               ("P4",), ("F3",), False),
+    # ND1_RECOMMENDED_PROFILE_R3, ratified 2026-08-27 (doc HEAD 2728e43,
+    # profile d40ad864..., grammar block c251335f...). Transcribed verbatim
+    # from BEGIN_ND1_CR1_GRAMMAR_R3 — the approved bytes define this spec,
+    # not the other way round.
+    #
+    # A dangling P3 means a run started and its process died before any
+    # terminal event. CR1 is how that gets ADJUDICATED, and its successor
+    # list is F3 alone: crash resolution never revives a run. The
+    # ("CR1","P3") edge in FORBIDDEN_EDGES states that positively, because
+    # a closed successor list only says it by omission.
+    EventSpec("CR1", "SUPPLEMENT_RUN_CRASH_RESOLVED", NUMBERED,
+              ACTOR_MAIN_AGENT,
+              ("supplement_id", "dangling_event", "incident_id",
+               "crash_evidence_summary", "recovery_authorization_doc",
+               "registry_intact_verification", "registry_witness_ref"),
+              ("P3",), ("F3",), False, incident_required=True),
     EventSpec("F3", "SUPPLEMENT_SUPERSEDED", NUMBERED, ACTOR_MAIN_AGENT,
               ("supersedes_event_sequence", "superseded_supplement_id",
                "superseded_commit", "reason_code", "incident_id",
                "successor_supplement_id"),
-              ("P1", "P2", "F1", "F2", "F2v", "AX"), ("T1",), True,
+              ("P1", "P2", "F1", "F2", "F2v", "AX", "CR1"), ("T1",), True,
               incident_required=True),
     EventSpec("T1", "SUPPLEMENT_PROPOSED", NUMBERED, ACTOR_MAIN_AGENT,
               ("successor_supplement_id", "predecessor_supplement_id",
@@ -340,7 +356,7 @@ ND3_STILL_REFUSED_BY_NAME = tuple(
 
 #: The two terminals (§D.3.3). `A1` and `AX` are explicitly NOT terminals.
 TERMINAL_SHORT_IDS = ("P5", "F3")
-NON_TERMINAL_TRAPS = ("A1", "AX")
+NON_TERMINAL_TRAPS = ("A1", "AX", "CR1")
 
 #: Edges the resolver must refuse even though both endpoints are legal
 #: events (§D.3.3 "不存在的边"). Kept as data so a test can assert the
@@ -354,6 +370,15 @@ FORBIDDEN_EDGES = (
     ("P2S", "P3"),    # must pass through the new P2
     ("P3", "P2S"),    # past the pre-start boundary
     ("F2", "P3"),     # post-start in-place retry
+    # Decision-seat ruling R-A (dec-item6-open-2026-08-27) = FULL. All three,
+    # not two: a two-edge middle state was the sixth review round's Finding 1.
+    # The seat's ground was measured, not asserted — every one of the eight
+    # edges above is ALSO redundant against a closed successor list, so this
+    # table has never been a correctness mechanism. It is the named-policy
+    # layer, and leaving CR1 out would have made it the table's one exception.
+    ("CR1", "P4"),    # a crash adjudication does not become a seal
+    ("CR1", "P5"),    # nor an independent verification
+    ("CR1", "P3"),    # THE restart edge: crash resolution never revives a run
 )
 
 

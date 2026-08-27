@@ -94,12 +94,29 @@ def test_the_packet_still_carries_r2_as_a_proposal_and_spares_r1():
 
 def test_r2_corrects_exactly_the_two_p3_contradictions_the_code_implements():
     """R2 exists to make the DOCUMENT say what the code already does. The
-    two must agree, or R2 is correcting the wrong thing."""
+    two must agree, or R2 is correcting the wrong thing.
+
+    SUPERSEDED FOR THE SUCCESSOR LIST, 2026-08-27. R3 was ratified and adds
+    CR1 to P3's successors. R2's correction was not wrong — it was complete
+    for its time, and R3 EXTENDS it. So the assertion below is written as
+    "R2's three, plus whatever later ratified revisions added", rather than
+    being edited to a new literal that would erase the distinction between
+    a correction and a supersession.
+
+    The R2 profile block itself still says `P4|A1|F2` and must: it is
+    approved by digest and nothing may edit it.
+    """
     body = _profile_body(R2_PROFILE_ID)
     assert "RECOMMENDED_P3_PERMITTED_PREDECESSOR=P2|F1" in body
     assert "RECOMMENDED_P3_PERMITTED_SUCCESSOR=P4|A1|F2" in body
     assert sc.EVENTS["P3"].predecessors == ("P2", "F1")
-    assert sc.EVENTS["P3"].successors == ("P4", "A1", "F2")
+    successors = sc.EVENTS["P3"].successors
+    assert successors[:3] == ("P4", "A1", "F2"), (
+        "R2's three P3 successors must still lead the tuple in order; a "
+        "later revision may extend the list, never rewrite it")
+    assert set(successors) - {"P4", "A1", "F2"} <= {"CR1"}, (
+        "P3 gained a successor no ratified revision declares: %r"
+        % (sorted(set(successors) - {"P4", "A1", "F2", "CR1"}),))
 
 
 def test_both_profiles_are_ratified_and_the_record_names_the_bytes():

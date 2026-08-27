@@ -129,6 +129,17 @@ class Reg:
                    "schema": "mc_day_strata_supplement.v1",
                    "non_authorization_disclaimer": "this row is not an "
                                                    "authorization"},
+            # R3, ratified 2026-08-27. Seven required fields, transcribed
+            # from BEGIN_ND1_CR1_GRAMMAR_R3; the domains for dangling_event,
+            # registry_intact_verification and registry_witness_ref are the
+            # ones the grammar block names.
+            "CR1": {"supplement_id": sid, "dangling_event": "P3",
+                    "incident_id": INC,
+                    "crash_evidence_summary": "synthetic: process absent, "
+                                              "no terminal event",
+                    "recovery_authorization_doc": "ops/SYNTHETIC_RULING.md",
+                    "registry_intact_verification": D64,
+                    "registry_witness_ref": "ops/SYNTHETIC_WITNESS.md"},
         }[short]
 
     # -- construction ----------------------------------------------------
@@ -1069,6 +1080,12 @@ PREFIX = {
     "P2S": ("P1", "P2", "F1", "P2S"),
     "P3": ("P1", "P2", "P3"),
     "F2": ("P1", "P2", "P3", "F2"),
+    # R3, ratified 2026-08-27. Ruling R-A condition 2 requires the mutation
+    # proof to assert THE DEDICATED CODE surfaces, not merely that a refusal
+    # happened — `test_every_forbidden_edge_is_refused` already does exactly
+    # that (`refuse(..., FORBIDDEN_EDGE_CODES[edge])`), so the three CR1
+    # edges inherit the required shape rather than needing a new one.
+    "CR1": ("P1", "P2", "P3", "CR1"),
 }
 
 
@@ -1235,7 +1252,10 @@ def test_every_ratified_token_can_be_parsed():
                   "AX": ("P1", "P2", "P3", "A1"),
                   "P5": ("P1", "P2", "P3", "P4"), "F1": ("P1", "P2"),
                   "F2": ("P1", "P2", "P3"), "F2v": ("P1", "P2", "P3", "P4"),
-                  "F3": ("P1", "P2"), "T1": ()}[short]
+                  "F3": ("P1", "P2"), "T1": (),
+                  # R3 (ratified 2026-08-27): CR1 adjudicates a dangling
+                  # P3, so its chain prefix is whatever reaches P3.
+                  "CR1": ("P1", "P2", "P3")}[short]
         reg = Reg().chain(prefix)
         if short == "T1":
             reg.chain(("P1", "P2", "P3", "F2", "F3"))

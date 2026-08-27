@@ -22,12 +22,13 @@ SUPERSEDED_BY_R2_FOR_P3_ONLY`, "R1 记录本身仍在，未改写、未宣称无
 integrity check on R1's bytes remains correct. What was missing is
 everything about R2, and the diff that makes "correction-only" checkable.
 
-THE R3 TEST CHECKS A PROPOSAL, NOT A RATIFIED PROFILE. R3 is not approved
-and this file must never imply that it is. What it asserts is narrower and
-still worth having: the block in the proposal really is derived from R2's
-bytes by exactly the edits the proposal claims. A proposal whose own
-arithmetic is wrong should not reach a reviewer, and four of the five
-deliveries so far failed for reasons a machine could have caught.
+R3 WAS A PROPOSAL FOR SIX REVIEW ROUNDS AND IS NOW RATIFIED (2026-08-27,
+bound to doc HEAD 2728e43). While it was a proposal this file said in these
+words that R3 "is not approved and this file must never imply that it is" —
+kept here because the distinction is the point: what changed is one recorded
+approval, not the tests. The correction-only diff, the edge declarations and
+the boundary lines are asserted the same way before and after, which is why
+the ratification could be checked rather than trusted.
 """
 from __future__ import annotations
 
@@ -41,9 +42,17 @@ PROPOSAL = REPO / "ops" / "PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md"
 
 R1_SHA256 = "0a08319a408f068ce4c92f93c2c4c39e409937dddfd0ef9f7af43618c70b50a5"
 R2_SHA256 = "a3d40b7ce218294b75265622306bb91fc01081f98a0bacce8f8e86a3d3d8741d"
-#: PROPOSED, not approved. Named so nobody mistakes it for a ratified value.
-R3_PROPOSED_SHA256 = (
+#: RATIFIED 2026-08-27, bound to doc HEAD 2728e43. The name kept its
+#: `_PROPOSED_` spelling through six review rounds while R3 was a proposal;
+#: it is renamed here rather than left to mislead a reader who greps for it.
+R3_SHA256 = (
     "d40ad864571ec4773d68cdd4049b0eb8423da4cdf3fee7a145705f29c65f0d1d")
+R3_PROPOSED_SHA256 = R3_SHA256   # retained: older records cite this name
+CR1_GRAMMAR_SHA256 = (
+    "c251335f8d8c4dc89bce4ff7fb445f862d29a04b676bb3a90f6ef5ce5d5e3483")
+#: The commit Aaron's approval binds. Any later commit moves HEAD without
+#: moving this — that is the whole point of binding a commit and not a ref.
+R3_APPROVAL_DOC_HEAD = "2728e437b4c01ced97349e45077f2f87db7ac21d"
 
 #: §D.11.3's claim, now checkable.
 R2_EXPECTED_EDITS = 4
@@ -121,14 +130,52 @@ def test_no_approval_line_in_the_record_disagrees_with_another():
               for ln in text.splitlines()
               if ln.strip().startswith("APPROVED_PROFILE_ID=")}
     assert values == {"ND1_RECOMMENDED_PROFILE_R1",
-                      "ND1_RECOMMENDED_PROFILE_R2"}, (
+                      "ND1_RECOMMENDED_PROFILE_R2",
+                      "ND1_RECOMMENDED_PROFILE_R3"}, (
         "the ratification record's APPROVED_PROFILE_ID lines carry %r; the "
-        "record covers exactly the R1 approval and the R2 approval that "
-        "superseded it" % (sorted(values),))
-    r2_lines = text.count("APPROVED_PROFILE_ID=ND1_RECOMMENDED_PROFILE_R2")
-    assert r2_lines == 2, (
-        "the R2 approval id appears %d times, not 2; a changed count means "
-        "an approval line was added or lost" % r2_lines)
+        "record covers the R1 approval, the R2 approval that superseded it "
+        "for P3, and the R3 approval that superseded R2 for P3 and F3"
+        % (sorted(values),))
+    for rev, want in (("R2", 2), ("R3", 2)):
+        got = text.count("APPROVED_PROFILE_ID=ND1_RECOMMENDED_PROFILE_%s" % rev)
+        assert got == want, (
+            "the %s approval id appears %d times, not %d; a changed count "
+            "means an approval line was added or lost" % (rev, got, want))
+
+
+def test_the_ratification_record_carries_the_r3_approval():
+    """RATIFIED 2026-08-27. Four values, each verified against the bytes at
+    the bound commit before being recorded — not against the working tree,
+    and not accepted because the approval and the submission agreed (they
+    share an origin, so agreement between them proves nothing)."""
+    text = RATIFICATION.read_text(encoding="utf-8")
+    for line in ("APPROVED_PROFILE_ID=ND1_RECOMMENDED_PROFILE_R3",
+                 f"APPROVED_PROFILE_SHA256={R3_SHA256}",
+                 f"APPROVED_CR1_GRAMMAR_SHA256={CR1_GRAMMAR_SHA256}",
+                 f"APPROVAL_BINDS_DOC_HEAD={R3_APPROVAL_DOC_HEAD}",
+                 "ND1_PROFILE_R3_RATIFICATION=VALID"):
+        assert line in text, f"ratification record lost {line}"
+
+
+def test_r2_is_recorded_as_superseded_rather_than_deleted():
+    """Same append-only property R1 has. R3 supersedes R2 for P3 AND F3 —
+    R2 only touched P3, so the scope of supersession grew and the record
+    has to say by how much."""
+    text = RATIFICATION.read_text(encoding="utf-8")
+    assert "R2_STATUS=SUPERSEDED_BY_R3_FOR_P3_AND_F3_ONLY" in text
+    assert "APPROVED_PROFILE_ID=ND1_RECOMMENDED_PROFILE_R2" in text
+    assert f"APPROVED_PROFILE_SHA256={R2_SHA256}" in text, (
+        "R2's own approved digest must survive its supersession; the record "
+        "is extended, never rewritten")
+
+
+def test_the_approved_r3_bytes_still_hash_to_what_aaron_approved():
+    """The live-tree check. `test_the_proposal_r3_block_hashes_to_what_the
+    _proposal_declares` checks the proposal's self-consistency; this checks
+    that what is on disk today is still what was ratified."""
+    assert _digest(PROPOSAL.read_text(encoding="utf-8"), "R3") == R3_SHA256, (
+        "the R3 profile bytes changed; Aaron's 2026-08-27 approval no longer "
+        "covers this document")
 
 
 def test_r1_is_recorded_as_superseded_rather_than_deleted():

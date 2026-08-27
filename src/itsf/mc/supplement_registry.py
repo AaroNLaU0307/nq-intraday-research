@@ -426,6 +426,13 @@ FORBIDDEN_EDGE_CODES: Mapping[tuple, str] = MappingProxyType({
     ("P2S", "P3"): "p2s_to_p3_without_new_p2",
     ("P3", "P2S"): "p2s_after_p3",
     ("F2", "P3"): "f2_to_p3_in_place_retry",
+    # R-A = FULL. Ruling condition: each new edge carries a dedicated code,
+    # and the mutation proof must assert THE CODE surfaces, not merely that
+    # a refusal happened. If a code can never surface because an earlier
+    # check preempts it, FULL buys nothing and the ruling falls back to ZERO.
+    ("CR1", "P4"): "cr1_to_p4_forbidden",
+    ("CR1", "P5"): "p5_after_cr1",
+    ("CR1", "P3"): "cr1_does_not_revive_a_run",
 })
 
 REFUSAL_CODES = frozenset((
@@ -987,6 +994,14 @@ def _edge_code(prev: str, cur: str) -> str | None:
             return "p5_after_a1_without_a2"
         if prev == "AX":
             return "p5_after_ax"
+        # MEASURED before transcribing, 2026-08-27: without this branch
+        # ("CR1","P5") returns the generic `p5_predecessor_not_p4_or_a2`
+        # and its dedicated code never surfaces — the exact condition
+        # ruling R-A says would make FULL worthless. The branch is not a
+        # workaround invented to satisfy the ruling: A1 and AX sit in the
+        # same position and are handled the same way, two lines above.
+        if prev == "CR1":
+            return "p5_after_cr1"
         return "p5_predecessor_not_p4_or_a2"
     if prev == "AX" and cur != "F3":
         return "ax_successor_not_f3"

@@ -48,6 +48,37 @@ def _section(text: str, start: str, end: str) -> str:
     return text[text.index(start):text.index(end)]
 
 
+#: R3, ratified 2026-08-27. THE RATIFIED GRAMMAR NOW HAS TWO DOCUMENTS.
+#: §D.3.2 of the decision packet carries the original 13 events. CR1 could
+#: not be added there: the packet's bytes are what R1's and R2's
+#: `APPROVAL_BINDS_DOC_HEAD` bind, and editing it would invalidate both
+#: approvals — the R2 ratification record says exactly that. So R3 put
+#: CR1's grammar in its own canonical block, bound into the profile by
+#: `RECOMMENDED_CR1_GRAMMAR_SHA256`.
+#:
+#: Nothing in the transcription obligations anticipated that these
+#: derivation guards read a document which cannot contain CR1. The full
+#: suite found it.
+PROPOSAL = REPO / "ops" / "PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md"
+CR1_GRAMMAR_SHA256 = (
+    "c251335f8d8c4dc89bce4ff7fb445f862d29a04b676bb3a90f6ef5ce5d5e3483")
+
+
+def _cr1_grammar() -> dict:
+    """CR1's ratified grammar, read only after its bytes prove to be the
+    approved ones. Deriving from unverified bytes would turn this guard
+    into an assertion that the code matches whatever someone last wrote."""
+    text = PROPOSAL.read_bytes().decode("utf-8")
+    b, e = "BEGIN_ND1_CR1_GRAMMAR_R3\n", "END_ND1_CR1_GRAMMAR_R3"
+    block = text[text.index(b) + len(b):text.index(e)]
+    got = hashlib.sha256(block.encode("utf-8")).hexdigest()
+    assert got == CR1_GRAMMAR_SHA256, (
+        "the CR1 grammar bytes changed; Aaron's 2026-08-27 approval of "
+        f"{CR1_GRAMMAR_SHA256[:16]}... no longer covers them, so nothing "
+        "may be derived from this block")
+    return dict(ln.split("=", 1) for ln in block.splitlines() if "=" in ln)
+
+
 # ===========================================================================
 # 1. the ratification itself
 # ===========================================================================
@@ -116,14 +147,23 @@ def test_every_event_token_is_re_derived_from_the_ratified_document():
     code changes the MEANING of a sealed registry row, so it must not be
     possible to do it quietly."""
     sec = _section(_packet(), "### D.3.2 逐事件语法", "### D.3.3")
-    from_doc = set(re.findall(r"^TOKEN=([A-Z_]+)", sec, re.M))
-    assert from_doc == set(sc.EVENT_TOKENS)
-    assert len(from_doc) == 13
+    from_packet = set(re.findall(r"^TOKEN=([A-Z_]+)", sec, re.M))
+    assert len(from_packet) == 13, (
+        "§D.3.2 no longer carries exactly 13 tokens; the packet is bound by "
+        "R1's and R2's approvals and must not have been edited")
+    from_r3 = {_cr1_grammar()["CR1_TOKEN"]}
+    assert from_r3 == {"SUPPLEMENT_RUN_CRASH_RESOLVED"}
+    assert from_packet.isdisjoint(from_r3), (
+        "both ratified sources declare the same token; one was edited")
+    assert from_packet | from_r3 == set(sc.EVENT_TOKENS)
 
 
 def test_every_short_id_in_the_contract_appears_in_the_document():
     sec = _section(_packet(), "### D.3.2 逐事件语法", "### D.3.3")
+    cr1 = _cr1_grammar()
     for short_id in sc.EVENTS:
+        if short_id == cr1["CR1_SHORT_ID"]:
+            continue     # ratified in the R3 grammar block, verified above
         assert f"**{short_id} `" in sec or f"**{short_id} " in sec, \
             f"{short_id} is declared in code but not in §D.3.2"
 
@@ -142,13 +182,46 @@ def test_the_verification_failure_codes_are_the_documents_closed_set():
     assert from_doc == sc.VERIFICATION_FAILURE_CODES
 
 
-def test_the_two_terminals_and_the_two_traps_match_the_document():
+def test_the_two_terminals_and_the_three_traps_match_the_documents():
+    """Two terminals from §D.3.3; the traps now come from BOTH sources.
+
+    A1 and AX are the packet's; CR1 is R3's, and its non-terminality is
+    stated by `CR1_TERMINAL=NO` in the approved grammar block rather than
+    by anything in the packet."""
     sec = _section(_packet(), "### D.3.3", "### D.3.4")
     assert "AX_TERMINAL" not in sc.TERMINAL_SHORT_IDS
     assert sc.TERMINAL_SHORT_IDS == ("P5", "F3")
-    assert sc.NON_TERMINAL_TRAPS == ("A1", "AX")
+    assert sc.NON_TERMINAL_TRAPS == ("A1", "AX", "CR1")
     # the document must still say AX is NOT a terminal
     assert "`AX` | 只记录 Aaron 的" in sec or "AX_TERMINAL=NO" in _packet()
+    cr1 = _cr1_grammar()
+    assert cr1["CR1_TERMINAL"] == "NO", (
+        "the approved grammar makes CR1 terminal; it may not be a trap")
+    assert cr1["CR1_SHORT_ID"] not in sc.TERMINAL_SHORT_IDS
+
+
+def test_the_cr1_spec_matches_its_approved_grammar_field_for_field():
+    """The transcription itself, checked against the bytes it came from —
+    every field, not a sample. Written after the P3-successor half of this
+    transcription was left out and only the reachability guard caught it."""
+    cr1, spec = _cr1_grammar(), sc.EVENTS["CR1"]
+    assert spec.short_id == cr1["CR1_SHORT_ID"]
+    assert spec.token == cr1["CR1_TOKEN"]
+    assert spec.row_class == cr1["CR1_ROW_CLASS"]
+    assert spec.actor == cr1["CR1_ACTOR"]
+    assert spec.terminal is (cr1["CR1_TERMINAL"] == "YES")
+    assert spec.incident_required is (cr1["CR1_INCIDENT_REQUIRED"] == "YES")
+    assert spec.predecessors == tuple(
+        cr1["CR1_PERMITTED_PREDECESSOR"].split("|"))
+    assert spec.successors == tuple(
+        cr1["CR1_PERMITTED_SUCCESSOR"].split("|"))
+    assert spec.required_fields == tuple(
+        cr1["CR1_REQUIRED_FIELDS"].split("|"))
+    # and the other half of every edge, which is where I went wrong
+    for pred in spec.predecessors:
+        assert "CR1" in sc.EVENTS[pred].successors
+    for succ in spec.successors:
+        assert "CR1" in sc.EVENTS[succ].predecessors
 
 
 def test_p5_has_exactly_the_two_ratified_predecessors():

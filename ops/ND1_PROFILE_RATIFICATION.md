@@ -198,3 +198,89 @@ NOT_RESOLVED=N06 本身。批准 profile 不是通过验收；候选 HEAD 因本
 STILL_NO=supplement 执行、真实数据读取、目录创建、写探针、registry/exposure
          追加、MC 执行、策略 build —— 一律未授权。
 ```
+
+---
+
+*仅追加。以下为 R3 的批准记录；上方 R1 与 R2 的记录一字未改。*
+
+---
+
+## 9. `ND1_RECOMMENDED_PROFILE_R3` 批准记录（2026-08-27）
+
+```
+APPROVED_PROFILE_ID=ND1_RECOMMENDED_PROFILE_R3
+APPROVED_PROFILE_SHA256=d40ad864571ec4773d68cdd4049b0eb8423da4cdf3fee7a145705f29c65f0d1d
+APPROVED_CR1_GRAMMAR_SHA256=c251335f8d8c4dc89bce4ff7fb445f862d29a04b676bb3a90f6ef5ce5d5e3483
+APPROVAL_BINDS_DOC_HEAD=2728e437b4c01ced97349e45077f2f87db7ac21d
+ND1_PROFILE_R3_RATIFICATION=VALID
+R2_STATUS=SUPERSEDED_BY_R3_FOR_P3_AND_F3_ONLY（R2 记录本身仍在，未改写、未宣称无效）
+```
+
+### 9.1 Aaron 的批准（逐字）
+
+**与 R2 那次不同，Aaron 这次逐字给出了五行块本身**，不是「批准 R3」三个字：
+
+```
+APPROVED_PROFILE_ID=ND1_RECOMMENDED_PROFILE_R3
+APPROVED_PROFILE_SHA256=d40ad864571ec4773d68cdd4049b0eb8423da4cdf3fee7a145705f29c65f0d1d
+APPROVED_CR1_GRAMMAR_SHA256=c251335f8d8c4dc89bce4ff7fb445f862d29a04b676bb3a90f6ef5ce5d5e3483
+APPROVAL_BINDS_DOC_HEAD=2728e437b4c01ced97349e45077f2f87db7ac21d
+ND1_PROFILE_R3_RATIFICATION=VALID
+```
+
+**披露**：这五行的取值由 builder 在上一条消息中呈交，Aaron 逐字回贴。
+§8.1 那种「原话两个字、取值另附」的歧义在本次不存在。
+
+若 Aaron 认为绑定值应为别的取值，**在本文件末尾追加一行更正即可**，
+不得就地改写本节。
+
+### 9.2 builder 在记录之前的独立核验（未采信呈交值）
+
+**Aaron 的数字与 builder 呈交的数字一致并不构成核验**——两者同源。
+所以逐条对着**那个 commit 的字节**重算，不是对着工作树：
+
+```
+git show 2728e43:ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md
+```
+
+| 项 | 结论 |
+|---|---|
+| `2728e43` 存在，且为核验时的当前 HEAD | 是 |
+| 该 commit 为 doc-only | 是——`ops/R3_CROSS_FIELD_RECHECK_2026-08-27.md` ＋ `ops/README.md`，零代码零测试 |
+| R3 块在该 commit 的字节算得 `d40ad864…` | 相符 |
+| CR1 语法块在该 commit 的字节算得 `c251335f…` | 相符 |
+
+### 9.3 新增第三个字段的理由
+
+R1／R2 的批准块只有 `id + sha256 + doc head` 三项。R3 多一项
+`APPROVED_CR1_GRAMMAR_SHA256`，因为 R3 引入的 CR1 语法**不在 profile 块内**：
+它自成一个 canonical 块，profile 里以 `RECOMMENDED_CR1_GRAMMAR_SHA256` 一行绑定。
+
+绑定行落在 R3 哈希覆盖范围内，所以批准 `d40ad864…` **已经传递性地钉死了语法字节**
+——改语法一字即破 `c251335f…`，要修绑定行必改 R3 块即破 `d40ad864…`。
+第三项因此是**冗余的显式化，不是新的信任根**：它让冷读者不必先理解传递关系
+才能核对语法字节。
+
+该构造经决裁席审查后接受（`ops/RULING_FABLE_ITEM6_OPEN_2026-08-27.md` 的 R-B），
+附三条 CONDITIONS，**均已在批准之前执行完毕**。
+
+### 9.4 本批准的效力边界
+
+**与 R1／R2 完全一致，一条未松**：
+
+```
+SUPPLEMENT_EXECUTION_AUTHORIZED=NO
+REAL_DATA_READ_AUTHORIZED=NO
+DIRECTORY_CREATION_AUTHORIZED=NO
+WRITE_PROBE_AUTHORIZED=NO
+REGISTRY_EVENT_APPEND_AUTHORIZED=NO
+EXPOSURE_EVENT_APPEND_AUTHORIZED=NO
+MC_EXECUTION_AUTHORIZED=NO
+STRATEGY_BUILD_AUTHORIZED=NO
+```
+
+批准的是**语法与治理定义**，不是任何一次执行。R3 引入 CR1（崩溃裁定事件）这件事
+**不授权任何崩溃恢复动作**——它只是让「如果发生，用什么词表记它」有了定义。
+
+将来每一次真实执行仍需 Aaron 单独的、绑定完整 40 位 commit 的精确授权语句
+（决策包 §D.10.4）。
