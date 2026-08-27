@@ -418,6 +418,63 @@ def checkpoint_of(gate_name: str) -> str:
     return CHECKPOINT_OF[gate_name]
 
 
+#: N09 EXECUTION PATH R3 §5 — the precheck evidence's serializer, landing
+#: point, timing, and what a write failure becomes. The reviewer's Medium
+#: was that R2 required the table on disk and defined none of these four.
+#:
+#: SERIALIZER, named rather than implied. Three byte-identical canonical-JSON
+#: bodies exist in this package — `atoms.canonical_json`,
+#: `day_strata_supplement.canonical_json`, and `cold_reducer._canonical`,
+#: which R3 §5 called a third `canonical_json` and which is actually spelled
+#: with a leading underscore. Naming none of them would be tacit permission
+#: for a fourth. R3 explicitly does NOT fix the duplication (out of scope);
+#: it names the one this evidence uses so the set cannot grow because of N09.
+PRECHECK_EVIDENCE_SERIALIZER = "itsf.mc.atoms.canonical_json"
+
+#: LANDING POINT. A named file under the run's evidence directory, and it
+#: must be covered by the seal INVENTORY. R3's reason, which is the whole
+#: point: evidence outside the inventory cannot be verified after the seal,
+#: and unverifiable evidence is the same as absent evidence.
+PRECHECK_EVIDENCE_FILENAME = "mc_bundle_precheck.v1.json"
+PRECHECK_EVIDENCE_MUST_BE_IN_INVENTORY = True
+
+#: TIMING. Computed and written BEFORE the P3 append, bound exactly to
+#: `prepared.file_sha256`. R3: that the binding precedes P3 must be
+#: PROVABLE, not declared — which is why the decision below takes `has_p3`
+#: as an argument instead of consulting a flag it could have set itself.
+PRECHECK_EVIDENCE_BOUND_TO = "prepared.file_sha256"
+
+#: WHAT A WRITE FAILURE BECOMES. The post-P3 half is the reason this exists.
+EVIDENCE_WRITE_FAILURE_PRE_P3 = "F1"
+EVIDENCE_WRITE_FAILURE_POST_P3 = "INDETERMINATE"
+
+
+def decide_evidence_write_failure(*, has_p3: bool) -> str:
+    """R3 §5 — where the precheck evidence fails to land, and when.
+
+    WHY THIS IS NOT `plan_failure_event`. Router A decides F1 vs F2 by the
+    P3 boundary, and that is right for GATE failures. Measured on this
+    contract's own runner: a post-P3 failure routed through it returns
+    **F2**. For an evidence WRITE failure R3 §5 forbids exactly that —
+
+        P3 之后落盘失败 -> INDETERMINATE，走 Aaron
+                          不追加 F2、不重试、停机上交
+
+    same reasoning as the 08-25 reviewer's third point and as §2's
+    `archive_policy_a` finding: the state after P3 is an INDETERMINATE half
+    transfer, and folding it into an ordinary F2 records an unknown state as
+    a known one. F2 says "this is what happened". Nobody knows that here.
+
+    So this is a distinct failure class with its own decision, layered
+    beside the two routers rather than editing either. Nothing routes to it
+    yet — the scaffold refuses before any evidence is written — and that is
+    the point: the rule exists before the capability does, so the capability
+    cannot arrive without it.
+    """
+    return (EVIDENCE_WRITE_FAILURE_POST_P3 if has_p3
+            else EVIDENCE_WRITE_FAILURE_PRE_P3)
+
+
 #: DECISION-SEAT RULING, 第 1 件 of dec-four-owner-2026-08-27 — executor
 #: provenance, formalised rather than added.
 #:

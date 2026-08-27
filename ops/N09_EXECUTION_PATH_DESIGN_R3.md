@@ -369,3 +369,72 @@ prepare_real_mc_input      -> MC_RUN_AUTHORIZED（registry 语法词）
 属于改门语义，裁定明确不归 builder。
 
 **§7 的四项仍全部在 Aaron 手里，本节不触及其中任何一项。**
+
+---
+
+## 10. 2026-08-27 追加 —— §5 有机制了，且实测推翻了 §5 自己的三处事实陈述
+
+守卫：`tests/test_n09_precheck_evidence_rules.py`（22 项，五条变异全红）。
+合同层新增 `PRECHECK_EVIDENCE_*` 四条常量与 `decide_evidence_write_failure`。
+
+### 10.1 「三份同体的 canonical_json」—— **不同体**
+
+§5 写「本仓现存三份同体的 `canonical_json`」。实测：
+
+```
+atoms.canonical_json         sort_keys ensure_ascii separators  allow_nan=False
+cold_reducer._canonical      sort_keys ensure_ascii separators  allow_nan=False
+day_strata.canonical_json    sort_keys ensure_ascii separators  ← 没有 allow_nan
+```
+
+**后果是具体的**：`day_strata.canonical_json` 对 `NaN`／`Infinity`／`-Infinity`
+返回 `{"x":NaN}` 这类**不是合法 JSON**的字符串，另两份抛 `ValueError`。
+而它正是 `canonical_rows_digest`（supplement 行摘要）用的那一份 ——
+摘要可能取在非 JSON 的字节上，而冷读者用另两份复算时会**抛异常而非给出不同答案**。
+
+**这个发现是撞出来的，值得记下过程**：我先写的是「三份逐字节一致」那条测试，
+**它通过了** —— 因为用例里没有 NaN。**以错误的理由变绿**，正是这个仓平时在别处
+猎捕的那类缺陷，出现在一条为猎捕它而写的测试里。
+
+**未修，理由有两条**：§5 自己写明「R3 不修它（超出本设计范围）」；且摘要函数不是
+builder 可凭自己判断更改的东西 —— 已封存的每一个摘要都是用现在这一份取的。
+
+**已做的是把它钉住**：supplement 行的四个字段全为字符串或整数年份，float 进不来，
+所以 NaN 到不了。**加一个字段就红** —— 那正是这个分歧不再潜伏的时刻。
+
+### 10.2 名字：`cold_reducer.canonical_json` 实为 `_canonical`
+
+§5 把第三份写成 `cold_reducer.py:69` 的 `canonical_json`，那里的函数叫 `_canonical`。
+行号对，名字不对。**实质（三份并存）为真。** 记下来，免得后来者 grep
+`canonical_json` 只找到两份而以为 §5 把数目搞错了。
+
+**守卫因此按参数签名找，不按名字找** —— 一份换个名字加进来的第四份，
+名字基的扫描会走过去。
+
+### 10.3 数目：按签名找是**五份**，但那是两套合同
+
+`s0/runinfra.py` 另有两处同签名实现（`canonicalize_manifest_record`、
+`append_manifest_record`），**它们用 `ensure_ascii=False`** —— 与 MC 那三份相反。
+
+读它的 docstring 与冻结的 per-record schema：manifest 是 UTF-8 工件，
+`ensure_ascii=False` 是刻意的。**那是另一套 canonical 形式，不是第四份拷贝。**
+
+守卫因此**按合同分开计数**：MC 形式恰三份，manifest 形式恰两份。
+我的第一版把两套混成一套，会得到一条永远红的测试，
+**更糟的是会给出「把两套本该不同的合同统一起来」的论据**。
+
+### 10.4 §5 的失败处置：路由器 A 现在会给 F2
+
+```
+实测   plan_failure_event(..., has_p3=True)  ->  F2
+§5     P3 之后落盘失败 -> INDETERMINATE，不追加 F2、不重试、停机上交
+```
+
+路由器 A 对**门失败**判 F2 是对的；对**证据落盘失败**不是。
+与 §2 的 `archive_policy_a` 同形：**P3 之后是不确定的半转移，
+把它自动归入 F2 会让一个未知状态被记成一个已知状态。**
+
+因此 `decide_evidence_write_failure` 是一条独立的失败类决策，
+**层叠在两个路由器旁边，不改任何一个**。今天没有任何东西路由到它 ——
+骨架在证据被写之前就拒绝了 —— **而这正是要点：规则先于能力落地，
+能力就不能在没有规则的情况下到来。**
