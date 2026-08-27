@@ -82,6 +82,8 @@
 | [`RULING_SOL_N09_R2_HOLD_2026-08-26.md`](RULING_SOL_N09_R2_HOLD_2026-08-26.md) | **N09 执行路径设计 R2 复审结果 = HOLD**（3 High／1 Medium，四条全部经 builder 复现）＋裁定原文逐字转录。**此前该轮裁定只存在于聊天里**，2026-08-27 落盘。outcome-clean |
 | [`DECISION_PACKET_ITEM6_OPEN_FABLE.md`](DECISION_PACKET_ITEM6_OPEN_FABLE.md) | **第 6 项三个开放项的决裁包**（R-A 禁边 ZERO/FULL · R-B profile 行绑语法块的构造 · R-C 悬空 P3 的拒绝范围）。**R3 的 ratify 明确排除在外，仍是 `STILL_AARON_ONLY`。** 自带禁区清单与盲席检索禁令。outcome-clean |
 | [`RULING_FABLE_ITEM6_OPEN_2026-08-27.md`](RULING_FABLE_ITEM6_OPEN_2026-08-27.md) | **第 6 项三项开放项的裁定（生效）**：R-A=FULL · R-B=接受构造＋三条 CONDITIONS（已全部执行）· R-C=PER_ID_ONLY。**R3 的 ratify 仍 `STILL_AARON_ONLY`。** outcome-clean |
+| [`P2_AUTHORIZATION_PREPARATION.md`](P2_AUTHORIZATION_PREPARATION.md) | **N09 的 P2 要什么，以及为什么今天签了也生效不了**——四必填字段、四条实测阻断（无前驱／registry 追加未授权／目录创建未授权／执行路径仍是拒绝骨架）、正确顺序。**不签、不代填。** outcome-clean |
+| [`DECISION_PACKET_FOUR_OWNER_ITEMS.md`](DECISION_PACKET_FOUR_OWNER_ITEMS.md) | **Aaron 仅剩四件的决裁包**（P3 写者 · 目录创建四要素 · D-3 五项 · P2 排序与 P1 路径）。自带禁区清单。**P2 的签署与 verbatim 语句明令不可代裁。** outcome-clean |
 | [`R3_CROSS_FIELD_RECHECK_2026-08-27.md`](R3_CROSS_FIELD_RECHECK_2026-08-27.md) | **§7 路线的 builder 步骤**：R3 的 C1–C10 跨字段检查重跑（7 PASS／3 不适用／0 FAIL）＋ CR1 双向边闭合 ＋ 两个 canonical SHA-256。**批准未发生，`PROFILE_STATUS=PROPOSED_NOT_EFFECTIVE`。** outcome-clean |
 | [`N09_EXECUTION_PATH_DESIGN_R3.md`](N09_EXECUTION_PATH_DESIGN_R3.md) | **N09 执行路径设计 R3**——回应 R2 的 HOLD：三个 checkpoint 各自的副作用断言、冻结的 A1/F2/indeterminate 矩阵、钉死的 structural-only 调用图、precheck 证据规则。`BUILD_SCOPE=DEFAULT_REFUSE_SCAFFOLD_ONLY`，`STATUS=NOTHING_IMPLEMENTED`。outcome-clean |
 | [`A2_N09_SOL_EXPOSURE_AND_REDESIGN_2026-08-25.md`](A2_N09_SOL_EXPOSURE_AND_REDESIGN_2026-08-25.md) | N09 首轮：席位暴露 ＋ 非正式 REDESIGN |
