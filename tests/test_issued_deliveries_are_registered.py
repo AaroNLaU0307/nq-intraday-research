@@ -72,6 +72,28 @@ def _entries():
     return json.loads(REGISTER.read_text(encoding="utf-8"))["under_review"]
 
 
+def _in_head(rel):
+    """Is this path already recorded in HEAD?
+
+    THE DEADLOCK THIS RESOLVES, hit while creating the next packet. A
+    delivery must be registered, and a register entry needs `unchanged_since`
+    — the commit that last touched the path. For a file that has never been
+    committed there is no such commit, and the commit that would create one
+    is the commit this guard refuses. A new delivery could therefore never be
+    made without `--no-verify`, and a rule whose normal use requires
+    bypassing it is not a rule.
+
+    So the commit that INTRODUCES a delivery is allowed through, and every
+    commit after it is blocked until the register is armed. The exemption is
+    exactly one commit wide and closes by itself; nothing can sit issued and
+    unregistered, because the next commit — any commit — fails.
+    """
+    import subprocess
+    return subprocess.run(
+        ["git", "-C", str(REPO), "cat-file", "-e", "HEAD:" + rel],
+        capture_output=True).returncode == 0
+
+
 class TestEveryDeliveryDeclaresItsStatus(unittest.TestCase):
 
     def test_a_document_that_pins_bytes_says_whether_it_is_out(self):
@@ -109,13 +131,46 @@ class TestAnIssuedDeliveryIsArmed(unittest.TestCase):
             review = _REVIEW_ID.search(text)
             if not status or not review:
                 continue          # the tests above own that failure
+            rel = path.relative_to(REPO).as_posix()
+            if not _in_head(rel):
+                continue          # the commit that introduces it; see _in_head
             if status.group(1) == "ISSUED" and review.group(1) not in live:
-                unarmed.append(f"{path.relative_to(REPO).as_posix()} "
-                               f"(review_id {review.group(1)})")
+                unarmed.append(f"{rel} (review_id {review.group(1)})")
         self.assertEqual([], unarmed,
                          "these deliveries say ISSUED but the register is not "
                          "armed for them; a reviewer is holding bytes nothing "
                          "is protecting:\n  " + "\n  ".join(unarmed))
+
+    def test_the_new_file_exemption_is_exactly_one_commit_wide(self):
+        """The exemption in `_in_head` is the only way past this guard, so
+        its width is the thing to prove rather than assert.
+
+        Measured against the repository itself: every delivery that HAS been
+        committed is subject to the check. If that set were empty the
+        exemption would be unbounded and nobody would notice, because the
+        guard above would simply skip everything."""
+        committed = [p.relative_to(REPO).as_posix()
+                     for p, _t, _r in _deliveries()
+                     if _in_head(p.relative_to(REPO).as_posix())]
+        self.assertGreater(
+            len(committed), 8,
+            f"only {len(committed)} deliveries are in HEAD; the new-file "
+            "exemption is covering more than it should")
+
+    def test_a_delivery_in_head_is_not_exempt(self):
+        """Directly: pick a committed ISSUED delivery and confirm `_in_head`
+        says so, i.e. it went through the check rather than around it."""
+        issued_in_head = [
+            p.relative_to(REPO).as_posix()
+            for p, t, _r in _deliveries()
+            if (_STATUS.search(t) and _STATUS.search(t).group(1) == "ISSUED"
+                and _in_head(p.relative_to(REPO).as_posix()))]
+        armed = {e["review_id"] for e in _entries()}
+        for rel in issued_in_head:
+            text = (REPO / rel).read_text(encoding="utf-8")
+            self.assertIn(_REVIEW_ID.search(text).group(1), armed,
+                          f"{rel} is committed, ISSUED, and unarmed — the "
+                          "exemption did not cover it and must not")
 
     def test_every_registered_review_has_a_delivery_that_claims_it(self):
         """The other direction. A register entry for a review nobody issued
@@ -126,7 +181,7 @@ class TestAnIssuedDeliveryIsArmed(unittest.TestCase):
             review = _REVIEW_ID.search(text)
             status = _STATUS.search(text)
             if review and status and status.group(1) == "ISSUED":
-                claimed.add(review.group(1))
+                claimed.add(review.group(1))   # armed-or-not, it is live
         orphans = sorted({e["review_id"] for e in _entries()} - claimed)
         self.assertEqual([], orphans,
                          "the register is armed for reviews no ISSUED "
@@ -146,6 +201,8 @@ class TestAnIssuedDeliveryIsArmed(unittest.TestCase):
                 continue
             registered = by_review.get(review.group(1), set())
             me = path.relative_to(REPO).as_posix()
+            if not _in_head(me):
+                continue
             if me not in registered:
                 gaps.append(f"{me}: the delivery document itself is not "
                             "registered under its own review_id, so the "
