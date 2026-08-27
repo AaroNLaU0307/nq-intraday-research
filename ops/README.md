@@ -85,6 +85,7 @@
 | [`P2_AUTHORIZATION_PREPARATION.md`](P2_AUTHORIZATION_PREPARATION.md) | **N09 的 P2 要什么，以及为什么今天签了也生效不了**——四必填字段、四条实测阻断（无前驱／registry 追加未授权／目录创建未授权／执行路径仍是拒绝骨架）、正确顺序。**不签、不代填。** outcome-clean |
 | [`DECISION_PACKET_FOUR_OWNER_ITEMS.md`](DECISION_PACKET_FOUR_OWNER_ITEMS.md) | **Aaron 仅剩四件的决裁包**（P3 写者 · 目录创建四要素 · D-3 五项 · P2 排序与 P1 路径）。自带禁区清单。**P2 的签署与 verbatim 语句明令不可代裁。** outcome-clean |
 | [`RULING_FABLE_FOUR_OWNER_2026-08-27.md`](RULING_FABLE_FOUR_OWNER_2026-08-27.md) | **四件的裁定（生效）**：executor provenance 成文化（不加新字段）· 目录创建五槽 · D-3 五项逐项 · P2 排最后＋P1 走主代理手工。**含两条独立性披露与一条 STRONGEST_OBJECTION。** outcome-clean |
+| [`RULING_FABLE_SCOPE_AND_MIGRATION_2026-08-27.md`](RULING_FABLE_SCOPE_AND_MIGRATION_2026-08-27.md) | **两份边界裁定（生效）**：R3 骨架＝NARROW · `save_dir` 合同＝BOTH · 迁移路线＝A ＋ 十条不变量。**含 builder 对八条可证伪断言的逐条复现，以及三件两份裁定都没有的发现。** 模型同源性三连与机制来源两条披露留给 Aaron。outcome-clean |
 | [`DECISION_PACKET_SCOPE_AND_BOUNDARY.md`](DECISION_PACKET_SCOPE_AND_BOUNDARY.md) | **两个边界问题的决裁包**：R3 骨架可建到哪（NARROW/WIDE，裁定收尾句与 R3 §6 给了两个边界）· `save_dir` 合同的边界（LEXICAL_ONLY/RENDER_TIME/BOTH，三轮 HOLD 同一缺陷类）。跨 ITSF 与 qros-runtime 两仓。outcome-clean |
 | [`DECISION_PACKET_REGISTRY_MIGRATION.md`](DECISION_PACKET_REGISTRY_MIGRATION.md) | **registry 迁出 OneDrive 的设计与决裁包**。**头号发现：刚批准的 CR1 语法块（`c251335f…`）依赖 `ops/TRIAL_REGISTRY.md` 的 git 历史，而迁出仓库＝迁出 git——迁移方向与它相抵。** 三条路线 ＋ 六条不变量 ＋ 15 处路径构造盘点。`STATUS=DESIGN_ONLY`。outcome-clean |
 | [`DIRECTORY_CREATION_GRANTS.md`](DIRECTORY_CREATION_GRANTS.md) | **目录创建授权的 append-only 记录件**（第 2 件裁定所要求，由 builder 建）。**今天为空，`GRANTS_RECORDED=0`；建立本件不授权任何创建。** outcome-clean |

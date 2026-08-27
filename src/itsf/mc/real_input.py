@@ -27,9 +27,10 @@ def prepare_real_mc_input() -> "mcc.PreparedMCInput":
     gate until Aaron + Codex introduce the MC registry vocabulary."""
     from itsf.guards import G9_FLAG, SECOND_COPY_FLAG, assert_real_run_allowed
     assert_real_run_allowed(G9_FLAG, SECOND_COPY_FLAG)
-    registry = mcc._REPO_ROOT / "ops" / "TRIAL_REGISTRY.md"
-    mcc.authorize_real_mc(
-        registry.read_text(encoding="utf-8") if registry.exists() else "")
+    # Invariant 5 of dec-registry-migration-2026-08-27 — one construction
+    # site, and absence now refuses instead of reading as empty.
+    from .registry_boundary import read_snapshot
+    mcc.authorize_real_mc(read_snapshot().text)
     # --- unreachable today (authorize_real_mc always raises) -------------
     # R2.2 PHASE E: the SOLE formal entry — raw attestation bytes go in,
     # the authority is constructed and pinned INSIDE prepare_mc_input.

@@ -136,9 +136,10 @@ def run_supplement_production(*_a, **_k) -> NoReturn:
     deterministic refusal fires BEFORE any Development-data access, any
     output-root creation, or any registry event. Everything after the
     gate is unreachable until the vocabulary exists."""
-    registry = _REPO_ROOT / "ops" / "TRIAL_REGISTRY.md"
-    text = registry.read_text(encoding="utf-8") if registry.exists() else ""
-    authorize_supplement(text)
+    # Invariant 5 of dec-registry-migration-2026-08-27 — one construction
+    # site, and absence now refuses instead of reading as empty.
+    from .registry_boundary import read_snapshot
+    authorize_supplement(read_snapshot().text)
     raise AssertionError("unreachable: authorize_supplement always raises")
 
 

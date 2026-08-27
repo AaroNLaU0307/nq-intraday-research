@@ -170,3 +170,46 @@ builder 不自行选一种读法然后建到一半。
 
 **第 1 件的 CONDITIONS 在两种读法下都成立且未变**：运行时那一半（运行器真的追加）
 在临界区／单写不变量／torn-line 处置建成并经 fresh Sol PASS ＋ Aaron 授权之前不可建。
+
+---
+
+## 11. 收尾句被后续裁定澄清为 NARROW（CONDITIONS 3 要求的追加）
+
+```
+CLARIFIED_BY=dec-scope-boundary-2026-08-27 第 1 件，RULING=NARROW
+ADOPTED_BY_AARON=2026-08-27
+```
+
+§10 标出的那个差额（行生产／封存／归档）**已裁为不可建**。决裁席给的决定性理由
+不是「两种读法都说得通、选保守的」，而是更强的一条：
+
+> 若把收尾句读成对差额三样的授权，裁定内部即相抵（§4「运行时那一半不可建」
+> ＋ §9「八项全 NO」）；读成松散转述，全文自洽。**Aaron 追认的是整份裁定，
+> 而整份裁定只有一种自洽读法。追认一对互相矛盾的句子，不产生其中较宽那句的
+> 独立效力。**
+
+**并指出 builder 文档里一个真缺口**：R3 §6 给的机械判据是 AST 可达性（registry 写
+调用），**而封存／归档是磁盘写、不是 registry 调用**——那条判据对 WIDE 根本不够。
+是 builder 自己写的判据，builder 自己没发现它覆盖不了自己列的三样。
+
+### builder 执行 CONDITIONS 1 时的一条如实更正
+
+CONDITIONS 1 的原话是「`_test_only` hermetic 核心**保持现状**」。
+**builder 实测的「现状」与该措辞可能暗示的不同，如实记录**：
+
+```
+supplement_production.build_supplement_from_authority   存在，且调用 hermetic 核心
+   —— 自陈「从已封存 S0 输入到已封存 supplement 的唯一生产路径」
+supplement_runner（C_BUILD 执行路径）                    不 import、不调用它
+全仓除该模块自身外                                        零处调用
+```
+
+**所以 WIDE 的能力已经在树里，只是未接线**——与 `registry_witness.py` 同一形态：
+写好了、正确、**故意没接线**。
+
+NARROW 今天靠「没接线」满足，**不是靠「能力不存在」**。两者在今天等价，但若决裁席
+是按后者裁的，其理由基础与实际不同。**结论不受影响**（NARROW 仍成立，且这个事实
+让它更该成立），但下一份决裁包须带上此更正。
+
+守卫钉的正是这一点：`test_the_execution_path_does_not_reach_the_hermetic_core`
+——**接线必须打红，而不是静默通过**。变异实测：把核心接进 runner ⇒ 红。

@@ -116,8 +116,36 @@ def _read_text(path: Path) -> str:
 
     Deliberately one tiny function: the no-bypass test asserts that no
     other production module reads this path, and the behavioural test
-    counts calls HERE to prove one mediation performs exactly one read."""
-    return path.read_text(encoding="utf-8") if path.exists() else ""
+    counts calls HERE to prove one mediation performs exactly one read.
+
+    A MISSING FILE REFUSES; it does not read as an empty registry.
+
+    Ruling invariant 8 of dec-registry-migration-2026-08-27 found this,
+    and the consequence measured out exactly as the seat described:
+
+        missing file        -> "no supplement event chain exists for this
+                               id - NOT AUTHORIZED"
+        real registry, no
+        chain for that id   -> the SAME string, indistinguishable
+
+    So a path typo looked precisely like "not authorized yet". That is the
+    same defect shape as calling a crash "unauthorised" - a failure the
+    system cannot see, wearing the costume of a refusal it understands. It
+    matters most exactly when the path is about to change: after a
+    migration, one un-updated construction site would refuse quietly and
+    correctly-looking, forever.
+
+    Refusing loudly is safe here BECAUSE the empty string was never a
+    legitimate state: the governed registry has existed and been appended
+    to since the first trial, and an append-only file does not become
+    empty."""
+    if not path.exists():
+        raise BoundaryError(
+            "the governed registry is absent at %s. This is a refusal, not "
+            "an empty registry: an append-only file does not become empty, "
+            "so absence means the path is wrong or the file was lost - "
+            "never that nothing has been authorised yet." % path)
+    return path.read_text(encoding="utf-8")
 
 
 def read_snapshot(path: str | Path | None = None) -> RegistrySnapshot:

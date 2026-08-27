@@ -3238,8 +3238,9 @@ def run_real_mc(*_args, **_kwargs) -> "NoReturn":
     which refuses deterministically today. Unreachable beyond the gate."""
     from itsf.guards import G9_FLAG, SECOND_COPY_FLAG, assert_real_run_allowed
     assert_real_run_allowed(G9_FLAG, SECOND_COPY_FLAG)
-    from pathlib import Path
-    registry = Path("ops/TRIAL_REGISTRY.md")
-    text = registry.read_text(encoding="utf-8") if registry.exists() else ""
-    authorize_real_mc(text)
+    # Invariant 5 of dec-registry-migration-2026-08-27 — one construction
+    # site. This one also built a RELATIVE path, so it only resolved when
+    # the process happened to be running from the repository root.
+    from .registry_boundary import read_snapshot
+    authorize_real_mc(read_snapshot().text)
     raise AssertionError("unreachable: authorize_real_mc always raises")

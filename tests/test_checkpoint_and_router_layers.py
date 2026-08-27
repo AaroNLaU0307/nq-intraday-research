@@ -118,6 +118,62 @@ class TestTheLayersDoNotExecuteAnything(unittest.TestCase):
             with self.assertRaises(sr.SupplementRunnerError, msg=gate):
                 sr.GATES[gate](ctx)
 
+    def test_the_execution_path_does_not_reach_the_hermetic_core(self):
+        """RULING 1 CONDITIONS 1 of dec-scope-boundary-2026-08-27.
+
+        NARROW means the C_BUILD execution path may not derive rows or
+        seal. The capability EXISTS —
+        `supplement_production.build_supplement_from_authority` calls
+        `build_day_strata_supplement_test_only` and is documented as the
+        only production path from a sealed S0 input to a sealed supplement
+        — it is simply not wired to anything. Measured: nothing outside
+        that module calls it, and `supplement_runner` neither imports nor
+        calls it.
+
+        Same shape as `registry_witness.py`: written, correct, unwired,
+        and unwired ON PURPOSE. What the condition adds is that wiring it
+        must now go red rather than pass quietly.
+        """
+        import ast
+        from pathlib import Path
+        forbidden = {"build_day_strata_supplement_test_only",
+                     "seal_supplement_test_only",
+                     "build_supplement_from_authority",
+                     "supplement_production"}
+        runner = (Path(__file__).resolve().parents[1] / "src" / "itsf" /
+                  "mc" / "supplement_runner.py")
+        tree = ast.parse(runner.read_text(encoding="utf-8"))
+        docstrings = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                                 ast.AsyncFunctionDef)):
+                doc = ast.get_docstring(node, clean=False)
+                if doc is not None:
+                    docstrings.add(doc)
+        reached = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                if node.module and node.module.split(".")[-1] in forbidden:
+                    reached.append(f"import from {node.module} @L{node.lineno}")
+                for alias in node.names:
+                    if alias.name in forbidden:
+                        reached.append(f"import {alias.name} @L{node.lineno}")
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.split(".")[-1] in forbidden:
+                        reached.append(f"import {alias.name} @L{node.lineno}")
+            if isinstance(node, ast.Call):
+                name = getattr(node.func, "id", None) or getattr(
+                    node.func, "attr", None)
+                if name in forbidden:
+                    reached.append(f"call {name} @L{node.lineno}")
+        self.assertEqual([], reached,
+                         "the C_BUILD execution path now reaches row "
+                         "production or sealing; ruling 1 is NARROW and "
+                         "wiring these needs a NEW authorization, not a "
+                         "reading of an existing sentence:\n  "
+                         + "\n  ".join(reached))
+
     def test_the_layers_are_pure_lookups(self):
         """No I/O, no state: the same question twice gives the same answer,
         and neither call can have touched anything."""
