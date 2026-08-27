@@ -63,7 +63,37 @@ def _constructions(path: Path):
     return found
 
 
+#: `scripts/` is not the package, and the first version of this guard did
+#: not scan it. The migration-plan review found the gap: S6's "only one
+#: place to change" was not proven to cover registry WRITERS, and
+#: `scripts/s0_real_run.py` constructs the path itself at module level and
+#: reads it in two more places.
+#:
+#: It is registered rather than converged. The script is the real-run entry
+#: and its `CLEAN_GATE_ALLOWLIST_FILES` entry is GATE SEMANTICS the ruling
+#: said not to touch; folding its path construction into the boundary is a
+#: change to the real-run stack, not to this window's subject. So the
+#: exception is named, counted, and will fail if it grows.
+_KNOWN_SCRIPT_CONSTRUCTIONS = {
+    "scripts/s0_real_run.py": 2,   # REGISTRY constant + clean-gate allowlist
+}
+
+
 class TestOneConstructionSite(unittest.TestCase):
+
+    def test_scripts_constructions_are_exactly_the_registered_ones(self):
+        """Not zero — REGISTERED. A count that grows means a new writer
+        appeared outside the boundary, which is what would make a migration
+        miss a path."""
+        found = {}
+        for path in sorted((REPO / "scripts").rglob("*.py")):
+            hits = _constructions(path)
+            if hits:
+                found[path.relative_to(REPO).as_posix()] = len(hits)
+        self.assertEqual(_KNOWN_SCRIPT_CONSTRUCTIONS, found,
+                         "the set of registry-path constructions under "
+                         "scripts/ changed; a migration would have to find "
+                         "and update every one")
 
     def test_only_the_boundary_constructs_the_registry_path(self):
         offenders = []

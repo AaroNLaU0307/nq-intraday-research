@@ -111,6 +111,34 @@ class MediatedResolution:
 # The read
 # ---------------------------------------------------------------------------
 
+#: A tombstone is what the OLD path holds after a migration: a file that
+#: exists, is deliberately not a registry, and names where the real one
+#: went. It must be REFUSED LOUDLY and by its own name.
+#:
+#: The review of the migration plan found why. `_read_text` refuses an
+#: ABSENT file; a tombstone is PRESENT, so it read as a 97-byte snapshot and
+#: the downstream refusal was the same string a missing registry produces —
+#: "no supplement event chain exists for this id". A deliberate marker that
+#: reads as "nothing has been authorised yet" is the defect the absence
+#: check was added to close, wearing a different costume.
+#:
+#: Deliberately NOT "reject anything unparseable": a truncated or rolled-back
+#: registry is a different incident, and the anti-rollback witness is its
+#: designed detector. Widening this to cover that case would hide a real
+#: incident behind a path error.
+REGISTRY_TOMBSTONE_MARKER = "REGISTRY_MOVED_NOT_A_REGISTRY"
+
+
+def _assert_not_a_tombstone(path: Path, text: str) -> None:
+    if REGISTRY_TOMBSTONE_MARKER in text:
+        first = next((ln for ln in text.splitlines()
+                      if REGISTRY_TOMBSTONE_MARKER in ln), "")
+        raise BoundaryError(
+            "%s is a migration tombstone, not the registry: %r. The "
+            "canonical registry moved; this path must not be read as an "
+            "empty or unauthorised one." % (path, first.strip()[:160]))
+
+
 def _read_text(path: Path) -> str:
     """THE production read of the governed registry path.
 
@@ -145,7 +173,9 @@ def _read_text(path: Path) -> str:
             "an empty registry: an append-only file does not become empty, "
             "so absence means the path is wrong or the file was lost - "
             "never that nothing has been authorised yet." % path)
-    return path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8")
+    _assert_not_a_tombstone(path, text)
+    return text
 
 
 def read_snapshot(path: str | Path | None = None) -> RegistrySnapshot:

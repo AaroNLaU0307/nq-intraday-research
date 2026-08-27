@@ -76,6 +76,55 @@ class TestAbsenceRefuses(unittest.TestCase):
             self.assertEqual(0, snapshot.n_bytes)
 
 
+class TestATombstoneIsRefusedByName(unittest.TestCase):
+    """MIGRATION-PLAN REVIEW, HIGH/medium confidence — and it reproduced.
+
+    The absence check refuses a MISSING file. A migration tombstone is
+    PRESENT, so it read as a 97-byte snapshot and the downstream refusal was
+    the same string a missing registry gives: "no supplement event chain
+    exists for this id". A deliberate marker reading as "nothing has been
+    authorised yet" is the defect the absence check exists to close, wearing
+    a different costume.
+
+    NOT WIDENED TO "reject anything unparseable". A truncated or rolled-back
+    registry is a DIFFERENT incident and the anti-rollback witness is its
+    designed detector; folding it in here would hide a real incident behind
+    a path error. So the tombstone is refused by its own marker."""
+
+    def _tomb(self, body):
+        import tempfile
+        d = Path(tempfile.mkdtemp())
+        t = d / "TRIAL_REGISTRY.md"
+        t.write_text(body, encoding="utf-8")
+        return t
+
+    def test_a_tombstone_refuses(self):
+        t = self._tomb("%s\nMoved to the itsf-registry repository.\n"
+                       % rb.REGISTRY_TOMBSTONE_MARKER)
+        with self.assertRaises(rb.BoundaryError):
+            rb.read_snapshot(str(t))
+
+    def test_the_refusal_says_it_is_a_tombstone_not_an_empty_registry(self):
+        t = self._tomb("%s -> C:/new/place\n" % rb.REGISTRY_TOMBSTONE_MARKER)
+        try:
+            rb.read_snapshot(str(t))
+        except rb.BoundaryError as exc:
+            text = str(exc)
+        self.assertIn("tombstone", text)
+        self.assertIn("C:/new/place", text)
+
+    def test_an_ordinary_truncated_registry_is_still_read(self):
+        """The line this draws: truncation goes to the witness, not here."""
+        t = self._tomb("")
+        self.assertEqual(0, rb.read_snapshot(str(t)).n_bytes)
+
+    def test_the_real_registry_carries_no_marker(self):
+        """Otherwise the guard would refuse the live registry."""
+        repo = Path(__file__).resolve().parents[1]
+        text = (repo / "ops" / "TRIAL_REGISTRY.md").read_text(encoding="utf-8")
+        self.assertNotIn(rb.REGISTRY_TOMBSTONE_MARKER, text)
+
+
 class TestWhatTheDefectLookedLike(unittest.TestCase):
     """Pinned so the reason survives the fix.
 
