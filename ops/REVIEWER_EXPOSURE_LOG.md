@@ -206,3 +206,23 @@ outcome 暴露」，而那个值就在我送去给它读的文件里。它**先�
 **全部 Fable 5**。第 7 行席位自陈了这一点并要求 Aaron 知悉后再追认。
 缓解事实同样记录：本轮被裁的 HOLD 出自 fresh Sol（跨家族制衡在环内运转），
 且第 7 行席位在第 2 件上**站在 Sol 一侧推翻了同模型前席的缓解方案**。
+
+## 第 7、8 行的终分类 —— Aaron 2026-08-27 裁定
+
+两行的 `NOT_EXPOSED` 此前是**席位自评 ＋ builder 依同一依据的记录**。
+第 8 行席位在 `STILL_AARON_ONLY` 里把自己这一行的资格影响明确让给了 Aaron。
+**现由 Aaron 裁定，两行的分类不变，但依据从「自评」升为「已裁」。**
+
+| 行 | 终分类 | 依据（逐字） |
+|---|---|---|
+| 7 · 8 | **`NOT_EXPOSED`**，且**不影响未来 Stage I 资格** | 席位接触到的是**文件名与治理标识**（恢复锚名、N08 DROP、N00 保留、MC-REG-COLLISION-001 待批），**无任何一类 outcome 内容的值** —— revealed verdict · cumulative exposure count · endpoint spread value · zero-direction cell count · addendum feasibility assertion。按项目自己的准则「**文件名不是内容**」，不构成 outcome 暴露。`Aaron 2026-08-27；见 ops/OWNER_DECISIONS_2026-08-27.md ⑩` |
+
+**如实记录两句，不因已裁而省略：**
+
+**一、这是宽松的一边，且判断依据是席位自己的申报。** 若日后发现某席位的申报不完整，
+本裁定随之作废 —— 这一句写进裁定记录，不是 builder 的补充。
+
+**二、第 8 行的成因仍未被修掉。** 那个失效的隔离路径存在于 builder 的**持久记忆索引**里，
+它让每一个 fresh 席位启动时就带上一个已经不存在的路径。
+仓内的机械保障（`tests/test_cited_records_exist.py`）管不到记忆。
+**分类为 NOT_EXPOSED 不等于成因已消除。**
