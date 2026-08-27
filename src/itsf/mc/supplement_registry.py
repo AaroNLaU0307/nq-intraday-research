@@ -327,7 +327,15 @@ ALLOWED_NOTE_FIELDS: Mapping[str, tuple] = MappingProxyType(
 
 _HEX64_FIELDS = frozenset({"sealed_sha256", "rows_digest",
                            "day_universe_digest", "source_input_sha256",
-                           "local_seal_sha256", "attestation_sha256"})
+                           "local_seal_sha256", "attestation_sha256",
+                           # R3: CR1_FIELD_DOMAIN_registry_intact_verification
+                           # = SHA256_HEX64_OF_REGISTRY_BYTES_AS_READ_BEFORE...
+                           "registry_intact_verification"})
+
+#: Fields the ratified grammar pins to a single literal value. R3 gives CR1
+#: `CR1_FIELD_DOMAIN_dangling_event=P3`; a profile line that nothing enforces
+#: is a claim, not a constraint.
+_LITERAL_DOMAIN_FIELDS = {"dangling_event": "P3"}
 _HEX40_FIELDS = frozenset({"authorized_commit", "superseded_authorized_commit",
                            "successor_authorized_commit", "superseded_commit"})
 _INT_FIELDS = frozenset({"supersedes_event_sequence", "n_rows", "n_cells",
@@ -858,6 +866,11 @@ def _check_field_values(row, short_id, sid, fields) -> Refusal | None:
                        line_no=row.line_no)
 
     for key, value in fields.items():
+        want = _LITERAL_DOMAIN_FIELDS.get(key)
+        if want is not None and value != want:
+            return bad("field_outside_ratified_domain",
+                       f"{key}={value!r}; the ratified grammar pins it to "
+                       f"{want!r}")
         if key in _HEX64_FIELDS and not sc.HEX64_RE.match(value):
             return bad("digest_field_not_64hex",
                        f"{key}={value!r} is not a 64-hex digest")

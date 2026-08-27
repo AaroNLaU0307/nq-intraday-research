@@ -358,6 +358,56 @@ ND3_STILL_REFUSED_BY_NAME = tuple(
 TERMINAL_SHORT_IDS = ("P5", "F3")
 NON_TERMINAL_TRAPS = ("A1", "AX", "CR1")
 
+#: DECISION-SEAT RULING R-C (dec-item6-open-2026-08-27) = PER_ID_ONLY.
+#:
+#: Whether a chain's LAST event leaves the id able to start new work. A
+#: WHITELIST, deliberately: a blacklist would let any event added later
+#: default to permitted, which is backwards for a fail-closed stack. A new
+#: event lands on the refusing side until someone rules otherwise.
+#:
+#: NOT AN AUTHORIZATION. The name says `CHAIN_STATE_PERMITS_START`, not
+#: `START_ADMISSIBLE`, because this is one necessary condition among
+#: several — a run still needs a unique live P2, whose actor is Aaron.
+#:
+#: SCOPE IS PER-ID AND ONLY PER-ID. R-C considered blocking the whole MC
+#: entry whenever any id has a dangling P3 and refused to hard-code it:
+#: P3 is UNNUMBERED and consumes no exposure slot, so a dangling P3 is one
+#: id's unclosed lifecycle, not a registry-integrity event; real registry
+#: damage is already covered by conditional global fail-closed (the witness
+#: superset criterion, A_PRECHECK re-resolution). GLOBAL-BY-GOVERNANCE
+#: REMAINS AVAILABLE AND UNCHANGED — Aaron withholding every new P2 during
+#: an incident blocks everything, with no code and no un-wedging ruling.
+#: What the ruling refused was hard-coding that discretion, not the
+#: discretion.
+CHAIN_STATE_PERMITS_START = ("P1", "P2", "F1", "T1")
+
+#: Why each refusing state refuses, one distinct name per state — a
+#: reviewer asked for that explicitly, because "refused" alone cannot tell
+#: an operator whether to wait, re-authorize, or adjudicate.
+CHAIN_STATE_REFUSAL = MappingProxyType({
+    "P2S": "AWAITING_REAUTHORIZATION",
+    "P3": "ABANDONED_RUN",
+    "P4": "AWAITING_INDEPENDENT_VERIFICATION",
+    "A2": "AWAITING_INDEPENDENT_VERIFICATION",
+    "F2": "AWAITING_RETIREMENT",
+    "F2v": "AWAITING_RETIREMENT",
+    "A1": "AWAITING_ARCHIVE_RESOLUTION",
+    "AX": "AWAITING_RETIREMENT",
+    "CR1": "AWAITING_RETIREMENT",
+    "P5": "CLOSED_USE_A_NEW_ID",
+    "F3": "CLOSED_USE_A_NEW_ID",
+})
+
+
+def chain_state_refusal(last_short_id: str) -> str | None:
+    """`None` when the chain state permits a start; otherwise the named
+    reason. Fail-closed on an unknown event: a short id in neither table
+    refuses with a name that says so, rather than falling through."""
+    if last_short_id in CHAIN_STATE_PERMITS_START:
+        return None
+    return CHAIN_STATE_REFUSAL.get(last_short_id, "UNRULED_CHAIN_STATE")
+
+
 #: Edges the resolver must refuse even though both endpoints are legal
 #: events (§D.3.3 "不存在的边"). Kept as data so a test can assert the
 #: resolver rejects every one of them.

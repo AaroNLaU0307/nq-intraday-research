@@ -697,9 +697,18 @@ def plan_next_short_id(from_short_id: str, *, outcome: str,
             raise SupplementRunnerError("unknown_outcome",
                                         f"F1/{outcome!r}")
     elif from_short_id == "P3":
+        # R3, ratified 2026-08-27: a crash with no terminal event is
+        # adjudicated by CR1. Note this is the ONLY new outcome — a crash
+        # does not become a seal, a failure, or an archive problem, and
+        # FORBIDDEN_EDGES states the three it may not become.
         nxt = {"sealed_archive_ok": "P4",
                "sealed_archive_failed": "A1",
-               "post_start_failure": "F2"}.get(outcome, "")
+               "post_start_failure": "F2",
+               "crash_resolved": "CR1"}.get(outcome, "")
+    elif from_short_id == "CR1":
+        # Retirement is the only way out. The run is not revived — that is
+        # what ("CR1","P3") in FORBIDDEN_EDGES says positively.
+        nxt = "F3" if outcome == "retire" else ""
     elif from_short_id == "A1":
         nxt = {"recovered": "A2", "permanent": "AX"}.get(outcome, "")
     elif from_short_id == "P4":
@@ -743,10 +752,19 @@ def assert_chain_closed(short_ids: Sequence[str]) -> str:
         raise SupplementRunnerError("empty_chain", "no events")
     last = short_ids[-1]
     if last in sc.NON_TERMINAL_TRAPS:
+        # DERIVED FROM THE SUCCESSOR DATA, not a hardcoded table. The
+        # previous form was a two-branch ternary naming AX and A1, and
+        # adding CR1 to the traps made it tell a CR1 chain that "A1 must be
+        # followed by A2 or AX" — measured, 2026-08-27. That is the third
+        # time an event was added and a hand-maintained string went stale;
+        # the ratified successors already say what may follow, so they are
+        # what the message reads from.
+        successors = sc.EVENTS[last].successors
+        allowed = (" or ".join(successors) if successors
+                   else "nothing (its successor list is empty)")
         raise SupplementRunnerError(
             "chain_stops_at_non_terminal",
-            f"{last} is not a terminal; "
-            f"{'AX must be followed by F3' if last == 'AX' else 'A1 must be followed by A2 or AX'}")
+            f"{last} is not a terminal; {last} must be followed by {allowed}")
     if last not in sc.TERMINAL_SHORT_IDS:
         raise SupplementRunnerError("chain_not_closed", last)
     return last
