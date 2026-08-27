@@ -213,3 +213,23 @@ NARROW 今天靠「没接线」满足，**不是靠「能力不存在」**。两
 
 守卫钉的正是这一点：`test_the_execution_path_does_not_reach_the_hermetic_core`
 ——**接线必须打红，而不是静默通过**。变异实测：把核心接进 runner ⇒ 红。
+
+---
+
+## 12. §7 与 §5 所依据的一个前提，builder 事后查出是夸大的
+
+**§7 转录的决裁席原话一字未改，也不得改**——转录不因转录者事后发现前提有误而被改写。
+
+但那段话里的「本项目已经因云同步残渣烧过一次 trial」与「已经兑现过的风险」，
+**其事实基础来自 builder 写进决裁包的一句错话**。实测：
+
+```
+ops/TRIAL_REGISTRY.md 中 BURNED / ABORTED / VOID 事件数    0
+S0-T001                                                   成功封存
+```
+
+L-5 是真实**缺陷**，R5 是真实**事故**，而「烧掉一次 trial」是缺陷的**机制**
+（`D3_REGISTRY_WRITER_PROPOSAL` §2.4 原文用的是「**会让**」）。
+
+**这削弱了拒绝路线 C 的力度**，也改变了 §7 自陈弱点的分量。
+全文见 `ops/CORRECTION_NO_TRIAL_WAS_BURNED_2026-08-27.md`。

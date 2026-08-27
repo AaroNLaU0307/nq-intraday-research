@@ -16,8 +16,17 @@ AUTHORIZATIONS_STILL_NO=八项全部；DIRECTORY_CREATION_AUTHORIZED=NO 尤其�
 
 ## 1. 为什么要迁 —— 一句话与一个环境事实
 
-registry 是 append-only 的事件真相源，而它今天在**主动同步的 OneDrive 树**里。
-本项目**已经因云同步残渣撞上 exact-set 磁盘不变量烧掉过一次 trial**（L-5）。
+registry 是 append-only 的事件真相源，而它今天在一棵 **OneDrive 树**里。
+
+**同步是休眠的，不是活跃的**（Aaron 2026-08-27 指出，builder 实测证实）：仓内
+文件属性只有 `Archive`，无 `Offline`／`ReparsePoint`／`RecallOnDataAccess`；
+全仓零个冲突副本；主客户端 `OneDrive.exe` 未运行；最后登录 2026-01-06。
+**但账户仍配置着，OneDrive 根与其下 `Desktop` 都是重解析点——一次登录就会把
+这棵树纳入管理。风险是「一步之遥」，不是「不可能」。**
+L-5 是**真实缺陷**（2026-08-10 裁定），其机制**会**让同步残渣撞上 exact-set
+磁盘不变量并烧掉一次 trial。**更正：至今没有 trial 被烧掉过**，registry 里
+`BURNED/ABORTED/VOID` 事件数为 0——builder 此前把机制写成了已发生的事故，
+见 `ops/CORRECTION_NO_TRIAL_WAS_BURNED_2026-08-27.md`。
 
 **一个 builder 实测的环境事实，说明这不是「有人把仓放错了地方」**：
 
@@ -25,11 +34,12 @@ registry 是 append-only 的事件真相源，而它今天在**主动同步的 O
 HKCU\...\User Shell Folders
   Desktop  -> C:\Users\Aaron\OneDrive\Desktop        ← 已知文件夹重定向
   Personal -> C:\Users\Aaron\OneDrive\Documents
-OneDrive.Sync.Service 运行中
+OneDrive.Sync.Service 运行中（注意：这是服务组件，不是同步客户端本身）
 ```
 
-**这台机器上的桌面就是 OneDrive。** 任何放在桌面下的仓都在同步树里，与放置者的
-选择无关——所以「注意别放进去」不是可行的缓解，迁出才是。
+**这台机器上的桌面就是 OneDrive。** 任何放在桌面下的仓都落在 OneDrive 树里，
+与放置者的选择无关——所以「注意别放进去」不是可行的缓解。**这一条不因同步休眠
+而变假**：休眠可以结束，重定向不会。
 
 `ops/REGISTRY_SYNC_FAILURE_MODEL.md` §6 早已写明：**迁出同步树是结构性关死那个
 窗口的唯一办法。**
