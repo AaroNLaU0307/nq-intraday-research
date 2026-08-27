@@ -185,6 +185,59 @@ class TestAnIssuedDeliveryIsArmed(unittest.TestCase):
                           f"{rel} is committed, ISSUED, and unarmed — the "
                           "exemption did not cover it and must not")
 
+    def test_no_armed_review_already_has_a_verdict_on_disk(self):
+        """THE ONE THAT WOULD HAVE CAUGHT THREE OF TODAY'S FOUR REPEATS.
+
+        The pattern, four times on 2026-08-27: a review returns, the builder
+        starts repairing what it found, and the register is still armed on
+        the very files being repaired. The freeze guard catches it — after
+        the edits, sometimes minutes later, once at full-machine-check time.
+        The rule it enforces is right; what was missing is the rule ABOUT
+        the rule:
+
+            a review whose verdict is already on disk is over,
+            and an over review must not still be armed.
+
+        Detected without inventing a convention: an outcome record is an
+        ops document that names the review_id and carries a RULING= or
+        VERDICT= line, and is not the delivery document itself. Once that
+        exists the register entry is stale by construction — nobody holds
+        those bytes any more, and leaving them frozen only means the next
+        repair collides with a review that already finished.
+
+        Ordering, written down so it stops being folklore:
+        verdict returns -> clear the register -> then repair.
+        """
+        entries = _entries()
+        if not entries:
+            return
+        # This guard's own premise. `test_no_vacuous_guards` flagged the
+        # sister-repository version of it within minutes of it being
+        # written, for asserting over a glob it never proved was non-empty.
+        records = sorted(OPS.glob("*.md"))
+        self.assertGreater(len(records), 40,
+                           "the verdict scan reached %d ops records; at that "
+                           "count it proves nothing" % len(records))
+        armed = {e["review_id"] for e in entries}
+        docs = {e["path"] for e in entries
+                if e.get("role", "delivery") == "delivery"}
+        verdict = re.compile(r"^(RULING|VERDICT)=", re.M)
+        over = set()
+        for path in records:
+            rel = path.relative_to(REPO).as_posix()
+            if rel in docs:
+                continue
+            text = path.read_text(encoding="utf-8")
+            review = _REVIEW_ID.search(text)
+            if not review or review.group(1) not in armed:
+                continue
+            if verdict.search(text):
+                over.add("%s: already ruled in %s" % (review.group(1), rel))
+        self.assertEqual([], sorted(over),
+                         "the register is armed for reviews that are already "
+                         "over; clear it BEFORE repairing, not after the "
+                         "freeze guard notices:\n  " + "\n  ".join(sorted(over)))
+
     def test_every_registered_review_has_a_delivery_that_claims_it(self):
         """The other direction. A register entry for a review nobody issued
         is a stale entry, and stale entries are how a register stops being
