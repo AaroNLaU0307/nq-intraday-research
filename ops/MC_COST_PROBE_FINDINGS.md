@@ -2,7 +2,7 @@
 
 ```
 RECORD_TYPE=MEASUREMENT_FINDING
-SPLIT_FROM=ops/ND2_ND3_RULING_REVIEW_FINDINGS.md
+SPLIT_FROM=ND2_ND3_RULING_REVIEW_FINDINGS.md（已隔离，见 ops/OUTCOME_CARRYING_ARTIFACTS.json；不得打开）
 WHY_SPLIT=该文件已交付 Sol 审查；交付出去的工件在审查期间不可变。
           追加新发现必须开新记录，与 registry 的 append-only 同纪律。
 SCRIPT=scripts/mc_cost_probe.py

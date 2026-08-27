@@ -1,11 +1,11 @@
 > **已并入，2026-08-25。** 下列五项已全部写进
-> `ops/MC_TO_STRATEGY_MASTER_PLAN.md` §15.1。本文件保留为历史记录，
+> `MC_TO_STRATEGY_MASTER_PLAN.md`（已隔离，见 ops/OUTCOME_CARRYING_ARTIFACTS.json；不得打开） §15.1。本文件保留为历史记录，
 > **不要再并入一次**；解冻条件（登记表清空）当时已满足。
 
 # 待并入主计划恢复锚的内容（§15）
 
 ```
-WHY_PENDING=ops/MC_TO_STRATEGY_MASTER_PLAN.md 目前登记在
+WHY_PENDING=MC_TO_STRATEGY_MASTER_PLAN.md（已隔离，见 ops/OUTCOME_CARRYING_ARTIFACTS.json；不得打开） 目前登记在
             ops/ARTIFACTS_UNDER_REVIEW.json，审查期间不可改动。
 UNFREEZE_WHEN=Sol 的委托裁定返回，条目从登记表移除之后。
 ```

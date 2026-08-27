@@ -10,7 +10,7 @@ REQUESTED_BY=Aaron，2026-08-25：「你自己做完整的 read-only provenance 
 ```
 
 **本审计未做**：零真实数据读取；零执行；零 registry／exposure 事件；零目录
-创建；未读 `ops/S0_T001_RESULT_DECISION_ADDENDUM.md` 与 `EXPOSURE_LEDGER.md`
+创建；未读 `S0_T001_RESULT_DECISION_ADDENDUM.md`（已隔离，见 ops/OUTCOME_CARRYING_ARTIFACTS.json；不得打开） 与 `EXPOSURE_LEDGER.md`
 的揭盲行；未重建任何缺失内容；未把新定义写成旧 authority。
 
 ---
@@ -142,7 +142,7 @@ candidate-specific strategy build。**
 | `Quant trade\` 下全部 14 个仓 | `STRATEGY_COUNCIL` 只出现在 ITSF 内 |
 | 文件名搜索 round4／council／joint matrix／联合矩阵（全盘 maxdepth 4） | 只有我自己的 `N06_ROUND4_SOL_PROMPT.md`（无关） |
 
-**一条待 Aaron 亲自核的线索**：`ops/S0_T001_RESULT_DECISION_ADDENDUM.md:40`
+**一条待 Aaron 亲自核的线索**：`S0_T001_RESULT_DECISION_ADDENDUM.md`（已隔离，见 ops/OUTCOME_CARRYING_ARTIFACTS.json；不得打开） 第 40 行
 含单个词 `recapture`（用 `-o` 只取匹配词，未读该行、未读第 26 行）。单次出现
 不构成候选定义，但该文件 Aaron 可自由阅读，值得他扫一眼。
 
