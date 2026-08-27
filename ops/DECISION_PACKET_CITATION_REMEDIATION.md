@@ -27,7 +27,8 @@ SUBAGENT_OR_WORKFLOW_BUDGET=0
 
 ## 0. 处境
 
-`ops/*.md`（94 份）里有 15 处 `ops/X` 形式的路径引用不可达。4 处合法（行文占位、
+83 份 `ops/*.md` 共引用 94 条不同的 `ops/` 路径，其中 **15 条不可达**。
+（`94` 是被引路径数，不是文档数 —— builder 初稿写反了，此处已更正。）4 处合法（行文占位、
 方案提出的路径）。**11 处是真问题，且分两类，处理方式很可能不同。**
 
 builder 已建机械保障把当前状态钉死（不会增长），**但一条引用都没改** —— 见 §4，
@@ -39,10 +40,9 @@ builder 已建机械保障把当前状态钉死（不会增长），**但一条�
 
 | SHA-256 | 字节 | 路径 |
 |---|---|---|
-| `c2d51f80dce7a8aa47f274fd1867c4404ef30d53cb52c7cb30e00a8c04e014a0` | `4873` | `ops/FINDINGS_DANGLING_CITATIONS_2026-08-27.md` |
-| `eb3b089f30f3a6b6c3dfb371e27733eb959d02323f031fa8a1c0801a3f1b67fb` | `13128` | `tests/test_cited_records_exist.py` |
+| `ae0e5f84ce472d1ba664288bf3f88592f762ef80a051e13b057e27219fd918c2` | `5446` | `ops/FINDINGS_DANGLING_CITATIONS_2026-08-27.md` |
+| `5d51755f67b69b021f40ef4ead3f0cd6af2af3b15b37c06d5c722e8076158a43` | `13656` | `tests/test_cited_records_exist.py` |
 | `a61c125b4e2e551955ce59816c9ccbc6a449a91d7f7701095eeb586e5c155f4b` | `2563` | `ops/OUTCOME_CARRYING_ARTIFACTS.json`（权威禁区表） |
-| `5d6e8b65b4a7f9d030d13a074f40a9c388bad763e17c610b9c529d14e5634745` | `10350` | `ops/D124_RULINGS_CLEAN_EXTRACT.md`（争议焦点文档） |
 
 任一条不匹配 ⇒ STOP。
 
@@ -116,7 +116,14 @@ ops/ND2_ND3_FABLE_DECISION_PROMPT.md        ops/S0_T001_RESULT_DECISION_ADDENDUM
 
 **请裁三选一**，若选 PER_DOCUMENT，**请给出分类判据本身**（builder 不自拟）。
 
-### 争议焦点：`ops/D124_RULINGS_CLEAN_EXTRACT.md`（已随包）
+### 争议焦点：`ops/D124_RULINGS_CLEAN_EXTRACT.md`（**刻意未随包钉字节**）
+
+**为什么不钉**：把它登记进本轮，就会把它拉进
+`test_delivery_names_no_quarantined_path` 的扫描范围，而该守卫自己写明拒绝这一点
+——「让它们通过就意味着往它里面写 OFF-LIMITS 标记，而它的全部价值就在于是一份
+没人可以打开、因而没人可以 diff 的裁定的逐字副本。一条只能靠篡改转录来满足的
+守卫是错的守卫。」**要它的字节请按 PULL_PROTOCOL 向工作会话索取**，不要自行打开
+或搜索。
 
 这份是**刻意做成 outcome-clean 的裁定摘录**，目的正是让席位不必去碰隔离原件。
 它当前引用两个陈旧路径（对应实体均在禁区表上，不得打开）：

@@ -36,13 +36,15 @@ DELIVERY_STATUS=RETURNED
 
 ```
 扫描集合   ops/*.md（非递归 —— 隔离子树是引用的「目标」，不是「来源」）
-文档数     94
+被扫文档   83 份 ops/*.md（测量时 80，本轮新增三份后重测）
+被引路径   94 条不同的 ops/ 路径（**这个 94 一度被 builder 误写成「文档数」，
+           已改；两个量都列出，免得下一个读者再混**）
 提取式     `?(ops/[A-Za-z0-9_./-]+\.(?:md|json|py))`?
 判据       (REPO / ref).exists() 为假即计入
 历史判据   git log --all --diff-filter=AD -- <ref>  无输出 ⇒ 从未增删
 ```
 
-守卫：`tests/test_cited_records_exist.py`（11 测试，四类变异全部证红）。
+守卫：`tests/test_cited_records_exist.py`（14 测试；八类变异全部证红，见 §5）。
 
 ---
 
@@ -98,8 +100,7 @@ ops/migration-2026-08-27/registry-snapshot-pre-migration.md
 **没有改动任何一条引用。** A 类看似只是路径打错，实则不是：
 `D124_RULINGS_CLEAN_EXTRACT.md` 是**刻意做成 outcome-clean 的摘录**，把它的引用
 改指进隔离区，与它存在的目的相反；而 `DECISION_PACKET_*` 里点名隔离路径反而是
-现行惯例（S5/R4 包 §2 就逐字点名 `ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md`
-作为禁区）。**同一处改动，在不同文档里是相反的正确做法。**
+现行惯例（S5/R4 包 §2 就把 `ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md` 逐字点名为**禁区、不得打开**）。**同一处改动，在不同文档里是相反的正确做法。**
 
 这属于隔离纪律的判断，不是路径纠错。本周已两次为「实现者自行挑一种读法」付过代价
 （第六轮 HOLD 的 Finding 1；S5 文件名）。不再自选。
@@ -119,6 +120,10 @@ tests/test_cited_records_exist.py
   隔离件被降级成「行文占位」       -> 红   ← 首版有此洞，变异测出后补上
   谎称某件在隔离区里              -> 红
   扫描返回空                     -> 红   ← 本文件自身受同一条规矩约束
+  禁区表为空／含悬空路径           -> 红
+  隔离区里有未申报的文件           -> 红
+  隔离区扫描为空                   -> 红   ← 首次全套运行时由 test_no_vacuous_guards
+                                            报出：本守卫自己犯了它所查的那个错
 ```
 
 **当前状态被钉死：不会增长，但也不会自行消失。**
