@@ -4,8 +4,49 @@
 > 你不必再去 `ops/` 里认哪个是最新的 prompt。
 
 ```
-UPDATED = 2026-08-26（两份交付同时挂着：第 6 项→Sol 复核，其余→Fable 决裁）
+UPDATED = 2026-08-27（R3 已批准并转录；builder 侧的 DAG 已见底）
 ```
+
+---
+
+## 先读这一段 —— 2026-08-27 之后的状态
+
+**R3 已由 Aaron 批准**（`ops/ND1_PROFILE_RATIFICATION.md` §9，绑 doc HEAD
+`2728e43`），**CR1 已转录进生产代码**，Fable 的三项裁定（R-A=FULL、R-B=接受构造、
+R-C=PER_ID_ONLY）**能执行的部分全部执行完毕**。ITSF 全量 4290/0。
+
+**builder 这边已经没有可独立推进的 DAG 节点了。** 恢复锚 §4 明写：N09 需 Aaron 的
+P2；N10 依赖 N09 的真实执行；N11 从未实现；N13 依赖 N11。
+
+### 只剩四件，全在 Aaron 手上
+
+```
+1. P3 与失败事件的写者是谁 —— D-3 的核心矛盾：已批准 actor 表派给 runner，
+   而全局边界 4 写「只有主代理写 registry」。两条已批准规则相抵。
+   建议交决裁席（提案是 builder 写的，不宜自裁）。
+2. 目录创建授权的四要素 —— 来源／actor／精确文本／commit 绑定／有效期。
+   builder 可备模板；填写与生效是 Aaron 的。
+3. D-3 的五项 UNRESOLVED_FOR_AARON —— 见 ops/RULING_SOL_D3_HOLD_2026-08-26.md。
+4. N09 的 P2 —— §D.10.4 要求 Aaron 单独的、绑定完整 40 位 commit 的精确语句。
+   builder 不得代填（常设禁令「不填 P2 占位符」未撤销）。
+```
+
+**三条独立授权仍不得合并**（ND1）：目录创建 / 写探针 / 执行。
+`DIRECTORY_CREATION_AUTHORIZED=NO` 时，签了 P2 也不能建 `supplements\` 子树。
+
+### qros-runtime 第二维护窗：开着，第 3 轮在飞
+
+```
+提示词  build-evidence/PROMPT_WINDOW2_SOL_ROUND3.md
+钉子    REVIEWED_SET_UNCHANGED_SINCE=7ca707e
+状态    第 1、2 轮均 HOLD 并已 reproduce-first 修复；956/22/25 全 PASS
+闭窗    未做 —— ITSF 注册表未切、偏离记录未闭合、过渡形 B 继续有效、
+        GRAD 试点被互斥挡着。这几项两轮都列为 UNRESOLVED_FOR_AARON
+```
+
+---
+
+## 以下为 2026-08-26 的记录，保留不改
 
 ---
 
