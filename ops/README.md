@@ -90,6 +90,7 @@
 | [`DECISION_PACKET_REGISTRY_MIGRATION.md`](DECISION_PACKET_REGISTRY_MIGRATION.md) | **registry 迁出 OneDrive 的设计与决裁包**。**头号发现：刚批准的 CR1 语法块（`c251335f…`）依赖 `ops/TRIAL_REGISTRY.md` 的 git 历史，而迁出仓库＝迁出 git——迁移方向与它相抵。** 三条路线 ＋ 六条不变量 ＋ 15 处路径构造盘点。`STATUS=DESIGN_ONLY`。outcome-clean |
 | [`REGISTRY_MIGRATION_PLAN_ROUTE_A.md`](REGISTRY_MIGRATION_PLAN_ROUTE_A.md) | **路线 A 迁移方案 R2**（fresh Sol 判 HOLD 后修订）：新增 FENCE 静默期＋双向核对、S4 采纳复审席拓扑、S8 改成可执行备份合同。**S5 悬置——裁定给的副本文件名撞边界 (2)，整个方案今天不可执行。** `STATUS=PLAN_ONLY`。outcome-clean |
 | [`CORRECTION_NO_TRIAL_WAS_BURNED_2026-08-27.md`](CORRECTION_NO_TRIAL_WAS_BURNED_2026-08-27.md) | **builder 自纠**：把 L-5 缺陷的**机制**（「会烧掉一次 trial」）写成了**已发生的事故**。实测 registry 里 `BURNED/ABORTED/VOID` 为 0。**两份裁定拒绝路线 C 的力度部分来自这句错话。** 另附 OneDrive 同步休眠的实测。outcome-clean |
+| [`DECISION_PACKET_S5_AND_R4.md`](DECISION_PACKET_S5_AND_R4.md) | **复审席退回的两件**：S5 回滚副本的形式（**裁定给的文件名撞边界 (2)，缺陷在裁定里**）· CR1「所指已移」要不要走 R4（复审席比决裁席严，builder 倾向复审席）。另请它复核 builder 已修的五条。outcome-clean |
 | [`ERRATUM_TO_MIGRATION_PLAN_REVIEW.md`](ERRATUM_TO_MIGRATION_PLAN_REVIEW.md) | **致正在飞的那轮迁移方案复审的勘误**——送审版含 builder 写错的一句；明说不必 STOP，并让复审席自选「纳入本轮」或「另计」。附改后新哈希。outcome-clean |
 | [`PROMPT_MIGRATION_PLAN_SOL_REVIEW.md`](PROMPT_MIGRATION_PLAN_SOL_REVIEW.md) | **迁移方案的 fresh Sol 复审提示词**——六个攻击面，含决裁席自陈的最弱处（「所指已移」治理缓解 vs R4）。**开篇告知：裁路线的席位对本方案设计有实质贡献、已自陈失格，跨家族独立审查由本轮恢复。** outcome-clean |
 | [`DIRECTORY_CREATION_GRANTS.md`](DIRECTORY_CREATION_GRANTS.md) | **目录创建授权的 append-only 记录件**（第 2 件裁定所要求，由 builder 建）。**今天为空，`GRANTS_RECORDED=0`；建立本件不授权任何创建。** outcome-clean |
