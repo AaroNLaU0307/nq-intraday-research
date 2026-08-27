@@ -106,6 +106,16 @@ class TestRouting(unittest.TestCase):
         self.assertEqual(["archive_policy_a"], on_b)
 
 
+#: THE SINGLE SOURCE. Two tests need this set: the one that forbids these
+#: names in the execution path, and the one that proves they are real symbols
+#: (without which the first is vacuous). Spelling it twice let a typo in the
+#: forbidding copy pass BOTH — measured, not supposed.
+HERMETIC_CORE_SYMBOLS = ("build_day_strata_supplement_test_only",
+                         "seal_supplement_test_only",
+                         "build_supplement_from_authority",
+                         "supplement_production")
+
+
 class TestTheLayersDoNotExecuteAnything(unittest.TestCase):
     """Scope, asserted rather than promised."""
 
@@ -117,6 +127,33 @@ class TestTheLayersDoNotExecuteAnything(unittest.TestCase):
         for gate in sc.GATE_TABLE["C_BUILD"]:
             with self.assertRaises(sr.SupplementRunnerError, msg=gate):
                 sr.GATES[gate](ctx)
+
+    def test_the_forbidden_names_are_real_symbols(self):
+        """THE PREMISE THE GUARD BELOW CANNOT PROVE ABOUT ITSELF.
+
+        It asserts four names are absent from `supplement_runner`. A typo in
+        any one of them makes that name absent from the whole repository, so
+        the assertion passes and the condition it enforces is silently
+        unenforced. Pinning them as real symbols is what makes the absence
+        mean something."""
+        import ast
+        from pathlib import Path
+        src = Path(__file__).resolve().parents[1] / "src" / "itsf" / "mc"
+        defined = {"supplement_production"}      # the module itself
+        for path in src.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                     ast.ClassDef)):
+                    defined.add(node.name)
+        self.assertGreater(len(defined), 40,
+                           f"the symbol scan reached {len(defined)} names; "
+                           "at that count 'all four exist' proves nothing")
+        missing = sorted(set(HERMETIC_CORE_SYMBOLS) - defined)
+        self.assertEqual([], missing,
+                         "the guard below forbids names that do not exist; "
+                         "its absence assertion is vacuous for: "
+                         + ", ".join(missing))
 
     def test_the_execution_path_does_not_reach_the_hermetic_core(self):
         """RULING 1 CONDITIONS 1 of dec-scope-boundary-2026-08-27.
@@ -136,10 +173,7 @@ class TestTheLayersDoNotExecuteAnything(unittest.TestCase):
         """
         import ast
         from pathlib import Path
-        forbidden = {"build_day_strata_supplement_test_only",
-                     "seal_supplement_test_only",
-                     "build_supplement_from_authority",
-                     "supplement_production"}
+        forbidden = set(HERMETIC_CORE_SYMBOLS)
         runner = (Path(__file__).resolve().parents[1] / "src" / "itsf" /
                   "mc" / "supplement_runner.py")
         tree = ast.parse(runner.read_text(encoding="utf-8"))

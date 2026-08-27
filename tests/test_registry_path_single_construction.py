@@ -95,6 +95,18 @@ class TestOneConstructionSite(unittest.TestCase):
                          "scripts/ changed; a migration would have to find "
                          "and update every one")
 
+    def test_the_scan_actually_reaches_files(self):
+        """THE PREMISE THE GUARD BELOW CANNOT PROVE ABOUT ITSELF.
+
+        `assertEqual([], offenders)` is true when the scan found nothing to
+        look at. A wrong root, a changed glob, a package move — the guard
+        then reports clean forever, which is worse than no guard because it
+        reports clean LOUDLY. Measured here so the failure is visible."""
+        modules = [p for p in SRC.rglob("*.py") if p.stem != _BOUNDARY]
+        self.assertGreater(len(modules), 20,
+                           f"the construction scan reached {len(modules)} "
+                           "modules; at that count it proves nothing")
+
     def test_only_the_boundary_constructs_the_registry_path(self):
         offenders = []
         for path in sorted(SRC.rglob("*.py")):
