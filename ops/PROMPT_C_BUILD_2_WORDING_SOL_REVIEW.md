@@ -16,15 +16,19 @@ OUTCOME_EXPOSED=NONE
 PREREG_SEALED=N/A（本件是执行路径设计，不是预注册）
 ```
 
-**本文件从磁盘读取。绝对路径**：
+**本文件从磁盘读取 —— read this prompt from disk, not from a paste。绝对路径**：
 `C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework\ops\PROMPT_C_BUILD_2_WORDING_SOL_REVIEW.md`
 
 仓根：`C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework`
 
 ```
-HEAD=3aa5663
-REVIEWED_SET_UNCHANGED_SINCE=<见冻结登记册 ops/ARTIFACTS_UNDER_REVIEW.json>
+HEAD=36cd793
+REVIEWED_SET_UNCHANGED_SINCE=36cd793a83b37b5be817c4c6f31817c5120497cd
 ```
+
+> **确认你读的是当前文件**：**line 26 of it must read**
+> `REVIEWED_SET_UNCHANGED_SINCE=36cd793a83b37b5be817c4c6f31817c5120497cd`。
+> 对不上 ⇒ 你手上是陈旧粘贴 ⇒ **STOP**，回到磁盘重读。
 
 ---
 
@@ -77,9 +81,11 @@ BLIND_SEAT_MAY_NOT_SEARCH_THE_REPOSITORY = 是
 **不得 grep、不得 rglob、不得广域检索。** 需要哪个路径，向工作会话要，由
 `PULL_PROTOCOL` 提供字节 ＋ SHA256。
 
+**禁区清单随包**：`ops/OUTCOME_CARRYING_ARTIFACTS.json` 是权威登记册，本 prompt 不复述其内容，你**不得打开它所登记的任何一件**。
+
 **隔离子树 `ops/outcome_quarantine/**` —— 禁区，不得打开、不得搜索、不得列目录。**
-`MC_TO_STRATEGY_MASTER_PLAN.md` 在其中。outcome-clean 的替代入口是
-`ops/RECOVERY_ANCHOR.md`。
+其中包括 `ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md`。
+outcome-clean 的替代入口是 `ops/RECOVERY_ANCHOR.md`。
 
 **`ops/EXPOSURE_LEDGER.md`（研究轴）不在你的阅读集内。**
 `ops/REVIEWER_EXPOSURE_LOG.md`（席位轴）可读 —— 但注意：
