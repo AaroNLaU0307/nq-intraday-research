@@ -255,17 +255,92 @@ class TestCBuild2DuringStaging(_Tmp):
                                 for p in out.iterdir()),
                          "bytes moved despite the refusal")
 
+    #: What a silent delete is spelled as. Not exhaustive by construction --
+    #: see `test_the_scan_declares_what_it_cannot_see`.
+    DESTRUCTIVE = ("unlink", "rmtree", "remove", "removedirs", "rmdir")
+
+    def _reachable_sources(self, entry):
+        """`entry` plus every module-level function it can reach.
+
+        WIDENED 2026-08-29 after measuring the old one-function scan:
+
+            局部别名     rm = os.remove; rm(partial)     -> NOT caught
+            被调函数里删 _preserve(partial, incident)     -> NOT caught
+
+        The second one matters: `_preserve` is called on BOTH divergence
+        branches, and a delete moved into it satisfied the old check
+        completely. (b) claimed "no `.partial` bytes are ever silently
+        destroyed" while looking at one function body -- the claimed class
+        was wider than the route that detected it, which is the same defect
+        §12.5 records for (a)."""
+        module = sys.modules[sr.__name__]
+        defined = {name: obj for name, obj in vars(module).items()
+                   if inspect.isfunction(obj)
+                   and getattr(obj, "__module__", None) == sr.__name__}
+        seen, queue, sources = set(), [entry.__name__], {}
+        while queue:
+            name = queue.pop()
+            if name in seen or name not in defined:
+                continue
+            seen.add(name)
+            source = inspect.getsource(defined[name])
+            sources[name] = source
+            for node in ast.walk(ast.parse(source)):
+                if isinstance(node, ast.Call):
+                    called = getattr(node.func, "id", None)
+                    if called in defined:
+                        queue.append(called)
+        return sources
+
     def test_nothing_is_ever_unlinked_by_the_staging_path(self):
         """(b) as a property of the CODE rather than of one run. No scenario
-        test enumerates every scenario; a single `unlink` here is the
-        ratified prohibition broken."""
-        tree = ast.parse(inspect.getsource(sr.resolve_partial))
-        calls = {getattr(n.func, "attr", getattr(n.func, "id", ""))
-                 for n in ast.walk(tree) if isinstance(n, ast.Call)}
-        for destructive in ("unlink", "rmtree", "remove"):
-            self.assertNotIn(destructive, calls,
-                             "resolve_partial calls %r; "
-                             "SILENT_DELETE_FORBIDDEN=YES" % destructive)
+        test enumerates every scenario; a single delete here is the ratified
+        prohibition broken."""
+        for name, source in self._reachable_sources(sr.resolve_partial).items():
+            tree = ast.parse(source)
+            calls = {getattr(n.func, "attr", getattr(n.func, "id", ""))
+                     for n in ast.walk(tree) if isinstance(n, ast.Call)}
+            for destructive in self.DESTRUCTIVE:
+                self.assertNotIn(destructive, calls,
+                                 "%s() calls %r; SILENT_DELETE_FORBIDDEN=YES"
+                                 % (name, destructive))
+
+    def test_no_destructive_call_is_hidden_behind_a_local_alias(self):
+        """`rm = os.remove` renames the call and the name check stops
+        seeing it. Measured on the old scan: not caught."""
+        for name, source in self._reachable_sources(sr.resolve_partial).items():
+            for node in ast.walk(ast.parse(source)):
+                if isinstance(node, ast.Assign) and isinstance(
+                        node.value, (ast.Attribute, ast.Name)):
+                    bound = getattr(node.value, "attr",
+                                    getattr(node.value, "id", ""))
+                    self.assertNotIn(bound, self.DESTRUCTIVE,
+                                     "%s() binds %r to a local name, which "
+                                     "hides it from the call-name scan"
+                                     % (name, bound))
+
+    def test_the_walk_actually_reaches_the_helpers(self):
+        """A transitive scan that silently reaches nothing would pass every
+        assertion above. `_preserve` is the one that matters: both
+        divergence branches go through it."""
+        reached = self._reachable_sources(sr.resolve_partial)
+        self.assertIn("resolve_partial", reached)
+        self.assertIn("_preserve", reached,
+                      "the scan did not reach _preserve, so a delete moved "
+                      "into it would pass unseen: reached %s"
+                      % sorted(reached))
+
+    def test_the_scan_declares_what_it_cannot_see(self):
+        """The honest boundary, pinned rather than left implied. This scan
+        sees module-level functions reached by a direct call. It does NOT
+        see: deletes inside methods, inside imported modules, or reached
+        through a value (a callable passed in, a dict of handlers). Saying
+        so is the point -- a claim of exhaustiveness here would be the same
+        defect §12.5 corrects."""
+        reached = self._reachable_sources(sr.resolve_partial)
+        self.assertNotIn("os", reached,
+                         "the scan does not descend into imported modules; "
+                         "if it now does, this boundary note is stale")
 
     def test_the_gate_for_this_checkpoint_refuses_unconditionally(self):
         """Why none of the above is a gate test: `seal_staging_partial` is a

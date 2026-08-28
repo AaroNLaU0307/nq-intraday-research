@@ -671,3 +671,198 @@ C_BUILD_2 —— 调用边界（B 重述）
 **不主张本稿已生效** —— 它要过 fresh Sol 再过 Aaron。
 `test_c_build_2s_state_is_not_observable_to_a_caller` 按 CONDITIONS 保留为陈旧化绊线：
 若将来 `.partial` 真的存活过调用，它会红，而那正是本稿前提失效的时刻。
+
+### 12.5 起草稿自纠 —— (a) 声称的违规类比它的检出途径宽
+
+**这一条是在给 fresh Sol 写 prompt 的过程中量出来的**，写的正是那句
+「请判：一个未经校验的 FINAL 若字节恰好正确，(a) 还检得出来吗」。
+写完停下来量了，答案是**检不出来**，于是它不再是问题而是缺陷。
+
+#### 实测
+
+```python
+out/"f.json" 由本机制之外的东西写出（手抄／备份还原／没有 promote-后复读的旧版本）
+resolve_partial(...) -> PartialAction(action='already_sealed', detail='byte-identical')
+(a) 的检出途径「FINAL 在场则字节 == intended」  -> 通过
+本次调用复读校验过它吗                          -> 没有。该分支只做了一次相等比较
+```
+
+`resolve_partial` 开头：
+
+```python
+if final.exists():
+    existing = final.read_bytes()
+    if existing == intended:
+        return PartialAction("already_sealed", detail="byte-identical")
+```
+
+**任何**字节相符的既存 FINAL 都走这里，与它由什么产出无关。
+
+#### 因此 §12.1 (a) 的措辞不满足判据 (1)
+
+原稿写：
+
+```
+(a) 未经校验的 FINAL 不存在
+    防的违规类：一份没被复读校验过的 FINAL 被当作已封存
+    检出途径：调用后的文件系统事实 —— FINAL 若在场，其字节 == intended
+```
+
+**声称的类严格宽于检出途径能看见的集合。** 这比诚实划界更糟：
+读措辞的人会以为宽的那个类被覆盖了。
+
+**这是今天第三次同一形态**（另两次在姊妹仓，复审席已为其编号至第五实例）：
+**我守的边界一直比我声称的属性窄。**
+
+#### 更正后的 (a)
+
+```
+(a) 字节与 intended 不符的 FINAL 不会被当作已封存
+    防的违规类：一份字节与 intended 不符的 FINAL 被当作已封存
+    检出途径：调用后的文件系统事实 —— FINAL 若在场，其字节 == intended
+              （既存不符 -> supplement_seal_conflict 拒绝；
+                本次 promote -> promote 后复读无条件运行）
+    依据：机制在 os.replace 之后自己复读一次并在不符时抛
+          supplement_post_promotion_verify；门分类的是这个结局
+```
+
+#### 明写的残余 —— 不声称已闭合
+
+```
+既存 FINAL 若字节相符，本机制凭字节接受，不问出处。
+关闭它需要一份机制现在没有的 provenance 记录，而造一份是设计变更 ——
+裁定 B 的 CONDITIONS 明令本稿「机制零改动」，因此本稿不得关闭它。
+```
+
+钉在 `tests/test_c_build_2_wording_coverage.py`，**四条测量全绿**：
+残余存在（`already_sealed`）· 检出途径对它通过 · 字节不符仍拒 ·
+本次 promote 的那一半确实被无条件校验。
+
+**这条残余是否需要处理，归 Aaron**，不归本稿、也不归复审席。
+
+### 12.6 起草稿自纠之二 —— (b) 同病，且更硬
+
+§12.5 更正 (a) 之后我按同一把尺子量了 (b)。**同一个病。**
+
+(b) 声称的违规类是「没有任何 `.partial` 字节被静默销毁」，
+检出途径是「`resolve_partial` 的 AST 里没有 unlink / rmtree / remove」。
+**那把尺子只量一个函数体。** 实测三种写法：
+
+```
+局部别名        rm = os.remove; rm(partial)      -> 旧检查看不见
+Path 方法经变量  p = partial; p.unlink()          -> 看得见（调用名仍是 unlink）
+被调函数里删     _preserve(...) 内部删            -> 旧检查看不见
+```
+
+**第三条要命**：`_preserve` 在**两条分歧分支上都被调用**
+（branch C 改名后允许重试、branch E 改名后拒绝）。
+把一句删除搬进 `_preserve`，旧检查**完整通过**。
+
+#### 处置 —— 只改测试，机制零改动（CONDITIONS 允许）
+
+`test_nothing_is_ever_unlinked_by_the_staging_path` 的扫描面从
+「`resolve_partial` 一个函数体」放宽为「`resolve_partial` ＋ 它经直接调用
+可达的每个模块级函数」，并新增两条：
+
+```
+test_no_destructive_call_is_hidden_behind_a_local_alias   别名绑定
+test_the_walk_actually_reaches_the_helpers                走到了 _preserve（否则前两条空转）
+test_the_scan_declares_what_it_cannot_see                 明写它看不见什么
+```
+
+**变异证红（实测）**：
+
+```
+删移进 _preserve         -> 红（旧检查：绿）
+局部别名 rm = os.remove  -> 红（旧检查：绿）
+还原                     -> 24 绿
+```
+
+`test_the_walk_actually_reaches_the_helpers` 是为防**这条修复自己空转**而加的：
+一个什么都没走到的传递扫描，会让上面每一条断言都自动通过。
+
+#### 明写残余 —— 这把尺子仍看不见什么
+
+```
+方法体内的删除 · 被导入模块内部的删除 · 经由值到达的删除
+（传进来的可调用对象、handler 字典）
+```
+
+**不声称穷尽。** 由 `test_the_scan_declares_what_it_cannot_see` 钉住 ——
+它断言扫描没有下沉到导入模块，所以哪天真下沉了，这条边界说明会红而不是变成陈述性谎言。
+
+#### 因此 §12.1 的 (b) 更正为
+
+```
+(b) 没有任何 .partial 字节被静默销毁
+    防的违规类：残留被删而不是被移开
+    检出途径：被钉住的机制性质 —— resolve_partial 及其经直接调用可达的
+              每个模块级函数（含 _preserve），其 AST 中无删除调用，
+              且无删除调用被绑到局部名；每一条移开路径都产出 preserved_as
+    看不见的：方法体内、被导入模块内、经由值到达的删除（明写，不声称穷尽）
+    依据：SILENT_DELETE_FORBIDDEN=YES（已批准）
+```
+
+### 12.7 起草稿自纠之三 —— (c) 的枚举短了一半
+
+按同一把尺子量 (c)。它的检出途径写「**两条**分歧结局各自留下
+`<filename>.partial.divergent.<incident_id>`」。**实测有四条：**
+
+```
+branch C                  retry_permitted            产出具名分歧件
+branch E                  supplement_partial_verify  产出具名分歧件
+divergent_partial_exists  拒绝                       残留以原名 .partial 留在原地
+incident_id_malformed     拒绝                       残留以原名 .partial 留在原地
+```
+
+后两条是 `_preserve` 在改名**之前**的两道拒绝：
+分歧件同名已存在（不覆盖前一次事故的证据）、`incident_id` 不匹配
+`INCIDENT_RE = ^INC-[0-9a-f]{12}\Z`。
+
+#### (c) 声称的类仍成立，但路线写短了
+
+「分歧发生而无可追溯的残留」这个**类**在四条结局上都成立 ——
+后两条把字节以原名留在原地，可追溯。**但路线只枚举了两条**，
+按路线逐条核对现实的读者会发现它短了一半。
+
+**这是本文档内第三次同一形态**（§12.5 的 (a)、§12.6 的 (b)）。
+三次都不是设计时想到的，都是拿尺子逐条量出来的。
+
+#### 更正后的 (c)
+
+```
+(c) 分歧发生时，字节不丢失且残留可追溯
+    防的违规类：分歧发生而无可追溯的残留
+    检出途径：调用后的文件系统事实，四条分歧结局逐条：
+      branch C  retry_permitted           -> <filename>.partial.divergent.<incident_id>
+      branch E  supplement_partial_verify -> <filename>.partial.divergent.<incident_id>
+      divergent_partial_exists            -> 残留以原名 .partial 在场，
+                                             且前一次事故的分歧件字节不变
+      incident_id_malformed               -> 残留以原名 .partial 在场
+    依据：ND1_PARTIAL_MODIFY_TEXT 的 BRANCH_E 子句给出名字模板（已批准）；
+          SILENT_DELETE_FORBIDDEN=YES 覆盖后两条
+```
+
+四条各自钉在 `tests/test_c_build_2_wording_coverage.py`，
+含一条跨四结局的类断言 `test_no_divergence_outcome_destroys_bytes`
+（防前四条各自成立而类本身无人守）。
+
+---
+
+### 12.8 三次自纠的共同形态 —— 写给复审席，也写给我自己
+
+```
+(a)  声称的违规类  宽于  检出途径能看见的集合
+(b)  声称的性质    宽于  扫描面（一个函数体 vs 可达调用图）
+(c)  声称的路线    短于  实际结局数（两条 vs 四条）
+```
+
+**三条都是「我声称的」与「我实际守的」不一致，方向还不一样** ——
+(a)(b) 是声称得太宽，(c) 是守得比声称的更全但写得太少。
+
+**发现方式全都一样**：不是设计时想到的，是**逐条拿检出途径去跑现实**。
+姊妹仓 `qros-runtime` 的同一形态今天被复审席编号到第五实例，
+诊断是「**我守的边界一直比我声称的属性窄**」。本文档三条是同一个诊断的第三、四、五例。
+
+**对复审席的意义**：判据 (1)「覆盖保全」不能靠读措辞判 ——
+措辞读起来永远是自洽的。**只有拿路线去跑现实才判得出来。**
