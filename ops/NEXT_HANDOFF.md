@@ -121,11 +121,79 @@ LOW    unittest.main() 位置      直接运行只跑 5/10；全仓只有这一�
 
 ---
 
+## 2bis. 通宵后半程 —— 换了打法之后找到的
+
+前半程补解析器拒绝的覆盖，**没找到缺陷**（八个条件全对）。
+边际价值在降，于是换靶：**今晚真正抓到东西的是穷举规则集的域**（DEL、COM0）。
+
+### 扫「枚举形状的规则集」
+
+```
+qros   _WINDOWS_ILLEGAL · _WINDOWS_DEVICES   —— 今晚已各修一条，扫完了
+ITSF   无
+```
+
+### 换角度：正则过宽是同一类，然后就中了
+
+```
+qros   gitread.FROZEN_OID · statefile._HEX40 · statefile._HEX64
+       packetrecords._HEX64                            四个全接受尾随 
+
+ITSF   atoms._UPPER_CONST · atoms._HEX64 · consumer._HEX64_RE
+       report._DATE_RE · runinfra._HEX64_RE            五个全接受尾随 
+
+```
+
+**两仓合计九个身份校验器接受尾随换行，其中六个校验 SHA-256 或 git OID。**
+
+Python 的 `$` 匹配「末尾**或**末尾换行之前」。严重性说准：**不是身份绕过**
+（只允许恰好一个 `
+`，塞不进 symbolic ref），
+**是边界把非规范值原样交回去并声称它规范** —— `canonical_oid` 返回带换行的「规范形式」，
+于是同一对象的两种拼写比较不相等。**MEDIUM，不是 HIGH。**
+
+**ITSF 那边尤其值得记**：它**早就有**这条守卫（docstring 写着 `THE SWEPT CLASS`），
+但它只扫七个手写模式、全在一个模块里。**守卫的范围停在作者当时所在的模块，
+而它命名的性质是整个仓的性质。** 修法不是再手列一张表，是**让清单从源码导出**。
+
+### 覆盖率实测（两仓）
+
+```
+qros   89.1%   266 个 raise 站点，171 个从未执行（64%）
+ITSF   93.1%   431 个 raise 站点，156 个从未执行（36%）
+```
+
+**明写这两个数字不意味着什么**：拒绝没被执行 ≠ 有风险。危险的是条件写错、
+该触发时不触发 —— 第七实例正是如此。所以每条新测试都喂它该拦住的输入。
+
+已补：qros lane-chain 解析器八条（承重：chain 决定哪些 stage 转移存在）·
+ITSF 三条无字面量可匹配的拒绝 · ITSF cost_calibration_loader 四处
+（其中**混合数据角色拒绝**是一条从没人跑过的安全边界）。
+
+**并明写不主张剩下的都该测** —— 分清授权边界 / 防御性不可达 / 真缺口要逐模块看。
+`cost_calibration_loader.py` 的 61.2%（全仓最低）**不是缺口是授权边界**，
+未覆盖行几乎全在 `REAL_DATA_READ_AUTHORIZED=NO` 之后。
+
+### ⚠ 这后半程有生产改动，与前半程不同
+
+```
+qros   gitread.py · statefile.py · packetrecords.py   四处 $ -> \Z
+ITSF   atoms.py · consumer.py · report.py · runinfra.py  五处 $ -> \Z
+性质   收紧不放宽；未碰任何冻结文件；两仓全量绿
+```
+
+**ITSF 侧本周其余工作都是机制零改动（裁定 B 的 CONDITIONS）**，这五处**不在
+C_BUILD_2 措辞范围内**，改的是无关模块的正则锚点。
+**若你认为复审期间不该有任何 `src/` 改动，两边都可回退** ——
+代价是九个身份校验器继续接受尾随换行。
+
+---
+
 ## 3. 数字
 
 ```
-ITSF          4481 passed（+24 subtests）
-qros-runtime  1078 passed（+57 subtests）· CONFORMANCE 22 · RENDER_CHECK 25
+ITSF          4506 passed（+53 subtests）
+qros-runtime  1100 passed（+81 subtests）· CONFORMANCE 22 · RENDER_CHECK 25
 两个仓         工作树干净
 机制           ITSF 侧仍零改动（CONDITIONS 要求）
 ```
