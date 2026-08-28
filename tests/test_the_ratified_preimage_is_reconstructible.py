@@ -61,6 +61,31 @@ class TestTheApprovedBytesAreTheOnesBeingReasonedAbout(unittest.TestCase):
         self.assertEqual(SIZE, len(body.encode("utf-8")))
         self.assertEqual(SHA, hashlib.sha256(body.encode("utf-8")).hexdigest())
 
+    def test_the_preimage_is_the_only_span_with_that_hash(self):
+        """The span was located BY HASH, not by trusting the ratification
+        record's "49 lines / 2527 bytes" description — that was only a
+        search hint. This closes the remaining gap in that argument: if a
+        second span hashed the same, "the approved bytes" would be
+        ambiguous and the falsifier closure would be anchored to a guess.
+
+        Every start line x every window of 1..79 lines, filtered by byte
+        count first. Exactly one hit, at the declared position."""
+        lines = _doc_at_commit()
+        hits = []
+        for start in range(len(lines)):
+            for span in range(1, 80):
+                if start + span > len(lines):
+                    break
+                body = "\n".join(lines[start:start + span]) + "\n"
+                encoded = body.encode("utf-8")
+                if len(encoded) != SIZE:
+                    continue
+                if hashlib.sha256(encoded).hexdigest() == SHA:
+                    hits.append((start + 1, span))
+        self.assertEqual([(FIRST_LINE, SPAN)], hits,
+                         "the approved hash matches %d spans, so 'the "
+                         "approved bytes' is ambiguous" % len(hits))
+
     def test_the_ratification_record_still_declares_that_hash(self):
         """If the ratification record is ever edited to name a different
         hash, this reconstruction is pinned to a superseded approval and
