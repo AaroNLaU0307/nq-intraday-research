@@ -52,12 +52,13 @@ REVIEWED_SET_UNCHANGED_SINCE=<见冻结登记册 ops/ARTIFACTS_UNDER_REVIEW.json
 
 | SHA-256 | 字节 | 路径 |
 |---|---|---|
-| `2572e35d744e3978321503f4684aeb1020e3429413b92be7b2e42b030f1166f6` | `33551` | `ops/N09_EXECUTION_PATH_DESIGN_R3.md` |
+| `7258de5d1b2965621635530ac269a8eaec88fada0ad91ad50a99cc4278bea921` | `42357` | `ops/N09_EXECUTION_PATH_DESIGN_R3.md` |
 | `101b6b7b272df2b0f71359a5e4d5310e896d10a27c072d783decbf7c9dfaeb82` | `11888` | `ops/RULING_FABLE_C_BUILD_2_HOOK_2026-08-28.md` |
 | `80e6c91e4f5f28273bc0dcc1db95586b0aae12dec079badf95210b419c8b16d7` | `8831` | `ops/DECISION_PACKET_C_BUILD_2_HOOK.md` |
 | `446ebd4bf51dc797d30566d54076c34d771ccd5114d34e931dc32e189fd3328a` | `47106` | `src/itsf/mc/supplement_runner.py` |
 | `34b2a17ed2e1617e34457882d7df7b4bcc0cc8d658003f8ea5a07a607bdfe0cf` | `32616` | `src/itsf/mc/supplement_contract.py` |
-| `b9482fcad3dd5091d0a062af65036154cbb7445099f79450c902e2673573cf89` | `20233` | `tests/test_n09_checkpoint_assertions.py` |
+| `cd790eb0432774bb5f9c8f0a84b4ae6a5b3eec4a9d4cfdc1448e4d121f16c4cf` | `8023` | `tests/test_c_build_2_wording_coverage.py` |
+| `c9e62af2a09f8a41b8b9215b7bb7f2aa825fe5297b1e758919e56e15b005ec61` | `24182` | `tests/test_n09_checkpoint_assertions.py` |
 | `3dc719db3f34e8a60a0f71fb5b1c6f31e8a9bf32f655063b3c2d2aa9f4ab7d13` | `36141` | `tests/test_mc_supplement_runner.py` |
 
 任一条不匹配 ⇒ STOP。
