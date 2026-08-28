@@ -131,8 +131,17 @@ class TestCBuild2DuringStaging(_Tmp):
                                 for p in out.iterdir()))
 
     def test_a_stale_partial_is_moved_aside_not_deleted(self):
-        """(b) and (c) together — BRANCH_E. This is what a crashed run leaves
-        behind: a `.partial` with no matching final."""
+        """(b) and (c) together.
+
+        BRANCH_C, not E — corrected 2026-08-28 after the decision seat found
+        the labels contradicting each other. The ratified text is two
+        clauses: `BRANCH_E_RENAME_TO_.partial.divergent.<incident_id>` names
+        the rename TARGET; `BRANCH_C_RENAME_THEN_ALLOW_RETRY` adds the retry.
+        This case renames and permits a retry, so the ACTION is C while the
+        NAME it produces is E's. The earlier comment gave both to E.
+
+        This is what a crashed run leaves behind: a `.partial` with no
+        matching final."""
         out = self._dir()
         (out / "supp.jsonl.partial").write_bytes(b"stale from a crash")
         action = sr.resolve_partial(out, "supp.jsonl", b"new rows",
@@ -144,14 +153,88 @@ class TestCBuild2DuringStaging(_Tmp):
                            + sc.DIVERGENT_PARTIAL_TEMPLATE.format(
                                incident_id=INCIDENT))
         self.assertTrue(divergent.exists(),
-                        "the stale bytes are gone; BRANCH_E renames, it does "
-                        "not delete")
+                        "the stale bytes are gone; branch C renames and "
+                        "permits a retry, it does not delete")
         self.assertEqual(b"stale from a crash", divergent.read_bytes())
         self.assertEqual(divergent.name, Path(action.preserved_as).name,
                          "the action does not report where the bytes went")
 
+    def test_an_unverified_final_is_refused_after_promotion(self):
+        """CLAUSE (a) OF THE R3 §12 DRAFT, and it had no proof until now.
+
+        The draft says: an unverified FINAL does not exist, detected as a
+        post-call filesystem fact. Running the draft's own mutation list
+        against it, "delete the post-promotion re-read" came back GREEN —
+        nothing in the suite noticed, because on the happy path the FINAL
+        always reads back correctly, so removing the check changes nothing
+        any existing test could see.
+
+        A clause with no mutation proof does not satisfy criterion (2) of
+        the ruling. This is that proof: make the FINAL read differently
+        after `os.replace`, which is what a corrupted or racing filesystem
+        would do, and the mechanism must refuse rather than report a seal."""
+        out = self._dir()
+        real = Path.read_bytes
+
+        def tampered(self, *a, **k):
+            if self.name == "supp.jsonl":          # the FINAL, after replace
+                return b"CORRUPTED AFTER PROMOTION"
+            return real(self, *a, **k)
+
+        Path.read_bytes = tampered
+        self.addCleanup(setattr, Path, "read_bytes", real)
+        with self.assertRaises(sr.SupplementRunnerError) as caught:
+            sr.resolve_partial(out, "supp.jsonl", b"rows",
+                               incident_id=INCIDENT)
+        self.assertIn("post_promotion", str(caught.exception),
+                      "the promotion was accepted without re-reading it; a "
+                      "FINAL nobody verified is exactly what clause (a) "
+                      "forbids")
+
+    def test_branch_e_also_leaves_a_divergent_file_and_refuses(self):
+        """THE HALF THE OLD WORDING MISSED, found while drafting R3 §12.
+
+        (c) says "if a divergent rename happened, the divergent file exists".
+        There are TWO outcomes that rename, and only one had a test:
+
+            branch C  stale `.partial` differs  -> rename, retry_permitted
+            branch E  staged bytes re-read      -> rename, REFUSE
+                      differently
+
+        Measured here by making the first `.partial` read return other bytes,
+        which is exactly the corruption branch E exists to catch. It leaves
+        the same `<name>.partial.divergent.<incident_id>` and raises — so
+        (c) holds on both outcomes, and now both are asserted."""
+        out = self._dir()
+        real = Path.read_bytes
+        state = {"n": 0}
+
+        def tampered(self, *a, **k):
+            if self.name.endswith(".partial"):
+                state["n"] += 1
+                if state["n"] == 1:
+                    return b"CORRUPTED IN FLIGHT"
+            return real(self, *a, **k)
+
+        Path.read_bytes = tampered
+        self.addCleanup(setattr, Path, "read_bytes", real)
+        with self.assertRaises(sr.SupplementRunnerError) as caught:
+            sr.resolve_partial(out, "supp.jsonl", b"rows",
+                               incident_id=INCIDENT)
+        self.assertIn("SILENT_DELETE_FORBIDDEN", str(caught.exception))
+        Path.read_bytes = real
+        divergent = out / ("supp.jsonl"
+                           + sc.DIVERGENT_PARTIAL_TEMPLATE.format(
+                               incident_id=INCIDENT))
+        self.assertTrue(divergent.exists(),
+                        "branch E refused but left nothing behind; the bytes "
+                        "it could not verify are gone")
+        self.assertFalse((out / "supp.jsonl").exists(),
+                         "branch E promoted despite failing verification")
+
     def test_the_divergent_name_carries_the_incident_id(self):
-        """(c) exactly. Residue that does not name its incident cannot be
+        """(c) exactly — and (c) IS BRANCH_E: the ratified clause that names
+        the rename target. Residue that does not name its incident cannot be
         tied to the failure that produced it."""
         out = self._dir()
         (out / "supp.jsonl.partial").write_bytes(b"stale")

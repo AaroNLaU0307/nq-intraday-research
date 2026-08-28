@@ -502,14 +502,46 @@ resolve_partial 不是「staged 之后停在那里」——
 promote 是原子的，调用后不留 .partial
 相同字节 -> already_sealed，不销毁任何东西
 不同字节盖在已封存件上 -> **拒绝**（不是改名）——「已封存的 supplement 永不覆写」
-陈旧 .partial（崩溃残留）-> BRANCH_E 改名移开，字节逐字保留，
-                            分歧件名携带 incident_id
+陈旧 .partial（崩溃残留）-> BRANCH_C 改名移开＋允许重试，字节逐字保留，
+                            分歧件名按 BRANCH_E 的模板携带 incident_id
 incident_id 不合法 -> 在触碰任何字节之前拒绝
 resolve_partial 的源码里没有 unlink/rmtree/remove（SILENT_DELETE_FORBIDDEN 的代码层形式）
 ```
 
-**其中「不同字节 -> 拒绝而非改名」是我原本想错的一条**：我以为它会走 BRANCH_E，
-实测是 `supplement_seal_conflict`。BRANCH_E 只处理**没有对应 FINAL 的陈旧 `.partial`**。
+**其中「不同字节 -> 拒绝而非改名」是我原本想错的一条**：我以为它会走分歧改名，
+实测是 `supplement_seal_conflict`。
+
+#### 11.2bis 标签更正，2026-08-28 —— 决裁席指出，builder 核准
+
+决裁席发现 R3 与 runner 的 docstring 对 BRANCH_C／E 的归属互相矛盾，
+并因未读批准原文而让渡不裁。**批准原文就逐字引在 `supplement_contract.py:153`**，
+builder 据此核：
+
+```
+批准原文  ND1_PARTIAL_MODIFY_TEXT =
+          BRANCH_E_RENAME_TO_.partial.divergent.<incident_id> ;
+          BRANCH_C_RENAME_THEN_ALLOW_RETRY
+
+runner:905  陈旧 .partial 字节不同 -> _preserve -> retry_permitted
+            = 改名后允许重试 = **BRANCH_C**（runner 标注为 C，对）
+runner:913  写后复读不符         -> _preserve -> raise（拒绝，无重试）
+            = 改名到那个名字     = **BRANCH_E**（runner 标注为 E，对）
+```
+
+**两个分支都改名，都用同一个模板产生的名字。** 区别在后半句：
+**E 规定改名的目标名，C 规定改名之后允许重试。**
+
+结论逐条：
+
+```
+R3 §1(c)   把「分歧件的名字」归给 BRANCH_E   —— **对**，不改
+§11.2      把陈旧 .partial 的**动作**归给 E  —— **错**，是 C，已改
+测试注释    同一处错，两条已改
+runner     两处标注都对
+```
+
+**决裁席说「行为本身两处钉得都对，唯标签归属互相矛盾」——精确。**
+它让渡是因为没读批准原文；那段原文在本仓可读，builder 读了，所以这一条不必上交。
 
 ### 11.3 C_BUILD_3：断言落在已批准事件的既有字段上
 
@@ -528,3 +560,114 @@ A1 的 `required_fields` 确实已含 `local_seal_sha256` 与 `local_seal_immuta
 
 C_BUILD_2 因 11.1 的缺口不能用运行时对立来钉，改为按已批准词表钉它的**主体不同**
 （`.partial` 残留，A1 的字段表里没有这个词）。
+
+---
+
+## 12. C_BUILD_2 的新措辞 —— 起草稿（裁定 B，待 fresh Sol 复审 ＋ Aaron 批）
+
+```
+STATUS=DRAFT —— 未生效。生效条件见 dec-c-build-2-hook-2026-08-28 的 CONDITIONS：
+       经 fresh Sol 复审、Aaron 批准后方生效。
+FORM=追加／超越，§1 的 C_BUILD_2 原文一字不删（沿 §10.1bis 成例）
+MECHANISM_CHANGES=零。GATE_TABLE 与 CHECKPOINT_OF 零改动。
+```
+
+### 12.0 先答裁定的 FALSIFIER —— builder 已核，未触发
+
+裁定写：若已批准的 ND1/N-D2 原文**以批准值**规定该门必须「在 staging 期间」运行，
+则 B 触及批准实质、裁定作废。**核验结果**：
+
+```
+搜索面   ops/*.md（非隔离）＋ src/itsf/mc/*.py
+命中     「staging 期间」只出现在 R2、R3 与裁定记录自身 —— 全部是 builder 侧
+         的设计文本或对它的转述，无一是批准值
+相关批准值  ND1_PARTIAL_RECOVERY_RULE=MODIFY
+            ND1_PARTIAL_MODIFY_TEXT=BRANCH_E_… ; BRANCH_C_…
+            SILENT_DELETE_FORBIDDEN=YES
+            —— 三者都规定「分歧字节怎么处置」，无一规定门何时运行
+```
+
+**结论：门的运行时机从来不是批准值，是 R2 自己写下的一句设计措辞。** FALSIFIER 未触发。
+
+### 12.1 新措辞
+
+```
+C_BUILD_2 —— 调用边界（B 重述）
+
+门的位置与职能（判据 5 要求明写，不留开放读法）
+    seal_staging_partial 在 resolve_partial 的**调用边界**上运行：
+    对该次调用的**结局或异常**做分类。
+    门不观测调用内部，不实现第二份不变量（承 §3 的门学说）。
+
+断言（调用返回或抛出之后，逐类不合并）
+
+  (a) 未经校验的 FINAL 不存在
+      防的违规类：一份没被复读校验过的 FINAL 被当作已封存
+      检出途径：**调用后的文件系统事实** —— FINAL 若在场，其字节 == intended
+      依据：机制在 os.replace 之后自己复读一次并在不符时抛
+            supplement_post_promotion_verify；门分类的是这个结局
+
+  (b) 没有任何 .partial 字节被静默销毁
+      防的违规类：残留被删而不是被移开
+      检出途径：**被钉住的机制性质** —— resolve_partial 的 AST 里没有
+            unlink / rmtree / remove；每一条移开路径都产出 preserved_as
+      依据：SILENT_DELETE_FORBIDDEN=YES（已批准）
+
+  (c) 若发生分歧改名，分歧件在场且名字携带 incident_id
+      防的违规类：分歧发生而无可追溯的残留
+      检出途径：**调用后的文件系统事实** —— 两条分歧结局各自留下
+            <filename>.partial.divergent.<incident_id>：
+              retry_permitted（branch C：改名后允许重试）
+              supplement_partial_verify（branch E：改名后拒绝）
+      依据：ND1_PARTIAL_MODIFY_TEXT 的 BRANCH_E 子句给出名字模板（已批准）
+```
+
+**(a)(c) 是调用后的文件系统事实，(b) 是被钉住的机制性质 —— 逐类标明，不合并**（判据 1）。
+
+### 12.2 逐条对照五判据
+
+```
+(1) 覆盖保全     三个违规类逐条列出，各自标明检出途径是「调用后文件系统事实」
+                 还是「被钉住的机制性质」，未合并。
+                 **并补上了旧措辞漏掉的一半**：(c) 原只覆盖 branch C 那条结局，
+                 实测 branch E 同样留下分歧件（见 12.3 的新测试）。
+(2) 证伪保全     三条子句各配变异，清单见 12.3。
+(3) 不得回并     主体仍是 .partial 纪律；C_BUILD_1（输出集为空）与
+                 C_BUILD_3（封存件在场且可重算）的「互不蕴含」钉子不受影响 ——
+                 新措辞不含任何可与那两条合并的通用形式。
+(4) 锚定保全     (b) 由 SILENT_DELETE_FORBIDDEN 导出，(c) 由
+                 DIVERGENT_PARTIAL_TEMPLATE 导出，既有 premise 测试
+                 （test_the_ratified_values_this_asserts_against_are_still_in_force）
+                 在批准值一变时即红。
+(5) 缺口出清     门的位置与职能写在措辞第一段：调用边界、分类结局或异常。
+                 「接到哪里」不再开放。
+```
+
+### 12.3 变异证红清单（判据 2）
+
+```
+(a) 删掉 os.replace 之后的复读校验            -> 红（**本次新增测试**）
+(b) 在 resolve_partial 里加一处 unlink        -> 红（既有测试）
+(b) 让 _preserve 不返回 preserved_as          -> 红
+(c) 令 branch C 不改名                        -> 红（既有测试）
+(c) 令 branch E 删除而不移开                  -> 红（**本次新增测试**）
+锚定 撤销 SILENT_DELETE_FORBIDDEN             -> 红（既有 premise 测试）
+```
+
+**这份清单第一次跑的时候把草稿自己驳回了。** (a) 那条最初是**绿**的 ——
+删掉 promote 后的复读校验，套件里没有任何东西发现，因为顺利路径上 FINAL 永远读回
+正确字节，删掉检查对既有测试不可见。
+
+**一条没有变异证据的子句不满足裁定的判据 (2)。** 补了一条测试：在 `os.replace`
+之后令 FINAL 读出不同字节（正是被污染或竞态的文件系统会做的事），机制必须拒绝
+而不是报告封存。补完才红。
+
+**(c) 的另一半也是这样补上的**：旧措辞只覆盖 branch C 那条分歧结局，
+实测 branch E（写后复读不符 -> 改名 -> 拒绝）同样留下分歧件，此前无测试。
+
+### 12.4 本稿不做的
+
+不改机制一个字节；不改 `GATE_TABLE`／`CHECKPOINT_OF`；不删 §1 的原文；
+**不主张本稿已生效** —— 它要过 fresh Sol 再过 Aaron。
+`test_c_build_2s_state_is_not_observable_to_a_caller` 按 CONDITIONS 保留为陈旧化绊线：
+若将来 `.partial` 真的存活过调用，它会红，而那正是本稿前提失效的时刻。
