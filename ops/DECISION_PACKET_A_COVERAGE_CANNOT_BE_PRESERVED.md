@@ -1,8 +1,29 @@
+# 决裁包 —— **已撤回 2026-08-29**
+
+```
+WITHDRAWN=YES
+WITHDRAWN_REASON=本包的整个前提（§12.5）是 builder 造出来的缺陷，已实测推翻
+WITHDRAWN_BY=builder，在 Aaron 批准「按推荐重开 B」之后、执行之前
+SEE=ops/N09_EXECUTION_PATH_DESIGN_R3.md §14
+      tests/test_every_sealed_final_was_read_back.py
+```
+
+> **Aaron 已按本包的推荐批准「重开 B」。那个批准不应被执行**，
+> 因为推荐所依据的缺陷不存在：`already_sealed` 分支**确实**把 FINAL 读回并与
+> `intended` 比较，与 promote 后的复读是同一个检查。实测五条路径逐条计数。
+>
+> 我把 (a) 的违规类偷换成了「出处未知」——我自己引进的更宽的类——
+> 再宣布 (a) 覆盖不了它。**量对的一半是真的，推出来的一半是假的。**
+>
+> **下方全文保留不删**，因为它是这次误判的记录，不是可以整理掉的草稿。
+
+---
+
 # 决裁包 —— (a) 的覆盖保全在现 CONDITIONS 下无法满足
 
 ```ini
 PACKET_ID=dec-a-coverage-2026-08-29
-DELIVERY_STATUS=DRAFT
+DELIVERY_STATUS=WITHDRAWN
 DECIDER=Aaron（本件三条路全部改动决裁席或 CONDITIONS 定下的东西，builder 一条都不能自己选）
 SOURCE=fresh Sol 复审 c-build-2-wording 的 HIGH ② 与 STRONGEST_OBJECTION
 LANE=FULL

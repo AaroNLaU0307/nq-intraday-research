@@ -973,3 +973,122 @@ branch E 的行为本身另有测试覆盖，所以**这是证据映射错误，
 `ops/DECISION_PACKET_A_COVERAGE_CANNOT_BE_PRESERVED.md`。
 
 **因此 §12 整体仍是 `STATUS=DRAFT`，且不再是「等复审」而是「等 Aaron 裁 (a)」。**
+
+---
+
+## 14. 撤回 §12.5 —— 那个缺陷是我造出来的
+
+```
+RETRACTION_OF=§12.5（并因此撤回 §13.5 与 ops/DECISION_PACKET_A_COVERAGE_CANNOT_BE_PRESERVED.md）
+DATE=2026-08-29
+FOUND_BY=builder，在 Aaron 批准「按推荐重开 B」之后、执行之前
+STATUS=§12.5 文本按追加惯例保留不删；本节推翻其结论
+```
+
+### 14.1 触发
+
+Aaron 采纳了我的推荐（重开 B）。**动手之前我回去核推荐的依据**，
+也就是 §12.5 那句「`already_sealed` 分支……不问出处、**从未复读校验**」。
+
+**「不问出处」是真的。「从未复读校验」是假的。**
+
+```python
+if final.exists():
+    existing = final.read_bytes()          # <- 这就是复读
+    if existing == intended:               # <- 这就是校验
+        return PartialAction("already_sealed", ...)
+```
+
+它与 `os.replace` 之后那次 `final.read_bytes() != intended` 是**同一个检查**。
+
+### 14.2 实测（计数 `Path.read_bytes` 落在 FINAL 名上的次数）
+
+```
+既存 FINAL 字节相符    already_sealed     读 FINAL 1 次，== intended
+既存 FINAL 字节不符    拒绝               读 FINAL 1 次，!= intended
+无 partial 正常封存    promote            读 FINAL 1 次，== intended
+partial 相符续做封存   promote            读 FINAL 1 次，== intended
+partial 不符           retry_permitted    读 0 次 —— 而它没有任何 FINAL 被当作已封存
+```
+
+**每一条「把 FINAL 当作已封存」的路径，都在同一次调用里把它读回并与 intended 比较过。**
+唯一 0 次读的路径根本不封存 FINAL。
+
+### 14.3 因此
+
+**§12.1 (a) 声称防的违规类 —— 「一份没被复读校验过的 FINAL 被当作已封存」——
+没有实例。原措辞覆盖它，判据 (1) 在 (a) 这一条上本来就成立。**
+
+### 14.4 我实际做错的是什么
+
+我把 (a) 的类**偷换**成了「出处未知的 FINAL 被接受」——**那是我自己引进的、更宽的类**——
+然后宣布 (a) 覆盖不了「它自己的」类，再把 (a) 缩窄到我能检的范围。
+
+```
+量对的一半   already_sealed 确实不问出处
+错掉的一半   由此推出「未经复读校验」—— 那是另一个类
+```
+
+**这与同一天那次 Class B 误分类是同一个形状**：机械可测的一半量对了，
+另一半靠断言。而 §12.8 那个诊断（「声称的覆盖宽于实际的检出」）
+我恰恰用在了一个声称与检出本来就吻合的地方 ——
+**靠的是把声称悄悄换成我自己发明的更宽版本。**
+
+### 14.5 复审席的 HIGH ② 不成立，但它没有判错
+
+复审席的 `STRONGEST_OBJECTION` 写：
+
+> 裁定要求旧违规类逐类继续可检出，但 §12.5 **明确承认**同字节、未知 provenance 的
+> FINAL 仍会被接受。缩窄违规类不能同时叫作「覆盖保全」。
+
+**这个推理在给定 §12.5 的前提下完全正确。** 前提是我供的，前提是错的。
+**复审席不该为此被记一笔**——它读的是我写下的「明确承认」，那正是它该采信的东西。
+
+**这一条要记住的是**：一个只读席位的判断质量，上限是我交给它的事实的质量。
+我给了它一个我自己发明的缺陷，它就在那个缺陷上做了正确的推理。
+**送审包里的每一句自陈，都是复审席无法独立复核的输入。**
+
+### 14.6 处置
+
+```
+§12.1 (a)   恢复原措辞（下方 14.7），§12.5 的「更正后的 (a)」作废
+§12.5       文本保留，结论撤回
+§13.5       撤回（它是 §12.5 的下游）
+决裁包       ops/DECISION_PACKET_A_COVERAGE_CANNOT_BE_PRESERVED.md -> WITHDRAWN
+重开 B      **不执行** —— 依据已消失
+出处未知     仍然为真，但它是一条**关于机制的独立事实**，不是 (a) 的缺陷。
+            单独记在 14.8，不再挂在覆盖保全名下
+```
+
+### 14.7 (a) 恢复为
+
+```
+(a) 未经校验的 FINAL 不存在
+    防的违规类：一份没被复读校验过的 FINAL 被当作已封存
+    检出途径：调用后的文件系统事实 —— FINAL 若在场，其字节 == intended
+    依据：两条封存路径各自复读一次并比对 intended ——
+          既存件走 `existing == intended`，新封存走 promote 后的
+          `final.read_bytes() != intended` -> supplement_post_promotion_verify。
+          门分类的是这个结局。
+    实测：tests/test_every_sealed_final_was_read_back.py，五条路径逐条计数
+```
+
+### 14.8 出处未知 —— 独立记录，不是 (a) 的缺陷
+
+```
+既存 FINAL 若字节与 intended 相符，机制凭字节接受，不问是谁写的。
+这是真的，且无法由任何措辞关闭 —— 关闭它需要一份机制不保存的 provenance 记录。
+它不属于 (a) 的违规类：(a) 管的是「字节有没有被确认」，不是「谁写的」。
+是否需要处置，归 Aaron，且与判据 (1) 无关。
+```
+
+### 14.9 CONDITIONS 现状（builder 自评，不自证）
+
+```
+1 追加/超越且旧文本不删                met
+2 五判据对照及有效变异证红              (a) 的障碍消失；(b)(c) 的实际缺陷已闭合
+                                       —— 但**这需要一轮新的 fresh Sol 判定，我不自证**
+3 fresh Sol 复审并经 Aaron 批准         not met（需新一轮）
+4 机制、GATE_TABLE、CHECKPOINT_OF 零改动  met（本次仍零改动）
+5 陈旧化绊线保留                        met
+```
