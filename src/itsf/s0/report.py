@@ -245,7 +245,7 @@ _STABILITY_AXIS_BOOKKEEPING_KEYS: frozenset[str] = frozenset({"conservation_ok"}
 #     shaped leaf (Codex M6.1.1 finding: "key exists and dict non-empty" is
 #     not the same claim as "the value is what the real producer emits").
 # ---------------------------------------------------------------------------
-_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\Z")
 
 
 # ---------------------------------------------------------------------------

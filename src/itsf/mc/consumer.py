@@ -134,7 +134,7 @@ BUNDLE_EXACT_SET = frozenset(
        "manifest.jsonl"])
 
 _RECORD_FIELDS = tuple(TradePathRecord.__dataclass_fields__)  # 19 fields
-_HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
+_HEX64_RE = re.compile(r"^[0-9a-f]{64}\Z")
 RECORDS_DIGEST_SCHEMA = "mc_records_custody.v1"
 
 

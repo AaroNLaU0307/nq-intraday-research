@@ -113,7 +113,7 @@ class ManifestIntegrityError(ValueError):
 
 GENESIS_PREVIOUS_HASH = "0" * 64
 
-_HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
+_HEX64_RE = re.compile(r"^[0-9a-f]{64}\Z")
 
 _STAGE_VALUES: tuple[str, ...] = tuple(s.value for s in RunStage)
 _STAGE_ORDER: dict[str, int] = {s.value: i for i, s in enumerate(RunStage)}

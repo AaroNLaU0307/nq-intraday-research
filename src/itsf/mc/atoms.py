@@ -140,8 +140,8 @@ REQUIRED_HARVESTED_CONSTANTS = (
     "itsf.mc.account:TOPSTEP_ABSOLUTE_MAX_MICROS",
 )
 
-_UPPER_CONST = re.compile(r"^[A-Z][A-Z0-9_]*$")
-_HEX64 = re.compile(r"^[0-9a-f]{64}$")
+_UPPER_CONST = re.compile(r"^[A-Z][A-Z0-9_]*\Z")
+_HEX64 = re.compile(r"^[0-9a-f]{64}\Z")
 
 # The EXACT lifecycle-config preimage key set (D2: unknown / missing /
 # extra all refuse, each with its own code).
