@@ -151,13 +151,57 @@ class TestHowManyDivergenceOutcomesThereActuallyAre(unittest.TestCase):
         self.assertEqual([("f.json" + sc.PARTIAL_SUFFIX)],
                          [p.name for p in out.iterdir()])
 
+    def _force_branch_e(self):
+        """Make the post-write re-read disagree, which is what branch E
+        classifies. Patched at `Path.read_bytes` for the staging file only:
+        the real trigger is a filesystem that hands back different bytes,
+        which cannot be staged in a temp directory."""
+        real = Path.read_bytes
+        state = {"seen": False}
+
+        def diverging(self):
+            if self.name.endswith(sc.PARTIAL_SUFFIX) and not state["seen"]:
+                state["seen"] = True
+                return b"not what was written"
+            return real(self)
+
+        Path.read_bytes = diverging
+        self.addCleanup(setattr, Path, "read_bytes", real)
+
+    def test_branch_e_writes_the_named_divergent_file(self):
+        """ADDED 2026-08-29. §12.7 claimed the class assertion below spanned
+        all four outcomes; the wording review measured that it ran three and
+        never reached branch E. That was an evidence-map error in the design
+        document, not a defect in the mechanism — branch E was covered
+        elsewhere — but a claim of four-outcome coverage that runs three is
+        the same shape §12.8 is about, so it is closed rather than
+        explained."""
+        out = Path(tempfile.mkdtemp())
+        self._force_branch_e()
+        with self.assertRaises(sr.SupplementRunnerError) as caught:
+            sr.resolve_partial(out_dir=out, filename="f.json",
+                               intended=INTENDED, incident_id=INCIDENT)
+        self.assertIn("supplement_partial_verify", str(caught.exception))
+        self.assertIn("f.json.partial.divergent." + INCIDENT,
+                      [p.name for p in out.iterdir()])
+
     def test_no_divergence_outcome_destroys_bytes(self):
-        """The CLASS (c) actually names, asserted across all four outcomes
-        rather than across the two the route enumerates."""
+        """The CLASS (c) actually names, asserted across all four outcomes.
+
+        It now runs four. Before 2026-08-29 it ran three and the design
+        document said four."""
         out = self._staged()
         sr.resolve_partial(out_dir=out, filename="f.json",
                            intended=INTENDED, incident_id=INCIDENT)
         self.assertTrue(list(out.iterdir()), "branch C destroyed the bytes")
+
+        out = Path(tempfile.mkdtemp())                      # branch E
+        self._force_branch_e()
+        with self.assertRaises(sr.SupplementRunnerError):
+            sr.resolve_partial(out_dir=out, filename="f.json",
+                               intended=INTENDED, incident_id=INCIDENT)
+        self.assertTrue(list(out.iterdir()), "branch E destroyed the bytes")
+
         for bad_id, prior in ((INCIDENT, True), ("not an id", False)):
             out = self._staged()
             if prior:

@@ -866,3 +866,110 @@ incident_id_malformed     拒绝                       残留以原名 .partial 
 
 **对复审席的意义**：判据 (1)「覆盖保全」不能靠读措辞判 ——
 措辞读起来永远是自洽的。**只有拿路线去跑现实才判得出来。**
+
+---
+
+## 13. 措辞复审（`c-build-2-wording`）返回 HOLD —— 逐条处置
+
+```
+VERDICT=HOLD
+WORDING_MAY_GO_TO_AARON=NO
+TRANSPORT_PRECHECK=STOP
+CONDITIONS_MET=1 met · 2 not met · 3 not met · 4 met · 5 met
+```
+
+### 13.1 HIGH ① 传输锚点不存在 —— 我的错，已订正
+
+提示第 31 行声称「本提示的字节由 §1 表中它自己的 SHA-256 把守」，
+**而 §1 表里没有本提示那一行。** 复审席实测本提示为
+`13638` bytes、`caa00e4db927229c63c9b0837579a4efc0835f587f320d1319e24c1b4f7faa90`，
+**与我复算一字不差** —— 但没有可比对的声明值，所以 STOP 成立。
+
+发行字节实际记在 `ops/ARTIFACTS_UNDER_REVIEW.json` 的 `role: delivery` 条目里。
+提示已改为指向那里。**登记册在提示之外，所以没有不动点问题** ——
+这也正是 §12 那次 delivery-pin 修复的同一条道理，我修好了机制却在文字里指错了地方。
+
+### 13.2 HIGH ③ falsifier —— 现已在**批准原文字节**上闭合
+
+复审席判 `FALSIFIER_INDEPENDENTLY_CHECKED=NOT_CLOSED`，理由正确：
+包里送的 `supplement_contract.py` 是**转录件**，拿转录件核原文等于自己核自己。
+
+已重建批准原像并逐字核验：
+
+```
+commit   803d99162d0a018ae5a3b44273601d98d9439d50
+file     ops/DECISION_PACKET_N00_AND_ND1.md
+span     第 1309 行起 49 行 · 2527 bytes · LF · UTF-8
+sha256   0a08319a408f068ce4c92f93c2c4c39e409937dddfd0ef9f7af43618c70b50a5
+         == ops/ND1_PROFILE_RATIFICATION.md 的 APPROVED_PROFILE_SHA256
+```
+
+在这 49 行内检索 staging／期间／during／时机／when／运行时／中途／mid／checkpoint：
+**命中 1 行，`RECOMMENDED_F1_GATE_NAME_ENUM=DEFER_TO_N04`，管的是门的命名不是时机。**
+
+**结论：falsifier 未触发，且这个结论现在建立在批准字节上。**
+钉在 `tests/test_the_ratified_preimage_is_reconstructible.py`，每轮从 git 重建。
+
+#### 重建过程中额外量到一件，没人问
+
+**`SILENT_DELETE_FORBIDDEN` 不在批准原像里。** 它是导出值 —— `MODIFY ⇒ YES` ——
+导出表在同一文件第 1299 行，而原像从 1309 行开始，**表在原像之外**。
+
+§12.1 (b) 写「依据：`SILENT_DELETE_FORBIDDEN=YES`（已批准）」。
+**不精确**：它是**有已批准前件的导出值**（前件 `ND1_PARTIAL_RECOVERY_RULE=MODIFY`
+确在原像内），这与「已批准值」是两回事，而差别恰好落在判据 (4) 锚定保全被主张的地方。
+
+**(b) 的依据行更正为**：
+`依据：SILENT_DELETE_FORBIDDEN=YES —— 由已批准的 ND1_PARTIAL_RECOVERY_RULE=MODIFY
+按 DECISION_PACKET_N00_AND_ND1.md:1299 的导出表导出，非批准原像内的值`
+
+### 13.3 MEDIUM ④ (b) 的守卫仍有两条语法绕法 —— 已复现，已修
+
+```
+ast.Assign 别名      rm = os.remove          现守卫 DETECTED=True
+ast.AnnAssign 别名   rm: object = os.remove  现守卫 DETECTED=False   <- 绕过
+write_bytes 截断     p.write_bytes(b"")      现守卫 DETECTED=False   <- 绕过
+```
+
+**修**：绑定形式扩到 `Assign / AnnAssign / AugAssign / NamedExpr`（加注解不是另一种行为）；
+新增就地清空检测 —— `write_bytes / write_text / truncate` 带**字面空载荷**即拒
+（`write_bytes` 本身合法且在 staging 路径上使用，所以只禁可证的空载荷）。
+**`SILENT_DELETE_FORBIDDEN` 管的是字节，不是哪个系统调用。**
+
+明写看不见的：非字面的空载荷（`write_bytes(payload)` 而 `payload` 运行时恰为空）、
+计算出来的 `truncate(n)`。由 `test_the_truncation_scan_declares_what_it_cannot_see` 钉住。
+
+变异证红（实测）：`AnnAssign` 绕法 → 1 红；`write_bytes(b"")` → 3 红；还原 → 26 绿。
+
+### 13.4 LOW ⑤ 「跨四结局」证据映射错误 —— 已复现，已修
+
+§12.7 声称 `test_no_divergence_outcome_destroys_bytes` 跨四结局，
+**实测它只跑三条**（branch C、分歧件已存在、非法 incident_id），
+docstring 的表里列了 branch E 而测试从未到达它。
+
+branch E 的行为本身另有测试覆盖，所以**这是证据映射错误，不是实现缺陷** ——
+但「声称四条而跑三条」正是 §12.8 那个形态，所以闭合而不是解释。
+新增 `test_branch_e_writes_the_named_divergent_file`，并把类断言扩到真跑四条。
+
+### 13.5 HIGH ② (a) 不满足覆盖保全 —— **不由 builder 处置，归 Aaron**
+
+复审席的 `STRONGEST_OBJECTION`：
+
+> 裁定要求旧违规类逐类继续可检出，但 §12.5 明确承认同字节、未知 provenance 的
+> FINAL 仍会被接受。**缩窄违规类不能同时叫作「覆盖保全」。**
+
+**我接受这个判断，并且不认为它能由起草稿解决。** 三条路各自需要 Aaron 的裁量：
+
+```
+(一) 放宽判据 (1)          承认「未经校验的 FINAL」在门学说下本就不可检出，
+                          把它移出覆盖保全的要求
+(二) 重开 B                承认 B 在现 CONDITIONS 下无法满足，回到 A 或第三条路
+(三) 授权机制改动          加一份 provenance 记录 —— 但 CONDITIONS 明令机制零改动，
+                          所以这需要 Aaron 先解除那条约束
+```
+
+**这三条我一条都不能自己选**：(一)(二) 改的是决裁席定的判据，
+(三) 改的是 CONDITIONS 明令不动的东西。决裁包见
+`ops/DECISION_PACKET_A_COVERAGE_CANNOT_BE_PRESERVED.md`。
+
+**因此 §12 整体仍是 `STATUS=DRAFT`，且不再是「等复审」而是「等 Aaron 裁 (a)」。**

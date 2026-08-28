@@ -2,7 +2,7 @@
 
 ```ini
 REVIEW_ID=c-build-2-wording
-DELIVERY_STATUS=ISSUED
+DELIVERY_STATUS=RETURNED
 RECOMMENDED_MODEL=Codex GPT-5.6 Sol
 EFFORT_INTENT=VERY_HIGH
 RECOMMENDED_EFFORT=Extra High
@@ -31,8 +31,12 @@ REVIEWED_SET_UNCHANGED_SINCE=9557c0a78da2299c0d7c0a347d35f33f06db29f1
 **本提示自身不在该 range 内，这是刻意的**：发出一份 delivery 这个动作**就是**
 对它的一次提交，所以任何包含它的 commit range 都不存在不动点
 （证明与实测见 `tests/test_the_delivery_cannot_pin_itself.py`）。
-本提示的字节由 §1 表中它自己的 SHA-256 把守，那才是回答「delivery 有没有动过」
-的正确工具。**若你认为这个拆分本身是个漏洞，请写进 FINDINGS** ——
+
+**【本轮 HIGH，已订正】** 此处原写「本提示的字节由 §1 表中它自己的 SHA-256 把守」。
+**§1 表里没有本提示那一行**，所以那句话给了一个不存在的核对锚点，复审席据此判
+`TRANSPORT_PRECHECK=STOP`，判得对。**发行时的字节记在
+`ops/ARTIFACTS_UNDER_REVIEW.json` 中本 review_id 的条目里**（`role: delivery`），
+复审席读那份登记册即可比对 —— 它在本提示之外，因而没有不动点问题。**若你认为这个拆分本身是个漏洞，请写进 FINDINGS** ——
 它是 2026-08-29 才做的改动，你是第一个看到它的复审席。
 
 > **确认你读的是当前文件**：**line 25 of it must read**

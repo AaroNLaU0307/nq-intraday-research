@@ -307,17 +307,62 @@ class TestCBuild2DuringStaging(_Tmp):
 
     def test_no_destructive_call_is_hidden_behind_a_local_alias(self):
         """`rm = os.remove` renames the call and the name check stops
-        seeing it. Measured on the old scan: not caught."""
+        seeing it. Measured on the old scan: not caught.
+
+        WIDENED 2026-08-29 after the wording review measured a bypass the
+        first version could not see:
+
+            rm = os.remove          ast.Assign      caught
+            rm: object = os.remove  ast.AnnAssign   NOT caught
+
+        An annotation is not a different act. Every binding form that can
+        put a destructive callable behind a new name is checked, not the
+        one form that came to mind."""
+        binding = (ast.Assign, ast.AnnAssign, ast.AugAssign, ast.NamedExpr)
         for name, source in self._reachable_sources(sr.resolve_partial).items():
             for node in ast.walk(ast.parse(source)):
-                if isinstance(node, ast.Assign) and isinstance(
-                        node.value, (ast.Attribute, ast.Name)):
+                if isinstance(node, binding) and isinstance(
+                        getattr(node, "value", None), (ast.Attribute, ast.Name)):
                     bound = getattr(node.value, "attr",
                                     getattr(node.value, "id", ""))
                     self.assertNotIn(bound, self.DESTRUCTIVE,
                                      "%s() binds %r to a local name, which "
                                      "hides it from the call-name scan"
                                      % (name, bound))
+
+    #: Destroying bytes by writing over them rather than by deleting the
+    #: file. `write_bytes` itself is legitimate and used on the staging
+    #: path, so only a provably-empty payload is banned.
+    TRUNCATING = ("write_bytes", "write_text", "truncate")
+
+    def test_no_path_is_emptied_in_place(self):
+        """The second bypass the wording review found: `partial.write_bytes
+        (b"")` destroys the residue while calling nothing on the delete
+        list. SILENT_DELETE_FORBIDDEN is about the BYTES, not about which
+        syscall removed them."""
+        for name, source in self._reachable_sources(sr.resolve_partial).items():
+            for node in ast.walk(ast.parse(source)):
+                if not isinstance(node, ast.Call):
+                    continue
+                if getattr(node.func, "attr", "") not in self.TRUNCATING:
+                    continue
+                for arg in node.args:
+                    if isinstance(arg, ast.Constant) and arg.value in (b"", ""):
+                        self.fail("%s() empties a path in place via %s(); "
+                                  "SILENT_DELETE_FORBIDDEN=YES is about the "
+                                  "bytes, not the syscall"
+                                  % (name, node.func.attr))
+
+    def test_the_truncation_scan_declares_what_it_cannot_see(self):
+        """Only a LITERAL empty payload is visible. `write_bytes(payload)`
+        where `payload` happens to be empty at runtime is not, and neither
+        is `truncate(n)` with a computed `n`. Saying so is the point: this
+        is a syntactic check wearing no claim of exhaustiveness."""
+        source = self._reachable_sources(sr.resolve_partial)["resolve_partial"]
+        self.assertIn("write_bytes", source,
+                      "resolve_partial no longer writes at all; if the "
+                      "staging write moved elsewhere this scan now covers "
+                      "nothing and the boundary note is stale")
 
     def test_the_walk_actually_reaches_the_helpers(self):
         """A transitive scan that silently reaches nothing would pass every
