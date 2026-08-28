@@ -1222,3 +1222,38 @@ pytest     10 passed
 现势：三份 canonical_json 全部 allow_nan=False，全部对 NaN 抛 ValueError。
 修复见 §10.1bis。只读 §10.1 不读 §10.1bis 会误以为缺陷仍在。
 ```
+
+### 15.7 追记：那个守卫自己也只锚了子集，为期一天
+
+写第 3 轮 prompt 时，我在 §3 ② 里打算问复审席：
+
+> 批准若以别的形式出现 —— 不叫 `APPROVED_PROFILE_SHA256`、写在别的文件里 ——
+> 这个守卫看得见吗？**我认为看不见，且没有测试它。**
+
+**停下来量了，答案是「确实看不见，而且已经漏了一个」。**
+
+```
+非隔离面所有 64-hex 声明字段名（实测）
+   5  APPROVED_PROFILE_SHA256
+   2  APPROVED_CR1_GRAMMAR_SHA256      <- 守卫的模式看不见
+   2  RECOMMENDED_CR1_GRAMMAR_SHA256
+   ...
+```
+
+**CR1 语法是第四份已批准工件**：它不在 profile 块内，自成 canonical 块
+（`c251335f…`，`PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md` 第 188 行起 17 行 1585 字节），
+由 profile 内一行 `RECOMMENDED_CR1_GRAMMAR_SHA256` 绑定。
+
+**所以：为了阻止我锚在子集上而写的那个守卫，自己锚在了子集上。** 一天。
+
+**修**：检测模式放宽为任意 `APPROVED_*SHA256`；`APPROVALS` 加入种类字段；
+`KIND_SCOPE` 逐种记录「哪些检查适用、哪些不适用及理由」——
+新增一个没有 `KIND_SCOPE` 条目的种类即失败，
+且「grammar 不带任何锚定值」这条豁免本身也被验证而非断言。
+
+**另一件量到的、原本也要问的**：`SIGNABLE_RATIFICATION_ROUTES=1`
+（唯一路线＝profile id + profile sha256 + doc HEAD）——
+**所以守卫的模式不是我随手挑的，它对应唯一合法批准路线。**
+
+变异证红：追加一份 `APPROVED_SOMETHING_ELSE_SHA256` → 红；
+加一个无 `KIND_SCOPE` 的种类 → 红；还原 → 8 绿 + 24 subtests。
