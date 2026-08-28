@@ -93,10 +93,10 @@ BLIND_SEAT_MAY_NOT_SEARCH_THE_REPOSITORY = 是
 **禁区清单随包**：`ops/OUTCOME_CARRYING_ARTIFACTS.json` 是权威登记册，本 prompt 不复述其内容，你**不得打开它所登记的任何一件**。
 
 **隔离子树 `ops/outcome_quarantine/**` —— 禁区，不得打开、不得搜索、不得列目录。**
-其中包括 `ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md`。
+【OFF-LIMITS】其中包括 `ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md` —— 不得打开。
 outcome-clean 的替代入口是 `ops/RECOVERY_ANCHOR.md`。
 
-**`ops/EXPOSURE_LEDGER.md`（研究轴）不在你的阅读集内。**
+【OFF-LIMITS】**`ops/EXPOSURE_LEDGER.md`（研究轴）不在你的阅读集内，不得打开。**
 `ops/REVIEWER_EXPOSURE_LOG.md`（席位轴）可读 —— 但注意：
 决裁席已申报**席位轴台账的序言携带研究轴累计数值（1575）**，
 按已裁定依据（C-1：累计/计数类属 TRIAL_ACCOUNTING 轴）自评不烧 outcome-blind 资格，
