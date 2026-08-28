@@ -4,73 +4,78 @@
 > 你不必再去 `ops/` 里认哪个是最新的 prompt。
 
 ```
-UPDATED = 2026-08-27 晚（三份裁定全部执行完；两轮 Sol 复审在飞；一条 builder 自纠）
+UPDATED = 2026-08-29
 ```
 
 ---
 
-## 现在挂着两轮 fresh Sol，回来就有活
+## 现在有两份备妥待发，都还没发
 
 ```
-qros-runtime  build-evidence/PROMPT_WINDOW2_SOL_ROUND4.md
-              第二维护窗第 4 轮。钉子 095ac4e。前三轮均 HOLD 同一缺陷类，
-              本轮送的是**边界裁定 ＋ 按它的实现**，不是第四条规则。
-              **开篇披露：渲染层机制出自裁它的那个决裁席，从未经独立审查。**
+ITSF          ops/PROMPT_C_BUILD_2_WORDING_SOL_REVIEW.md
+              C_BUILD_2 新措辞复审。裁定 B 的 CONDITIONS 明令的那一道。
+              冻结登记册已武装：1 delivery + 8 reference，pin=9557c0a。
+              **开篇告知：决裁席自陈已限定措辞形态，独立性相应折减** ——
+              也就是说这道复审有沦为形式的风险，prompt 把这件事当成主要攻击面。
 
-ITSF          ops/PROMPT_MIGRATION_PLAN_SOL_REVIEW.md
-              迁移方案复审。**送审版含一句 builder 写错的话**——勘误已备：
-              ops/ERRATUM_TO_MIGRATION_PLAN_REVIEW.md，可直接递给该会话。
+qros-runtime  build-evidence/PROMPT_WINDOW2_SOL_ROUND8.md
+              第二维护窗第 8 轮。pin=403dc54，13 项已武装（含 prompt 自身）。
+              **主要问题是结构性的**：那个函数的骨架是「试→接住异常→分类」，
+              七轮实测说明枚举永远漏得掉下一种。**继续枚举还是倒转默认？**
+              我没有自己做这个骨架重写 —— 对正在认证中的函数动骨架，
+              而我已连续五次把这类边界画窄。
 ```
 
-**两轮都 HOLD 走 reproduce-first，不采信、逐条复现再修。**
+**两轮都走 reproduce-first：回来的 finding 不采信，逐条复现再修。**
+
+**发出去会各烧一个 Sol 席位。** ITSF 的席位轴台账要补第 10 行，
+**但要等它实际被消耗之后再写** —— 现在写就是记一件没发生的事。
 
 ---
 
-## 一条 builder 自纠，读裁定之前先读它
+## 2026-08-29 落地的（全部变异证红）
 
-`ops/CORRECTION_NO_TRIAL_WAS_BURNED_2026-08-27.md`
+```
+ITSF   §12 起草稿三条自纠 —— 三条都是「声称的覆盖」宽于「实际的检出」
+       (a) already_sealed 对任何字节相符的既存 FINAL 放行，不问出处、从未校验
+       (b) 静默删除扫描面只有一个函数体；删除搬进 _preserve 完整通过
+       (c) 路线写「两条分歧结局」，实测四条
+       §12.8 记共同形态。机制零改动（CONDITIONS）。
 
-builder 在至少四份文档里把 L-5 缺陷的**机制**（「会烧掉一次 trial」）写成了
-**已发生的事故**。实测：registry 里 `BURNED/ABORTED/VOID` 为 **0**，
-S0-T001 成功封存。**从来没有 trial 被烧掉过。**
+ITSF   一份 delivery 无法被包含它自己的 commit range 钉住 —— 三条守卫连起来
+       要求一个不存在的不动点。ITSF 从未登记过任何 *PROMPT*.md，所以第一次
+       触发就是第一次撞上。pin 跨度收到参考件，delivery 由内容哈希把守。
 
-**它触及两份裁定**：`dec-registry-migration` 拒绝路线 C 的理由之一是
-「对一个**已经兑现过的风险**给了过轻的处置」——那句话的事实基础是错的。
+ITSF   席位台账不再随包 —— 第 6、9 行的成因是「台账进了送审集」，
+       两次都只被记录、没变成规则。现在是规则：
+       tests/test_the_seat_ledger_is_not_shipped_to_seats.py
 
-**另**：OneDrive 实测处于**休眠**（文件无 `Offline`/`ReparsePoint`，零冲突副本，
-主客户端未运行，最后登录 2026-01-06）。但账户仍配置着、Desktop 仍是重解析点
-——**一步之遥，不是不可能**。迁移理由仍在，紧迫性下降。
+qros   第五实例，我自己量到的 —— round 7 为分开「缺席」与「不可判定」而加的
+       lstat，自己写成 except OSError: return None，在下一层重建了同一个塌陷。
+       是在写「请复审席判这个」那句话时停下来量出来的。
+
+qros   这个仓没有席位轴台账，八个席位无一行记录 —— 缺台账 ⇒ 该轴 UNKNOWN。
+       没有代你补建（要回溯重构八轮凭记忆的历史）。三件请你定，
+       见 build-evidence/FINDINGS_NO_SEAT_LEDGER_2026-08-29.md
+```
+
+**ITSF 4443/0 · qros-runtime 1050/22/25。**
 
 ---
 
-## 2026-08-27 一天之内落地的（全部变异证红）
+## 还压在你手上、我不动的
 
 ```
-R3 批准并转录      CR1 全套 · P3/F3 双向边 · NON_TERMINAL_TRAPS · 三条禁边 ＋ 三个专码
-                   11 条禁边专码全部浮出（R-A 条件 2 达成）
-R-C                白名单 {P1,P2,F1,T1} ＋ 11 个状态各自具名诊断，未知事件 fail-closed
-executor 成文化    actor_form/executor_of 分五形；两类模型（治理时/运行时）精确成立
-R3 §2–§3 两层      CHECKPOINT_OF（三个时刻）· ROUTER_OF（修掉 archive_policy_a 发 F2 的活缺陷）
-                   已批准 GATE_TABLE 一字未动 —— 叠层，不改枚举
-不变量 5           四处路径构造收敛到 registry_boundary 一处
-不变量 8           registry 缺失改为 BoundaryError 拒绝
-边界② 渲染层       最深既存祖先的最终拼写比较（qros-runtime）
+八项授权          全 NO；迁移 ①②③ 全 NO（③ 另有硬件阻断，本机只有 C:）
+R4                迁移执行完成之后才起草；窗口安全由「R4 ratify 前禁止追加 CR1 行」承担
+§12 新措辞的采纳   fresh Sol 复审只满足 CONDITIONS 的一半，采纳是你的事
+三条裁定的独立性   dec-four-owner · dec-scope-boundary · dec-registry-migration
+                  三份全是 Fable 5，其中一份收窄了另一份，另一份自陈失格
+四个决策席无席位轴行 dec-four-owner · dec-scope-boundary · dec-registry-migration ·
+                  dec-item6-open —— 按 L6 那四席的席位轴状态是 UNKNOWN，不是 NONE。
+                  我没有编造行。
+qros 席位台账      建不建、回填到哪、跨仓席位记在哪边
 ```
-
-**ITSF 4319/0 · qros-runtime 966/22/25。**
-
----
-
-## 三条裁定共有的独立性缺口 —— 未由任何人判定
-
-```
-dec-four-owner · dec-scope-boundary · dec-registry-migration
-```
-
-**三份全是 Fable 5**，其中一份收窄了另一份的措辞，另一份对它所裁的方案有实质设计
-贡献并自陈失格。**整条链至今没有跨家族独立审查**——两轮在飞的 Sol 是第一次。
-
-三份裁定都写了「Aaron 应知悉后再追认」。**builder 不代判。**
 
 ---
 
