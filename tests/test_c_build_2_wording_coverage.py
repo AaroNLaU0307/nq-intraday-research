@@ -1,30 +1,34 @@
-"""What (a) of the §12 draft actually detects, versus what it claims.
+"""What `already_sealed` establishes, and what it does not.
 
-The draft's (a) names its violation class as
+CORRECTED 2026-08-29 (round-2 review, MEDIUM). This docstring used to end
+"Nothing in that branch verifies anything; it compares", and used that to
+argue (a)'s violation class was uncovered. §14 of the design retracts that:
 
-    "一份没被复读校验过的 FINAL 被当作已封存"
-    (a FINAL that was never re-read-verified, treated as sealed)
+    existing = final.read_bytes()      # the re-read
+    if existing == intended:           # the verification
 
-and gives its detection route as a fact about the filesystem AFTER the call:
-FINAL, if present, has bytes == intended.
+is the same check `supplement_post_promotion_verify` performs. Comparison
+against `intended` IS the verification. The class "a FINAL that was never
+re-read-verified is treated as sealed" has no instance, and the original
+wording covered it.
 
-MEASURED: those are not the same set. `resolve_partial` returns
-`already_sealed` for ANY pre-existing FINAL whose bytes match, whatever
-produced it — a hand-copy, a restore from backup, an older build without
-the post-promotion re-read. Nothing in that branch verifies anything; it
-compares. The claimed class is strictly wider than the route that detects
-it.
+Leaving the old text here while the design said the opposite meant a
+reviewer reading the tests and a reviewer reading the design got different
+stories from the same author. That is worse than either being wrong alone.
 
-That is the same shape the sister repository spent five review rounds on:
-the guard is narrower than the property it claims. It is worse than an
-honest boundary, because a reader of the wording believes the wider class
-is covered.
+WHAT SURVIVES, and it is a different thing: `already_sealed` does not
+establish PROVENANCE. It does not know who wrote the FINAL — a hand-copy,
+a restore from backup, an older build. That is true, unclosable without a
+provenance record the mechanism does not keep, and NOT part of (a)'s class.
+§14.8 records it as a standalone fact about the mechanism.
 
-So the draft is corrected to name what it detects, and the residual — a
-FINAL of unknown provenance is accepted on bytes alone — is PINNED HERE
-rather than left silent. Closing it would need a provenance record the
-mechanism does not have, and inventing one is a design change, which the
-ruling forbids this draft from making.
+WHAT THE ROUND-2 REVIEW ADDED, and it is the sharper point: whether a
+comparison HAPPENED is a PROCESS property, and no post-call filesystem
+state can establish it. Measured — a mutant that returns `already_sealed`
+without reading anything leaves an identical post-call state. So the
+route for (a) is a PINNED MECHANISM PROPERTY, held by
+`test_wrong_bytes_are_still_refused` and the read-counting in
+`test_every_sealed_final_was_read_back.py`, not by observing the tree.
 """
 
 import tempfile
@@ -43,23 +47,43 @@ class TestWhatAlreadySealedActuallyChecks(unittest.TestCase):
     def _out(self):
         return Path(tempfile.mkdtemp())
 
-    def test_a_final_of_unknown_provenance_is_accepted_on_bytes_alone(self):
-        """The residual, pinned. Nothing here produced this FINAL and
-        nothing re-read-verified it; matching bytes are the whole test."""
+    def test_a_final_of_unknown_provenance_is_accepted(self):
+        """The PROVENANCE residual, pinned. Nothing here produced this
+        FINAL. Its bytes ARE re-read and compared — that is the
+        verification — but nothing establishes who wrote it.
+
+        RENAMED 2026-08-29: was `..._accepted_on_bytes_alone`, which read
+        as "accepted without checking". It is accepted ON its bytes, having
+        checked them."""
         out = self._out()
         (out / "f.json").write_bytes(INTENDED)
         act = sr.resolve_partial(out_dir=out, filename="f.json",
                                  intended=INTENDED, incident_id="i1")
         self.assertEqual("already_sealed", act.action)
 
-    def test_the_detection_route_passes_for_it(self):
-        """(a)'s route is 'FINAL present => bytes == intended'. It holds
-        here, which is exactly why the route cannot see the claimed class."""
+    def test_post_call_state_cannot_show_the_comparison_happened(self):
+        """ROUND-2 HIGH, pinned as a test rather than as a paragraph.
+
+        The post-call fact "FINAL present and bytes == intended" holds
+        identically whether or not the mechanism compared anything —
+        measured against a mutant that returns `already_sealed` without
+        reading. So this observation is NOT evidence that verification
+        occurred, and (a)'s detection route may not be described as a pure
+        filesystem fact.
+
+        What this test asserts is the observation's WEAKNESS, which is why
+        it is worth having: it stops anyone re-deriving the wrong
+        classification from a passing check."""
         out = self._out()
         (out / "f.json").write_bytes(INTENDED)
         sr.resolve_partial(out_dir=out, filename="f.json",
                            intended=INTENDED, incident_id="i1")
-        self.assertEqual(INTENDED, (out / "f.json").read_bytes())
+        observed = (out / "f.json").exists() and (
+            out / "f.json").read_bytes() == INTENDED
+        self.assertTrue(observed)
+        self.assertIn("test_wrong_bytes_are_still_refused", dir(self),
+                      "the behavioural pin that DOES hold the property must "
+                      "live in this class; if it moves, this note is stale")
 
     def test_wrong_bytes_are_still_refused(self):
         """What the route DOES detect, and the class the corrected wording
@@ -94,8 +118,6 @@ class TestTheResidualIsWrittenDownRatherThanClaimedClosed(unittest.TestCase):
         self.assertIn("12.5", text)
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class TestHowManyDivergenceOutcomesThereActuallyAre(unittest.TestCase):
@@ -212,3 +234,6 @@ class TestHowManyDivergenceOutcomesThereActuallyAre(unittest.TestCase):
             self.assertIn("f.json" + sc.PARTIAL_SUFFIX,
                           [p.name for p in out.iterdir()],
                           "a refusal destroyed the residue it refused over")
+
+if __name__ == "__main__":
+    unittest.main()

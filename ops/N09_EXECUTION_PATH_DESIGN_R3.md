@@ -1092,3 +1092,133 @@ partial 不符           retry_permitted    读 0 次 —— 而它没有任何 
 4 机制、GATE_TABLE、CHECKPOINT_OF 零改动  met（本次仍零改动）
 5 陈旧化绊线保留                        met
 ```
+
+---
+
+## 15. 第 2 轮措辞复审（`c-build-2-wording-r2`）返回 HOLD —— 四条逐条处置
+
+```
+VERDICT=HOLD   WORDING_MAY_GO_TO_AARON=NO   TRANSPORT_PRECHECK=PASS
+CRITERION_1_NOW_MET=NO —— (a) NO · (b) YES · (c) YES
+CONDITIONS_MET=1 met · 2 not met · 3 not met · 4 met · 5 met
+```
+
+**四条全部先复现后修。** 复审席这一轮独立复核了 51 项测试、原像重建、
+全窗唯一性、四条分歧结局，并明列了它**无法**独立复核的三类历史事实 ——
+那份 `UNVERIFIABLE_SELF_REPORTS` 清单本身就是我要的东西。
+
+### 15.1 HIGH ① 过程性质被标成状态事实 —— 成立，已改
+
+复审席的话：
+
+> 即使当前机制确实执行比较，`FINAL bytes == intended` 也无法证明比较曾发生。
+
+**复现（变异实测）**：把 `already_sealed` 改成不读 FINAL 直接返回 ——
+
+```
+变异体      action=already_sealed
+调用后事实   FINAL 在场=True，其字节==intended=True
+未变异体    完全相同
+```
+
+**该途径看不出比较是否发生过。** 所以 (a) 的检出途径**不是纯文件系统事实**，
+是**被钉住的机制性质**。
+
+**这与 §14 的撤回并不冲突，两件事都成立**：
+类确实没有实例（§14 对），**而途径分类仍然错**（本节）。
+我撤回了虚构的缺陷，却没有回头检查那条途径该怎么归类。
+
+**(a) 更正为**：
+
+```
+(a) 未经校验的 FINAL 不存在
+    防的违规类：一份没被复读校验过的 FINAL 被当作已封存
+    检出途径：**被钉住的机制性质** —— 每一条把 FINAL 当作已封存的路径，
+              都在同一次调用内把 FINAL 读回并与 intended 比对：
+              既存件走 `existing == intended`，新封存走 promote 后的
+              `final.read_bytes() != intended`。
+              由 `test_wrong_bytes_are_still_refused` 与
+              `test_every_sealed_final_was_read_back.py` 的读计数钉住。
+    **明写不是什么**：调用后的「FINAL 在场且字节 == intended」**不能**充当本条的
+              检出途径 —— 一个从不比较的变异体留下完全相同的状态（实测）。
+              钉在 `test_post_call_state_cannot_show_the_comparison_happened`。
+```
+
+变异证红（实测）：撤掉 `already_sealed` 的比较 → 4 红；还原 → 17 绿。
+
+### 15.2 HIGH ② 陈旧化保护不成立 —— 成立，且实情比 finding 更糟
+
+复现：追加一份伪造的取代性批准（把 `ND1_PARTIAL_MODIFY_TEXT` 改成完全不同的值），
+**34 条守卫全绿**。
+
+**然后枚举出了真正的问题**：`ND1_PROFILE_RATIFICATION.md` 里**早就有三份批准**：
+
+```
+R1  0a08319a…  2026-08-20   ops/DECISION_PACKET_N00_AND_ND1.md 第 1309 行 49 行
+R2  a3d40b7c…  2026-08-23   同文件第 1614 行 51 行     R1_STATUS=SUPERSEDED_BY_R2_FOR_P3_ONLY
+R3  d40ad864…  2026-08-27   ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md 第 110 行 60 行
+                            R2_STATUS=SUPERSEDED_BY_R3_FOR_P3_AND_F3_ONLY
+```
+
+**§13.2 只锚在 R1 上，而 R2、R3 当时已经存在。** 我没有注意到。
+
+**逐份重建后核验的结果（这一条是好消息，但它是运气）**：
+
+```
+三个锚定值   三份批准逐字相同
+时机词       三份各自零命中（用测试那条正则；加 gate 则 R1 有 1 行，
+             是 RECOMMENDED_F1_GATE_NAME_ENUM=DEFER_TO_N04，管命名不管时机）
+```
+
+**所以锚定实质上站得住 —— 但没有任何机制在守它。**
+
+**修**：新建 `tests/test_every_approval_is_accounted_for.py`：
+逐份按哈希重建原像（R3 的在另一个文件里，是**搜出来的不是猜的**）·
+三个锚定值在每一份里都必须一致 · falsifier 对每一份都查 ·
+**出现第四份未检查的批准即失败**，并明写「不得放宽模式让它通过」。
+
+变异证红（实测）：追加第四份 → 1 红；还原 → 6 绿 + 18 subtests。
+
+### 15.3 MEDIUM 测试仍声称 comparison 不是 verification —— 成立，已改
+
+`test_c_build_2_wording_coverage.py` 的模块 docstring 还留着
+「Nothing in that branch verifies anything; it compares」，与 §14 直接矛盾。
+
+**这比单纯的陈旧更糟**：读测试的复审席和读设计的复审席，
+会从**同一个作者**那里拿到两个互相矛盾的故事。已重写，并把 §15.1 的
+过程/状态区分一并写进去。一个测试也随之改名
+（`..._accepted_on_bytes_alone` → `..._accepted`，因为前者读起来像「没检查就接受」，
+而它是**检查了字节之后**接受的）。
+
+### 15.4 LOW `unittest.main()` 位置导致半套件假绿 —— 成立，已改
+
+```
+直接运行   Ran 5 tests ... OK      <- 后半个文件根本没跑
+pytest     10 passed
+```
+
+我用 `cat >>` 往文件尾部追加测试类时，把它们追加到了
+`if __name__ == "__main__":` **之后**。**全仓扫描：只有这一处。**
+已把 `unittest.main()` 移到文件末尾；直接运行现在跑满 10 条。
+
+### 15.5 复审席点出的第五件（未列入 FINDINGS，但我接受）
+
+> ⑤ 导出值锚定：锚定不必直达批准块；「批准前件＋固定、确定性的导出规则」
+> 可以形成有效传递锚。**但现有 premise test 不会在「新批准值追加、代码仍旧」时变红。**
+
+前半句是对我 §13.2 那条担心的**否定**——传递锚有效，我不必把 (b) 的依据行说得那么弱。
+后半句正是 15.2，已修。
+
+### 15.6 §10.1 的时态 —— 我自己审计出来的，一并施加
+
+`ops/SELF_REPORT_AUDIT_2026-08-29.md` 记录：§10.1 那张表以现在时写着
+`day_strata.canonical_json ← 没有 allow_nan`，而三份现在全部抛 `ValueError`
+（Aaron 2026-08-27 授权补上，修复记在紧随的 §10.1bis）。
+
+**不是假断言，是陈旧时态。** 表本身按追加惯例不改，此处标注：
+
+```
+§10.1 的表是 2026-08-27 当时的实测记录。
+现势：三份 canonical_json 全部 allow_nan=False，全部对 NaN 抛 ValueError。
+修复见 §10.1bis。只读 §10.1 不读 §10.1bis 会误以为缺陷仍在。
+```
