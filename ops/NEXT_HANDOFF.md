@@ -185,7 +185,33 @@ always-refusing scaffold`。五条最小解阻条件里 **1／2／4／5 全是 b
 ```
 
 R3 对现有代码的每条断言由 `tests/test_n09_r3_design_facts.py` 机械钉住
-（21 项，4 条变异证红）。**仍是设计，`STATUS=NOTHING_IMPLEMENTED`。**
+（21 项，4 条变异证红）。
+
+**2026-08-27／28 更新 —— §1–§6 现在全部有机制了。** 措辞要准：
+**加的是守卫，不是骨架本身**；骨架在各出口处的其余结构仍未建。
+
+```
+§1  三个 checkpoint 各自的断言     tests/test_n09_checkpoint_assertions.py（19）
+§2  两个路由器 ＋ 转移矩阵         supplement_contract（当日早些时候）
+§4  structural-only 调用图         tests/test_n09_scaffold_criteria.py（17）
+§5  precheck 证据四规则            tests/test_n09_precheck_evidence_rules.py（22）
+§6  骨架的四条判据                 同上 scaffold_criteria
+```
+
+**过程中测出四处 R3 自己的事实陈述不成立**，逐条记在 R3 §9–§11：
+
+```
+§5 说三份 canonical_json 同体      不同体 —— 一份缺 allow_nan，对 NaN 产出非法 JSON
+                                   Aaron 2026-08-28 作废该范围声明，已修
+§5 把第三份写成 canonical_json      实为 _canonical（行号对，名字不对）
+§5 说是三份                        按签名找是五份，但另两份是 manifest 的另一套合同
+§1 说 C_BUILD_2 三条都是文件系统事实 其中的状态只存在于 resolve_partial 调用内部，
+                                   而它不提供让门在那一刻运行的钩子 ——
+                                   已出决裁包 dec-c-build-2-hook-2026-08-28
+```
+
+**`STATUS=NOTHING_IMPLEMENTED` 对「骨架的出口结构」仍然逐字为真**，
+对「§1–§6 的机制」已不再为真。
 
 **越过骨架仍需 Aaron 的四项**（R3 §7，builder 不代填）：P3／失败事件的写者、
 目录创建授权的四要素、D-3 的五项 `UNRESOLVED_FOR_AARON`、N09 的 P2。

@@ -101,7 +101,7 @@ def required_save_path(repo, review_id, save_dir=None):
 ### 3.4 测试与 conformance（条件 4）
 
 运行时自己有 **6+ 处硬编码** `"runs/packets/%s.packet"`：
-`tests/fakes.py:275`、`test_integration_cli.py:299`、`test_satisfaction.py:174`、
+`qros-runtime/tests/fakes.py:275`、`test_integration_cli.py:299`、`test_satisfaction.py:174`、
 `test_sol_hold_repairs.py:209/892/2509`。
 
 这些**不改**（它们钉的是默认行为，必须继续绿）。**新增**配置路径的覆盖用例：

@@ -68,8 +68,8 @@ BLIND_SEAT_MAY_NOT_SEARCH_THE_REPOSITORY = 是
 ——一次广域符号搜索把片段带了出来；第三个只做了**一次单模式定向 grep**，同样触到了。
 
 权威清单：`ops/OUTCOME_CARRYING_ARTIFACTS.json` 的 `carries_outcome`。
-**读那个 json，把里面每一条路径当作关闭。** 尤其点名（**禁区，不得打开**）：
-`ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md`。
+**读那个 json，把里面每一条路径当作关闭。** 尤其点名：
+`ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md` —— **禁区，不得打开、不得搜索。**
 
 **许可起点**：`ops/RECOVERY_ANCHOR.md`（outcome-clean，永不隔离）。
 

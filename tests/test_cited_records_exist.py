@@ -57,6 +57,23 @@ QUARANTINE = OPS / "outcome_quarantine"
 #: what a marker is allowed to say.
 _REF = re.compile(r"`?(ops/[A-Za-z0-9_./-]+\.(?:md|json|py))`?")
 
+#: SOURCE-PATH REFERENCES, added 2026-08-28. `ops/` documents also cite code
+#: by path, and those dangle the same way — a reader who cannot resolve one
+#: searches, which is the action the blind-seat rule forbids.
+#:
+#: THE LOOKBEHIND IS THE WHOLE TRICK, and it was learned by getting it wrong.
+#: Without it the pattern matches the TAIL of a correctly-qualified
+#: cross-repository path: `qros-runtime/tests/x.py` contains `tests/x.py`, so
+#: a properly written reference was reported as dangling. Half of the two
+#: "findings" that motivated this guard were the detector manufacturing them.
+_SRC_REF = re.compile(
+    r"(?<![A-Za-z0-9_./-])((?:tests|src|scripts)/[A-Za-z0-9_./-]+\.py)")
+
+#: Sibling repositories a cross-repo reference may name. A reference that
+#: starts with one of these is qualified and is not this repository's to
+#: resolve — which is why the lookbehind above must not strip the prefix.
+_SIBLING_REPOS = ("qros-runtime", "quant-research-knowledge-base")
+
 _KNOWN = {
     "ops/...md": "PROSE_PLACEHOLDER",
     "ops/PROMPT_...md": "PROSE_PLACEHOLDER",
@@ -268,6 +285,93 @@ class TestEachClassificationIsCheckable(unittest.TestCase):
             "class was emptied on 2026-08-27 when all three members turned "
             "out to be proposals; re-read the citing LINES before trusting "
             "the label:\n  " + "\n  ".join(cited))
+
+
+class TestSourcePathsCitedInOpsResolve(unittest.TestCase):
+    """`ops/` documents cite code by path, and a dangling one behaves exactly
+    like a dangling `ops/` citation: the reader searches.
+
+    THE CROSS-REPOSITORY CASE is the reason this needs care rather than
+    another regex. A reference to the sister runtime is not this
+    repository's to resolve, and writing it qualified — `qros-runtime/…` —
+    is the correct form, not a defect. The first version of this scan
+    reported those as dangling because the pattern matched their tails.
+    """
+
+    def _dangling(self):
+        out = {}
+        for path in _citing_documents():
+            text = path.read_text(encoding="utf-8")
+            for ref in _SRC_REF.findall(text):
+                if not (REPO / ref).exists():
+                    out.setdefault(ref, set()).add(path.name)
+        return out
+
+    def test_the_scan_finds_source_references_at_all(self):
+        """Premise. `assertEqual([], dangling)` is true of a scan that
+        matched nothing."""
+        total = set()
+        for path in _citing_documents():
+            total |= set(_SRC_REF.findall(path.read_text(encoding="utf-8")))
+        self.assertGreater(len(total), 20,
+                           "the source-path scan found %d references; at that "
+                           "count it proves nothing" % len(total))
+
+    def test_no_source_path_cited_in_ops_dangles(self):
+        """NO ALLOWLIST, and that is measured rather than aspired to.
+
+        A first version carried two entries for the unqualified paths that
+        `FINDINGS_PENDING_UNFREEZE_2026-08-27.md` quotes while recording this
+        very defect. Clearing that allowlist did not turn the test red —
+        the entries were dead, because the record writes those paths in a
+        deliberately broken form the pattern cannot match. A dead allowlist
+        entry is worse than none: it implies a live exception."""
+        dangling = sorted(self._dangling())
+        self.assertEqual([], dangling,
+                         "these code paths are cited in ops/ and do not "
+                         "resolve here; if the target lives in a sibling "
+                         "repository the reference needs its repo name:\n  "
+                         + "\n  ".join(dangling))
+
+    def test_the_record_of_the_defect_still_quotes_it_unresolvably(self):
+        """The other half of the sentence above, asserted so it stays true.
+
+        That record has to show the bad forms in order to be a record of
+        them. It writes `<tests>/…` — close enough to read, impossible to
+        match. If someone later "tidies" it into real paths, the record
+        becomes two more instances of the defect it documents, and this
+        fires before the scan above does."""
+        record = OPS / "FINDINGS_PENDING_UNFREEZE_2026-08-27.md"
+        self.assertTrue(record.exists())
+        text = record.read_text(encoding="utf-8")
+        self.assertIn("<tests>/", text,
+                      "the record no longer quotes the paths in the broken "
+                      "form, so it is about to start dangling itself")
+        # NOT "contains no matchable path" — that was the first version and
+        # it was too strong: the record legitimately names
+        # `tests/test_cited_records_exist.py`, which resolves. What must hold
+        # is that none of its paths DANGLE.
+        unresolved = sorted(r for r in _SRC_REF.findall(text)
+                            if not (REPO / r).exists())
+        self.assertEqual([], unresolved,
+                         "the record now carries a dangling source path: %r"
+                         % unresolved)
+
+    def test_a_qualified_cross_repo_reference_is_not_flagged(self):
+        """The lookbehind, asserted as behaviour. Without it a correctly
+        written cross-repo path is reported as dangling — measured, and it
+        produced half of the two findings that motivated this guard."""
+        for repo in _SIBLING_REPOS:
+            sample = "see `%s/tests/test_x.py` for the detail" % repo
+            self.assertEqual([], _SRC_REF.findall(sample),
+                             "a qualified %s reference still matches; the "
+                             "lookbehind is not doing its job" % repo)
+
+    def test_an_unqualified_reference_is_still_flagged(self):
+        """The other direction — otherwise the lookbehind could be widened
+        until nothing matches at all."""
+        self.assertEqual(["tests/test_x.py"],
+                         _SRC_REF.findall("see `tests/test_x.py` for detail"))
 
 
 class TestTheOffLimitsListItselfResolves(unittest.TestCase):
