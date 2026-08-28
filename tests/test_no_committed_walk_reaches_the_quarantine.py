@@ -64,9 +64,19 @@ class TestTheQuarantineHoldsNothingAPythonWalkWouldFind(unittest.TestCase):
 
     def test_it_contains_only_markdown(self):
         """The reason `rglob('*.py')` sweeps cannot reach it. One `.py`
-        landing here removes that protection with nothing else changing."""
-        others = sorted(p.name for p in QUARANTINE.rglob("*")
-                        if p.is_file() and p.suffix != ".md")
+        landing here removes that protection with nothing else changing.
+
+        The scan proves it found something BEFORE asserting the absence —
+        caught by this repository's own vacuous-guard detector on the first
+        version, which asserted "no non-markdown files" over a collection
+        it never showed was non-empty. An empty quarantine would have
+        passed it."""
+        found = [p for p in QUARANTINE.rglob("*") if p.is_file()]
+        self.assertGreater(len(found), 5,
+                           "the quarantine scan found %d files; the absence "
+                           "asserted below would hold over nothing"
+                           % len(found))
+        others = sorted(p.name for p in found if p.suffix != ".md")
         self.assertEqual([], others,
                          "non-markdown files are in the quarantine, so "
                          "source sweeps can now reach it: %s" % others)
