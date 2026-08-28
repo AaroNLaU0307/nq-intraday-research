@@ -1,65 +1,56 @@
 # 下一份要交出去的东西 —— 固定入口
 
 > **这个文件名永远不变。** 我说「贴这个给 Sol／Fable」时，指的就是它。
-> 你不必再去 `ops/` 里认哪个是最新的 prompt。
 
 ```
-UPDATED = 2026-08-29
+UPDATED = 2026-08-29 晚（两轮 fresh Sol 都回来了，都 HOLD，都已逐条处置）
 ```
 
 ---
 
-## 现在有两份备妥待发，都还没发
+## 现在没有任何 prompt 在飞 —— 挡路的是两个你的裁量
 
 ```
-ITSF          ops/PROMPT_C_BUILD_2_WORDING_SOL_REVIEW.md
-              C_BUILD_2 新措辞复审。裁定 B 的 CONDITIONS 明令的那一道。
-              冻结登记册已武装：1 delivery + 8 reference，pin=9557c0a。
-              **开篇告知：决裁席自陈已限定措辞形态，独立性相应折减** ——
-              也就是说这道复审有沦为形式的风险，prompt 把这件事当成主要攻击面。
+① ITSF   ops/DECISION_PACKET_A_COVERAGE_CANNOT_BE_PRESERVED.md
+         (a) 的覆盖保全在现 CONDITIONS 下无法满足。三条出路各自越权，
+         我一条都不能自己选：放宽判据(1) / 重开 B / 解除机制零改动。
+         **我推荐重开 B**，并写明那意味着我在 §12 上的大部分工作不进生产。
+         裁了才知道 §12 要不要继续。
 
-qros-runtime  build-evidence/PROMPT_WINDOW2_SOL_ROUND8.md
-              第二维护窗第 8 轮。pin=403dc54，13 项已武装（含 prompt 自身）。
-              **主要问题是结构性的**：那个函数的骨架是「试→接住异常→分类」，
-              七轮实测说明枚举永远漏得掉下一种。**继续枚举还是倒转默认？**
-              我没有自己做这个骨架重写 —— 对正在认证中的函数动骨架，
-              而我已连续五次把这类边界画窄。
+② qros   倒转默认作为**设计**的正式采纳。
+         本次落地的是对已复现 HIGH 的最小正确修复，恰好就是那个结构；
+         但设计出自第 8 轮复审席（它自报 design_contribution=YES_THIS_REVIEW），
+         **后续认证不得声称对该设计元素独立** —— 这一条已记录，不要遗忘。
 ```
 
-**两轮都走 reproduce-first：回来的 finding 不采信，逐条复现再修。**
-
-**发出去会各烧一个 Sol 席位。** ITSF 的席位轴台账要补第 10 行，
-**但要等它实际被消耗之后再写** —— 现在写就是记一件没发生的事。
+**两轮复审都各烧了一个 Sol 席位。** ITSF 的席位轴台账要补第 10 行，
+qros 那边**没有台账可补**（见下）。
 
 ---
 
-## 2026-08-29 落地的（全部变异证红）
+## 2026-08-29 落地的（全部先复现后修，变异证红）
 
 ```
-ITSF   §12 起草稿三条自纠 —— 三条都是「声称的覆盖」宽于「实际的检出」
-       (a) already_sealed 对任何字节相符的既存 FINAL 放行，不问出处、从未校验
-       (b) 静默删除扫描面只有一个函数体；删除搬进 _preserve 完整通过
-       (c) 路线写「两条分歧结局」，实测四条
-       §12.8 记共同形态。机制零改动（CONDITIONS）。
+qros 第 8 轮 HOLD —— 第六实例
+  普通文件被当作目录放行：runs / runs/prompts / runs/a/b/c 全 ACCEPT，
+  repo_root 自身是文件也 ACCEPT。真实临时目录复现。
+  修：_must_be_a_directory 成为唯一放行规则，倒转默认。
+  **我自己的三条测试把这个缺陷写成了正确行为** —— 错的 oracle，不是覆盖缺失，
+  也正是五轮复审都没碰到它的原因：套件在断言它。三条就地更正并写明旧期望。
+  两条 LOW：32767 不再声称是首个不可表示长度（文档只说近似）；
+  边界测试改名 —— 它只比字符串长度，「真的能落地」从未被证明。
 
-ITSF   一份 delivery 无法被包含它自己的 commit range 钉住 —— 三条守卫连起来
-       要求一个不存在的不动点。ITSF 从未登记过任何 *PROMPT*.md，所以第一次
-       触发就是第一次撞上。pin 跨度收到参考件，delivery 由内容哈希把守。
-
-ITSF   席位台账不再随包 —— 第 6、9 行的成因是「台账进了送审集」，
-       两次都只被记录、没变成规则。现在是规则：
-       tests/test_the_seat_ledger_is_not_shipped_to_seats.py
-
-qros   第五实例，我自己量到的 —— round 7 为分开「缺席」与「不可判定」而加的
-       lstat，自己写成 except OSError: return None，在下一层重建了同一个塌陷。
-       是在写「请复审席判这个」那句话时停下来量出来的。
-
-qros   这个仓没有席位轴台账，八个席位无一行记录 —— 缺台账 ⇒ 该轴 UNKNOWN。
-       没有代你补建（要回溯重构八轮凭记忆的历史）。三件请你定，
-       见 build-evidence/FINDINGS_NO_SEAT_LEDGER_2026-08-29.md
+ITSF 措辞复审 HOLD —— 四条闭合、一条上交
+  ① 传输锚点不存在（我声称自身哈希在 §1，表里没有那行）→ 改指登记册
+  ③ falsifier 现已在**批准原文字节**上闭合：重建 803d991 的 49 行 2527 字节，
+    SHA256 与 APPROVED_PROFILE_SHA256 相等，其中无一句规定门何时运行。
+    额外量到 SILENT_DELETE_FORBIDDEN 是导出值不是批准值，(b) 的依据行已更正。
+  ④ AnnAssign 别名 + write_bytes(b"") 两条绕法复现并修
+  ⑤ 「跨四结局」实际只跑三条 —— 证据映射错误，已补 branch E
+  ② (a) 的覆盖保全 → 决裁包，见上
 ```
 
-**ITSF 4443/0 · qros-runtime 1050/22/25。**
+**ITSF 4457/0 · qros-runtime 1057/22/25。**
 
 ---
 
@@ -67,14 +58,14 @@ qros   这个仓没有席位轴台账，八个席位无一行记录 —— 缺�
 
 ```
 八项授权          全 NO；迁移 ①②③ 全 NO（③ 另有硬件阻断，本机只有 C:）
-R4                迁移执行完成之后才起草；窗口安全由「R4 ratify 前禁止追加 CR1 行」承担
-§12 新措辞的采纳   fresh Sol 复审只满足 CONDITIONS 的一半，采纳是你的事
-三条裁定的独立性   dec-four-owner · dec-scope-boundary · dec-registry-migration
-                  三份全是 Fable 5，其中一份收窄了另一份，另一份自陈失格
-四个决策席无席位轴行 dec-four-owner · dec-scope-boundary · dec-registry-migration ·
-                  dec-item6-open —— 按 L6 那四席的席位轴状态是 UNKNOWN，不是 NONE。
-                  我没有编造行。
-qros 席位台账      建不建、回填到哪、跨仓席位记在哪边
+R4                迁移执行完成之后才起草
+§12 新措辞         现在等的不是复审，是你裁 (a)
+qros HEADER_SCOPE  独立窗口复核；ORIGINAL_PACKET_WORK 仍 UNRESOLVED
+32,767 等号处       保守拒绝，还是另定可移植性政策
+三条裁定的独立性    dec-four-owner · dec-scope-boundary · dec-registry-migration
+四个决策席无席位轴行 那四席的席位轴状态是 UNKNOWN，不是 NONE。我没有编造行。
+qros 席位台账      **仍不存在**，八个席位无一行记录。建不建、回填到哪、
+                  跨仓席位记在哪边 —— build-evidence/FINDINGS_NO_SEAT_LEDGER_2026-08-29.md
 ```
 
 ---
