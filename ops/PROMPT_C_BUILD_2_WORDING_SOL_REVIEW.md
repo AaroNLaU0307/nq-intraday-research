@@ -22,12 +22,21 @@ PREREG_SEALED=N/A（本件是执行路径设计，不是预注册）
 仓根：`C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework`
 
 ```
-HEAD=36cd793
-REVIEWED_SET_UNCHANGED_SINCE=36cd793a83b37b5be817c4c6f31817c5120497cd
+REVIEWED_SET_UNCHANGED_SINCE=9557c0a78da2299c0d7c0a347d35f33f06db29f1
 ```
 
-> **确认你读的是当前文件**：**line 26 of it must read**
-> `REVIEWED_SET_UNCHANGED_SINCE=36cd793a83b37b5be817c4c6f31817c5120497cd`。
+**语义**：该 commit **之后**没有任何 commit 触碰过 §1 表中的**参考件**。
+**它不是也不该是当前分支头** —— 提交本提示、登记册、issuance 记录都会推动分支头。
+
+**本提示自身不在该 range 内，这是刻意的**：发出一份 delivery 这个动作**就是**
+对它的一次提交，所以任何包含它的 commit range 都不存在不动点
+（证明与实测见 `tests/test_the_delivery_cannot_pin_itself.py`）。
+本提示的字节由 §1 表中它自己的 SHA-256 把守，那才是回答「delivery 有没有动过」
+的正确工具。**若你认为这个拆分本身是个漏洞，请写进 FINDINGS** ——
+它是 2026-08-29 才做的改动，你是第一个看到它的复审席。
+
+> **确认你读的是当前文件**：**line 25 of it must read**
+> `REVIEWED_SET_UNCHANGED_SINCE=9557c0a78da2299c0d7c0a347d35f33f06db29f1`。
 > 对不上 ⇒ 你手上是陈旧粘贴 ⇒ **STOP**，回到磁盘重读。
 
 ---

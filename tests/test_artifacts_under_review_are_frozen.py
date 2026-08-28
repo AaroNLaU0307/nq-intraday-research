@@ -136,7 +136,16 @@ def test_the_pin_is_the_derived_one_not_a_typed_one():
             wrong.append(f"{review_id}: {len(declared)} different pins in "
                          "one review set")
             continue
-        expected = derive_pin(repo, [e["path"] for e in group])
+        # The DELIVERY document is excluded from the span, and only from
+        # the span. Issuing a delivery IS a commit to it, so a range that
+        # contains it has no fixed point -- proved in
+        # tests/test_the_delivery_cannot_pin_itself.py, measured 2026-08-29
+        # the first time a `*PROMPT*` path was ever registered here. Its
+        # bytes are held by the hash guard above, which is the instrument
+        # that actually answers "did the delivery move".
+        span = [e["path"] for e in group
+                if not e.get("is_the_delivery_document")] or                [e["path"] for e in group]
+        expected = derive_pin(repo, span)
         if declared.pop() != expected:
             wrong.append(f"{review_id}: pinned "
                          f"{group[0]['unchanged_since'][:12]}, derived "
@@ -169,6 +178,12 @@ def test_no_commit_has_touched_a_reviewed_path_since_its_declaration():
 
     touched = []
     for e in entries:
+        if e.get("is_the_delivery_document"):
+            # Excluded here for the same reason as in the pin derivation:
+            # committing the delivery IS the issuance, so this range can
+            # never be empty for it. Its bytes are held by the hash guard.
+            # See tests/test_the_delivery_cannot_pin_itself.py.
+            continue
         out = subprocess.run(
             ["git", "log", "--oneline", f"{e['unchanged_since']}..HEAD",
              "--", e["path"]],
