@@ -23,8 +23,12 @@ PREREG_SEALED=N/A
 仓根：`C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework`
 
 ```
-REVIEWED_SET_UNCHANGED_SINCE=PIN_PLACEHOLDER
+REVIEWED_SET_UNCHANGED_SINCE=d34ce7c9d30fa87493123cc12b504c5111418df5
 ```
+
+> **确认你读的是当前文件**：**line 26 of it must read**
+> `REVIEWED_SET_UNCHANGED_SINCE=d34ce7c9d30fa87493123cc12b504c5111418df5`。
+> 对不上 ⇒ 你手上是陈旧粘贴 ⇒ **STOP**，回到磁盘重读。
 
 **语义**：该 commit **之后**没有任何 commit 触碰过 §1 表中的参考件。
 **它不是也不该是当前分支头。** 本提示自身不在该 range 内（发出 delivery 就是对它的
@@ -63,7 +67,18 @@ R3  d40ad864…  2026-08-27   R2_STATUS=SUPERSEDED_BY_R3_FOR_P3_AND_F3_ONLY
 
 ## 1. 传输核对（先做，不通过就 STOP）
 
-TRANSPORT_TABLE_PLACEHOLDER
+| SHA-256 | 字节 | 路径 |
+|---|---|---|
+| `562febeb56c11a5eb75213de97b78dcc0cc583c5dc8523bd2349b2470e7c2cc9` | `61178` | `ops/N09_EXECUTION_PATH_DESIGN_R3.md` |
+| `101b6b7b272df2b0f71359a5e4d5310e896d10a27c072d783decbf7c9dfaeb82` | `11888` | `ops/RULING_FABLE_C_BUILD_2_HOOK_2026-08-28.md` |
+| `3964c7b8227542bd78c1b7706493dbf16cbf86c30b824a5560bfa505eb174adc` | `11830` | `ops/ND1_PROFILE_RATIFICATION.md` |
+| `446ebd4bf51dc797d30566d54076c34d771ccd5114d34e931dc32e189fd3328a` | `47106` | `src/itsf/mc/supplement_runner.py` |
+| `34b2a17ed2e1617e34457882d7df7b4bcc0cc8d658003f8ea5a07a607bdfe0cf` | `32616` | `src/itsf/mc/supplement_contract.py` |
+| `c2987bafbe62e3a16dcc3249016985c91cac8259b04bec4ec959423300d1be95` | `6100` | `tests/test_every_sealed_final_was_read_back.py` |
+| `3b8fd362614ee7e7c689bde19d9797b501464de5bc2caa57cb8271963effae50` | `6869` | `tests/test_the_ratified_preimage_is_reconstructible.py` |
+| `498421a878abd5c8795d826fc58121c93cfdd192525a86da6bae7e26dc8cb540` | `11552` | `tests/test_every_approval_is_accounted_for.py` |
+| `4d4874c5e22b5adff47312bb03c0e405418fb894446b9ecd87a46e7ecef42613` | `11556` | `tests/test_c_build_2_wording_coverage.py` |
+| `40f9ecce8b9ecf5835073291a200920316f65478e4188a633d44ed0680a311c0` | `26667` | `tests/test_n09_checkpoint_assertions.py` |
 
 任一条不匹配 ⇒ STOP。
 
