@@ -148,10 +148,27 @@ def run_supplement_production(*_a, **_k) -> NoReturn:
 # ---------------------------------------------------------------------------
 
 def canonical_json(obj) -> str:
-    """THE canonical JSON form: sorted keys, compact separators, ASCII.
-    Every digest this module computes or verifies uses exactly this."""
+    """THE canonical JSON form: sorted keys, compact separators, ASCII,
+    NaN/Infinity rejected. Every digest this module computes or verifies
+    uses exactly this.
+
+    `allow_nan=False` ADDED 2026-08-28 under Aaron's authorization. Without
+    it this function emitted `{"x":NaN}` — not valid JSON — while
+    `atoms.canonical_json` and `cold_reducer._canonical`, the two functions
+    N09 R3 §5 called identical to it, raised. It feeds
+    `canonical_rows_digest`, so a digest could have been taken over bytes
+    that are not JSON, and a cold reader recomputing with either of the
+    other two would have raised rather than disagreed.
+
+    R3 §5 had declared the duplication out of its scope — "R3 不修它" — on
+    the stated premise that the three were 同体. They were not, so that
+    premise was false and Aaron voided the scope statement rather than the
+    finding. Measured before changing anything: zero sealed supplements
+    exist (no P4 event, no supplement bytes, no subtree), so no existing
+    digest could be invalidated; and no supplement row field is a float, so
+    no reachable input changes behaviour."""
     return json.dumps(obj, sort_keys=True, ensure_ascii=True,
-                      separators=(",", ":"))
+                      separators=(",", ":"), allow_nan=False)
 
 
 def canonical_rows_digest(rows: Iterable[Mapping]) -> str:

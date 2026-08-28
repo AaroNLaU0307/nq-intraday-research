@@ -142,58 +142,79 @@ class TestTheSerializerIsNamedAndTheSetCannotGrow(unittest.TestCase):
             self.assertIn("%s=%s" % (key, value), src.replace(" ", ""))
         self.assertIn('separators=(",",":")', src.replace(" ", ""))
 
-    def test_they_are_not_identical_and_this_is_where_they_differ(self):
-        """MEASURED 2026-08-27, and it contradicts R3 §5.
+    def test_all_three_now_refuse_nan_which_they_did_not_on_2026_08_27(self):
+        """THE DIVERGENCE, FOUND AND THEN CLOSED — and both halves matter.
 
-        R3 says three 同体 (identical-bodied) serializers. They are not:
+        Measured 2026-08-27, contradicting R3 §5's claim of three 同体
+        (identical-bodied) serializers:
 
-            atoms.canonical_json         allow_nan=False   -> refuses NaN
-            cold_reducer._canonical      allow_nan=False   -> refuses NaN
-            day_strata.canonical_json    (absent)          -> emits `NaN`
+            atoms.canonical_json         allow_nan=False   -> refused NaN
+            cold_reducer._canonical      allow_nan=False   -> refused NaN
+            day_strata.canonical_json    (absent)          -> emitted `NaN`
 
         `NaN`, `Infinity` and `-Infinity` are not valid JSON. The permissive
-        one feeds `canonical_rows_digest`, the digest over supplement rows —
-        so a digest could be taken over bytes that are not JSON, and a cold
-        reader recomputing with either of the other two would RAISE rather
-        than disagree.
+        one feeds `canonical_rows_digest`, so a digest could have been taken
+        over bytes that are not JSON, and a cold reader recomputing with
+        either of the other two would have RAISED rather than disagreed.
 
-        FOUND BY ACCIDENT, which is the part worth recording. The test below
+        FOUND BY ACCIDENT, which is the part worth keeping. The test below
         was written first, asserting "all three agree byte for byte", and it
-        passed — because none of its cases contained NaN. Green for the wrong
-        reason: the same defect class this repository spends its time hunting
-        elsewhere, in a test written to hunt it.
+        PASSED — because none of its cases contained NaN. Green for the wrong
+        reason: the defect class this repository spends its time hunting,
+        inside a test written to hunt it.
+
+        CLOSED 2026-08-28 by Aaron, whose words were "R3 §5 那句范围声明作废，
+        改". R3 had put the duplication out of its own scope on the stated
+        premise that the three were identical; the premise was false, so the
+        scope statement went rather than the finding.
+
+        Measured before the change, and it is why the change was cheap: zero
+        sealed supplements exist — no P4 event in the registry, no supplement
+        bytes on disk, no subtree — so no existing digest could be
+        invalidated. And no supplement row field is a float, so no reachable
+        input changes behaviour either.
         """
         from itsf.mc import atoms, cold_reducer
         from itsf.mc import day_strata_supplement as dss
         for value in (float("nan"), float("inf"), float("-inf")):
             case = {"x": value}
-            with self.assertRaises(ValueError):
-                atoms.canonical_json(case)
-            with self.assertRaises(ValueError):
-                cold_reducer._canonical(case)
-            self.assertIsInstance(
-                dss.canonical_json(case), str,
-                "day_strata refuses too now; if that was deliberate this "
-                "divergence record is stale and R3 §5 was right after all")
+            for name, fn in (("atoms", atoms.canonical_json),
+                             ("cold_reducer", cold_reducer._canonical),
+                             ("day_strata", dss.canonical_json)):
+                with self.assertRaises(ValueError, msg=name):
+                    fn(case)
 
-    def test_the_divergence_is_latent_because_no_row_field_is_a_float(self):
-        """WHY IT IS NOT FIXED HERE. R3 §5 says the duplication is out of its
-        scope — "R3 不修它" — and a digest function is not something to change
-        on a builder's own judgement: every digest already sealed was taken
-        with the current one.
-
-        What IS in scope is proving the divergence cannot be reached today,
-        and making that proof fail the moment it can. Supplement rows carry
-        four fields, all strings or an integer year; no float can enter, so
-        no NaN can. Add a float field and this goes red — which is exactly
-        when the divergence stops being latent."""
-        from itsf.mc import day_strata_supplement as dss
-        self.assertEqual(("trade_date", "year", "vol_stratum",
-                          "event_stratum"), dss.ROW_FIELDS,
-                         "the supplement row shape changed; re-check whether "
-                         "a float can now reach canonical_rows_digest, "
-                         "because the permissive serializer would encode a "
-                         "NaN into a sealed digest without complaint")
+    def test_no_serializer_in_the_mc_form_omits_allow_nan(self):
+        """The property, not the three instances. A fourth added without
+        `allow_nan=False` would reopen exactly what was just closed, and
+        would pass every test above by simply not being one of the three."""
+        import ast
+        modules = sorted(SRC.rglob("*.py"))
+        self.assertGreater(len(modules), 20,
+                           "the scan reached %d modules; 'none omits it' over "
+                           "an empty scan is not a fact" % len(modules))
+        offenders = []
+        for path in modules:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                if getattr(node.func, "attr", "") != "dumps":
+                    continue
+                kw = {k.arg: k.value for k in node.keywords}
+                if not {"sort_keys", "ensure_ascii", "separators"} <= set(kw):
+                    continue
+                ascii_flag = kw["ensure_ascii"]
+                if not (isinstance(ascii_flag, ast.Constant)
+                        and ascii_flag.value is True):
+                    continue          # the manifest form, a different contract
+                nan = kw.get("allow_nan")
+                if not (isinstance(nan, ast.Constant) and nan.value is False):
+                    offenders.append(path.relative_to(SRC).as_posix())
+        self.assertEqual([], offenders,
+                         "these use the MC canonical form without "
+                         "allow_nan=False, so they can encode NaN into a "
+                         "digest: %r" % sorted(set(offenders)))
 
     def test_the_three_agree_on_every_json_valid_input(self):
         """R3 calls them 同体. On valid JSON they are — and that is the whole
