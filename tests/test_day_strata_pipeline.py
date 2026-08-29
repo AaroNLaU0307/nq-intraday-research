@@ -206,8 +206,6 @@ class TestTheCleanPath(unittest.TestCase):
         self.assertEqual(list(outcome.rows), list(handed))
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class TestCBuild3AfterTheArchiveAttempt(unittest.TestCase):
@@ -289,3 +287,7 @@ class TestCBuild3AfterTheArchiveAttempt(unittest.TestCase):
                                      local_seal_sha256="f" * 64,
                                      archive_before=(), archive_after=())
         self.assertEqual("local_seal_mutated", outcome.failure.code)
+
+
+if __name__ == "__main__":
+    unittest.main()

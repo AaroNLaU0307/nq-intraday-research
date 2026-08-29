@@ -122,5 +122,114 @@ class TestClassification(unittest.TestCase):
         self.assertIn("rows_digest_recompute", sc.GATE_TABLE["C_BUILD"])
 
 
+
+
+def _seal_codes_from_source():
+    """Every literal code the seal step can refuse with, derived.
+
+    Two sources: `seal_supplement_production`'s own drift checks, and the
+    `resolve_partial` codes it inherits by calling it. Both are read from
+    source so a new refusal joins this check by existing."""
+    root = Path(__file__).resolve().parents[1] / "src" / "itsf" / "mc"
+    codes = set()
+    prod = ast.parse(io.open(root / "supplement_production.py",
+                             encoding="utf-8").read())
+    seal = [n for n in ast.walk(prod) if isinstance(n, ast.FunctionDef)
+            and n.name == "seal_supplement_production"]
+    for fn in seal:
+        for node in ast.walk(fn):
+            if (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)
+                    and node.exc.args
+                    and isinstance(node.exc.args[0], ast.Constant)):
+                codes.add(node.exc.args[0].value)
+    runner = ast.parse(io.open(root / "supplement_runner.py",
+                               encoding="utf-8").read())
+    rp = [n for n in ast.walk(runner) if isinstance(n, ast.FunctionDef)
+          and n.name in ("resolve_partial", "_preserve", "_divergent_name")]
+    for fn in rp:
+        for node in ast.walk(fn):
+            if (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)
+                    and node.exc.args
+                    and isinstance(node.exc.args[0], ast.Constant)):
+                codes.add(node.exc.args[0].value)
+    return {c for c in codes if isinstance(c, str)}
+
+
+class TestTheSealTableIsDerivedToo(unittest.TestCase):
+
+    def test_every_seal_code_is_mapped_or_recorded_as_undecided(self):
+        known = (set(dsc.STAGE_GATE_OF_SEAL_CODE)
+                 | set(dsc.UNDECIDED_SEAL_CODES))
+        missing = sorted(_seal_codes_from_source() - known)
+        self.assertEqual(
+            [], missing,
+            "these seal refusals are in neither table: %s\nAdd each to "
+            "STAGE_GATE_OF_SEAL_CODE with the raise site that justifies the "
+            "gate, or to UNDECIDED_SEAL_CODES with the question." % missing)
+
+    def test_the_two_tables_do_not_overlap(self):
+        """A code that is both mapped and undecided would classify silently
+        while claiming to be an open question."""
+        both = sorted(set(dsc.STAGE_GATE_OF_SEAL_CODE)
+                      & set(dsc.UNDECIDED_SEAL_CODES))
+        self.assertEqual([], both)
+
+    def test_neither_table_names_a_code_the_seal_cannot_raise(self):
+        found = _seal_codes_from_source()
+        stale = sorted((set(dsc.STAGE_GATE_OF_SEAL_CODE)
+                        | set(dsc.UNDECIDED_SEAL_CODES)) - found)
+        self.assertEqual([], stale, "stale entries: %s" % stale)
+
+    def test_the_derivation_found_both_sources(self):
+        """A scan that reached only one module would look clean while
+        missing half the surface."""
+        found = _seal_codes_from_source()
+        self.assertIn("production_rows_digest_drift", found)   # the seal's
+        self.assertIn("supplement_seal_conflict", found)       # resolve_partial's
+
+    def test_every_mapped_pair_is_a_real_stage_and_gate(self):
+        for code, (stage, gate) in sorted(
+                dsc.STAGE_GATE_OF_SEAL_CODE.items()):
+            with self.subTest(code=code):
+                self.assertIn(stage, sc.STAGE_ENUM)
+                self.assertIn(gate, sc.GATE_TABLE[stage])
+
+    def test_the_b_derive_codes_really_are_b_derive(self):
+        """The reason the table carries pairs. Putting an authority defect
+        under C_BUILD would file the right defect at the wrong stage, and
+        the stage is half of what the failure event carries."""
+        for code in ("production_binding_drift",
+                     "production_day_universe_drift"):
+            with self.subTest(code=code):
+                stage, gate = dsc.classify_seal_failure(code)
+                self.assertEqual("B_DERIVE", stage)
+                self.assertIn(gate, sc.GATE_TABLE["B_DERIVE"])
+
+    def test_an_undecided_code_refuses_with_its_question(self):
+        with self.assertRaises(dsc.ClassificationError) as caught:
+            dsc.classify_seal_failure("production_payload_drift")
+        message = str(caught.exception)
+        self.assertIn("no ratified gate", message)
+        self.assertIn("rebuild to", message)
+        self.assertIn("nobody ruled", message)
+
+    def test_an_unknown_code_refuses_differently(self):
+        """"Undecided" and "unheard of" are different states and an
+        operator needs different actions."""
+        with self.assertRaises(dsc.ClassificationError) as caught:
+            dsc.classify_seal_failure("brand_new_code")
+        self.assertIn("in neither table", str(caught.exception))
+
+    def test_the_undecided_set_is_not_empty_by_accident(self):
+        """If it ever empties, it should be because someone RULED, and the
+        ruling should be recorded — not because the entries were quietly
+        moved into the mapped table."""
+        self.assertEqual(2, len(dsc.UNDECIDED_SEAL_CODES))
+        for code, question in dsc.UNDECIDED_SEAL_CODES.items():
+            with self.subTest(code=code):
+                self.assertGreater(len(question), 60,
+                                   "%s carries no real question" % code)
+
+
 if __name__ == "__main__":
     unittest.main()

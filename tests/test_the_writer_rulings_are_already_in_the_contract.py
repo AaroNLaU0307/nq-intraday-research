@@ -180,8 +180,6 @@ class TestFailClosedIsRealNotIntended(unittest.TestCase):
         self.assertIn("每次恢复写入", text)
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class TestCR1IsTheRecoveryVocabularyAndItIsFrozen(unittest.TestCase):
@@ -220,3 +218,7 @@ class TestCR1IsTheRecoveryVocabularyAndItIsFrozen(unittest.TestCase):
         registry = (Path(__file__).resolve().parents[1] / "ops"
                     / "TRIAL_REGISTRY.md").read_text(encoding="utf-8")
         self.assertNotIn(sc.EVENTS["CR1"].token, registry)
+
+
+if __name__ == "__main__":
+    unittest.main()
