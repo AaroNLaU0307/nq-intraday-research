@@ -124,6 +124,88 @@ class TestClassification(unittest.TestCase):
 
 
 
+def _builder_codes_from_source():
+    """Every literal code `build_supplement_from_authority` can raise.
+
+    Derived, for the same reason every other table here is: a hand-written
+    mirror goes stale, and this project produced five instances of exactly
+    that in one day. The sixth was the one that made this table necessary --
+    `run_c_build` classified all of these as `row_schema_blind` on a comment
+    claiming the builder only validates rows."""
+    root = Path(__file__).resolve().parents[1] / "src" / "itsf" / "mc"
+    tree = ast.parse(io.open(root / "supplement_production.py",
+                             encoding="utf-8").read())
+    fn = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+          and n.name == "build_supplement_from_authority"]
+    codes = set()
+    for f in fn:
+        for node in ast.walk(f):
+            if (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)
+                    and node.exc.args
+                    and isinstance(node.exc.args[0], ast.Constant)):
+                codes.add(node.exc.args[0].value)
+    return codes
+
+
+class TestTheBuilderTableIsDerivedToo(unittest.TestCase):
+    """Added 2026-08-29 after the end-to-end rehearsal found a B_DERIVE
+    defect being filed under a C_BUILD gate."""
+
+    def test_every_builder_code_is_mapped_or_marked_a_caller_bug(self):
+        known = (set(dsc.STAGE_GATE_OF_BUILDER_CODE)
+                 | set(dsc.CALLER_ERROR_BUILDER_CODES))
+        missing = sorted(_builder_codes_from_source() - known)
+        self.assertEqual(
+            [], missing,
+            "these builder refusals are in neither table: %s\nEach must "
+            "either name a (stage, gate) justified by its raise site, or be "
+            "recorded as a caller bug that never becomes a row." % missing)
+
+    def test_the_derivation_found_the_codes(self):
+        found = _builder_codes_from_source()
+        self.assertGreaterEqual(len(found), 5)
+        self.assertIn("production_authority_test_only", found)
+
+    def test_neither_builder_table_names_a_code_it_cannot_raise(self):
+        stale = sorted((set(dsc.STAGE_GATE_OF_BUILDER_CODE)
+                        | set(dsc.CALLER_ERROR_BUILDER_CODES))
+                       - _builder_codes_from_source())
+        self.assertEqual([], stale, "stale builder entries: %s" % stale)
+
+    def test_the_two_builder_tables_do_not_overlap(self):
+        self.assertEqual([], sorted(set(dsc.STAGE_GATE_OF_BUILDER_CODE)
+                                    & set(dsc.CALLER_ERROR_BUILDER_CODES)))
+
+    def test_every_mapped_pair_is_a_real_stage_and_gate(self):
+        for code, (stage, gate) in sorted(
+                dsc.STAGE_GATE_OF_BUILDER_CODE.items()):
+            with self.subTest(code=code):
+                self.assertIn(stage, sc.STAGE_ENUM)
+                self.assertIn(gate, sc.GATE_TABLE[stage])
+
+    def test_the_authority_codes_really_are_B_DERIVE(self):
+        """The correction itself. Under C_BUILD these would file an
+        authority defect at the stage that builds rows."""
+        for code in ("production_authority_type",
+                     "production_authority_test_only",
+                     "production_supplement_id_divergence"):
+            with self.subTest(code=code):
+                stage, gate = dsc.classify_builder_failure(code)
+                self.assertEqual("B_DERIVE", stage)
+
+    def test_a_caller_bug_refuses_and_says_so(self):
+        with self.assertRaises(dsc.ClassificationError) as caught:
+            dsc.classify_builder_failure("production_unknown_argument")
+        message = str(caught.exception)
+        self.assertIn("CALLER BUG", message)
+        self.assertIn("Fix the call site", message)
+
+    def test_an_unknown_builder_code_refuses_differently(self):
+        with self.assertRaises(dsc.ClassificationError) as caught:
+            dsc.classify_builder_failure("production_brand_new")
+        self.assertIn("in neither builder table", str(caught.exception))
+
+
 def _seal_codes_from_source():
     """Every literal code the seal step can refuse with, derived.
 

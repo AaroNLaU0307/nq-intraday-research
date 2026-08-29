@@ -82,12 +82,51 @@ class TestEveryRefusalReachesItsGate(unittest.TestCase):
                                      **{"2024-01-03": "T9"}))
         self.assertEqual("row_schema_blind", outcome.failure.gate)
 
-    def test_a_builder_refusal_reaches_row_schema_blind(self):
-        """The builder validates the rows it was handed, so its refusals
-        are row-schema refusals by construction."""
-        outcome = _run(builder_raises=ValueError("bad row"))
+    def test_a_SCHEMA_refusal_from_the_builder_reaches_row_schema_blind(self):
+        """The supplement-object validators, reached through the builder.
+        These genuinely are row/schema refusals."""
+        from itsf.mc.day_strata_supplement import SupplementError
+        outcome = _run(builder_raises=SupplementError(
+            "supplement_row_schema", "row 0: missing=['year']"))
         self.assertEqual("row_schema_blind", outcome.failure.gate)
-        self.assertIn("bad row", outcome.failure.detail)
+        self.assertEqual("C_BUILD", outcome.failure.stage)
+        self.assertIn("year", outcome.failure.detail)
+
+    def test_an_AUTHORITY_refusal_reaches_B_DERIVE_not_row_schema_blind(self):
+        """THE CORRECTION, 2026-08-29, found by the end-to-end rehearsal.
+
+        This test used to read `test_a_builder_refusal_reaches_row_schema_
+        blind`, on the docstring "the builder validates the rows it was
+        handed, so its refusals are row-schema refusals by construction".
+        `day_strata_dryrun` walked the chain for the first time and showed
+        that false: the builder validates the AUTHORITY too, and a
+        `production_authority_test_only` refusal was being filed as a
+        row-schema defect at the wrong stage.
+
+        The stage and the gate are what an F1/F2 row carries, so the old
+        behaviour put a wrong defect on record under a name nobody ruled."""
+        from itsf.mc.supplement_production import SupplementProductionError
+        outcome = _run(builder_raises=SupplementProductionError(
+            "production_authority_test_only",
+            "a test_only authority may never build a production supplement"))
+        self.assertEqual("B_DERIVE", outcome.failure.stage)
+        self.assertEqual("custody_authority_production", outcome.failure.gate)
+
+    def test_a_CALLER_BUG_raises_instead_of_becoming_a_failure_row(self):
+        """A forbidden keyword is a programming error. Filing it as a gate
+        failure would record a failed run that never happened."""
+        from itsf.mc.day_strata_classify import ClassificationError
+        from itsf.mc.supplement_production import SupplementProductionError
+        with self.assertRaises(ClassificationError) as caught:
+            _run(builder_raises=SupplementProductionError(
+                "production_decisive_argument_supplied", "binding"))
+        self.assertIn("CALLER BUG", str(caught.exception))
+
+    def test_an_UNANTICIPATED_exception_propagates(self):
+        """Better a real traceback than a guessed gate. An exception nobody
+        mapped is a defect in the code, not a refusal by the run."""
+        with self.assertRaises(ValueError):
+            _run(builder_raises=ValueError("nobody planned for this"))
 
     def test_a_digest_mismatch_reaches_rows_digest_recompute(self):
         outcome = _run(product=_a_product(digest="0" * 64))

@@ -135,19 +135,28 @@ class TestTheGrantStillHasAReason(unittest.TestCase):
     """It unblocks no gate. It IS still required, and this states why in a
     form that can be checked rather than believed."""
 
-    def test_the_only_mkdir_in_the_package_is_a_test_only_function(self):
-        """Measured, and it is the sharper version of "the module never
-        creates". There IS a `mkdir` in `mc/` -- in
-        `seal_supplement_test_only`, whose name declares its scope. Nothing
-        on the production path creates a directory, which is why the parent
-        must be granted rather than conjured."""
+    #: Every `mkdir` site in `mc/`, and what makes each one safe. WIDENED
+    #: on 2026-08-29 when `day_strata_dryrun` added the second -- the guard
+    #: fired on my own new code, which is what it is for. The widening is
+    #: not a rubber stamp: entry (2) is checked STRUCTURALLY below, by
+    #: proving the refusal runs before the mkdir.
+    MKDIR_SITES = {
+        ("day_strata_supplement.py", "seal_supplement_test_only"): "TEST_ONLY",
+        ("day_strata_dryrun.py", "rehearse"): "GUARDED_BY_ASSERT_SYNTHETIC",
+    }
+
+    def test_every_mkdir_site_in_the_package_is_a_KNOWN_one(self):
+        """The property is "no PRODUCTION path creates a directory", and
+        `not any mkdir` was a proxy for it. The proxy broke when a
+        rehearsal legitimately needed scratch dirs, so the check moved to
+        the property: every site is enumerated with what makes it safe."""
         import ast
         import io as _io
 
-        sites = []
+        sites, scanned = set(), 0
         for path in sorted((REPO / "src" / "itsf" / "mc").rglob("*.py")):
-            src = _io.open(path, encoding="utf-8").read()
-            tree = ast.parse(src)
+            scanned += 1
+            tree = ast.parse(_io.open(path, encoding="utf-8").read())
             for node in ast.walk(tree):
                 if not (isinstance(node, ast.Call)
                         and getattr(node.func, "attr", "") == "mkdir"):
@@ -155,11 +164,66 @@ class TestTheGrantStillHasAReason(unittest.TestCase):
                 owner = [f.name for f in ast.walk(tree)
                          if isinstance(f, ast.FunctionDef)
                          and f.lineno <= node.lineno <= f.end_lineno]
-                owner.sort(key=len, reverse=True)
-                sites.append((path.name, owner[0] if owner else "<module>"))
-        self.assertEqual([("day_strata_supplement.py",
-                           "seal_supplement_test_only")], sites,
-                         "a new directory-creating site appeared: %s" % sites)
+                owner.sort(key=lambda n: len(n), reverse=True)
+                sites.add((path.name, owner[0] if owner else "<module>"))
+        # PREMISE, caught by my own vacuous-guard detector on the first
+        # draft: `[] == unknown` passes over nothing if the scan found
+        # nothing, and "no unknown sites" would then mean "I did not look".
+        self.assertGreater(scanned, 20,
+                           "the package glob found %d files" % scanned)
+        self.assertGreaterEqual(
+            len(sites), 2,
+            "the scan found %d mkdir sites; there are known to be two, so a "
+            "smaller number means the matcher stopped working, not that the "
+            "code stopped creating directories" % len(sites))
+        unknown = sorted(sites - set(self.MKDIR_SITES))
+        self.assertEqual(
+            [], unknown,
+            "a new directory-creating site appeared in mc/: %s\nEnumerate "
+            "it in MKDIR_SITES with what makes it safe, and add the check "
+            "that proves it -- an entry with no proof is a rubber stamp."
+            % unknown)
+        self.assertEqual(sorted(self.MKDIR_SITES), sorted(sites),
+                         "MKDIR_SITES names a site that no longer exists")
+
+    def test_the_rehearsals_mkdir_runs_AFTER_the_governed_root_refusal(self):
+        """The proof behind `GUARDED_BY_ASSERT_SYNTHETIC`, structural
+        rather than trusted. If the mkdir ever moved above the refusal, a
+        scratch_root inside a governed root would be created and only THEN
+        rejected -- leaving behind the thing the refusal exists to prevent."""
+        import ast
+        import io as _io
+
+        tree = ast.parse(_io.open(
+            REPO / "src" / "itsf" / "mc" / "day_strata_dryrun.py",
+            encoding="utf-8").read())
+        fn = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+              and n.name == "rehearse"]
+        self.assertEqual(1, len(fn), "rehearse is gone or duplicated")
+        guard = [n.lineno for n in ast.walk(fn[0]) if isinstance(n, ast.Call)
+                 and getattr(n.func, "id", "") == "_assert_synthetic"]
+        mkdirs = [n.lineno for n in ast.walk(fn[0]) if isinstance(n, ast.Call)
+                  and getattr(n.func, "attr", "") == "mkdir"]
+        self.assertEqual(1, len(guard), "the refusal call is gone: %s" % guard)
+        self.assertTrue(mkdirs, "no mkdir found — this check now proves "
+                                "nothing and should be removed with the "
+                                "MKDIR_SITES entry it backs")
+        self.assertLess(max(guard), min(mkdirs),
+                        "a directory is created before the governed-root "
+                        "refusal runs")
+
+    def test_and_that_refusal_actually_rejects_a_governed_scratch_root(self):
+        """The premise. A guard call in the right PLACE that rejected
+        nothing would satisfy the structural check above."""
+        from itsf.mc import day_strata_dryrun as dry
+
+        class _Synthetic:
+            test_only = True
+
+        with self.assertRaises(dry.DryRunRefused):
+            dry._assert_synthetic(_Synthetic(),
+                                  dry._GOVERNED[0] / "supplements" / "x")
+        dry._assert_synthetic(_Synthetic(), REPO)      # an ordinary path
 
     def test_and_no_production_caller_reaches_that_function(self):
         """THE RESIDUAL, stated rather than hidden. That `mkdir` passes

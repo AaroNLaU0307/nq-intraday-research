@@ -42,10 +42,26 @@ __all__ = ["CBuildFailure", "CBuildOutcome", "run_c_build",
 
 
 class CBuildFailure(NamedTuple):
-    """A refusal, already carrying the gate that names it."""
+    """A refusal, already carrying the stage AND gate that name it.
+
+    `stage` was added 2026-08-29 after the rehearsal
+    (`day_strata_dryrun`) walked the chain end to end for the first time
+    and showed a B_DERIVE defect being reported under a C_BUILD gate. The
+    stage is half of what an F1/F2 row carries, so a failure that could
+    only express a gate could only ever file half the truth. It defaults to
+    C_BUILD because that is where most of them are, and it is LAST so
+    existing positional construction is unaffected."""
     gate: str
     code: str
     detail: str
+    stage: str = "C_BUILD"
+    #: The EXCEPTION CLASS NAME this refusal came from, in the vocabulary
+    #: every `_fail` site uses. Added in the same pass as `stage`, and for
+    #: the same reason: the rehearsal showed a `SupplementProductionError`
+    #: being recorded as a `DayStrataRowsError` because the planner spelled
+    #: one class name for every failure. That is a false statement in the
+    #: registry, just in a different field from the gate name.
+    error_class: str = "DayStrataRowsError"
 
 
 class CBuildOutcome(NamedTuple):
@@ -100,10 +116,17 @@ def run_c_build(*, authority, prepared, universe, vol_method: str,
                 archive_root: Path | None = None) -> CBuildOutcome:
     """Derive the rows, build the product, and hold C_BUILD_1's assertion.
 
-    Returns an outcome rather than raising, because a GATE reports the
-    refusal and the gate needs to know which one it is. Raising here would
-    make every C_BUILD failure arrive as whatever exception escaped, and
-    the F1/F2 event would carry the wrong gate name.
+    Returns an outcome rather than raising FOR A CLASSIFIED REFUSAL,
+    because a GATE reports it and the gate needs to know which one it is.
+    Raising there would make every C_BUILD failure arrive as whatever
+    exception escaped, and the F1/F2 event would carry the wrong gate name.
+
+    IT DOES RAISE for two things, and both are deliberate: a CALLER BUG
+    (a forbidden or unknown keyword) and an UNANTICIPATED exception. Neither
+    is a run failure. Turning a programming error into a failure row would
+    record a run that never failed, and inventing a gate for an unmapped
+    exception is exactly the defect the classification tables exist to
+    prevent. A real traceback beats a guessed gate.
     """
     before_runs = supplement_bytes_snapshot(runs_root)
     before_archive = supplement_bytes_snapshot(archive_root)
@@ -117,28 +140,54 @@ def run_c_build(*, authority, prepared, universe, vol_method: str,
         return CBuildOutcome(
             (), None,
             CBuildFailure(dsc.classify_producer_failure(exc), exc.code,
-                          exc.detail))
+                          exc.detail, "C_BUILD", type(exc).__name__))
 
     from . import supplement_production as sp
     try:
         product = sp.build_supplement_from_authority(authority, prepared, rows)
-    except Exception as exc:                                   # noqa: BLE001
-        # The builder's own refusals are row-schema refusals by
-        # construction: it validates the rows it was handed. Its code is
-        # carried verbatim so the detail is not lost behind a rename.
+    except sp.SupplementProductionError as exc:
+        # A CORRECTION, 2026-08-29. This used to classify EVERY builder
+        # exception as `row_schema_blind`, on the claim that "the builder's
+        # own refusals are row-schema refusals by construction: it
+        # validates the rows it was handed". `day_strata_dryrun` walked the
+        # chain end to end for the first time and showed that claim false:
+        # the builder validates the AUTHORITY too, and
+        # `production_authority_test_only` was arriving as a row-schema
+        # defect at the wrong stage. The gate name and the stage are what
+        # the F1/F2 row carries, so that was a wrong defect on record.
+        #
+        # A caller bug and an unmapped code both RAISE out of here rather
+        # than becoming an outcome: neither is a run failure, and inventing
+        # a gate for them is the defect this whole table exists to prevent.
+        stage, gate = dsc.classify_builder_failure(exc.code)
+        return CBuildOutcome(
+            tuple(rows), None,
+            CBuildFailure(gate, exc.code, str(exc), stage,
+                          type(exc).__name__))
+    except ds.SupplementError as exc:
+        # The SUPPLEMENT-object validators, reached through the builder.
+        # These genuinely are row/schema refusals: `_validate_row` and
+        # `_validate_supplement_object` are what raise them.
         return CBuildOutcome(
             tuple(rows), None,
             CBuildFailure("row_schema_blind",
-                          getattr(exc, "code", type(exc).__name__), str(exc)))
+                          getattr(exc, "code", type(exc).__name__), str(exc),
+                          "C_BUILD", type(exc).__name__))
 
     declared = _declared_digest(product)
     recomputed = ds.canonical_rows_digest(rows)
     if declared != recomputed:
         return CBuildOutcome(
             tuple(rows), None,
-            CBuildFailure("rows_digest_recompute", "rows_digest_mismatch",
-                          f"declared {declared!r} != recomputed "
-                          f"{recomputed!r}"))
+            CBuildFailure(
+                "rows_digest_recompute", "rows_digest_mismatch",
+                f"declared {declared!r} != recomputed {recomputed!r}",
+                "C_BUILD",
+                # No exception was raised: this pipeline DETECTED the
+                # mismatch against `day_strata_supplement`'s own
+                # `canonical_rows_digest`, so the honest class name is that
+                # module's vocabulary rather than the row producer's.
+                ds.SupplementError.__name__))
 
     _assert_c_build_1(before_runs, supplement_bytes_snapshot(runs_root),
                       "runs_root")

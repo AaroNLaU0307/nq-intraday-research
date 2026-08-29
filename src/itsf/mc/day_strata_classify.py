@@ -29,7 +29,9 @@ from . import day_strata_rows as dsr
 __all__ = ["GATE_OF_PRODUCER_CODE", "classify_producer_failure",
            "ClassificationError", "STAGE_GATE_OF_SEAL_CODE",
            "classify_seal_failure", "ROUTER_B_SEAL_CODES",
-           "seal_failure_router", "ROUTER_A", "ROUTER_B"]
+           "seal_failure_router", "ROUTER_A", "ROUTER_B",
+           "STAGE_GATE_OF_BUILDER_CODE", "CALLER_ERROR_BUILDER_CODES",
+           "classify_builder_failure"]
 
 
 class ClassificationError(Exception):
@@ -182,6 +184,63 @@ def seal_failure_router(code: str) -> str:
         "STAGE_GATE_OF_SEAL_CODE with the raise site that justifies the "
         "gate, or to ROUTER_B_SEAL_CODES with the reason no gate names it."
         % code)
+
+
+#: `build_supplement_from_authority`'s own refusals -> (stage, gate).
+#:
+#: FOUND BY THE REHEARSAL, 2026-08-29. `run_c_build` classified EVERY
+#: builder exception as `row_schema_blind`, on a comment that said "the
+#: builder's own refusals are row-schema refusals by construction: it
+#: validates the rows it was handed". Walking the chain end to end showed
+#: that claim is false -- the builder also validates the AUTHORITY, and a
+#: `production_authority_test_only` refusal was being filed as a row-schema
+#: defect at the wrong stage.
+#:
+#: Each mapping is justified by what the raise site actually compares:
+STAGE_GATE_OF_BUILDER_CODE = {
+    # `type(authority) is not SupplementAuthority` (:259)
+    "production_authority_type": ("B_DERIVE", "custody_authority_production"),
+    # `authority.test_only` (:264)
+    "production_authority_test_only": ("B_DERIVE",
+                                       "custody_authority_production"),
+    # payload stamped with an id the authority was not minted for (:290)
+    "production_supplement_id_divergence": ("B_DERIVE",
+                                            "custody_authority_binding"),
+}
+
+#: Builder refusals that are CALLER BUGS, not run defects.
+#:
+#: These fire when code passes a forbidden or unknown keyword. Filing a
+#: programming error as a gate failure would put it in the research
+#: registry as though a run had failed, so `classify_builder_failure`
+#: refuses them instead of naming a gate. A bug is fixed, not recorded.
+CALLER_ERROR_BUILDER_CODES = frozenset({
+    "production_unknown_argument",
+    "production_decisive_argument_supplied",
+})
+
+
+def classify_builder_failure(code: str) -> tuple:
+    """(stage, gate) for a `build_supplement_from_authority` refusal.
+
+    Refuses a caller bug and refuses an unknown code. Both refusals are
+    louder than a default, because the gate name is what the F1/F2 row
+    carries and a defaulted gate writes a defect under a name nobody
+    ruled."""
+    if code in CALLER_ERROR_BUILDER_CODES:
+        raise ClassificationError(
+            "builder code %r is a CALLER BUG (a forbidden or unknown "
+            "keyword), not a run defect. It has no gate on purpose: filing "
+            "a programming error as a gate failure would record a failed "
+            "run that never happened. Fix the call site." % code)
+    pair = STAGE_GATE_OF_BUILDER_CODE.get(code)
+    if pair is None:
+        raise ClassificationError(
+            "builder code %r is in neither builder table. Add it to "
+            "STAGE_GATE_OF_BUILDER_CODE with the raise site that justifies "
+            "the (stage, gate), or to CALLER_ERROR_BUILDER_CODES if it is a "
+            "programming error." % code)
+    return pair
 
 
 def classify_seal_failure(code: str) -> tuple:

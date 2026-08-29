@@ -190,27 +190,70 @@ def test_every_gate_context_takes_registry_text_and_chain_from_ONE_read():
                 continue
             where = f"{path.relative_to(SRC.parent.parent)}:{fn.lineno} {fn.name}"
 
-            # ONE boundary call in this function, unpacked into two names.
+            # ROUTE A -- one `resolve_for_supplement`, unpacked into two
+            # names. The runner's entry, and what `build_precheck_context`
+            # uses.
             resolves = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
                         and getattr(n.func, "attr", "") == "resolve_for_supplement"]
-            if len(resolves) != 1:
+            # ROUTE B -- one RegistrySnapshot built from bytes the caller
+            # already holds, mediated once. `day_strata_dryrun` needs this:
+            # a rehearsal SUPPLIES its registry text (the state must be
+            # chosen, not whatever the live ledger holds), so it can never
+            # call the file-reading entry. It is the same property by a
+            # different door: ONE snapshot, both fields off it.
+            snaps = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
+                     and getattr(n.func, "attr", "") == "RegistrySnapshot"]
+            mediates = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
+                        and getattr(n.func, "attr", "") == "mediate"]
+
+            if len(resolves) == 1 and not snaps:
+                bound = None
+                for node in ast.walk(fn):
+                    if (isinstance(node, ast.Assign)
+                            and node.value in resolves
+                            and isinstance(node.targets[0], ast.Tuple)):
+                        bound = [getattr(e, "id", "")
+                                 for e in node.targets[0].elts]
+                if not bound or len(bound) != 2:
+                    offenders.append(
+                        f"{where}: the boundary call's result is not "
+                        "unpacked into (snapshot, chain)")
+                    continue
+                snap_name, chain_name = bound
+            elif len(snaps) == 1 and len(mediates) == 1 and not resolves:
+                snap_name = None
+                for node in ast.walk(fn):
+                    if (isinstance(node, ast.Assign) and node.value in snaps
+                            and isinstance(node.targets[0], ast.Name)):
+                        snap_name = node.targets[0].id
+                # the mediation must be OF that snapshot, not of something else
+                fed = [a for m in mediates for a in m.args
+                       if getattr(a, "id", None) == snap_name]
+                if snap_name is None or not fed:
+                    offenders.append(
+                        f"{where}: the snapshot it builds is not the one it "
+                        "mediates, so the two fields come from two states")
+                    continue
+                chain_name = None
+                for node in ast.walk(fn):
+                    if (isinstance(node, ast.Assign)
+                            and isinstance(node.value, ast.Call)
+                            and getattr(node.value.func, "attr", "")
+                            == "supplement_chain"
+                            and isinstance(node.targets[0], ast.Name)):
+                        chain_name = node.targets[0].id
+                if chain_name is None:
+                    offenders.append(
+                        f"{where}: no chain is resolved from the mediation")
+                    continue
+            else:
                 offenders.append(
-                    f"{where}: {len(resolves)} resolve_for_supplement call(s); "
-                    "exactly one is required so both fields come from the "
-                    "same snapshot")
+                    f"{where}: {len(resolves)} resolve_for_supplement + "
+                    f"{len(snaps)} RegistrySnapshot + {len(mediates)} "
+                    "mediate — a GateContext must come from EXACTLY one "
+                    "boundary read or one mediated snapshot, never a mix "
+                    "and never two")
                 continue
-            bound = None
-            for node in ast.walk(fn):
-                if (isinstance(node, ast.Assign)
-                        and node.value in resolves
-                        and isinstance(node.targets[0], ast.Tuple)):
-                    bound = [getattr(e, "id", "") for e in node.targets[0].elts]
-            if not bound or len(bound) != 2:
-                offenders.append(
-                    f"{where}: the boundary call's result is not unpacked "
-                    "into (snapshot, chain)")
-                continue
-            snap_name, chain_name = bound
 
             for call in builds:
                 got = {kw.arg: kw.value for kw in call.keywords}

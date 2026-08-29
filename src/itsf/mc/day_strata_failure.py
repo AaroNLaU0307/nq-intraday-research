@@ -116,10 +116,21 @@ def plan_for_c_build_failure(outcome, *, supplement_id: str, chain,
             "an F1 row carries.")
 
     has_p3 = p3_boundary(chain)
+    # The STAGE comes from the failure, not from this module's name.
+    # `CBuildFailure` grew a stage on 2026-08-29 because a builder refusal
+    # about the AUTHORITY belongs to B_DERIVE, and hardcoding C_BUILD here
+    # would file the right defect at the wrong stage -- which is half of
+    # what the F1/F2 row carries.
     gate_failure = GateFailure(
-        stage=_C_BUILD,
+        stage=getattr(failure, "stage", _C_BUILD),
         gate_name=failure.gate,
-        error_class=ERROR_CLASS_OF_PRODUCER_REFUSAL,
+        # The CLASS the refusal actually came from, not a spelled
+        # constant. The rehearsal showed a `SupplementProductionError`
+        # being recorded as a `DayStrataRowsError` because this line named
+        # one class for every failure -- a false statement in the registry,
+        # in a different field from the gate name but the same defect.
+        error_class=getattr(failure, "error_class",
+                            ERROR_CLASS_OF_PRODUCER_REFUSAL),
         detail="%s: %s" % (failure.code, failure.detail))
     return plan_failure_event(
         gate_failure, supplement_id=supplement_id, incident_id=incident_id,
