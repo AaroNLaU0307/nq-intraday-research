@@ -155,40 +155,103 @@ def test_the_runner_obtains_its_chain_through_the_boundary():
     assert "resolve_for_supplement" in src
 
 
-def test_the_gate_obligation_is_vacuous_today_and_must_invert_when_it_is_not():
-    """A GUARD THAT MUST INVERT, not one that must keep passing.
+def test_every_gate_context_takes_registry_text_and_chain_from_ONE_read():
+    """THE LIVE FORM. This test used to assert the obligation was VACUOUS —
+    no production code built a `GateContext` at all — and its own docstring
+    said what to do when that stopped being true:
 
-    C2 also says the A_PRECHECK gates must use the boundary. Today that is
-    VACUOUSLY true: no production code constructs a `GateContext` at all —
-    the execution path does not exist, and every production entry refuses
-    before reaching one. A vacuous obligation is exactly the kind that gets
-    forgotten, so it is pinned here rather than trusted to memory.
+        "WHEN THE EXECUTION PATH IS BUILT this test will fail, and the
+         correct response is NOT to delete it. It is to replace the
+         assertion with the live one: `GateContext.registry_text` must be
+         `snapshot.text` from the same boundary call that produced
+         `GateContext.chain` — one read, one snapshot, both fields."
 
-    WHEN THE EXECUTION PATH IS BUILT this test will fail, and the correct
-    response is NOT to delete it. It is to replace the assertion with the
-    live one: `GateContext.registry_text` must be `snapshot.text` from the
-    same boundary call that produced `GateContext.chain` — one read, one
-    snapshot, both fields. Building a GateContext from a second read would
-    reintroduce precisely the split-snapshot defect Sol rewrote C2 to close.
+    2026-08-29: `mc/day_strata_context.build_precheck_context` became the
+    first production constructor, the test went red, and this is that
+    replacement. The tripwire worked — it fired at exactly the moment the
+    obligation became real, which is the only moment anyone would have
+    thought to check.
+
+    Building a `GateContext` from a SECOND read would reintroduce the
+    split-snapshot defect C2 was rewritten to close: two reads of one
+    mutable file can disagree, and then the chain a gate refuses on is not
+    the registry the run recorded.
     """
-    constructors = []
+    offenders = []
+    for path in sorted(SRC.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for fn in ast.walk(tree):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            builds = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
+                      and (getattr(n.func, "attr", None) == "GateContext"
+                           or getattr(n.func, "id", None) == "GateContext")]
+            if not builds:
+                continue
+            where = f"{path.relative_to(SRC.parent.parent)}:{fn.lineno} {fn.name}"
+
+            # ONE boundary call in this function, unpacked into two names.
+            resolves = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
+                        and getattr(n.func, "attr", "") == "resolve_for_supplement"]
+            if len(resolves) != 1:
+                offenders.append(
+                    f"{where}: {len(resolves)} resolve_for_supplement call(s); "
+                    "exactly one is required so both fields come from the "
+                    "same snapshot")
+                continue
+            bound = None
+            for node in ast.walk(fn):
+                if (isinstance(node, ast.Assign)
+                        and node.value in resolves
+                        and isinstance(node.targets[0], ast.Tuple)):
+                    bound = [getattr(e, "id", "") for e in node.targets[0].elts]
+            if not bound or len(bound) != 2:
+                offenders.append(
+                    f"{where}: the boundary call's result is not unpacked "
+                    "into (snapshot, chain)")
+                continue
+            snap_name, chain_name = bound
+
+            for call in builds:
+                got = {kw.arg: kw.value for kw in call.keywords}
+                text = got.get("registry_text")
+                chain = got.get("chain")
+                text_ok = (isinstance(text, ast.Attribute)
+                           and getattr(text.value, "id", "") == snap_name
+                           and text.attr == "text")
+                chain_ok = (isinstance(chain, ast.Name)
+                            and chain.id == chain_name)
+                if not (text_ok and chain_ok):
+                    offenders.append(
+                        f"{where}: GateContext at line {call.lineno} does not "
+                        f"take registry_text from {snap_name}.text AND chain "
+                        f"from {chain_name}")
+    assert not offenders, (
+        "a GateContext is built from something other than one boundary "
+        "read:" + '\n  ' + '\n  '.join(offenders)
+        + '\n\n' + "Two reads of one mutable file can disagree, and "
+          "then the chain a gate refuses on is not the registry the run "
+          "recorded.")
+
+
+def test_the_live_form_is_actually_looking_at_something():
+    """The replacement's own vacuity guard. The test above passes trivially
+    if no production code builds a GateContext — which was TRUE until
+    2026-08-29 and is what the previous form asserted. If that becomes true
+    again, this says so instead of reporting clean."""
+    constructors = 0
     for path in sorted(SRC.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                fn = node.func
-                name = fn.attr if isinstance(fn, ast.Attribute) else (
-                    fn.id if isinstance(fn, ast.Name) else "")
-                if name == "GateContext":
-                    constructors.append(
-                        f"{path.relative_to(SRC.parent.parent)}:{node.lineno}")
-    assert not constructors, (
-        "production code now constructs a GateContext:\n  "
-        + "\n  ".join(constructors)
-        + "\n\nThe C2 gate obligation just stopped being vacuous. Replace "
-          "this test's assertion with the live one — registry_text and "
-          "chain must come from ONE boundary call — rather than deleting "
-          "it.")
+            fn = getattr(node, "func", None)
+            name = (getattr(fn, "attr", None) or getattr(fn, "id", None)
+                    if isinstance(node, ast.Call) else None)
+            if name == "GateContext":
+                constructors += 1
+    assert constructors >= 1, (
+        "no production code builds a GateContext any more, so the check "
+        "above passes over nothing. Either restore the constructor or put "
+        "back the vacuous form with its inversion note.")
 
 
 # ===========================================================================
