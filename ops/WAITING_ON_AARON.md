@@ -18,20 +18,19 @@ BASIS=Aaron 2026-08-29「很多决定不需要问我……我也只是说把我�
 
 ## A. 现在就能给的（每条一句话，不需要懂工程）
 
-### A1. 两条目录的创建授权
+### A1. 两条目录的创建授权 —— ✅ **已给，已执行，已用掉（2026-08-29）**
 
-`supplement_runner.py` 跑起来时要往这两个地方写东西，但那两个父目录不存在，
-而我不能在你的数据区建目录：
+Aaron 亲笔逐字发送，主代理手工执行，门前门后 exact-set 快照已入
+`ops/DIRECTORY_CREATION_GRANTS.md` §4 第 1 行。两个目录已建、均空、
+diff 恰为两条 `dir supplements`。**授权绑事件，已失效。**
 
-```
-C:\Users\Aaron\quant-data\itsf-runs\supplements
-C:\Users\Aaron\quant-data\itsf-runs-archive\supplements
-```
+**但我当时说错了一件事，实测后订正**：我把这条描述成能解开一道门。
+**它不解开任何一道门** —— A_PRECHECK 十三道门在创建前后结果完全一致。
+`supplement_subtree_absent` 从来不因子树缺失而拒绝，它查的是运行目标**碰撞**。
+详见 `订正-SUBTREE-GATE-2026-08-29`（同一份 grants 文件末尾）。
 
-无通配符，无变量，逐字两条，封闭枚举。**我的建议：给。**
-细节在 `ops/SUPPLEMENTS_SUBTREE_GRANT_PREPARATION.md`。
-
-> 你要说的话大意：「授权在上面这两条逐字路径上创建目录。」
+授权本身仍然必要，理由是另一条真的：运行目录
+`<supplements>\<id>_<UTC>` 需要父层先存在，而生产路径不建目录。
 
 ### A2. 迁移 ① —— 新仓目录创建
 

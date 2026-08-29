@@ -392,14 +392,21 @@ def roots(tmp_path: Path) -> tuple:
 # 0 — preconditions, ASSERTED (this battery never skips)
 # ===========================================================================
 
-def test_governed_supplement_subtrees_do_not_exist():
-    """Neither governed root may grow a `supplements` subtree because of
-    this lane. `DIRECTORY_CREATION_AUTHORIZED=NO`."""
-    for root in (RULED_RUNS_ROOT, RULED_ARCHIVE_ROOT):
-        subtree = Path(root) / r.SUPPLEMENTS_SUBDIR
-        assert not subtree.exists(), (
-            f"{subtree} EXISTS — directory creation is a separate "
-            "authorization that has not been given")
+def test_governed_supplement_subtrees_exist_by_grant_and_are_empty():
+    """WAS `..._do_not_exist`, and the rename is the point.
+
+    Absence was the ruling's CONDITION only "before the authorization is
+    executed". Aaron authorized both paths verbatim on 2026-08-29 and they
+    were created manually with pre/post exact-set evidence in
+    `ops/DIRECTORY_CREATION_GRANTS.md` §4. Absence would now be the defect.
+
+    The property this test actually protected -- that no code path creates
+    or writes into them -- is asserted in the stronger form that survives:
+    they exist, a USED grant records why, and they hold nothing.
+    `not exists()` would have passed from here on while a test quietly
+    wrote files into them; emptiness catches exactly that."""
+    from _governed_subtrees import assert_governed_subtrees_are_empty
+    assert_governed_subtrees_are_empty(Path(__file__).resolve().parents[1])
 
 
 def test_platform_precondition_posix_root_is_not_absolute():
@@ -1385,6 +1392,7 @@ def test_every_planner_entry_point_in_this_file_is_lease_guarded(tmp_path):
     assert calls.count(runs) == 2 and calls.count(arch) == 2, calls
 
 
-def test_governed_subtrees_still_absent_after_the_battery():
-    for root in (RULED_RUNS_ROOT, RULED_ARCHIVE_ROOT):
-        assert not (Path(root) / r.SUPPLEMENTS_SUBDIR).exists()
+def test_governed_subtrees_still_empty_after_the_battery():
+    """The battery plans hundreds of paths. None may leave a byte behind."""
+    from _governed_subtrees import assert_governed_subtrees_are_empty
+    assert_governed_subtrees_are_empty(Path(__file__).resolve().parents[1])

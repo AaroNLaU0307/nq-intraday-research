@@ -807,21 +807,27 @@ def test_production_entry_refuses_a_defective_chain_whole(monkeypatch):
 
 def test_production_entry_writes_nothing_anywhere():
     """Protected-state zero-write proof: the registry and the exposure
-    ledger are byte-identical either side of the call, and neither
-    governed `supplements` subtree comes into existence."""
+    ledger are byte-identical either side of the call, and neither governed
+    `supplements` subtree is TOUCHED.
+
+    It used to say "comes into existence". They exist now, by Aaron's
+    verbatim 2026-08-29 grant, so non-existence stopped being the property
+    and "unchanged" took over -- which also covers the case the old form
+    could not: the runner writing into a directory that is already there."""
+    from _governed_subtrees import (assert_governed_subtrees_untouched,
+                                    snapshot)
     reg = REPO / "ops" / "TRIAL_REGISTRY.md"
     led = REPO / "EXPOSURE_LEDGER.md"
     before = (hashlib.sha256(reg.read_bytes()).hexdigest(),
               hashlib.sha256(led.read_bytes()).hexdigest())
-    roots = [Path(r"C:\Users\Aaron\quant-data\itsf-runs") / "supplements",
-             Path(r"C:\Users\Aaron\quant-data\itsf-runs-archive") / "supplements"]
+    subtrees_before = snapshot()
     with pytest.raises(Exception):
         r.run_supplement_production()
     after = (hashlib.sha256(reg.read_bytes()).hexdigest(),
              hashlib.sha256(led.read_bytes()).hexdigest())
     assert before == after
-    for p in roots:
-        assert not p.exists(), f"the runner created {p}"
+    assert_governed_subtrees_untouched(subtrees_before,
+                                       "run_supplement_production")
 
 
 def test_a_missing_registry_resolver_refuses_rather_than_proceeding(

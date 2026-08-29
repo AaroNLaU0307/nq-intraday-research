@@ -355,7 +355,10 @@ GOVERNED_SUBTREES = (
 
 
 def test_exercising_the_supplement_surface_writes_nothing_protected():
+    from _governed_subtrees import (assert_governed_subtrees_untouched,
+                                    snapshot)
     before = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in PROTECTED}
+    subtrees_before = snapshot()
     # touch everything a caller could reach without an authorization
     with pytest.raises(Exception):
         runner.run_supplement_production()
@@ -364,8 +367,10 @@ def test_exercising_the_supplement_surface_writes_nothing_protected():
             assert callable(runner.GATES[gate])
     after = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in PROTECTED}
     assert before == after
-    for sub in GOVERNED_SUBTREES:
-        assert not sub.exists(), f"the supplement surface created {sub}"
+    # They exist by the 2026-08-29 grant, so "did not create" is no longer
+    # the check -- "did not touch" is, and it is the stronger one.
+    assert_governed_subtrees_untouched(subtrees_before,
+                                       "the supplement surface")
 
 
 def test_the_registry_still_carries_no_supplement_event():

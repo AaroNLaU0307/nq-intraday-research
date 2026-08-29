@@ -1718,12 +1718,13 @@ def test_z_nothing_here_authorizes_anything():
         dss.authorize_supplement("")
 
 
-def test_z_no_supplements_subtree_was_created_under_the_ruled_roots():
-    from itsf.contracts import RULED_ARCHIVE_ROOT, RULED_RUNS_ROOT
-    for root in (Path(RULED_RUNS_ROOT), Path(RULED_ARCHIVE_ROOT)):
-        assert not (root / "supplements").exists(), (
-            f"{root}/supplements must not exist - directory creation is a "
-            "SEPARATE authorization that has not been granted")
+def test_z_nothing_in_this_battery_wrote_into_a_governed_subtree():
+    """The subtrees exist by Aaron's verbatim 2026-08-29 grant, so their
+    ABSENCE is no longer the property. What no battery may do is put a byte
+    in one -- and that is a check the old `not exists()` form could not
+    have made once they legitimately existed."""
+    from _governed_subtrees import assert_governed_subtrees_are_empty
+    assert_governed_subtrees_are_empty(Path(__file__).resolve().parents[1])
 
 
 # ===========================================================================

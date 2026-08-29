@@ -243,3 +243,71 @@ INDEPENDENCE_STATEMENT=<按维度：会话、作者身份、模型多样性、�
 ```
 
 **本裁定不释放任何 gate，不是研究授权，不是运行授权。**
+
+---
+
+## 订正-SUBTREE-GATE-2026-08-29
+
+```
+CORRECTION_ID=订正-SUBTREE-GATE-2026-08-29
+FOUND_BY=builder（Opus 5），在 Aaron 授权创建两条 supplements 父层之后
+         去实测「这解开了什么」时
+METHOD=执行门本身，不是读代码
+```
+
+### 被订正的句子（**原句保留，本件只追加**）
+
+> `supplement_subtree_absent` 是 A_PRECHECK 的 13 道门之一 ——
+> **子树不存在时它拒绝**，且模块永不自行创建。
+
+**「子树不存在时它拒绝」是假的。** 实测三种情形，门**全部通过**：
+两个父层都不存在、只有一个存在、两个都存在。它在目录被创建之前就是通过的。
+
+### 它实际拒绝什么
+
+它规划真实目标 `<root>/supplements/<id>_<UTC>`，由规划器拒绝：
+
+```
+碰撞          目标已存在                -> plan_target_exists
+根缺失        <root> 本身不存在          -> plan_root_absent   ← 是「根」，不是 supplements
+reparse 点    根是重解析点/符号链接
+逃逸          目标逃出根
+无 UTC 戳     目录名 <id>_<UTC> 无法规划
+```
+
+**「根」与「supplements 子层」的区别就是这条订正的全部内容。**
+
+`ops/N09_EXECUTION_PATH_DESIGN_R2.md` 一直是对的：
+「`_g_supplement_subtree_absent` 今日只**观察**目标不存在」。
+**设计文档对，治理文档错。**
+
+### 代价：多少，以及不是多少
+
+裁定 `dec-four-owner-2026-08-27` 问的是五个槽应当取什么**形式**，
+答的是封闭枚举、无通配符、绑路径不绑 commit、四条 fail-closed。
+**没有一条依赖这句假话** —— 它是动机，不是前提。**所以裁定站得住。**
+
+真实代价是：这份授权被描述成能解开一道门，而它**不解开任何一道门**。
+A_PRECHECK 十三道门在创建前后的结果**完全一致**。
+
+### 授权本身仍然必要，理由是另一条（真的）
+
+运行目录 `<root>/supplements/<id>_<UTC>` 在「不隐式创建父层」的纪律下，
+需要父层先存在，而**生产路径不创建任何目录**。
+
+实测的精确版本：`mc/` 包里**有且只有一处 `mkdir`**，在
+`seal_supplement_test_only` —— 函数名自己声明了范围，且全仓无生产调用者。
+
+**一条如实记下的残留**：那处 `mkdir` 用的是 `parents=True, exist_ok=True`。
+若有人拿治理根去调它，它**会**把 `supplements` 父层一起建出来。
+所以「模块永不自己创建」这条保证**扛在调用方，不在被调方** ——
+它是一条有实测支撑的命名约定，不是机制。
+
+### 机械化
+
+`tests/test_the_subtree_gate_observes_collision_not_absence.py`
+把上述每一条都执行了一遍，并守着这句假话不再回来。
+
+**本件 `DELIVERY_STATUS=RETURNED`** —— 已交付决策席并已裁。
+原字节一字未动：改一份已被据以裁决的材料，就是改写裁决的依据。
+本节是追加的订正，不是修订。
