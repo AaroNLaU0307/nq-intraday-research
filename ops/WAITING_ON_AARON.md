@@ -32,6 +32,29 @@ diff 恰为两条 `dir supplements`。**授权绑事件，已失效。**
 授权本身仍然必要，理由是另一条真的：运行目录
 `<supplements>\<id>_<UTC>` 需要父层先存在，而生产路径不建目录。
 
+### A1b. registry 追加授权（→ P1）—— ⏸ **我建议现在别给**
+
+你 2026-08-29 说了「我追加授权」。**我没有把它当授权用**：它不含具体内容
+（没有事件名、没有 supplement_id），A1 那次你亲笔写了逐字路径才能执行。
+
+而且我答应过先量再说，量完了，**结论和我原本要说的相反**：
+
+```
+追加 P1 解开的门数              0   （五道门的翻转全部来自 P2，那是你的行）
+没有 P1 时 P2 是否合法          否  （chain_does_not_start_at_proposal）
+P1 会不会随提交作废              不会（P2 会）
+P1＋P2 之后能不能跑              不能（C_BUILD 5/5 仍拒 —— 接线补丁还停放着）
+```
+
+**所以：它今天买不到任何东西，而且不会腐烂，等的成本是零。**
+裁定自己记的顺序也是「接线 → fresh Sol 复审 → registry 追加授权」。
+登记簿只追加、永久 —— 在买不到东西的时候写永久行是纯下行风险。
+
+全文与复算方式：`ops/MEASURED_WHAT_THE_REGISTRY_APPEND_UNLOCKS.md`，
+数字由 `tests/test_what_the_registry_append_unlocks.py` 产出。
+
+**到时候要说的那句话在那份记录 §6，现在不要说。**
+
 ### A2. 迁移 ① —— 新仓目录创建
 
 **我的建议：给。** 细节 `ops/MIGRATION_AUTHORIZATION_PREPARATION.md` §1。

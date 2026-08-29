@@ -25,6 +25,7 @@
 
 | 文件 | 是什么 |
 |---|---|
+| [`MEASURED_WHAT_THE_REGISTRY_APPEND_UNLOCKS.md`](MEASURED_WHAT_THE_REGISTRY_APPEND_UNLOCKS.md) | **registry 追加授权的实测**（合成 registry 干跑，真实登记簿未动）。**结论：追加 P1 解开的门数是 0**，五道门的翻转全部来自 P2；但 P1 是**结构必需**（没有它 `chain_does_not_start_at_proposal`）。**P1 不随提交作废，P2 会** —— 所以等的成本是零。**builder 建议：现在别给**，等接线过 fresh Sol 之后，理由四条可复算，数字全部由 `tests/test_what_the_registry_append_unlocks.py` 产出 |
 | [`PREPARED_C_BUILD_1_GATE_WIRING.md`](PREPARED_C_BUILD_1_GATE_WIRING.md) | **已写好、待落地的 C_BUILD_1 三门接线**（补丁 106 行同名 `.patch`）。阻塞原因不是缺授权 —— Aaron 08-29 明确批了「把五道门建成真的分类器」；阻塞的是 `supplement_runner.py` 此刻被 fresh Sol 持有（C_BUILD_2 措辞第 3 轮，仍未返回），改它会让那一轮席位白烧。**含一条自我订正**：该文件从来不在 `FROZEN_HASHES` 里，我按一条过期记忆少干了活 |
 | [`WAITING_ON_AARON.md`](WAITING_ON_AARON.md) | **等 Aaron 一句话的完整清单**，大白话，每条附 builder 推荐。A1 目录授权（`quant-data` 下两条逐字路径）· A2/A3 迁移 ①②（必须分两句）· A4 迁移 ③（**建议别给**：本机单卷，给了也执行不了）· B1 MATERIALITY · B2 真实数据运行授权（**唯一不可逆的一条，现在不该批**）。另列 builder 已自行接手、不再等他的四项 |
 | [`DECISION_PACKET_FOUR_OPEN_2026-08-26.md`](DECISION_PACKET_FOUR_OPEN_2026-08-26.md) | 四项待裁。Fable 已裁，但**裁决工件不在盘上**——见下一行 |
