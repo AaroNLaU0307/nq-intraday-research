@@ -218,8 +218,15 @@ class TestAFourthApprovalFailsClosed(unittest.TestCase):
         # of writing: 4 in the record, 4 declared by field, 4 examined --
         # zero false positives, so the widening installs clean rather than
         # needing an allowlist that would rot.
-        declared |= set(re.findall(r"\b[0-9a-f]{64}\b", text))
-        known = {sha for _l, _k, sha, _c, _p, _s, _n in APPROVALS}
+        # ROUND 4 MEDIUM. The pattern was lowercase-only, so an UPPERCASE
+        # SHA-256 walked straight through -- and an uppercase hash is
+        # ordinary output from plenty of tools, not a disguise. Last round
+        # I called base64 and segmented forms "beyond reasonable disguise"
+        # and FLAGGED that as a judgment rather than a proof; uppercase was
+        # never in that class, and the judgment did not cover it.
+        declared |= {found.lower() for found in
+                     re.findall(r"\b[0-9a-fA-F]{64}\b", text)}
+        known = {sha.lower() for _l, _k, sha, _c, _p, _s, _n in APPROVALS}
         unexamined = declared - known
         self.assertEqual(
             set(), unexamined,

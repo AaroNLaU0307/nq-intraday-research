@@ -1,8 +1,13 @@
-＃ C_BUILD_2 措辞复审 · 第 4 轮 —— fresh Sol
+＃ C_BUILD_2 措辞复审 · 第 4 轮 —— fresh Sol（**已返回：VERDICT=HOLD**）
+
+> 2026-08-30 返回，四条发现全部成立、全部复现。裁定与处置见
+> `ops/RULING_SOL_C_BUILD_2_R4_HOLD_2026-08-30.md`。
+> **本文以下内容是发出时的原字节，一字未改** —— §1.2 与 §4 描述的是当时那版合同，
+> 它已被第 4 轮打穿并重写。改它就是改一份已被据以裁决的材料。
 
 ```ini
 REVIEW_ID=c-build-2-wording-r4
-DELIVERY_STATUS=PREPARED_NOT_ISSUED
+DELIVERY_STATUS=RETURNED
 RECOMMENDED_MODEL=Codex GPT-5.6 Sol
 EFFORT_INTENT=VERY_HIGH
 RECOMMENDED_EFFORT=Extra High
@@ -88,10 +93,18 @@ PREREG_SEALED=N/A
 ## 2. 受审集
 
 ```
-REVIEWED_SET_UNCHANGED_SINCE=dba55d9
+REVIEWED_SET_UNCHANGED_SINCE=<发行时填入>
 ```
 
 **语义**：该 commit 之后没有任何 commit 触碰过下表的参考件。
+
+> **第 4 轮 MEDIUM 订正。** 上一版这里写死 `dba55d9`，而我自己的下一个提交
+> `eab7992` 又改了 `tests/test_resolve_partial_path_contract.py` —— 它就在受审集里。
+> 表里八个哈希全对，**错的是 range 声称**。这是一次自报，也是我这一晚反复抓的
+> 同一形态：**声称比事实宽**。
+>
+> 现在它**发行时才填**，并由 `tests/test_a_prompts_range_claim_actually_holds.py`
+> 从 git 机械核实 —— 任何 LIVE 提示词的 range 声称若不成立，套件变红。
 本提示自身不在该 range 内（发出 delivery 就是对它的一次提交，无不动点）。
 
 | 角色 | 路径 | sha256（前 16） |

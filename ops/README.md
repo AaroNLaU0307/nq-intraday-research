@@ -25,6 +25,7 @@
 
 | 文件 | 是什么 |
 |---|---|
+| [`RULING_SOL_C_BUILD_2_R4_HOLD_2026-08-30.md`](RULING_SOL_C_BUILD_2_R4_HOLD_2026-08-30.md) | **第 4 轮 HOLD，四条全部成立、全部复现**。两个 HIGH 在合同 12/12 全绿下通过：① 同形路径被 set 去重＋溯源是函数级不是路径级；② 删除动作作为**值**被调用，名字黑名单看不见。MEDIUM：64-hex 只认小写；**`REVIEWED_SET_UNCHANGED_SINCE` 是错误自报**。**根因我上一轮自己列出过却没去修** —— 列出弱点不等于处理弱点。已改为路径敏感有序列表＋封闭调用世界＋range 声称机械核实 |
 | [`FINDINGS_SOL_R3_REPRODUCED_2026-08-30.md`](FINDINGS_SOL_R3_REPRODUCED_2026-08-30.md) | **两条 HOLD 发现的复现证据**。含一件比结论更值得记的事：**第一次复现是错的**（全红），因为我的变异守在测试会触发的条件上；Sol 的守在测试从不触发的条件上。停在第一次就会写下「无法复现」而缺陷仍在 |
 | [`DECISION_PACKET_FOUR_OPEN_2026-08-29.md`](DECISION_PACKET_FOUR_OPEN_2026-08-29.md) | **四件待裁的决裁包**（已由 Fable 顾问级答复，见 `RULING_FABLE_FOUR_OPEN_2026-08-30.md`）。**第 2 件已撤回** —— 它是一件 owner 已裁事项，我当未决送出去了 |
 | [`RULING_SOL_C_BUILD_2_R3_HOLD_2026-08-30.md`](RULING_SOL_C_BUILD_2_R3_HOLD_2026-08-30.md) | **第 3 轮 fresh Sol 判 HOLD，逐字转录**。HIGH：C_BUILD_2 路径覆盖不是失败闭合（新增路径 59/59 仍绿）；MEDIUM：批准守卫的探测域是单文件＋字段正则却声称「每份批准」。**两条均已复现在先、修复在后**（`test_resolve_partial_path_contract.py` ＋ 探测域改为哈希）。`UNRESOLVED_FOR_AARON`：`SIGNABLE_RATIFICATION_ROUTES=1` 要不要成为权威不变量 |
@@ -72,6 +73,7 @@
 
 | 文件 | 交给谁 / 结果 |
 |---|---|
+| [`PROMPT_C_BUILD_2_WORDING_SOL_ROUND5.md`](PROMPT_C_BUILD_2_WORDING_SOL_ROUND5.md) | **第 5 轮，`PREPARED_NOT_ISSUED`**。§1.1 记着本轮最该记的一条：**第 4 轮的两个根因，我在第 4 轮 §4 里自己列出过，然后没去修** —— 列出弱点不等于处理弱点。所以 §4 改成「要么已修、要么明确接受并写明代价」，不再是「可能错的地方」清单 |
 | [`PROMPT_C_BUILD_2_WORDING_SOL_ROUND4.md`](PROMPT_C_BUILD_2_WORDING_SOL_ROUND4.md) | **第 4 轮，`PREPARED_NOT_ISSUED`**，等 Aaron 发。第 3 轮两条 HOLD 发现已修，含**我用 Sol 自己的反对意见攻击我的修复**的记录 —— 机制在发出前两次抓到我（合同只枚举函数体；`_preserve` 有两个调用点我只声明了一个）。§0 是**可执行的检索边界**，不是散文 —— 上一轮席位的曝光事故成因就是它 |
 | [`PROMPT_EIGHT_OPEN_FABLE.md`](PROMPT_EIGHT_OPEN_FABLE.md) | Fable 决裁席，八项，**已全部裁定并经 Aaron 采纳**；席位自评未烧 |
 | [`PROMPT_D3_SOL_REVIEW.md`](PROMPT_D3_SOL_REVIEW.md) | Sol，D-3 复核，**已返回 HOLD**，席位未烧 |

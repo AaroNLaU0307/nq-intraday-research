@@ -1,0 +1,131 @@
+＃ C_BUILD_2 措辞复审 · 第 5 轮 —— fresh Sol
+
+```ini
+REVIEW_ID=c-build-2-wording-r5
+DELIVERY_STATUS=PREPARED_NOT_ISSUED
+RECOMMENDED_MODEL=Codex GPT-5.6 Sol
+EFFORT_INTENT=VERY_HIGH
+RECOMMENDED_EFFORT=Extra High
+EXECUTION_MODE=STANDARD
+ROLE=verifier（措辞复审第 5 轮）
+WINDOW=NEW_TOP_LEVEL_SESSION
+MUST_NOT_BE=builder；被审字节的作者；dec-c-build-2-hook-2026-08-28 的决裁席（Fable 5）；
+            **第 1、2、3、4 轮 c-build-2-wording* 的任何会话**；
+            N09 R2/R3 的任何前序复审会话
+LANE=FULL
+OUTCOME_EXPOSED=NONE
+PREREG_SEALED=N/A
+```
+
+**本文件从磁盘读取。绝对路径**：
+`C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework\ops\PROMPT_C_BUILD_2_WORDING_SOL_ROUND5.md`
+
+仓根：`C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework`
+
+## 0. 检索边界 —— 可执行的
+
+```
+允许检索的根        src/  ·  tests/  ·  §2 表中逐条列名的 ops 文件
+禁止               仓根范围的 grep / rglob / find；ops/ 全目录枚举
+永不打开           ops/outcome_quarantine/**
+                   ops/EXPOSURE_LEDGER.md
+                   EXPOSURE_LEDGER.md（仓根那份）
+                   ops/OUTCOME_CARRYING_ARTIFACTS.json 的 carries_outcome 全部路径
+```
+
+需要上表之外的字节：**列出路径向工作会话索取**。
+第 4 轮席位报了 `PERSISTED_SEARCH_OUTPUT=NONE` —— 本节就是为此存在的，请照做并同样报告。
+
+## 1. 第 4 轮判 HOLD，四条全中，**其中最该记的一条是我自己造的**
+
+四条全部复现在先。证据与逐条处置：`ops/RULING_SOL_C_BUILD_2_R4_HOLD_2026-08-30.md`。
+
+### 1.1 我在第 4 轮的 §4 里列出了这两个根因，然后没有去修
+
+第 4 轮提示词 §4 的第 1、2 条，逐字：
+
+> 1. **导出本身只跟模块级 `ast.Name` 调用**……
+> 2. **义务 (a) 的检查是「守卫串里含 `== intended` 且左侧名字来自 `read_bytes`」。**
+>    一条构造得当的新路径可能满足这个形状而语义上并未回读 FINAL。
+
+**第 4 轮用的正是这两条。**
+**列出弱点不等于处理弱点** —— 这是本轮我从自己身上学到的东西，
+也是我把 §4 的形制改掉的原因（见下）。
+
+### 1.2 四条各自的根因与修法
+
+| 发现 | 根因 | 修法 |
+|---|---|---|
+| HIGH ① 同形路径被吞 | 出口存进 **set**；溯源是**函数级**不是路径级 | 出口改**有序列表**逐位比对；每个出口携带**它自己路径上的绑定**；义务 (a) 用该路径的绑定回答 |
+| HIGH ② 删除经可调用对象 | 名字黑名单是**开放世界** | **封闭调用世界**：只允许 `Name(...)` 与 `x.attr(...)` 两种形状且 callee 在白名单内；callee 是 Call／Subscript／Lambda 一律拒绝，**无需知道它解析成什么** |
+| MEDIUM ① 大写哈希 | 正则只认小写 | 大小写不敏感并归一化。我上一轮把 base64／分段称为「越过合理伪装」**并标明那是判断**；大写根本不在那一类 |
+| MEDIUM ② range 自报 | 手写并寄希望 | `tests/test_a_prompts_range_claim_actually_holds.py` 从 git 机械核实**每一份 LIVE 提示词**；pin 改为**发行时才填** |
+
+### 1.3 我另外自己往下推了两层（第 4 轮没点名，但同一根因）
+
+- **语句世界也封闭了。** 遍历原本只递归 `ast.If` —— 一个 `try:` 或 `with:` 里的
+  `return` 对它**不可见**。现在遇到不认识的语句类型**直接失败并说明原因**。
+  已证：往函数里塞一个 `try:` 早退 → 合同变红。
+- **`_FNS` 不再在 import 时缓存。** 这是第 4 轮 §4 我列出却没修的第 3 条。
+  这次修了 —— 因为上面 §1.1。
+
+## 2. 受审集
+
+```
+REVIEWED_SET_UNCHANGED_SINCE=<发行时填入；由 tests/test_a_prompts_range_claim_actually_holds.py 机械核实>
+```
+
+| 角色 | 路径 |
+|---|---|
+| delivery | `ops/PROMPT_C_BUILD_2_WORDING_SOL_ROUND5.md` |
+| reference | `src/itsf/mc/supplement_runner.py` |
+| reference | `src/itsf/mc/supplement_contract.py` |
+| reference | `tests/test_resolve_partial_path_contract.py` |
+| reference | `tests/test_a_prompts_range_claim_actually_holds.py` |
+| reference | `tests/test_every_sealed_final_was_read_back.py` |
+| reference | `tests/test_c_build_2_wording_coverage.py` |
+| reference | `tests/test_n09_checkpoint_assertions.py` |
+| reference | `tests/test_every_approval_is_accounted_for.py` |
+| reference | `tests/test_the_ratified_preimage_is_reconstructible.py` |
+| reference | `ops/RULING_SOL_C_BUILD_2_R4_HOLD_2026-08-30.md` |
+
+哈希与 pin 于发行时填入。
+
+## 3. 修后我自己跑的反例
+
+```
+HIGH ① 的注入  -> 出口列表多出一条  ＋  路径局部溯源报出
+                  "on THIS path 'existing' is bound to 'intended', which is not a read"
+HIGH ② 的注入  -> "callee is a Call -- not a plain name or attribute"
+                  ＋ next 不在允许名字里
+try/except 早退 -> "a `return` inside it would be INVISIBLE"
+大写 64-hex    -> 变红
+```
+
+## 4. 本轮我**接受并声明**的残留 —— 不是「可能错的地方」清单
+
+第 4 轮我把这一节写成「我觉得还可能错的五处」，然后没修，于是被用来打我。
+所以本轮改成：**要么已修，要么在此明确接受，并写明代价。**
+
+| 残留 | 为什么接受 | 代价 |
+|---|---|---|
+| `DECLARED_EXITS` 对**顺序**敏感 | 语义等价的重排会变红。这是**故意的**：重排也值得看一眼 | 噪声；重排时要改声明 |
+| 白名单可以被加条目消音 | 无法机械区分「合法新增」与「为了变绿而加」 | 文件里写明「加条目是有意的动作」，但这是社会约束不是机械约束 |
+| 合同只覆盖 `resolve_partial` ＋ 两个助手 | C_BUILD_2 的措辞就锚在这里 | 若措辞将来指向别处，合同要跟着扩 |
+| 义务 (a) 匹配守卫串含 `== intended` | 若改成 `_same(existing, intended)` 之类，`assertIn` **失败闭合**（变红）——已核 | 变红时需要人来判断是不是合法写法 |
+
+**若你认为其中任何一条不该被接受，请直说** —— 我把它们列在这里就是为了让你能反对，
+而不是为了显得坦诚。
+
+## 5. 交付要求
+
+沿用第 4 轮字段，另加：
+
+```
+CONTRACT_CLOSURE_ASSESSMENT=  路径敏感 ＋ 封闭调用世界 ＋ 封闭语句世界，
+                             是否闭合了你第 3、4 轮的反对？
+                             若否，注入一条绕过它的路径并跑出来。
+ACCEPTED_RESIDUALS_ASSESSMENT= §4 那四条「接受」里，有哪几条你认为不该接受？
+```
+
+**HOLD 受欢迎。前四轮都是 HOLD，每一轮的发现都成立。猜一个 PASS 比 HOLD 糟得多。**
