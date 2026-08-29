@@ -39,8 +39,13 @@ OPS = REPO / "ops"
 
 PIN = re.compile(r"REVIEWED_SET_UNCHANGED_SINCE=([0-9a-f]{7,40})\b")
 STATUS = re.compile(r"DELIVERY_STATUS=([A-Z_]+)")
-#: A reference row in a prompt's transport table.
-ROW = re.compile(r"^\|\s*reference\s*\|\s*`([^`]+)`", re.M)
+#: A transport-table row, in the format the repository already uses:
+#: `| <sha256> | <bytes> | \`<path>\` |`. My first draft invented a
+#: different shape (`| reference | \`path\` | ...`) and then reported that
+#: a correctly-formed prompt "lists no reference file" -- a guard written
+#: against a convention I made up rather than the one in use.
+ROW = re.compile(r"^\|\s*`?[0-9a-fA-F]{64}`?\s*\|\s*\d+\s*\|\s*`([^`]+)`",
+                 re.M)
 
 LIVE = {"ISSUED", "PREPARED_NOT_ISSUED"}
 

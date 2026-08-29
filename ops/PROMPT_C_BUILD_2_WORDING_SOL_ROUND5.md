@@ -1,5 +1,9 @@
 ＃ C_BUILD_2 措辞复审 · 第 5 轮 —— fresh Sol
 
+> **发行流程（builder 用，2026-08-30 学到的）**：哈希与 pin **和 `ISSUED` 是同一个动作**。
+> 备而未发时表里是占位符 —— 一份钉了字节却说自己「未发」的文件，守卫会拒绝，而它是对的：
+> 我先武装了登记册、又继续改受审文件，冻结守卫当场抓住。**改完再武装，不是反过来。**
+
 ```ini
 REVIEW_ID=c-build-2-wording-r5
 DELIVERY_STATUS=PREPARED_NOT_ISSUED
@@ -17,7 +21,8 @@ OUTCOME_EXPOSED=NONE
 PREREG_SEALED=N/A
 ```
 
-**本文件从磁盘读取。绝对路径**：
+**READ THIS PROMPT FROM DISK, not from a paste.** 本文件从磁盘读取，不从粘贴读。
+**绝对路径**：
 `C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework\ops\PROMPT_C_BUILD_2_WORDING_SOL_ROUND5.md`
 
 仓根：`C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework`
@@ -72,24 +77,29 @@ PREREG_SEALED=N/A
 ## 2. 受审集
 
 ```
-REVIEWED_SET_UNCHANGED_SINCE=<发行时填入；由 tests/test_a_prompts_range_claim_actually_holds.py 机械核实>
+REVIEWED_SET_UNCHANGED_SINCE=<发行时填入>
 ```
 
-| 角色 | 路径 |
-|---|---|
-| delivery | `ops/PROMPT_C_BUILD_2_WORDING_SOL_ROUND5.md` |
-| reference | `src/itsf/mc/supplement_runner.py` |
-| reference | `src/itsf/mc/supplement_contract.py` |
-| reference | `tests/test_resolve_partial_path_contract.py` |
-| reference | `tests/test_a_prompts_range_claim_actually_holds.py` |
-| reference | `tests/test_every_sealed_final_was_read_back.py` |
-| reference | `tests/test_c_build_2_wording_coverage.py` |
-| reference | `tests/test_n09_checkpoint_assertions.py` |
-| reference | `tests/test_every_approval_is_accounted_for.py` |
-| reference | `tests/test_the_ratified_preimage_is_reconstructible.py` |
-| reference | `ops/RULING_SOL_C_BUILD_2_R4_HOLD_2026-08-30.md` |
+| sha256 | bytes | 路径 |
+|---|---|---|
+| <发行时填入> | <发行时填入> | `src/itsf/mc/supplement_runner.py` |
+| <发行时填入> | <发行时填入> | `src/itsf/mc/supplement_contract.py` |
+| <发行时填入> | <发行时填入> | `tests/test_resolve_partial_path_contract.py` |
+| <发行时填入> | <发行时填入> | `tests/test_a_prompts_range_claim_actually_holds.py` |
+| <发行时填入> | <发行时填入> | `tests/test_every_sealed_final_was_read_back.py` |
+| <发行时填入> | <发行时填入> | `tests/test_c_build_2_wording_coverage.py` |
+| <发行时填入> | <发行时填入> | `tests/test_n09_checkpoint_assertions.py` |
+| <发行时填入> | <发行时填入> | `tests/test_every_approval_is_accounted_for.py` |
+| <发行时填入> | <发行时填入> | `tests/test_the_ratified_preimage_is_reconstructible.py` |
+| <发行时填入> | <发行时填入> | `ops/RULING_SOL_C_BUILD_2_R4_HOLD_2026-08-30.md` |
 
-哈希与 pin 于发行时填入。
+**delivery**：`ops/PROMPT_C_BUILD_2_WORDING_SOL_ROUND5.md`，其字节见 `ops/ARTIFACTS_UNDER_REVIEW.json`。
+
+**禁区清单不在本包内** —— 评审包不得携带它（D-2 裁定，第二个席位被烧之后）。
+它随包交付：`ops/OFF_LIMITS_COMPANION_R5.md`，请一并读。
+
+**核对你读的是当前文件**：line 76 of it must read 那一行 —— `REVIEWED_SET_UNCHANGED_SINCE` 必须是发行时记入 `ops/ARTIFACTS_UNDER_REVIEW.json` 的那个 commit。
+对不上 ⇒ 你手上是陈旧粘贴 ⇒ **STOP**，回磁盘重读。
 
 ## 3. 修后我自己跑的反例
 

@@ -73,6 +73,7 @@
 
 | 文件 | 交给谁 / 结果 |
 |---|---|
+| [`OFF_LIMITS_COMPANION_R5.md`](OFF_LIMITS_COMPANION_R5.md) | **第 5 轮的禁区伴随件**，随提示词一同交付。D-2 裁定要求它独立存在：第二个席位被烧时，禁区清单写在提示词里而交付载体是 Review Packet，**清单没跟过去**。含可执行的检索边界与「工具落盘请报路径、不要打开」 |
 | [`PROMPT_C_BUILD_2_WORDING_SOL_ROUND5.md`](PROMPT_C_BUILD_2_WORDING_SOL_ROUND5.md) | **第 5 轮，`PREPARED_NOT_ISSUED`**。§1.1 记着本轮最该记的一条：**第 4 轮的两个根因，我在第 4 轮 §4 里自己列出过，然后没去修** —— 列出弱点不等于处理弱点。所以 §4 改成「要么已修、要么明确接受并写明代价」，不再是「可能错的地方」清单 |
 | [`PROMPT_C_BUILD_2_WORDING_SOL_ROUND4.md`](PROMPT_C_BUILD_2_WORDING_SOL_ROUND4.md) | **第 4 轮，`PREPARED_NOT_ISSUED`**，等 Aaron 发。第 3 轮两条 HOLD 发现已修，含**我用 Sol 自己的反对意见攻击我的修复**的记录 —— 机制在发出前两次抓到我（合同只枚举函数体；`_preserve` 有两个调用点我只声明了一个）。§0 是**可执行的检索边界**，不是散文 —— 上一轮席位的曝光事故成因就是它 |
 | [`PROMPT_EIGHT_OPEN_FABLE.md`](PROMPT_EIGHT_OPEN_FABLE.md) | Fable 决裁席，八项，**已全部裁定并经 Aaron 采纳**；席位自评未烧 |
