@@ -299,3 +299,7 @@ builder 核：`supplement_contract.py:539` 引用其裁定 R-A/R-C，而当日�
 **第 9 行要记的一条**：(一) 这个形态是**第二次**发生了。第 6 行时的成因是「要它裁台账里的
 那个值，就得给它看」；这一次没有那个理由 —— 台账进送审集只是因为包里引用了它。
 **同一形态第二次出现而成因不同，说明第一次的处置（记录下来）没有变成一条规则。**
+
+| 4 | 2026-08-30 | Codex GPT-5.6 Sol，fresh session（review `c-build-2-wording-r3`，C_BUILD_2 措辞第 3 轮） | 受审集 1 delivery ＋ 10 reference，均非 outcome-carrying | 席位自陈 `OUTCOME_EXPOSED=NONE`：未打开、未搜索、未枚举任何禁区工件 | **`NOT_EXPOSED`**（席位自评，builder 未下调） | 该会话仍可承担未来 outcome-blind 角色 | 无缺陷。本行记的是一次**干净**的席位消耗 —— 台账不只记事故 |
+
+| 5 | 2026-08-30 | Fable 5，决裁席（`dec-four-open-2026-08-29` 四件待裁）。**注意：builder spawn 的子代理，对 builder 不独立，结论为顾问级** | **席位自陈的执行缺陷**：两次**仓根范围**检索，作用域含两份禁区 `EXPOSURE_LEDGER.md`。第一次仅返回文件名（零内容行）；第二次 33.9KB 完整输出被持久化到 `C:\Users\Aaron\.claude\projects\...\tool-results\toolu_013gLFC1txxsAd9vwduC49dp.txt`，**席位自陈未读该文件**，进入其上下文的只有 2KB 预览 | 两份禁区台账的**路径**；席位台账序言与 `tests/test_exposure_ledger_migration.py` 携带的研究轴累计计数值；启动记忆索引的治理状态行。席位自陈：未见 verdict、spread、cell count 或任何目标绩效数值 | **`PENDING_AARON`**（席位自评，builder 未下调）。按已裁 C-1「累计计数属记账轴不属 outcome 轴」与 Aaron 2026-08-27「文件名不是内容」，倾向 `NOT_EXPOSED`，但**该判定不归 builder** | 待终分类后确定 | **builder 的缺陷**：决裁包 §0.1 写了「不得打开、不得 grep、不得列目录」，却**没有随包给出可执行的检索边界**（例如「检索限定在 `src/`、`tests/`、指名的 ops 文件」）。与第 2 行同成因：禁区清单存在于文字而未随交付载体成为可执行约束。**这是同一形态第三次。** 该持久化文件按隔离处置：**不得直接打开** |

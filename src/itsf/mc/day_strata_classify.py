@@ -206,6 +206,21 @@ STAGE_GATE_OF_BUILDER_CODE = {
     # payload stamped with an id the authority was not minted for (:290)
     "production_supplement_id_divergence": ("B_DERIVE",
                                             "custody_authority_binding"),
+    # RULED 2026-08-30 by the Fable adjudication seat (advisory: a subagent
+    # is not independent of its spawner), and the reason is a data-flow fact
+    # builder did NOT establish and said so:
+    #
+    #   inside `build_supplement_from_authority` the ONLY call reaching
+    #   `_freeze_value` is `rows = _freeze_value(list(day_rows))` (:280).
+    #   `binding` comes from `supplement_build_inputs` (:268) and goes
+    #   straight into the hermetic core WITHOUT being frozen. So on THIS
+    #   path the offending key or value can only have come from a ROW.
+    #
+    # Verified against the source before adopting, not taken on report.
+    # Scope is deliberately the BUILDER side only: `freeze_payload`
+    # (:220, reached at :378/:391) freezes the WHOLE payload including the
+    # binding, so the seal side stays unmapped and keeps refusing.
+    "production_payload_unsupported_type": ("C_BUILD", "row_schema_blind"),
 }
 
 #: Builder refusals that are CALLER BUGS, not run defects.
@@ -230,18 +245,12 @@ CALLER_ERROR_BUILDER_CODES = frozenset({
 #: NOT a placeholder to fill in by guessing. BD-1's rule applies: the gate
 #: name is written into the F1/F2 row, so picking one puts a defect on
 #: record under a name nobody ruled.
-UNMAPPED_BUILDER_CODES = {
-    "production_payload_unsupported_type":
-        "a payload key or value is not exactly a built-in -- a hostile "
-        "subclass surviving the freeze (`_freeze_value`). That is an "
-        "INTEGRITY defect, not a row-schema one: `row_schema_blind` names "
-        "the four structural row fields and the blind guarantee, and this "
-        "is about Python types anywhere in the payload, which may have come "
-        "from the rows OR from the authority's binding. No C_BUILD gate "
-        "names it, and unlike the seal codes there is no post-seal router "
-        "to own it either. Needs a ruling: a new gate (an R4-level act on "
-        "the approved closed enum), or an assignment to an existing one "
-        "with the reasoning written down.",
+UNMAPPED_BUILDER_CODES: dict = {
+    # EMPTIED 2026-08-30. It held `production_payload_unsupported_type`
+    # until the Fable seat did the data-flow analysis builder had skipped
+    # (see STAGE_GATE_OF_BUILDER_CODE). The mechanism stays: the next code
+    # that reaches a caller with no gate goes here with its question, not
+    # into a gate someone picked.
 }
 
 

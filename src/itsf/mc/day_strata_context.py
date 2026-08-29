@@ -58,17 +58,48 @@ def required_fields(stage: str) -> frozenset:
     if stage not in sc.GATE_TABLE:
         raise ContextError("%r is not a stage with a gate table" % stage)
     tree = ast.parse(io.open(_RUNNER, encoding="utf-8").read())
+    defs = {n.name: n for n in ast.walk(tree)
+            if isinstance(n, ast.FunctionDef)}
     wanted = {"_g_" + gate for gate in sc.GATE_TABLE[stage]}
     fields = set()
     seen = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.FunctionDef) or node.name not in wanted:
-            continue
-        seen.add(node.name)
-        for inner in ast.walk(node):
+
+    def _fields_of(name, visited):
+        """`ctx.<field>` reads, FOLLOWING CALLS.
+
+        WIDENED 2026-08-30, and the tripwire in
+        `test_day_strata_context` is what caught it. The wired C_BUILD_1
+        gates are one line each -- `_classify_c_build_1(ctx, "<gate>")` --
+        so the `ctx.c_build_outcome` read lives one level down. A
+        body-only walk reported that stage as needing NOTHING, which would
+        have let `assert_complete` pass a context the gates then choked on.
+
+        Third instance of this exact narrowness in one night (the builder
+        code table and the mkdir scan were the others): a derivation that
+        stops at the function boundary describes a fraction of what it
+        claims to."""
+        if name in visited or name not in defs:
+            return set()
+        visited.add(name)
+        found = set()
+        for inner in ast.walk(defs[name]):
             if (isinstance(inner, ast.Attribute)
                     and getattr(inner.value, "id", "") == "ctx"):
-                fields.add(inner.attr)
+                found.add(inner.attr)
+            if isinstance(inner, ast.Call):
+                callee = getattr(inner.func, "id", None)
+                # only follow a call that is HANDED the context; a helper
+                # that never sees `ctx` cannot read a field off it.
+                if callee and callee != name and any(
+                        getattr(a, "id", None) == "ctx" for a in inner.args):
+                    found |= _fields_of(callee, visited)
+        return found
+
+    for gate_fn in sorted(wanted):
+        if gate_fn not in defs:
+            continue
+        seen.add(gate_fn)
+        fields |= _fields_of(gate_fn, set())
     missing_gates = sorted(wanted - seen)
     if missing_gates:
         raise ContextError(

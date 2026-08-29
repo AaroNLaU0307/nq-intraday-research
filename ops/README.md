@@ -25,6 +25,10 @@
 
 | 文件 | 是什么 |
 |---|---|
+| [`FINDINGS_SOL_R3_REPRODUCED_2026-08-30.md`](FINDINGS_SOL_R3_REPRODUCED_2026-08-30.md) | **两条 HOLD 发现的复现证据**。含一件比结论更值得记的事：**第一次复现是错的**（全红），因为我的变异守在测试会触发的条件上；Sol 的守在测试从不触发的条件上。停在第一次就会写下「无法复现」而缺陷仍在 |
+| [`DECISION_PACKET_FOUR_OPEN_2026-08-29.md`](DECISION_PACKET_FOUR_OPEN_2026-08-29.md) | **四件待裁的决裁包**（已由 Fable 顾问级答复，见 `RULING_FABLE_FOUR_OPEN_2026-08-30.md`）。**第 2 件已撤回** —— 它是一件 owner 已裁事项，我当未决送出去了 |
+| [`RULING_SOL_C_BUILD_2_R3_HOLD_2026-08-30.md`](RULING_SOL_C_BUILD_2_R3_HOLD_2026-08-30.md) | **第 3 轮 fresh Sol 判 HOLD，逐字转录**。HIGH：C_BUILD_2 路径覆盖不是失败闭合（新增路径 59/59 仍绿）；MEDIUM：批准守卫的探测域是单文件＋字段正则却声称「每份批准」。**两条均已复现在先、修复在后**（`test_resolve_partial_path_contract.py` ＋ 探测域改为哈希）。`UNRESOLVED_FOR_AARON`：`SIGNABLE_RATIFICATION_ROUTES=1` 要不要成为权威不变量 |
+| [`RULING_FABLE_FOUR_OPEN_2026-08-30.md`](RULING_FABLE_FOUR_OPEN_2026-08-30.md) | **Fable 四件裁定，顾问级**（builder spawn 的子代理，对 builder 不独立）。第 1 件用数据流推翻了我的 BD-4；**第 2 件抓到我把一件 owner 已裁事项当未决送裁**；第 3 件采纳＋两条硬化；第 4 件正确让渡给 Aaron |
 | [`HOW_TO_SEND_THE_SOL_ROUND3_REVIEW.md`](HOW_TO_SEND_THE_SOL_ROUND3_REVIEW.md) | **给 Aaron 的操作单**：第 3 轮复审的提示词早已 ISSUED，可能从没真发出去。含可直接粘的开场段、`MUST_NOT_BE` 清单、返回后我要做的四步。**2026-08-29 复查：十份参考件自 pin `d34ce7c` 起全部未动，可以原样发** |
 | [`REHEARSAL_SAMPLE_2026-08-29.md`](REHEARSAL_SAMPLE_2026-08-29.md) | **整条链第一次端到端走通的样本输出**（全合成输入，零治理写入，`day_strata_dryrun`）。两条路径：事件旗标缺失 → 生产者拒绝；旗标齐全 → builder 在 authority 分区拒绝。**首次走通就抓到一个真缺陷**：`run_c_build` 把所有 builder 异常都记成 `row_schema_blind`，而 builder 也校验 authority —— 于是 B_DERIVE 的 custody 缺陷被记到 C_BUILD 的行模式门下。已订正 |
 | [`MEASURED_WHAT_THE_REGISTRY_APPEND_UNLOCKS.md`](MEASURED_WHAT_THE_REGISTRY_APPEND_UNLOCKS.md) | **registry 追加授权的实测**（合成 registry 干跑，真实登记簿未动）。**结论：追加 P1 解开的门数是 0**，五道门的翻转全部来自 P2；但 P1 是**结构必需**（没有它 `chain_does_not_start_at_proposal`）。**P1 不随提交作废，P2 会** —— 所以等的成本是零。**builder 建议：现在别给**，等接线过 fresh Sol 之后，理由四条可复算，数字全部由 `tests/test_what_the_registry_append_unlocks.py` 产出 |

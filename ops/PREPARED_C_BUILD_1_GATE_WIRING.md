@@ -1,16 +1,20 @@
-# C_BUILD_1 三道门的接线 —— 已写好，待第 3 轮复审返回后落地
+# C_BUILD_1 三道门的接线 —— **已落地（2026-08-30）**
 
 ```
-STATUS      = PREPARED_NOT_APPLIED
-PATCH       = ops/PREPARED_C_BUILD_1_GATE_WIRING.patch（106 行）
+STATUS      = APPLIED（2026-08-30）
+PATCH       = 已应用并删除。留着一份不再适用的补丁是给下一个读它的人设陷阱；
+              内容在 git 历史与本文件里。守卫改为 tests/test_the_c_build_1_wiring_landed.py
 TARGET      = src/itsf/mc/supplement_runner.py
-BLOCKED_BY  = ops/PROMPT_C_BUILD_2_WORDING_SOL_ROUND3.md（DELIVERY_STATUS=ISSUED）
-UNBLOCKS_ON = 该轮 RETURNED，且其条目从 ops/ARTIFACTS_UNDER_REVIEW.json 移除
+BLOCKED_BY  = 已解除 —— 该轮 2026-08-30 返回，VERDICT=HOLD，受审登记条目已移除
+LANDED_ON   = 2026-08-30。三条绊线按设计变红并已改为活形式；
+              `required_fields` 也因此被发现不跟调用走，一并修好
 ```
 
-## 1. 为什么写好了却不落地
+## 1. 为什么它曾经写好却不落地（历史，保留）
 
-`src/itsf/mc/supplement_runner.py` 此刻被 fresh Sol 持有，
+*（以下为 08-29 当时的记述，逐字保留。）*
+
+`src/itsf/mc/supplement_runner.py` 当时被 fresh Sol 持有，
 pin `446ebd4bf51dc797…`，review_id `c-build-2-wording-r3`，**状态仍是 ISSUED**。
 
 传输规则要求接收方**先重算哈希再干活，不匹配就 STOP**。我改了这个文件，
@@ -102,3 +106,29 @@ they started reading.」
 3. `day_strata_context` 增加一个供给该字段的 C_BUILD 上下文装配器
 4. 变异证明：缺席通过、门交叉分类、分类器复查行
 5. 全量套件
+
+---
+
+## 5. 落地实录（2026-08-30）
+
+第 3 轮返回（`VERDICT=HOLD`）→ 受审登记条目移除 → 守卫按设计变红并宣告解锁 →
+补丁 `git apply --check` 干净 → 应用。
+
+清单四项全做，且**第 2 项带出一个新缺陷**：
+
+```
+1  应用补丁                                    ✅
+2  三条绊线改为活形式                          ✅ —— 但先红在了别处，见下
+3  required_fields 供给 c_build_outcome        ✅
+4  变异证明（缺席通过／门交叉／分类器复查行）    ✅ 见 test_the_c_build_1_wiring_landed.py
+5  全量套件                                    ✅
+```
+
+**第 2 项带出的缺陷**：绊线改活后仍红，因为 `required_fields("C_BUILD")` 返回空集。
+原因是它**只扫门函数的函数体**，而接好线的门只有一行
+`_classify_c_build_1(ctx, "<gate>")` —— 对 `ctx.c_build_outcome` 的读在低一层。
+
+**同一晚第三次「推导不跟调用走」**（另两次：builder 码表、mkdir 扫描）。
+已改为跟调用递归，且只跟**被交了 `ctx`** 的调用 —— 拿不到 ctx 的助手读不了它的字段。
+
+**是绊线抓到的。** 如果它当初写成「删掉就完事」，这个缺陷会活到第一次真跑。

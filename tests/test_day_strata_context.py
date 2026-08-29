@@ -144,37 +144,64 @@ class TestAnIncompleteContextIsRefused(unittest.TestCase):
         ctxmod.assert_complete(full, "A_PRECHECK")
 
 
-class TestCBuildHasNoRequirementsYetAndThatIsATripwire(unittest.TestCase):
-    """C_BUILD's gates are still default-refuse stubs, so they read nothing
-    from the context and `assert_complete(ctx, "C_BUILD")` passes over an
-    empty set.
+class TestCBuildNowREADSTheContextAndThatIsTheTripwireFiring(unittest.TestCase):
+    """THE LIVE FORM. This class used to assert C_BUILD read NOTHING from
+    the context, and said so in its own words:
 
-    That is the vacuous shape, stated rather than left to be discovered. The
-    assertion below goes RED the moment the gates are wired — which is
-    exactly when someone should look at whether the assembler supplies what
-    they started reading."""
+        "The assertion below goes RED the moment the gates are wired --
+         which is exactly when someone should look at whether the assembler
+         supplies what they started reading."
 
-    def test_c_build_reads_nothing_from_the_context_today(self):
-        self.assertEqual(frozenset(), ctxmod.required_fields("C_BUILD"),
-                         "a C_BUILD gate now reads the context. Wire the "
-                         "assembler to supply those fields, then update "
-                         "this test to assert the new requirement instead "
-                         "of the empty set.")
+    2026-08-30: fresh Sol returned the C_BUILD_2 wording review, the freeze
+    on `supplement_runner.py` lifted, the parked wiring patch landed, and
+    the three C_BUILD_1 gates became real classifiers. This is that look."""
 
-    def test_so_the_completeness_check_is_vacuous_for_it(self):
-        ctxmod.assert_complete(_bare(), "C_BUILD")
+    def test_the_three_C_BUILD_1_gates_now_read_the_outcome(self):
+        need = ctxmod.required_fields("C_BUILD")
+        self.assertIn("c_build_outcome", need,
+                      "the wired gates read nothing from the context, so "
+                      "either the patch did not land or they were wired to "
+                      "reach around it")
 
-    def test_and_the_gates_are_still_stubs(self):
-        """The premise for the two above. If a gate stopped being a stub
-        without starting to read the context, this file would still pass
-        while describing something untrue."""
+    def test_the_completeness_check_is_no_longer_vacuous(self):
+        """It used to pass over an empty requirement set. It now refuses a
+        context with no outcome attached -- which is the whole point of
+        `_classify_c_build_1`'s "absence is a refusal, never a pass"."""
+        with self.assertRaises(ctxmod.ContextError) as caught:
+            ctxmod.assert_complete(_bare(), "C_BUILD")
+        self.assertIn("c_build_outcome", str(caught.exception))
+
+    def test_a_context_carrying_an_outcome_is_complete_for_C_BUILD(self):
+        from itsf.mc.day_strata_pipeline import CBuildOutcome
+
+        full = _bare(c_build_outcome=CBuildOutcome((), None, None))
+        ctxmod.assert_complete(full, "C_BUILD")
+
+    def test_the_two_gates_deliberately_left_as_stubs_still_are(self):
+        """`seal_staging_partial` (its wording is what Sol just HELD on) and
+        `archive_policy_a` (Router B owns its outcome) were excluded from
+        the patch ON PURPOSE, each for a stated reason. If either quietly
+        becomes a classifier, the reason went with it."""
         import inspect
 
         from itsf.mc import supplement_runner as sr
-        for gate in sc.GATE_TABLE["C_BUILD"]:
+        for gate in ("seal_staging_partial", "archive_policy_a"):
             with self.subTest(gate=gate):
                 source = inspect.getsource(getattr(sr, "_g_" + gate))
                 self.assertIn("unreachable in this build", source)
+
+    def test_and_the_three_wired_ones_are_NOT_stubs_any_more(self):
+        """The other direction, so this class cannot pass by everything
+        being a stub again."""
+        import inspect
+
+        from itsf.mc import supplement_runner as sr
+        for gate in ("row_schema_blind", "day_set_exact",
+                     "rows_digest_recompute"):
+            with self.subTest(gate=gate):
+                source = inspect.getsource(getattr(sr, "_g_" + gate))
+                self.assertNotIn("unreachable in this build", source)
+                self.assertIn("_classify_c_build_1", source)
 
 
 if __name__ == "__main__":

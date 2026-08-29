@@ -157,8 +157,14 @@ def run_c_build(*, authority, prepared, universe, vol_method: str,
         # the F1/F2 row carries, so that was a wrong defect on record.
         #
         # A caller bug and an unmapped code both RAISE out of here rather
-        # than becoming an outcome: neither is a run failure, and inventing
-        # a gate for them is the defect this whole table exists to prevent.
+        # than becoming an outcome, and inventing a gate for them is the
+        # defect this whole table exists to prevent.
+        #
+        # CORRECTED 2026-08-30 (Fable): this used to add "neither is a run
+        # failure", which is false for the unmapped case. A type leak from a
+        # real data frame -- a numpy scalar in a row -- is a run failure
+        # that reaches an unmapped code. The reason to raise is that nobody
+        # has ruled where it belongs, NOT that it did not happen.
         stage, gate = dsc.classify_builder_failure(exc.code)
         return CBuildOutcome(
             tuple(rows), None,

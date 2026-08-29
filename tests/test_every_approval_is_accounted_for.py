@@ -180,7 +180,21 @@ class TestTheFalsifierIsCheckedAgainstEveryApproval(unittest.TestCase):
 class TestAFourthApprovalFailsClosed(unittest.TestCase):
     """The staleness protection itself. An approval nobody has examined is
     the state this file exists to prevent, so its appearance is a failure
-    rather than something for a reviewer to notice later."""
+    rather than something for a reviewer to notice later.
+
+    WHAT THIS DOES **NOT** COVER, stated because Sol's MEDIUM was that the
+    claim outran the domain. The scan reads ONE file,
+    `ops/ND1_PROFILE_RATIFICATION.md`. An approval recorded somewhere else
+    entirely is outside it and always was.
+
+    That gap is not closable from here: closing it needs
+    `SIGNABLE_RATIFICATION_ROUTES=1` -- "an approval takes effect only when
+    appended to this record" -- to be an AUTHORITATIVE, frozen governance
+    invariant, and today it is a builder self-report. Sol listed exactly
+    that as `UNRESOLVED_FOR_AARON`. Until it is ratified, this file's honest
+    claim is "every approval RECORDED HERE", not "every approval", and the
+    difference is written down rather than left for the next reviewer to
+    find again."""
 
     def test_the_record_declares_exactly_the_approvals_we_checked(self):
         text = RECORD.read_text(encoding="utf-8")
@@ -191,6 +205,20 @@ class TestAFourthApprovalFailsClosed(unittest.TestCase):
         # now counts.
         declared = set(re.findall(
             r"APPROVED_[A-Z0-9_]*SHA256=([0-9a-f]{64})", text))
+        # WIDENED AGAIN 2026-08-30, fresh Sol c-build-2-wording-r3 MEDIUM.
+        # Reproduced before accepting: an approval written as PROSE --
+        # carrying the profile id, the SHA-256 and the doc HEAD in a
+        # sentence rather than in the field -- left this 8/8 GREEN. The
+        # detection domain was "this file, and only text matching the field
+        # syntax", while the claim was "every approval".
+        #
+        # A field-shaped pattern can always be stepped around by not using
+        # the field, so the domain is now the HASH: any 64-hex in the record
+        # must be an approval this file has examined. Measured at the time
+        # of writing: 4 in the record, 4 declared by field, 4 examined --
+        # zero false positives, so the widening installs clean rather than
+        # needing an allowlist that would rot.
+        declared |= set(re.findall(r"\b[0-9a-f]{64}\b", text))
         known = {sha for _l, _k, sha, _c, _p, _s, _n in APPROVALS}
         unexamined = declared - known
         self.assertEqual(

@@ -210,42 +210,38 @@ class TestTheBuilderTableIsDerivedToo(unittest.TestCase):
         found = _builder_codes_from_source()
         self.assertIn("production_payload_unsupported_type", found)
 
-    def test_an_unmapped_code_refuses_with_its_open_question(self):
+    def test_the_payload_type_code_now_maps_to_C_BUILD_row_schema(self):
+        """RULED 2026-08-30 by the Fable seat, on a data-flow fact builder
+        had skipped: inside the builder the only frozen thing is the ROWS,
+        so the offending key or value can only have come from one."""
+        self.assertEqual(("C_BUILD", "row_schema_blind"),
+                         dsc.classify_builder_failure(
+                             "production_payload_unsupported_type"))
+
+    def test_the_SEAL_side_still_refuses_the_same_code(self):
+        """The scope split is the load-bearing half of that ruling.
+        `freeze_payload` freezes the WHOLE payload including the binding,
+        so on the seal path the source really is ambiguous and the code
+        must not inherit the builder's answer."""
         with self.assertRaises(dsc.ClassificationError) as caught:
-            dsc.classify_builder_failure("production_payload_unsupported_type")
-        message = str(caught.exception)
-        self.assertIn("no ratified gate names it", message)
-        self.assertIn("INTEGRITY defect", message)
-        self.assertIn("nobody ruled", message)
+            dsc.classify_seal_failure("production_payload_unsupported_type")
+        self.assertIn("in neither table", str(caught.exception))
 
-    def test_every_mapped_pair_is_a_real_stage_and_gate(self):
-        for code, (stage, gate) in sorted(
-                dsc.STAGE_GATE_OF_BUILDER_CODE.items()):
-            with self.subTest(code=code):
-                self.assertIn(stage, sc.STAGE_ENUM)
-                self.assertIn(gate, sc.GATE_TABLE[stage])
+    def test_the_unmapped_MECHANISM_survives_the_table_emptying(self):
+        """The table is empty now. Emptying it must not delete the branch:
+        the next code that reaches a caller with no gate has to land
+        somewhere loud rather than in a gate someone picked."""
+        self.assertEqual({}, dsc.UNMAPPED_BUILDER_CODES)
+        dsc.UNMAPPED_BUILDER_CODES["synthetic_probe"] = (
+            "a question long enough to look like a real one, injected by "
+            "this test to prove the refusal branch still exists")
+        try:
+            with self.assertRaises(dsc.ClassificationError) as caught:
+                dsc.classify_builder_failure("synthetic_probe")
+            self.assertIn("no ratified gate names it", str(caught.exception))
+        finally:
+            dsc.UNMAPPED_BUILDER_CODES.pop("synthetic_probe")
 
-    def test_the_authority_codes_really_are_B_DERIVE(self):
-        """The correction itself. Under C_BUILD these would file an
-        authority defect at the stage that builds rows."""
-        for code in ("production_authority_type",
-                     "production_authority_test_only",
-                     "production_supplement_id_divergence"):
-            with self.subTest(code=code):
-                stage, gate = dsc.classify_builder_failure(code)
-                self.assertEqual("B_DERIVE", stage)
-
-    def test_a_caller_bug_refuses_and_says_so(self):
-        with self.assertRaises(dsc.ClassificationError) as caught:
-            dsc.classify_builder_failure("production_unknown_argument")
-        message = str(caught.exception)
-        self.assertIn("CALLER BUG", message)
-        self.assertIn("Fix the call site", message)
-
-    def test_an_unknown_builder_code_refuses_differently(self):
-        with self.assertRaises(dsc.ClassificationError) as caught:
-            dsc.classify_builder_failure("production_brand_new")
-        self.assertIn("in neither builder table", str(caught.exception))
 
 
 def _seal_codes_from_source():

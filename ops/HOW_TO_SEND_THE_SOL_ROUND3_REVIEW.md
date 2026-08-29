@@ -1,4 +1,10 @@
-＃ 怎么把第 3 轮复审发给 Sol —— 给 Aaron 的操作单
+＃ 怎么把第 3 轮复审发给 Sol —— **已完成（2026-08-30）**
+
+> Aaron 于 2026-08-30 发出，Sol 返回 `VERDICT=HOLD`。四步全部做完：
+> 两条发现逐条复现在先（第一次复现是错的，见
+> `ops/FINDINGS_SOL_R3_REPRODUCED_2026-08-30.md`）→ 登记条目已移除 →
+> 守卫按设计宣告解锁 → 接线补丁已落地。
+> **本文保留为下一轮的操作模板。**
 
 ```
 写给     Aaron
@@ -68,7 +74,7 @@ C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework
 
 1. 逐条复现它的每一条发现 —— **不采信自陈**，这是本项目的标准做法
 2. 把 `ops/ARTIFACTS_UNDER_REVIEW.json` 里那一轮的条目移除（复审已返回）
-3. 那一刻 `tests/test_the_prepared_patch_still_applies.py` 会**主动变红并宣告解锁**
+3. 那一刻 `tests/test_the_c_build_1_wiring_landed.py` 会**主动变红并宣告解锁**
    —— 它就是为这一刻写的
 4. 落地接线补丁，把三条绊线改成活形式，跑全量
 

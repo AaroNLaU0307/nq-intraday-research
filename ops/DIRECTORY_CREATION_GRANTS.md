@@ -200,3 +200,46 @@ A_PRECHECK 十三道门在创建前后的结果**完全一致**。
 
 **本件 `APPEND_ONLY=YES`**，故 §3 的原句一字未动 —— 抹掉它既违反追加纪律，
 也会掩盖「一份已交付的决裁包携带过它」这个事实。
+
+---
+
+## 订正-ALREADY-RULED-2026-08-30
+
+```
+CORRECTION_ID=订正-ALREADY-RULED-2026-08-30
+FOUND_BY=Fable 决裁席（顾问级：builder spawn 的子代理，对 builder 不独立）
+SEVERITY=流程缺陷，非代码缺陷
+```
+
+### 被订正的句子（**原句保留，本件只追加**）
+
+> 第二层（`<supplements>\<id>_<UTC>` 运行时目录）**不在本行覆盖范围内**
+> —— 见 `ops/SUPPLEMENTS_SUBTREE_GRANT_PREPARATION.md` §2 的甲乙丙三条出路，
+> **Aaron 尚未裁**，builder 倾向**乙**。
+
+**「Aaron 尚未裁」是假的。**
+
+`ops/OWNER_DECISIONS_2026-08-29.md` §5 逐字裁了**乙**：
+
+> 裁定　不由 P2 蕴含（那会正面抵触 ND1「目录创建与执行不得合并」的明令），
+> 　　　也不修订命名规则（那要动已批准值）。
+> 　　　执行前 builder 把实际 UTC 查实、呈交封闭清单，Aaron 当场签。
+
+同记录 §6 状态表写着「形制已定（乙）」。
+
+### 代价：我把一件已裁事项送进了决裁包
+
+`ops/DECISION_PACKET_FOUR_OPEN_2026-08-29.md` 第 2 件问的正是这条。
+**最坏形态**：如果决裁席裁出了不同答案，就会变成**一个 builder spawn 的子席位
+静默覆盖 owner 裁定**。它没有 —— 它认出这条已裁并拒绝重裁，那是它的功劳，不是我的。
+
+### 形态
+
+**未经核对的陈述，写在真实事实旁边，读起来一模一样。**
+这与 `订正-SUBTREE-GATE-2026-08-29` 同形，也与 Sol 两轮都在打的
+「把我列出的当成全部」同形。差别只在这次错的是**治理事实**而不是机制事实。
+
+### 机械化
+
+`tests/test_no_settled_question_is_sent_to_adjudication.py` —— 决裁包里的问题
+不得已在 `OWNER_DECISIONS_*` 里被裁过。
