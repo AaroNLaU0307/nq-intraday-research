@@ -61,6 +61,31 @@ DECLARED_EXITS = {
     ("raise", "supplement_post_promotion_verify",
      "final.read_bytes() != intended"),
     ("return", "promote", ""),
+    # EXITS THAT LEAVE THROUGH A HELPER, added 2026-08-30 by attacking this
+    # contract with the same objection Sol used on its predecessors: is the
+    # declared set itself a hand-listed subset? It was. The first version
+    # walked `resolve_partial`'s own body, so an exception RAISED inside
+    # `_preserve` -- a real exception exit of `resolve_partial` -- was
+    # invisible to it.
+    #
+    # Fourth instance in one night of a derivation stopping at the function
+    # boundary, and this one was inside the fix for a HOLD about exactly
+    # that. Found before the round-4 packet went out, not by the reviewer.
+    ("raise", "divergent_partial_exists",
+     "partial.exists() AND residue != intended VIA _preserve"),
+    ("raise", "incident_id_malformed",
+     "partial.exists() AND residue != intended VIA _preserve -> "
+     "_divergent_name"),
+    # AND THE SECOND CALL SITE, which the contract found on its first
+    # transitive run -- I had declared branch C and missed branch E
+    # (`resolve_partial:968`, the staging re-read). Caught by the mechanism,
+    # on its author, immediately. That is the difference between a declared
+    # set that is CHECKED against a derivation and one that is merely
+    # written down.
+    ("raise", "divergent_partial_exists",
+     "partial.read_bytes() != intended VIA _preserve"),
+    ("raise", "incident_id_malformed",
+     "partial.read_bytes() != intended VIA _preserve -> _divergent_name"),
 }
 
 
@@ -105,6 +130,48 @@ class _Exits(ast.NodeVisitor):
         self.found.add(("raise", self._name_of(node.exc), self._guard()))
         self.nodes.append(("raise", node, self._guard()))
 
+    def visit_Call(self, node):
+        """A helper that raises is an EXCEPTION EXIT of its caller.
+
+        Without this the contract would enumerate only the body, and a
+        `raise` moved one level down would leave the declared set unchanged
+        -- the same hand-listed-subset defect the whole file exists to
+        close, reproduced inside the closure."""
+        callee = getattr(node.func, "id", None)
+        if callee and callee in _MODULE_FUNCTIONS:
+            for code, via in _raises_of(callee, callee):
+                guard = " ".join(x for x in (self._guard(), "VIA " + via) if x)
+                self.found.add(("raise", code, guard))
+        self.generic_visit(node)
+
+
+def _module_functions():
+    tree = ast.parse(io.open(RUNNER, encoding="utf-8").read())
+    return {n.name: n for n in ast.walk(tree)
+            if isinstance(n, ast.FunctionDef)}
+
+
+_MODULE_FUNCTIONS = _module_functions()
+
+
+def _raises_of(name, path, seen=None):
+    """(code, call-path) for every literal raise reachable from `name`."""
+    seen = seen or set()
+    if name in seen or name not in _MODULE_FUNCTIONS:
+        return []
+    seen.add(name)
+    out = []
+    for node in ast.walk(_MODULE_FUNCTIONS[name]):
+        if (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)
+                and node.exc.args
+                and isinstance(node.exc.args[0], ast.Constant)):
+            out.append((node.exc.args[0].value, path))
+        if isinstance(node, ast.Call):
+            callee = getattr(node.func, "id", None)
+            if callee and callee in _MODULE_FUNCTIONS and callee != name:
+                out += _raises_of(callee, path + " -> " + callee, seen)
+    return out
+
 
 def _resolve_partial():
     tree = ast.parse(io.open(RUNNER, encoding="utf-8").read())
@@ -141,7 +208,7 @@ class TestTheExitSetIsCLOSED(unittest.TestCase):
     def test_the_derivation_is_not_looking_at_an_empty_function(self):
         """A rename or a parse change would make the set empty, and empty
         equals empty is the vacuous pass this whole file exists to stop."""
-        self.assertGreaterEqual(len(_exits().found), 6)
+        self.assertGreaterEqual(len(_exits().found), 8)
 
 
 class TestObligationA_alreadySealedMustHaveREAD(unittest.TestCase):
