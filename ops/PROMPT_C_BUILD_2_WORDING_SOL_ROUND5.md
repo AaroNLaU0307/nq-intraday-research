@@ -6,7 +6,7 @@
 
 ```ini
 REVIEW_ID=c-build-2-wording-r5
-DELIVERY_STATUS=PREPARED_NOT_ISSUED
+DELIVERY_STATUS=ISSUED
 RECOMMENDED_MODEL=Codex GPT-5.6 Sol
 EFFORT_INTENT=VERY_HIGH
 RECOMMENDED_EFFORT=Extra High
@@ -28,6 +28,8 @@ PREREG_SEALED=N/A
 仓根：`C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework`
 
 ## 0. 检索边界 —— 可执行的
+
+下栏中 `永不打开` 之下的每一条路径都是 **OFF-LIMITS**（outcome-carrying），逐条点名只为**标记禁区**，不是引导你去读：
 
 ```
 允许检索的根        src/  ·  tests/  ·  §2 表中逐条列名的 ops 文件
@@ -77,28 +79,29 @@ PREREG_SEALED=N/A
 ## 2. 受审集
 
 ```
-REVIEWED_SET_UNCHANGED_SINCE=<发行时填入>
+REVIEWED_SET_UNCHANGED_SINCE=91ff15d830621f18730d82d6d8bc69b5322b646c
 ```
 
 | sha256 | bytes | 路径 |
 |---|---|---|
-| <发行时填入> | <发行时填入> | `src/itsf/mc/supplement_runner.py` |
-| <发行时填入> | <发行时填入> | `src/itsf/mc/supplement_contract.py` |
-| <发行时填入> | <发行时填入> | `tests/test_resolve_partial_path_contract.py` |
-| <发行时填入> | <发行时填入> | `tests/test_a_prompts_range_claim_actually_holds.py` |
-| <发行时填入> | <发行时填入> | `tests/test_every_sealed_final_was_read_back.py` |
-| <发行时填入> | <发行时填入> | `tests/test_c_build_2_wording_coverage.py` |
-| <发行时填入> | <发行时填入> | `tests/test_n09_checkpoint_assertions.py` |
-| <发行时填入> | <发行时填入> | `tests/test_every_approval_is_accounted_for.py` |
-| <发行时填入> | <发行时填入> | `tests/test_the_ratified_preimage_is_reconstructible.py` |
-| <发行时填入> | <发行时填入> | `ops/RULING_SOL_C_BUILD_2_R4_HOLD_2026-08-30.md` |
+| `981d098819f340b460b094bbcc284039973417f43e4ba65b252967d4d5c352b2` | 50099 | `src/itsf/mc/supplement_runner.py` |
+| `34b2a17ed2e1617e34457882d7df7b4bcc0cc8d658003f8ea5a07a607bdfe0cf` | 32616 | `src/itsf/mc/supplement_contract.py` |
+| `d3cb7a145ea0778fe9812d3ee4252ebc0bbcf34e59d5497e6014dbe1bb2a1ccd` | 17264 | `tests/test_resolve_partial_path_contract.py` |
+| `b329b372eeab1069675267c8e50f71bb903d5117257106e5edbfdfb4b4920fd0` | 6722 | `tests/test_a_prompts_range_claim_actually_holds.py` |
+| `c2987bafbe62e3a16dcc3249016985c91cac8259b04bec4ec959423300d1be95` | 6100 | `tests/test_every_sealed_final_was_read_back.py` |
+| `4d4874c5e22b5adff47312bb03c0e405418fb894446b9ecd87a46e7ecef42613` | 11556 | `tests/test_c_build_2_wording_coverage.py` |
+| `40f9ecce8b9ecf5835073291a200920316f65478e4188a633d44ed0680a311c0` | 26667 | `tests/test_n09_checkpoint_assertions.py` |
+| `4ae94ad34a5c2d4c06a8dd7a99aeef546356fb2ba8b384faf6cd8082f4ea1097` | 13730 | `tests/test_every_approval_is_accounted_for.py` |
+| `3b8fd362614ee7e7c689bde19d9797b501464de5bc2caa57cb8271963effae50` | 6869 | `tests/test_the_ratified_preimage_is_reconstructible.py` |
+| `90d0f93f1b17b2793277aed7f313691305f5178ae5d6bfcbd794b141f7209799` | 4562 | `ops/RULING_SOL_C_BUILD_2_R4_HOLD_2026-08-30.md` |
+| `eee5ddbfafa45b0a373d96c5ff0a2de8aeee9b51a3db3a42d96c85b6d84e96fa` | 2644 | `ops/OFF_LIMITS_COMPANION_R5.md` |
 
 **delivery**：`ops/PROMPT_C_BUILD_2_WORDING_SOL_ROUND5.md`，其字节见 `ops/ARTIFACTS_UNDER_REVIEW.json`。
 
 **禁区清单不在本包内** —— 评审包不得携带它（D-2 裁定，第二个席位被烧之后）。
 它随包交付：`ops/OFF_LIMITS_COMPANION_R5.md`，请一并读。
 
-**核对你读的是当前文件**：line 76 of it must read 那一行 —— `REVIEWED_SET_UNCHANGED_SINCE` 必须是发行时记入 `ops/ARTIFACTS_UNDER_REVIEW.json` 的那个 commit。
+**核对你读的是当前文件**：line 82 of it must read 那一行 —— `REVIEWED_SET_UNCHANGED_SINCE` 必须是 `91ff15d830621f18730d82d6d8bc69b5322b646c`。
 对不上 ⇒ 你手上是陈旧粘贴 ⇒ **STOP**，回磁盘重读。
 
 ## 3. 修后我自己跑的反例

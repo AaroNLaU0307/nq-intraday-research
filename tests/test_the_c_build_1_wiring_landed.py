@@ -116,18 +116,35 @@ class TestTheTwoExclusionsAreStillJustified(unittest.TestCase):
 
 class TestTheRunnerIsNoLongerHeldByAnyReview(unittest.TestCase):
 
-    def test_it_is_out_of_the_freeze_register(self):
+    def test_if_it_is_pinned_again_the_wiring_has_not_moved(self):
+        """WAS `test_it_is_out_of_the_freeze_register`, and its own failure
+        message already knew better than its assertion:
+
+            "the runner is pinned to a review again. That is not a defect
+             -- it means a new round is out, and the wiring must not move
+             while it is."
+
+        Round 5 went out and pinned it, so the absolute form went red on a
+        state it had itself described as correct. The property worth
+        holding is the second half of that sentence: while a reviewer holds
+        the file, the wiring stays exactly what they were handed."""
+        import hashlib
         import json
 
         register = json.loads((REPO / "ops" / "ARTIFACTS_UNDER_REVIEW.json")
                               .read_text(encoding="utf-8"))
         held = [e for e in register["under_review"]
                 if e.get("path") == "src/itsf/mc/supplement_runner.py"]
-        self.assertEqual(
-            [], held,
-            "the runner is pinned to a review again. That is not a defect "
-            "-- it means a new round is out, and the wiring must not move "
-            "while it is.")
+        if not held:
+            return                      # no live round; nothing to hold to
+        current = hashlib.sha256(RUNNER.read_bytes()).hexdigest()
+        for entry in held:
+            with self.subTest(review=entry.get("review_id")):
+                self.assertEqual(
+                    entry["sha256"], current,
+                    "the runner moved while %s holds it -- their recheck "
+                    "will STOP and the round is wasted"
+                    % entry.get("review_id"))
 
     def test_the_round_3_prompt_records_that_it_returned(self):
         text = (REPO / "ops" / "PROMPT_C_BUILD_2_WORDING_SOL_ROUND3.md"

@@ -1,4 +1,113 @@
 {
  "_comment": "Frozen while a reviewer holds them. Remove an entry when the review returns; an empty list is the normal state. `unchanged_since` is the commit the declaration pins: no commit after it may touch the path. HEAD itself is NEVER pinned -- committing the review prompt moves HEAD, so a HEAD pin is stale the moment it is written (measured 2026-08-25: a Sol session STOPped on exactly that). Nothing on ops/OUTCOME_CARRYING_ARTIFACTS.json may be listed here. Each entry declares role: \"delivery\" (a document authored for this review; must itself carry the off-limits list) or \"reference\" (pre-existing bytes handed along; scanned for unmarked quarantined paths, but NOT required to carry governance text — requiring that would mean editing an approved record to satisfy a test). Guarded by tests/test_artifacts_under_review_are_frozen.py and tests/test_review_artifacts_are_outcome_clean.py",
- "under_review": []
+ "under_review": [
+  {
+   "path": "ops/PROMPT_C_BUILD_2_WORDING_SOL_ROUND5.md",
+   "sha256": "93531f0de081b7fab3bf53de6d097ec6b5b308a2eda2c1d2beab78510bf6283e",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 5 轮",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r5",
+   "unchanged_since": "91ff15d830621f18730d82d6d8bc69b5322b646c",
+   "role": "delivery"
+  },
+  {
+   "path": "src/itsf/mc/supplement_runner.py",
+   "sha256": "981d098819f340b460b094bbcc284039973417f43e4ba65b252967d4d5c352b2",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 5 轮",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r5",
+   "unchanged_since": "91ff15d830621f18730d82d6d8bc69b5322b646c",
+   "role": "reference"
+  },
+  {
+   "path": "src/itsf/mc/supplement_contract.py",
+   "sha256": "34b2a17ed2e1617e34457882d7df7b4bcc0cc8d658003f8ea5a07a607bdfe0cf",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 5 轮",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r5",
+   "unchanged_since": "91ff15d830621f18730d82d6d8bc69b5322b646c",
+   "role": "reference"
+  },
+  {
+   "path": "tests/test_resolve_partial_path_contract.py",
+   "sha256": "d3cb7a145ea0778fe9812d3ee4252ebc0bbcf34e59d5497e6014dbe1bb2a1ccd",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 5 轮",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r5",
+   "unchanged_since": "91ff15d830621f18730d82d6d8bc69b5322b646c",
+   "role": "reference"
+  },
+  {
+   "path": "tests/test_a_prompts_range_claim_actually_holds.py",
+   "sha256": "b329b372eeab1069675267c8e50f71bb903d5117257106e5edbfdfb4b4920fd0",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 5 轮",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r5",
+   "unchanged_since": "91ff15d830621f18730d82d6d8bc69b5322b646c",
+   "role": "reference"
+  },
+  {
+   "path": "tests/test_every_sealed_final_was_read_back.py",
+   "sha256": "c2987bafbe62e3a16dcc3249016985c91cac8259b04bec4ec959423300d1be95",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 5 轮",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r5",
+   "unchanged_since": "91ff15d830621f18730d82d6d8bc69b5322b646c",
+   "role": "reference"
+  },
+  {
+   "path": "tests/test_c_build_2_wording_coverage.py",
+   "sha256": "4d4874c5e22b5adff47312bb03c0e405418fb894446b9ecd87a46e7ecef42613",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 5 轮",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r5",
+   "unchanged_since": "91ff15d830621f18730d82d6d8bc69b5322b646c",
+   "role": "reference"
+  },
+  {
+   "path": "tests/test_n09_checkpoint_assertions.py",
+   "sha256": "40f9ecce8b9ecf5835073291a200920316f65478e4188a633d44ed0680a311c0",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 5 轮",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r5",
+   "unchanged_since": "91ff15d830621f18730d82d6d8bc69b5322b646c",
+   "role": "reference"
+  },
+  {
+   "path": "tests/test_every_approval_is_accounted_for.py",
+   "sha256": "4ae94ad34a5c2d4c06a8dd7a99aeef546356fb2ba8b384faf6cd8082f4ea1097",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 5 轮",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r5",
+   "unchanged_since": "91ff15d830621f18730d82d6d8bc69b5322b646c",
+   "role": "reference"
+  },
+  {
+   "path": "tests/test_the_ratified_preimage_is_reconstructible.py",
+   "sha256": "3b8fd362614ee7e7c689bde19d9797b501464de5bc2caa57cb8271963effae50",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 5 轮",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r5",
+   "unchanged_since": "91ff15d830621f18730d82d6d8bc69b5322b646c",
+   "role": "reference"
+  },
+  {
+   "path": "ops/RULING_SOL_C_BUILD_2_R4_HOLD_2026-08-30.md",
+   "sha256": "90d0f93f1b17b2793277aed7f313691305f5178ae5d6bfcbd794b141f7209799",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 5 轮",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r5",
+   "unchanged_since": "91ff15d830621f18730d82d6d8bc69b5322b646c",
+   "role": "reference"
+  },
+  {
+   "path": "ops/OFF_LIMITS_COMPANION_R5.md",
+   "sha256": "eee5ddbfafa45b0a373d96c5ff0a2de8aeee9b51a3db3a42d96c85b6d84e96fa",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 5 轮",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r5",
+   "unchanged_since": "91ff15d830621f18730d82d6d8bc69b5322b646c",
+   "role": "reference"
+  }
+ ]
 }
