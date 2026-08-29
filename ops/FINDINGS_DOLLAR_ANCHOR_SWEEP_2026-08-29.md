@@ -77,3 +77,67 @@ Python 里 `$` 匹配「字符串末尾**或**末尾换行之前」；`\Z` 才�
 `qros-runtime/build-evidence/BUILDER_FOUND_DOLLAR_ANCHOR_2026-08-29.md`。
 
 **两仓合计九个身份校验器接受尾随换行，其中六个校验 SHA-256 或 git OID。**
+
+---
+
+## 7. 追加：又找到五处，而且**两条守卫都比它们声称的窄，其中一条是我几小时前写的**
+
+### 7.1 `ANCHOR_MODULES` 那条守卫的 docstring 说了假话
+
+`tests/test_mc_supplement_integration.py::test_no_validating_anchor_in_any_supplement_module_uses_dollar`
+的 docstring 逐字写着：
+
+> This sweeps every module by **SOURCE**, so a new one joins the check by
+> existing rather than by being remembered.
+
+**它迭代的是 `ANCHOR_MODULES`，一个手写的六元组。** 而 `src/itsf/mc/` 有 **21 个模块**。
+
+**更要命的是它的来历**：这条守卫本身就是为了修「上一版守卫只反射它知道的那两个模块」
+而写的。**修复重演了它要修的那件事，并在自己的 docstring 里声称没有。**
+
+实测（HEAD~6 的树，即我今晚动手之前）：
+
+```
+atoms.py     2 处 ^...$   —— 清单外，这条守卫看不见
+consumer.py  2 处 ^...$   —— 清单外，看不见
+```
+
+**已改为 glob 目录**，`ANCHOR_MODULES` 只留作下界（其中每个名字必须仍被 glob 到，
+否则「glob 悄悄不匹配了」会通过）。变异证红：把 `$` 放回 `atoms.py` → 红；旧版看不见。
+
+### 7.2 我自己那条新守卫，今晚被加宽了两次
+
+```
+第一版   只走 tree.body   -> 看不见函数内的 re.compile、看不见容器字面量里的
+第二版   走整棵 AST       -> 仍看不见 f-string 模式（ast.Constant 判定不成立）
+第三版   处理 JoinedStr   -> 才看全
+```
+
+**为「阻止扫描比它声称的性质窄」而写的守卫，自己窄了两次，用了一个晚上。**
+本仓三条同类扫描里，**两条有过这个缺陷**。
+
+### 7.3 因此又找到五处
+
+```
+consumer.py:1048   函数内 hex64 = re.compile(r"^[0-9a-f]{64}$")   校验 manifest 摘要
+runinfra.py:720-723  _SCHEMA_PATTERNS 四条日志 schema 白名单
+```
+
+**四条 schema 的严重性要说准**：那是 Stage-C 的**日志泄漏白名单**，
+docstring 写着「宁可误杀」。它接受 `message + "\n"` ——
+**但 `message + "\nLEAKED SECRET"` 不通过**（`$` 只匹配末尾那一个换行之前）。
+**所以没有信息能骑在上面，这是不精确，不是泄漏。**
+
+修的理由不是防泄漏，是：**一个声称「宁可误杀」的白名单，
+不该接受一个它没有列出的变体。**
+
+### 7.4 本仓 `$` 锚定的身份校验器现在合计
+
+```
+第一批（§2）   atoms._UPPER_CONST · atoms._HEX64 · consumer._HEX64_RE
+              report._DATE_RE · runinfra._HEX64_RE            5 处
+第二批（§7.3） consumer.py:1048 · runinfra._SCHEMA_PATTERNS ×4  5 处
+合计           10 处，加上姊妹仓 4 处 = **14 处**
+```
+
+**其中八处校验 SHA-256 或 git OID。**

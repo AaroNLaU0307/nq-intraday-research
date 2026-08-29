@@ -631,18 +631,37 @@ def test_no_validating_anchor_in_any_supplement_module_uses_dollar():
     found them. The earlier guard only reflected over the two modules it
     knew about, so it could not have caught them either.
 
-    This sweeps every module by SOURCE, so a new one joins the check by
-    existing rather than by being remembered."""
+    CORRECTED 2026-08-29 — AND THE CORRECTION IS THE POINT. The paragraph
+    above ended "This sweeps every module by SOURCE, so a new one joins the
+    check by existing rather than by being remembered." **It did not.** It
+    iterated `ANCHOR_MODULES`, a hand-written tuple of six names, while
+    `src/itsf/mc/` holds twenty-one modules.
+
+    So the repair written because a guard "only reflected over the two
+    modules it knew about" reflected over six, and said in its own docstring
+    that it did otherwise. MEASURED: at HEAD~6, `atoms.py` (2 patterns) and
+    `consumer.py` (2) carried the same defect, both outside the tuple, both
+    invisible to this test.
+
+    It now globs the directory. `ANCHOR_MODULES` is kept only as a floor —
+    every name in it must still be found, so a glob that silently stops
+    matching fails here rather than passing over nothing."""
     import re as _re
     src_dir = REPO / "src" / "itsf" / "mc"
+    modules = sorted(p for p in src_dir.glob("*.py") if p.name != "__init__.py")
+    assert len(modules) > len(ANCHOR_MODULES), (
+        f"the glob found {len(modules)} modules, which is not more than the "
+        "old hand-written list — the derivation is not deriving")
+    found_names = {p.name for p in modules}
+    missing = [n for n in ANCHOR_MODULES if n not in found_names]
+    assert missing == [], f"named modules the glob no longer sees: {missing}"
+
     offenders = []
-    for name in ANCHOR_MODULES:
-        path = src_dir / name
-        assert path.exists(), f"{name} missing — the sweep would be vacuous"
+    for path in modules:
         for i, line in enumerate(
                 path.read_bytes().decode("utf-8").splitlines(), 1):
-            if _re.search(r're\.compile\(r"\^[^"]*\$"\)', line):
-                offenders.append(f"{name}:{i}")
+            if _re.search(r're\.compile\(rf?"\^[^"]*\$"\)', line):
+                offenders.append(f"{path.name}:{i}")
     assert offenders == [], (
         "these anchors accept a trailing newline, because Python's `$` also "
         f"matches before one: {offenders}")

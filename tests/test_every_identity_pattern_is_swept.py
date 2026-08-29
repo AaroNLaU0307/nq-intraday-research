@@ -54,8 +54,48 @@ LINE_PARSERS = {
 }
 
 
+def _pattern_text(node):
+    """The pattern source, for a literal OR an f-string.
+
+    WIDENED A SECOND TIME on 2026-08-29, an hour after the first widening.
+    The first version required `ast.Constant`, so three of `runinfra`'s four
+    log-schema patterns — built with `rf"...{_STAGE_ALT}..."` — were
+    invisible. Interpolation is not a different kind of pattern.
+
+    Only the literal segments are recoverable; an interpolated name could
+    contribute anything. That is enough for this check, which asks how the
+    pattern STARTS and ENDS, and both ends are literal in every case here.
+    A placeholder marks the interpolated middle so nothing downstream reads
+    the result as the real pattern."""
+    if isinstance(node, ast.Constant):
+        return node.value if isinstance(node.value, str) else None
+    if isinstance(node, ast.JoinedStr):
+        parts = []
+        for value in node.values:
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                parts.append(value.value)
+            else:
+                parts.append("…")           # an interpolated segment
+        return "".join(parts)
+    return None
+
+
 def _identity_patterns():
-    """Every module-level whole-token validator in `src/`."""
+    """Every whole-token validator in `src/`, wherever it is compiled.
+
+    WIDENED 2026-08-29, hours after this file was written, and the reason is
+    the thing this file is about. The first version walked `tree.body` — only
+    `NAME = re.compile(...)` at module level. It therefore could not see:
+
+        consumer.py:1048   `hex64 = re.compile(...)` INSIDE a function
+        runinfra.py:722    four patterns inside a dict LITERAL
+
+    So the guard written to stop a sweep being narrower than the property it
+    names was itself narrower than the property it named, for one evening.
+    Two of the three sweeps in this repository have now had this defect.
+
+    It walks the whole tree. The name reported is the assignment target when
+    there is one, else `<line N>` — a pattern with no name still counts."""
     found = []
     for path in sorted(SRC.rglob("*.py")):
         source = io.open(path, encoding="utf-8").read()
@@ -63,26 +103,28 @@ def _identity_patterns():
             tree = ast.parse(source)
         except SyntaxError:                      # pragma: no cover
             continue
-        for node in tree.body:
-            if not isinstance(node, ast.Assign):
-                continue
-            target = node.targets[0]
-            if not isinstance(target, ast.Name):
-                continue
-            call = node.value
-            if not (isinstance(call, ast.Call)
-                    and getattr(call.func, "attr", "") == "compile"
-                    and getattr(getattr(call.func, "value", None), "id", "")
+        names = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
+                target = node.targets[0]
+                if isinstance(target, ast.Name):
+                    names[id(node.value)] = target.id
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call)
+                    and getattr(node.func, "attr", "") == "compile"
+                    and getattr(getattr(node.func, "value", None), "id", "")
                     == "re"):
                 continue
-            if not call.args or not isinstance(call.args[0], ast.Constant):
+            if not node.args:
                 continue
-            pattern = call.args[0].value
-            if not isinstance(pattern, str) or not pattern.startswith("^"):
+            pattern = _pattern_text(node.args[0])
+            if pattern is None or not pattern.startswith("^"):
                 continue
             if "(?P<" in pattern:
                 continue                          # a parser, not a validator
-            found.append((path.name, target.id, pattern, node.lineno))
+            found.append((path.name,
+                          names.get(id(node), "<line %d>" % node.lineno),
+                          pattern, node.lineno))
     return found
 
 

@@ -1045,7 +1045,7 @@ def _prepare_mc_input_impl(bundle: Mapping[str, bytes], *,
         rec = json.loads(line)
         if rec.get("record_type") == "file" and "relative_path" in rec:
             declared[rec["relative_path"]] = rec.get("file_sha256")
-    hex64 = re.compile(r"^[0-9a-f]{64}$")
+    hex64 = re.compile(r"^[0-9a-f]{64}\Z")
     for n in sorted(names - {"manifest.jsonl"}):
         want = declared.get(n)
         if not isinstance(want, str) or not hex64.match(want):

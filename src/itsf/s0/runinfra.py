@@ -717,10 +717,10 @@ _STAGE_ALT = "|".join(re.escape(v) for v in _STAGE_VALUES)
 _ISO_TS_RE = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})"
 
 _SCHEMA_PATTERNS: dict[str, re.Pattern[str]] = {
-    _LOG_SCHEMA_STAGE_STATUS: re.compile(rf"^stage=(?:{_STAGE_ALT}) status=(?:pass|fail|start|end)$"),
-    _LOG_SCHEMA_HEARTBEAT: re.compile(rf"^heartbeat stage=(?:{_STAGE_ALT}) ts={_ISO_TS_RE}$"),
-    _LOG_SCHEMA_FILE_HASH: re.compile(r"^file=[A-Za-z0-9_./-]+ sha256=[0-9a-f]{64}$"),
-    _LOG_SCHEMA_COMPLETION: re.compile(rf"^stage=(?:{_STAGE_ALT}) complete records=\d+$"),
+    _LOG_SCHEMA_STAGE_STATUS: re.compile(rf"^stage=(?:{_STAGE_ALT}) status=(?:pass|fail|start|end)\Z"),
+    _LOG_SCHEMA_HEARTBEAT: re.compile(rf"^heartbeat stage=(?:{_STAGE_ALT}) ts={_ISO_TS_RE}\Z"),
+    _LOG_SCHEMA_FILE_HASH: re.compile(r"^file=[A-Za-z0-9_./-]+ sha256=[0-9a-f]{64}\Z"),
+    _LOG_SCHEMA_COMPLETION: re.compile(rf"^stage=(?:{_STAGE_ALT}) complete records=\d+\Z"),
 }
 
 # See the module docstring's "known deviation" note: the task prose asks for
