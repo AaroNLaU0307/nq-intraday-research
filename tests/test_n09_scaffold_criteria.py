@@ -326,17 +326,47 @@ class TestCondition4StructuralOnlyCallGraph(unittest.TestCase):
                 called.add(node.id)
         return called, docs
 
-    def test_the_supplement_module_reaches_no_forbidden_name(self):
-        called, _docs = self._names_in("mc/day_strata_supplement.py")
-        crossed = sorted(set(self._FORBIDDEN) & called)
-        self.assertEqual([], crossed,
-                         "the supplement module reaches %r, which is the "
-                         "structural-only boundary being crossed" % crossed)
+    def _mc_modules(self):
+        """Every module in the supplement's package.
 
-    def test_the_runner_reaches_no_forbidden_name(self):
-        called, _docs = self._names_in("mc/supplement_runner.py")
-        crossed = sorted(set(self._FORBIDDEN) & called)
-        self.assertEqual([], crossed, "the runner reaches %r" % crossed)
+        WIDENED 2026-08-29, before the row producer was written. This scan
+        named two files — `day_strata_supplement.py` and
+        `supplement_runner.py` — while the property it enforces is the
+        structural-only boundary of the SUPPLEMENT, which is a property of
+        the package. A new module added to `itsf/mc/` would have crossed
+        the boundary freely and nothing would have said so.
+
+        That is the fourth time in one evening a guard here was scoped to
+        the files its author was looking at (the `$`-anchor sweep twice,
+        `ANCHOR_MODULES` once). Measured before widening: no module in the
+        package reaches any forbidden name, so this costs nothing today and
+        covers whatever is added tomorrow."""
+        root = REPO / "src" / "itsf" / "mc"
+        mods = sorted(p for p in root.rglob("*.py") if p.name != "__init__.py")
+        self.assertGreater(len(mods), 2,
+                           "the package glob found %d modules, which is not "
+                           "more than the old hand-written pair" % len(mods))
+        return mods
+
+    def test_no_module_in_the_package_reaches_a_forbidden_name(self):
+        offenders = {}
+        for path in self._mc_modules():
+            called, _docs = self._names_in(
+                path.relative_to(REPO / "src" / "itsf").as_posix())
+            crossed = sorted(set(self._FORBIDDEN) & called)
+            if crossed:
+                offenders[path.name] = crossed
+        self.assertEqual({}, offenders,
+                         "these modules reach the structural-only boundary: "
+                         "%r" % offenders)
+
+    def test_the_two_modules_the_design_names_are_still_scanned(self):
+        """The old pair, kept as a floor. A glob that silently stops
+        matching would report clean over nothing."""
+        seen = {p.name for p in self._mc_modules()}
+        for name in ("day_strata_supplement.py", "supplement_runner.py"):
+            with self.subTest(module=name):
+                self.assertIn(name, seen)
 
     def test_the_forbidden_names_are_real(self):
         """Otherwise a typo makes the two guards above vacuous — the same
