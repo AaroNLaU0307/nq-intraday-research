@@ -91,6 +91,31 @@ class TestAnIncompleteContextIsRefused(unittest.TestCase):
                      utc_stamp="20260829T000000Z", repo_dirty_paths=())
         ctxmod.assert_complete(full, "A_PRECHECK")
 
+    def test_a_field_the_context_does_not_HAVE_is_named_differently(self):
+        """The drift case, and the last uncovered branch in this module.
+
+        `required_fields` is derived from what the gates read; the context
+        is a dataclass with a fixed field set. If a gate starts reading
+        `ctx.something_new` and nobody adds it, the two disagree — and
+        "the context has no such field" is a different defect from "the
+        field is there and empty". The first is a code mismatch, the second
+        is an assembly failure, and an operator needs different actions."""
+
+        class _Missing:
+            """Everything A_PRECHECK needs except `chain`, which it does
+            not merely leave None — it does not define at all."""
+
+            def __init__(self):
+                for name in ctxmod.required_fields("A_PRECHECK"):
+                    if name != "chain":
+                        setattr(self, name, "supplied")
+
+        with self.assertRaises(ctxmod.ContextError) as caught:
+            ctxmod.assert_complete(_Missing(), "A_PRECHECK")
+        message = str(caught.exception)
+        self.assertIn("chain (no such field)", message)
+        self.assertNotIn("chain,", message)
+
     def test_frozen_hashes_false_is_an_answer_not_an_absence(self):
         """`False` means the check RAN and failed — a gate must see that,
         not be told the field is missing."""
