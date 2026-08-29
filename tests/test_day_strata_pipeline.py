@@ -208,3 +208,84 @@ class TestTheCleanPath(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCBuild3AfterTheArchiveAttempt(unittest.TestCase):
+    """R3 §1's third checkpoint asserts something DIFFERENT from the first
+    two: the attempt has already happened, and what must hold is that the
+    local seal is unchanged and nothing archived was lost.
+
+    Both are RECOMPUTATIONS. §11.3: a field named `local_seal_immutable`
+    proves nothing on its own, and reading it instead of recomputing is
+    exactly how a false claim survives."""
+
+    def _sealed(self, body=b'{"sealed": true}'):
+        import hashlib
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = Path(tmp.name) / "supplement.json"
+        path.write_bytes(body)
+        return path, hashlib.sha256(body).hexdigest()
+
+    def test_an_untouched_seal_and_intact_archive_pass(self):
+        path, digest = self._sealed()
+        archive = (("a.json", 2, "d" * 64),)
+        outcome = pipe.run_c_build_3(sealed_path=path,
+                                     local_seal_sha256=digest,
+                                     archive_before=archive,
+                                     archive_after=archive)
+        self.assertIsNone(outcome.failure)
+
+    def test_a_mutated_seal_refuses(self):
+        path, digest = self._sealed()
+        path.write_bytes(b'{"sealed": false}')
+        outcome = pipe.run_c_build_3(sealed_path=path,
+                                     local_seal_sha256=digest,
+                                     archive_before=(), archive_after=())
+        self.assertEqual("archive_policy_a", outcome.failure.gate)
+        self.assertEqual("local_seal_mutated", outcome.failure.code)
+
+    def test_a_vanished_seal_refuses(self):
+        path, digest = self._sealed()
+        path.unlink()
+        outcome = pipe.run_c_build_3(sealed_path=path,
+                                     local_seal_sha256=digest,
+                                     archive_before=(), archive_after=())
+        self.assertEqual("local_seal_absent", outcome.failure.code)
+
+    def test_a_deleted_archived_file_refuses(self):
+        path, digest = self._sealed()
+        outcome = pipe.run_c_build_3(
+            sealed_path=path, local_seal_sha256=digest,
+            archive_before=(("a.json", 2, "d" * 64),), archive_after=())
+        self.assertEqual("archived_bytes_deleted", outcome.failure.code)
+
+    def test_a_changed_archived_file_refuses_too(self):
+        """Present but different is a loss of the bytes that were there."""
+        path, digest = self._sealed()
+        outcome = pipe.run_c_build_3(
+            sealed_path=path, local_seal_sha256=digest,
+            archive_before=(("a.json", 2, "d" * 64),),
+            archive_after=(("a.json", 2, "e" * 64),))
+        self.assertEqual("archived_bytes_deleted", outcome.failure.code)
+
+    def test_ADDING_archived_bytes_is_fine(self):
+        """The check is one-directional on purpose. Archiving ADDS, so a
+        symmetric comparison would refuse every successful archive — and a
+        guard that refuses the success case gets deleted, not fixed."""
+        path, digest = self._sealed()
+        outcome = pipe.run_c_build_3(
+            sealed_path=path, local_seal_sha256=digest,
+            archive_before=(("a.json", 2, "d" * 64),),
+            archive_after=(("a.json", 2, "d" * 64),
+                           ("b.json", 3, "e" * 64)))
+        self.assertIsNone(outcome.failure)
+
+    def test_it_is_a_recompute_not_a_flag_read(self):
+        """The property §11.3 names. A caller passing a digest that does
+        not match the bytes must be refused, however confident it is."""
+        path, _digest = self._sealed()
+        outcome = pipe.run_c_build_3(sealed_path=path,
+                                     local_seal_sha256="f" * 64,
+                                     archive_before=(), archive_after=())
+        self.assertEqual("local_seal_mutated", outcome.failure.code)

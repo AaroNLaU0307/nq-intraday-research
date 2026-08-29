@@ -178,3 +178,68 @@ def _assert_c_build_1(before: tuple, after: tuple, label: str) -> None:
             "c_build_1_not_empty",
             f"{label}: {len(after)} supplement file(s) present before the "
             "first write; C_BUILD_1 requires the set to be empty")
+
+
+# ===========================================================================
+# C_BUILD_3 — after the archive attempt
+# ===========================================================================
+#
+# R3 §1's third checkpoint, and it asserts something DIFFERENT from the
+# first two. Not "no archive attempt" — the attempt has already happened.
+#
+#     (a) 本地 seal 不可变：重算其 sha256 等于 seal 时记录的 local_seal_sha256
+#     (b) 无任何已归档字节被删除
+#
+# Both are recomputations, not flag reads. §11.3 records why: a field
+# named `local_seal_immutable` proves nothing on its own, and reading it
+# instead of recomputing is exactly how a false claim survives.
+
+
+def run_c_build_3(*, sealed_path, local_seal_sha256: str,
+                  archive_before: tuple,
+                  archive_after: tuple) -> CBuildOutcome:
+    """Classify what the archive attempt left behind.
+
+    `local_seal_sha256` is what `seal_supplement_production` returned — the
+    digest of the bytes it intended to write. Recomputing the file and
+    comparing to that is the immutability claim; trusting a boolean would
+    be the flag read §11.3 warns about.
+
+    Returns an outcome for the same reason `run_c_build` does: the gate has
+    to be the thing that names the refusal."""
+    path = Path(sealed_path)
+    if not path.is_file():
+        return CBuildOutcome(
+            (), None,
+            CBuildFailure("archive_policy_a", "local_seal_absent",
+                          f"{path} is not a file after the archive attempt; "
+                          "the local seal must survive it"))
+
+    recomputed = hashlib.sha256(path.read_bytes()).hexdigest()
+    if recomputed != local_seal_sha256:
+        return CBuildOutcome(
+            (), None,
+            CBuildFailure("archive_policy_a", "local_seal_mutated",
+                          f"recomputed {recomputed!r} != recorded "
+                          f"{local_seal_sha256!r}"))
+
+    lost = _archived_bytes_lost(archive_before, archive_after)
+    if lost:
+        return CBuildOutcome(
+            (), None,
+            CBuildFailure("archive_policy_a", "archived_bytes_deleted",
+                          f"{len(lost)} archived file(s) no longer present "
+                          f"or no longer identical, first {lost[:3]}"))
+    return CBuildOutcome((), None, None)
+
+
+def _archived_bytes_lost(before: tuple, after: tuple) -> list:
+    """Names present before and missing-or-changed after.
+
+    ADDED bytes are fine — archiving adds. What C_BUILD_3 forbids is
+    LOSING what was already archived, so this is a one-directional check
+    and saying so matters: a symmetric comparison would refuse every
+    successful archive."""
+    now = {name: (size, digest) for name, size, digest in after}
+    return sorted(name for name, size, digest in before
+                  if now.get(name) != (size, digest))
