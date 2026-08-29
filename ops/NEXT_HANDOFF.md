@@ -70,6 +70,10 @@ ITSF   ops/PROMPT_C_BUILD_2_WORDING_SOL_ROUND3.md
 
 qros   build-evidence/PROMPT_WINDOW2_SOL_ROUND9.md
        pin=4217f1c，1 delivery + 14 reference 已武装。
+       **随它一起交** build-evidence/ERRATUM_TO_ROUND9_PROMPT.md ——
+       prompt 里写 TESTS=1078，复审席重跑会看到 1101。受审集合 15 件哈希逐条一致、
+       范围检查为空，涨的 23 条全来自集合外的两个新测试文件。
+       prompt 已 ISSUED 且冻着，我不改它的字节，所以勘误另立（沿本项目成例）。
 ```
 
 ---
@@ -144,7 +148,14 @@ ITSF   atoms._UPPER_CONST · atoms._HEX64 · consumer._HEX64_RE
 
 ```
 
-**两仓合计九个身份校验器接受尾随换行，其中六个校验 SHA-256 或 git OID。**
+**最终两仓合计十五处**（ITSF 10 · qros 5），**其中八处校验 SHA-256 或 git OID。**
+
+**而找到后十处的原因是：那两条守卫本身都比它们声称的窄。**
+ITSF 那条 `ANCHOR_MODULES` 的 docstring 逐字写着「sweeps every module by SOURCE」，
+**实际迭代一个手写六元组，而目录里有 21 个模块** —— 而它本身正是为修
+「上一版只反射它知道的那两个模块」而写的。**修复重演了它要修的那件事。**
+我自己新写的那条也被加宽了两次（只走 tree.body → 走整棵 AST → 处理 f-string），
+qros 那条则是手列四个名字，改为导出后才找到第五个。
 
 Python 的 `$` 匹配「末尾**或**末尾换行之前」。严重性说准：**不是身份绕过**
 （只允许恰好一个 `
@@ -193,7 +204,7 @@ C_BUILD_2 措辞范围内**，改的是无关模块的正则锚点。
 
 ```
 ITSF          4506 passed（+53 subtests）
-qros-runtime  1100 passed（+81 subtests）· CONFORMANCE 22 · RENDER_CHECK 25
+qros-runtime  1101 passed（+78 subtests）· CONFORMANCE 22 · RENDER_CHECK 25
 两个仓         工作树干净
 机制           ITSF 侧仍零改动（CONDITIONS 要求）
 ```
