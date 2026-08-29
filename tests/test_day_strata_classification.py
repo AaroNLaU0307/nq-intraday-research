@@ -159,25 +159,25 @@ class TestTheSealTableIsDerivedToo(unittest.TestCase):
 
     def test_every_seal_code_is_mapped_or_recorded_as_undecided(self):
         known = (set(dsc.STAGE_GATE_OF_SEAL_CODE)
-                 | set(dsc.UNDECIDED_SEAL_CODES))
+                 | set(dsc.ROUTER_B_SEAL_CODES))
         missing = sorted(_seal_codes_from_source() - known)
         self.assertEqual(
             [], missing,
             "these seal refusals are in neither table: %s\nAdd each to "
             "STAGE_GATE_OF_SEAL_CODE with the raise site that justifies the "
-            "gate, or to UNDECIDED_SEAL_CODES with the question." % missing)
+            "gate, or to ROUTER_B_SEAL_CODES with the reason." % missing)
 
     def test_the_two_tables_do_not_overlap(self):
-        """A code that is both mapped and undecided would classify silently
-        while claiming to be an open question."""
+        """A code in both tables would have two routers, and the one that
+        won would be whichever branch was written first."""
         both = sorted(set(dsc.STAGE_GATE_OF_SEAL_CODE)
-                      & set(dsc.UNDECIDED_SEAL_CODES))
+                      & set(dsc.ROUTER_B_SEAL_CODES))
         self.assertEqual([], both)
 
     def test_neither_table_names_a_code_the_seal_cannot_raise(self):
         found = _seal_codes_from_source()
         stale = sorted((set(dsc.STAGE_GATE_OF_SEAL_CODE)
-                        | set(dsc.UNDECIDED_SEAL_CODES)) - found)
+                        | set(dsc.ROUTER_B_SEAL_CODES)) - found)
         self.assertEqual([], stale, "stale entries: %s" % stale)
 
     def test_the_derivation_found_both_sources(self):
@@ -205,13 +205,38 @@ class TestTheSealTableIsDerivedToo(unittest.TestCase):
                 self.assertEqual("B_DERIVE", stage)
                 self.assertIn(gate, sc.GATE_TABLE["B_DERIVE"])
 
-    def test_an_undecided_code_refuses_with_its_question(self):
+    def test_a_router_b_code_refuses_by_NAMING_ITS_ROUTER(self):
+        """BD-1, executed. This used to say "nobody ruled". Somebody has:
+        the refusal now tells the caller where the outcome actually lives
+        instead of leaving them at a dead end."""
         with self.assertRaises(dsc.ClassificationError) as caught:
             dsc.classify_seal_failure("production_payload_drift")
         message = str(caught.exception)
-        self.assertIn("no ratified gate", message)
-        self.assertIn("rebuild to", message)
-        self.assertIn("nobody ruled", message)
+        self.assertIn("that is the RULING (BD-1)", message)
+        self.assertIn("decide_after_seal", message)
+        self.assertIn("no P4 and no A1", message)
+        self.assertNotIn("nobody ruled", message)
+
+    def test_the_router_is_answerable_without_raising(self):
+        """A caller that wants to ROUTE should not have to catch an
+        exception and read its prose to find out where to go."""
+        self.assertEqual(dsc.ROUTER_B,
+                         dsc.seal_failure_router("production_payload_drift"))
+        self.assertEqual(
+            dsc.ROUTER_A,
+            dsc.seal_failure_router("production_rows_digest_drift"))
+        with self.assertRaises(dsc.ClassificationError):
+            dsc.seal_failure_router("brand_new_code")
+
+    def test_router_b_really_does_have_an_answer_for_a_failed_seal(self):
+        """The premise of the whole ruling, measured on the runner rather
+        than asserted. If `decide_after_seal` had no answer for
+        local_seal_ok=False, BD-1 would be routing these codes into a hole."""
+        from itsf.mc import supplement_runner as sr
+        with self.assertRaises(sr.SupplementRunnerError) as caught:
+            sr.decide_after_seal(local_seal_ok=False, archive_report=None)
+        self.assertIn("local_seal_failed", str(caught.exception))
+        self.assertIn("nothing was sealed", str(caught.exception))
 
     def test_an_unknown_code_refuses_differently(self):
         """"Undecided" and "unheard of" are different states and an
@@ -220,15 +245,54 @@ class TestTheSealTableIsDerivedToo(unittest.TestCase):
             dsc.classify_seal_failure("brand_new_code")
         self.assertIn("in neither table", str(caught.exception))
 
-    def test_the_undecided_set_is_not_empty_by_accident(self):
-        """If it ever empties, it should be because someone RULED, and the
-        ruling should be recorded — not because the entries were quietly
-        moved into the mapped table."""
-        self.assertEqual(2, len(dsc.UNDECIDED_SEAL_CODES))
-        for code, question in dsc.UNDECIDED_SEAL_CODES.items():
+    def test_the_ruling_that_emptied_the_undecided_set_is_recorded(self):
+        """The predecessor of this test said: "If it ever empties, it
+        should be because someone RULED, and the ruling should be recorded
+        -- not because the entries were quietly moved into the mapped
+        table." It emptied. This is that check, and note the entries did
+        NOT move into the mapped table: they moved to a router."""
+        from pathlib import Path
+        record = (Path(__file__).resolve().parents[1] / "ops"
+                  / "BUILDER_DECISIONS_2026-08-29.md")
+        self.assertTrue(record.exists(), "BD-1 is not written down")
+        text = record.read_text(encoding="utf-8")
+        for code in dsc.ROUTER_B_SEAL_CODES:
             with self.subTest(code=code):
-                self.assertGreater(len(question), 60,
-                                   "%s carries no real question" % code)
+                self.assertIn(code, text)
+        self.assertIn("archive_policy_a", text)     # the cited precedent
+
+    def test_the_ruling_is_labelled_a_BUILDER_decision(self):
+        """The distinction that matters more than the ruling itself. A
+        builder decision filed among owner decisions would be using "Aaron
+        said decide it yourself" to cover something he never delegated."""
+        from pathlib import Path
+        ops = Path(__file__).resolve().parents[1] / "ops"
+        builder = (ops / "BUILDER_DECISIONS_2026-08-29.md").read_text(
+            encoding="utf-8")
+        self.assertIn("不是 owner 裁定", builder)
+        owner = (ops / "OWNER_DECISIONS_2026-08-29.md").read_text(
+            encoding="utf-8")
+        self.assertNotIn("BD-1", owner,
+                         "a builder ruling has leaked into the owner "
+                         "decision record")
+
+    def test_the_cited_precedent_is_real_and_executed(self):
+        """BD-1 rests on `archive_policy_a` having been found to create a
+        real contradiction. If that test disappeared, the ruling would be
+        resting on a citation to nothing."""
+        from pathlib import Path
+        facts = (Path(__file__).resolve().parents[1] / "tests"
+                 / "test_n09_r3_design_facts.py").read_text(encoding="utf-8")
+        self.assertIn("test_routing_it_as_an_ordinary_gate_contradicts_"
+                      "policy_a", facts)
+
+    def test_router_b_entries_carry_a_reason_not_a_question(self):
+        self.assertEqual(2, len(dsc.ROUTER_B_SEAL_CODES))
+        for code, reason in dsc.ROUTER_B_SEAL_CODES.items():
+            with self.subTest(code=code):
+                self.assertGreater(len(reason), 60)
+                self.assertNotIn("?", reason,
+                                 "%s still reads as an open question" % code)
 
 
 if __name__ == "__main__":

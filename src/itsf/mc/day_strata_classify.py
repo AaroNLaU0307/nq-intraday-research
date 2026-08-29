@@ -27,7 +27,9 @@ from __future__ import annotations
 from . import day_strata_rows as dsr
 
 __all__ = ["GATE_OF_PRODUCER_CODE", "classify_producer_failure",
-           "ClassificationError"]
+           "ClassificationError", "STAGE_GATE_OF_SEAL_CODE",
+           "classify_seal_failure", "ROUTER_B_SEAL_CODES",
+           "seal_failure_router", "ROUTER_A", "ROUTER_B"]
 
 
 class ClassificationError(Exception):
@@ -125,23 +127,61 @@ STAGE_GATE_OF_SEAL_CODE = {
     "incident_id_malformed": ("C_BUILD", "seal_staging_partial"),
 }
 
-#: Codes whose gate the ratified table does NOT settle, with the question.
+#: RULED 2026-08-29, `ops/BUILDER_DECISIONS_2026-08-29.md` BD-1. These two
+#: were `UNDECIDED_SEAL_CODES`; they are now decided, and the decision is
+#: that THEY GET NO GATE.
 #:
-#: NOT a placeholder to fill in later by guessing. `classify_seal_failure`
-#: refuses these LOUDLY, because a code arriving under a gate someone
-#: picked would write that gate's name into the F1/F2 event — and the
-#: event is what the registry keeps.
-UNDECIDED_SEAL_CODES = {
+#: They are seal-step failures, and the outcome of a failed seal is already
+#: owned by Router B, which has a defined answer for it:
+#:
+#:     local_seal_ok=False -> decide_after_seal -> `local_seal_failed`
+#:                            "no P4 and no A1: nothing was sealed"
+#:
+#: WHY NOT PICK A GATE. `archive_policy_a` is the executed precedent, not a
+#: hypothesis: it IS a C_BUILD gate, and routing it as an ordinary gate
+#: sends it through Router A to F2 while ratified
+#: `ND1_ARCHIVE_FAILURE_POLICY=A` requires A1.
+#: `test_routing_it_as_an_ordinary_gate_contradicts_policy_a` runs that
+#: contradiction. `ROUTER_OF` resolved it by giving Router B the outcome.
+#: This is the same shape, so it takes the same resolution.
+#:
+#: And no existing gate says either thing: `row_schema_blind` is about
+#: ROWS, while a supplement object is the container. Stretching a row gate
+#: over a container is the "the guard is narrower than its claim" defect
+#: this project has now produced eight times. Adding a gate is not
+#: available either -- `GATE_TABLE` is an approved closed enum and editing
+#: it is an R4-level act.
+ROUTER_B_SEAL_CODES = {
     "production_supplement_object_invalid":
-        "the SUPPLEMENT OBJECT's field set is wrong (:403). C_BUILD's only "
-        "schema gate is `row_schema_blind`, and this is not a row. Does the "
-        "supplement object's schema belong to that gate, or is a C_BUILD "
-        "gate missing?",
+        "the SUPPLEMENT OBJECT's field set is wrong (:403). Not a row, so "
+        "`row_schema_blind` does not name it; the seal did not complete, so "
+        "Router B does.",
     "production_payload_drift":
         "the declared payload is not what the authority and these rows "
-        "rebuild to (:456). That is a whole-payload consistency claim; no "
-        "C_BUILD gate names it and no B_DERIVE gate does either.",
+        "rebuild to (:456). A whole-payload consistency claim that no gate "
+        "names, raised while sealing, so Router B owns the outcome.",
 }
+
+#: Which router decides what a seal refusal becomes. Mirrors
+#: `supplement_contract.ROUTER_GATE_FAILURE` / `ROUTER_POST_SEAL`.
+ROUTER_A = "A"      # plan_failure_event: F1 or F2 by the P3 boundary
+ROUTER_B = "B"      # decide_after_seal: P4, A1, or a refused seal
+
+
+def seal_failure_router(code: str) -> str:
+    """Which router owns this seal refusal's outcome. Refuses the unknown.
+
+    The whole point of BD-1: an unmapped code must not silently acquire a
+    router any more than it may silently acquire a gate."""
+    if code in ROUTER_B_SEAL_CODES:
+        return ROUTER_B
+    if code in STAGE_GATE_OF_SEAL_CODE:
+        return ROUTER_A
+    raise ClassificationError(
+        "seal code %r is in neither table, so no router owns it. Add it to "
+        "STAGE_GATE_OF_SEAL_CODE with the raise site that justifies the "
+        "gate, or to ROUTER_B_SEAL_CODES with the reason no gate names it."
+        % code)
 
 
 def classify_seal_failure(code: str) -> tuple:
@@ -150,17 +190,20 @@ def classify_seal_failure(code: str) -> tuple:
     Returns a PAIR because two of the seal's checks belong to B_DERIVE.
     Classifying them into C_BUILD would put the right defect under the
     wrong stage, and the stage is half of what the failure event carries."""
-    if code in UNDECIDED_SEAL_CODES:
+    if code in ROUTER_B_SEAL_CODES:
         raise ClassificationError(
-            "seal code %r has no ratified gate. %s\n\nThis is recorded as "
-            "UNDECIDED rather than guessed: the gate name is written into "
-            "the F1/F2 event, so a picked gate would put a defect on "
-            "record under a name nobody ruled."
-            % (code, UNDECIDED_SEAL_CODES[code]))
+            "seal code %r has no gate, and that is the RULING (BD-1), not "
+            "an open question. %s\n\nRouter B owns this outcome: call "
+            "`supplement_runner.decide_after_seal(local_seal_ok=False, ...)`, "
+            "which answers `local_seal_failed` -- no P4 and no A1. Routing "
+            "it through a gate would send it to Router A's F1/F2, the exact "
+            "contradiction `archive_policy_a` was found to create."
+            % (code, ROUTER_B_SEAL_CODES[code]))
     pair = STAGE_GATE_OF_SEAL_CODE.get(code)
     if pair is None:
         raise ClassificationError(
             "seal code %r is in neither table. Add it to "
             "STAGE_GATE_OF_SEAL_CODE with the raise site that justifies "
-            "the gate, or to UNDECIDED_SEAL_CODES with the question." % code)
+            "the gate, or to ROUTER_B_SEAL_CODES with the reason no gate "
+            "names it (BD-1)." % code)
     return pair

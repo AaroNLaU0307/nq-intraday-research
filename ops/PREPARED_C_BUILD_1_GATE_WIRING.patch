@@ -1,0 +1,106 @@
+diff --git a/src/itsf/mc/supplement_runner.py b/src/itsf/mc/supplement_runner.py
+index 4bb7bf3..1cdffd4 100644
+--- a/src/itsf/mc/supplement_runner.py
++++ b/src/itsf/mc/supplement_runner.py
+@@ -112,6 +112,10 @@ class GateContext:
+     # passed all of them at 617f7c3.
+     prepared: object | None = None      # PreparedMCInput, or None
+     utc_stamp: str = ""                 # run stamp for the path planner
++    # The C_BUILD_1 outcome the three first-checkpoint gates CLASSIFY.
++    # A `day_strata_pipeline.CBuildOutcome`, or None. None is refused by
++    # those gates rather than passed: see `_classify_c_build_1`.
++    c_build_outcome: object | None = None
+ 
+ 
+ @_dc.dataclass(frozen=True, slots=True)
+@@ -529,32 +533,82 @@ def _g_method_version_pinned(ctx: GateContext) -> None:
+ 
+ # --- C_BUILD ---------------------------------------------------------------
+ 
++def _classify_c_build_1(ctx: GateContext, gate: str) -> None:
++    """The whole body of a C_BUILD_1 gate: CLASSIFY the producer's outcome.
++
++    Gate doctrine, R3 §3: a gate classifies the outcome of a call. It does
++    not observe inside the call and does not implement a second copy of the
++    invariant. `day_strata_rows` enforces the invariant and refuses with a
++    code; `day_strata_classify` maps that code to exactly one gate; this
++    reports it in the F1/F2 vocabulary. Re-checking the rows HERE would be
++    the R2 defect in a new place — two implementations of one invariant,
++    drifting apart at the first change to either.
++
++    ABSENCE IS A REFUSAL, NEVER A PASS. With no outcome attached, this gate
++    has classified nothing, and passing would put "no defect found" on
++    record about a build that never ran. That is the same false direction
++    `day_strata_failure.p3_boundary` refuses, and it is reached without
++    doing anything wrong — just by leaving a field unset.
++    """
++    from .day_strata_failure import ERROR_CLASS_OF_PRODUCER_REFUSAL
++
++    outcome = ctx.c_build_outcome
++    if outcome is None:
++        _fail("C_BUILD", gate, "SupplementRunnerError",
++              "no C_BUILD outcome is attached to this context, so this gate "
++              "classified nothing; a pass would report 'no defect' about a "
++              "build that never ran")
++    failure = outcome.belongs_to(gate)
++    if failure is not None:
++        _fail("C_BUILD", gate, ERROR_CLASS_OF_PRODUCER_REFUSAL,
++              "%s: %s" % (failure.code, failure.detail))
++
++
+ def _g_row_schema_blind(ctx: GateContext) -> None:
+     # The blind guarantee is enforced row-by-row by
+     # `day_strata_supplement._validate_row`; this gate exists so the
+     # failure has a NAMED stage/gate in the F1/F2 vocabulary.
+-    _fail("C_BUILD", "row_schema_blind", "SupplementRunnerError",
+-          "unreachable in this build: no rows are ever derived")
++    _classify_c_build_1(ctx, "row_schema_blind")
+ 
+ 
+ def _g_day_set_exact(ctx: GateContext) -> None:
+-    _fail("C_BUILD", "day_set_exact", "SupplementRunnerError",
+-          "unreachable in this build: no day set is ever derived")
++    _classify_c_build_1(ctx, "day_set_exact")
+ 
+ 
+ def _g_rows_digest_recompute(ctx: GateContext) -> None:
+-    _fail("C_BUILD", "rows_digest_recompute", "SupplementRunnerError",
+-          "unreachable in this build: no rows digest is ever computed")
++    _classify_c_build_1(ctx, "rows_digest_recompute")
+ 
+ 
+ def _g_seal_staging_partial(ctx: GateContext) -> None:
++    # C_BUILD_2, and DELIBERATELY still refusing while the three C_BUILD_1
++    # gates above have been wired. Two reasons, neither of them "not got
++    # to it yet":
++    #
++    #   1. Nothing is ever sealed on this path — `assert_real_run_allowed`,
++    #      directory creation and P2 all still refuse, so there is no
++    #      staging outcome for this gate to classify.
++    #   2. Its WORDING is out for review (`ops/PROMPT_C_BUILD_2_WORDING_
++    #      SOL_ROUND3.md`, ISSUED, pin d34ce7c). R2 was HOLD'd for asserting
++    #      one zero-side-effect rule across all three checkpoints, and
++    #      C_BUILD_2 is the checkpoint that broke it: staging writes
++    #      `.partial` BEFORE it can verify it. Wiring a gate whose
++    #      specification is under review is building on an unsettled spec.
+     _fail("C_BUILD", "seal_staging_partial", "SupplementRunnerError",
+-          "unreachable in this build: nothing is ever sealed")
++          "unreachable in this build: nothing is ever sealed (and the "
++          "C_BUILD_2 wording is out for review)")
+ 
+ 
+ def _g_archive_policy_a(ctx: GateContext) -> None:
++    # C_BUILD_3, and this one must NOT become an ordinary classifier at all.
++    # `ROUTER_OF` gives its outcome to Router B (`decide_after_seal`),
++    # because routing it as an ordinary gate sends a refusal through
++    # Router A to F2 while ratified `ND1_ARCHIVE_FAILURE_POLICY=A` requires
++    # A1. That contradiction is executed by
++    # `test_routing_it_as_an_ordinary_gate_contradicts_policy_a` — measured,
++    # not hypothetical. Wiring it here would re-create it.
+     _fail("C_BUILD", "archive_policy_a", "SupplementRunnerError",
+-          "unreachable in this build: nothing is ever archived")
++          "unreachable in this build: nothing is ever archived, and Router B "
++          "owns this gate's outcome (ROUTER_OF) — see decide_after_seal")
+ 
+ 
+ GATES: Mapping[str, Callable[[GateContext], None]] = MappingProxyType({

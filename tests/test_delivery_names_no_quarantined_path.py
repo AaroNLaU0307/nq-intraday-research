@@ -49,6 +49,20 @@ value is being a byte-verbatim copy of a ruling nobody may open and
 therefore nobody can diff against. A guard that can only be satisfied by
 falsifying a transcription is the wrong guard.
 
+A THIRD CASE, measured 2026-08-29. The scope key is "names the live
+review", and an INDEX that merely mentions a review_id in a descriptive
+entry is pulled in by it. `ops/README.md` tripped this the moment an index
+row quoted `c-build-2-wording-r3`; README is not in the register, is handed
+to nobody, and its section 8.5 legitimately lists the quarantine subtree as
+an index of what NOT to open.
+
+The resolution was to drop the machine id from the index row, NOT to
+loosen the key. Narrowing the scope to the register was considered and
+rejected: a review packet is often written before it is registered, and
+that is exactly the window where a delivery pointing at quarantine does its
+damage. So the rule for anyone who trips this: machine review ids belong in
+prompts and packets, not in the ops index.
+
 So the gap is real, bounded, and deliberate: this catches a DELIVERY that
 points at quarantine, not an EVIDENCE FILE that discusses it. If that ever
 needs closing, close it by keeping quarantined content out of evidence

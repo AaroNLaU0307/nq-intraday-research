@@ -10,3 +10,7 @@ __pycache__/
 # permanently block every later attempt at the same authorized commit.
 attempts/
 runs/
+
+# coverage run artifacts (regenerated; never evidence)
+.coverage
+.cov.json
