@@ -245,6 +245,95 @@ class TestTheWalkItself(unittest.TestCase):
         self.assertIn("NOTHING WAS WRITTEN", text)
 
 
+class TestTheRenderingOfStatesTheWALKCannotReach(unittest.TestCase):
+    """`render` is a pure function over a report, and one of its branches
+    describes something the rehearsal itself can never produce.
+
+    THE LIMITATION, stated rather than left as an uncovered line: a
+    rehearsal walks the PRODUCTION path, and the production builder refuses
+    a test_only authority. So `outcome.failure is None` -- a produced
+    product -- is unreachable from `rehearse`, and the branch that renders
+    it would otherwise be code nobody has ever seen run.
+
+    That is not a defect to remove. It is what a real run would print, and
+    a reader deserves to know the shape of it. So it is exercised here on a
+    hand-built report, and the impossibility is asserted next door."""
+
+    def test_the_rehearsal_can_never_produce_a_product(self):
+        """The premise for the two tests below. If this ever passes a
+        product through, the branch stops being unreachable and should be
+        exercised by the walk instead of by hand."""
+        with tempfile.TemporaryDirectory() as tmp:
+            report = _rehearse(tmp)
+        self.assertIsNotNone(
+            report.outcome.failure,
+            "the rehearsal produced a product, which means the production "
+            "builder stopped refusing a test_only authority -- that "
+            "partition is what makes this module safe")
+
+    def test_the_success_branch_renders_what_a_real_run_would_print(self):
+        from itsf.mc.day_strata_pipeline import CBuildOutcome
+
+        report = dry.DryRunReport(
+            stages=(), outcome=CBuildOutcome(rows=({"a": 1}, {"b": 2}),
+                                             product=object(), failure=None),
+            planned_event=None, reached_c_build=True)
+        text = dry.render(report)
+        self.assertIn("produced 2 rows and a product", text)
+        self.assertIn("a real run would seal next", text)
+        self.assertNotIn("WOULD RECORD", text)
+
+    def test_an_outcome_that_never_ran_says_so(self):
+        report = dry.DryRunReport(stages=(), outcome=None,
+                                  planned_event=None, reached_c_build=True)
+        self.assertIn("C_BUILD      not run", dry.render(report))
+
+    def test_asking_for_a_stage_that_is_not_there_answers_None(self):
+        report = dry.DryRunReport(stages=(), outcome=None,
+                                  planned_event=None, reached_c_build=False)
+        self.assertIsNone(report.stage("NOT_A_STAGE"))
+
+
+class TestTheScriptAaronRunsStillRuns(unittest.TestCase):
+    """A command handed to someone else is a command that rots unless
+    something runs it. This runs it."""
+
+    SCRIPT = REPO / "scripts" / "mc_ds_rehearsal.py"
+
+    def test_it_exits_clean_and_prints_both_walks(self):
+        import subprocess
+
+        out = subprocess.run(
+            [sys.executable, str(self.SCRIPT)], capture_output=True,
+            text=True, encoding="utf-8", errors="replace", cwd=str(REPO))
+        self.assertEqual(0, out.returncode,
+                         "the rehearsal script failed:\n%s" % out.stderr[-1200:])
+        self.assertIn("A. event flags missing", out.stdout)
+        self.assertIn("B. all five flags supplied", out.stdout)
+        self.assertIn("WOULD RECORD F1", out.stdout)
+
+    def test_it_leaks_no_scratch_path_into_what_it_prints(self):
+        """The report is meant to be pasted somewhere. A machine-specific
+        temp path in it is noise at best and a leak of local layout at
+        worst."""
+        import subprocess
+        import tempfile as _tf
+
+        out = subprocess.run(
+            [sys.executable, str(self.SCRIPT)], capture_output=True,
+            text=True, encoding="utf-8", errors="replace", cwd=str(REPO))
+        self.assertIn("<scratch>", out.stdout)
+        self.assertNotIn(_tf.gettempdir(), out.stdout)
+
+    def test_it_does_not_touch_the_governed_subtrees(self):
+        import subprocess
+
+        before = dry._snapshot_governed()
+        subprocess.run([sys.executable, str(self.SCRIPT)],
+                       capture_output=True, text=True, cwd=str(REPO))
+        self.assertEqual(before, dry._snapshot_governed())
+
+
 class TestItVerifiesItsOwnClaim(unittest.TestCase):
     """'Writes nothing' is checked, not promised."""
 

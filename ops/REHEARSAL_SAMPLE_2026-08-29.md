@@ -2,7 +2,7 @@
 
 ```ini
 RECORD_TYPE=SAMPLE_OUTPUT（不授权、不追加、不写任何治理路径）
-GENERATED=2026-08-29 by tests/test_day_strata_dryrun.py 的同一路径
+GENERATED=2026-08-29；**你可以自己重跑**：`python scripts/mc_ds_rehearsal.py`
 INPUTS=全部合成：编造的收盘价、test_only=True 的 authority、内存里的 registry
 ```
 
@@ -43,7 +43,7 @@ MC-DS SUPPLEMENT REHEARSAL — synthetic inputs, nothing written
 
 A_PRECHECK   PASS
 B_DERIVE     REFUSED at custody_authority_production
-    custody_authority_production     uction': SupplementRunnerError (a test_only authority may never enter the production path)
+    custody_authority_production     …ction': SupplementRunnerError (a test_only authority may never enter the production path)
 
 THE GATES DID NOT APPROVE THIS, AND THEY ARE NOT SUPPOSED TO.
 `custody_authority_production` refuses a test_only authority by design —
@@ -74,7 +74,7 @@ MC-DS SUPPLEMENT REHEARSAL — synthetic inputs, nothing written
 
 A_PRECHECK   PASS
 B_DERIVE     REFUSED at custody_authority_production
-    custody_authority_production     uction': SupplementRunnerError (a test_only authority may never enter the production path)
+    custody_authority_production     …ction': SupplementRunnerError (a test_only authority may never enter the production path)
 
 THE GATES DID NOT APPROVE THIS, AND THEY ARE NOT SUPPOSED TO.
 `custody_authority_production` refuses a test_only authority by design —

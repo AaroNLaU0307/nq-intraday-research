@@ -232,7 +232,11 @@ def render(report: DryRunReport) -> str:
         out.append("%-12s %s" % (stage.stage, head))
         for gate, verdict, detail in stage.verdicts:
             if verdict != "PASS":
-                out.append("    %-32s %s" % (gate, detail[-90:]))
+                # The informative half of a gate refusal is the TAIL (the
+                # reason), so the head is what gets dropped -- but dropping
+                # it silently leaves a word fragment that reads like a typo.
+                shown = detail if len(detail) <= 90 else "…" + detail[-89:]
+                out.append("    %-32s %s" % (gate, shown))
     out.append("")
     if not report.reached_c_build:
         out.append("THE GATES DID NOT APPROVE THIS, AND THEY ARE NOT "
