@@ -31,7 +31,7 @@ __all__ = ["GATE_OF_PRODUCER_CODE", "classify_producer_failure",
            "classify_seal_failure", "ROUTER_B_SEAL_CODES",
            "seal_failure_router", "ROUTER_A", "ROUTER_B",
            "STAGE_GATE_OF_BUILDER_CODE", "CALLER_ERROR_BUILDER_CODES",
-           "classify_builder_failure"]
+           "classify_builder_failure", "UNMAPPED_BUILDER_CODES"]
 
 
 class ClassificationError(Exception):
@@ -220,13 +220,44 @@ CALLER_ERROR_BUILDER_CODES = frozenset({
 })
 
 
+#: Builder refusals that CAN reach a caller and that no ratified gate
+#: names. Found 2026-08-29 by widening the derivation to follow calls: the
+#: first version scanned only raise sites inside
+#: `build_supplement_from_authority` itself, so a code raised one level
+#: down escaped both the table and the test that was supposed to police it.
+#: The guard was narrower than its claim -- this project's recurring shape.
+#:
+#: NOT a placeholder to fill in by guessing. BD-1's rule applies: the gate
+#: name is written into the F1/F2 row, so picking one puts a defect on
+#: record under a name nobody ruled.
+UNMAPPED_BUILDER_CODES = {
+    "production_payload_unsupported_type":
+        "a payload key or value is not exactly a built-in -- a hostile "
+        "subclass surviving the freeze (`_freeze_value`). That is an "
+        "INTEGRITY defect, not a row-schema one: `row_schema_blind` names "
+        "the four structural row fields and the blind guarantee, and this "
+        "is about Python types anywhere in the payload, which may have come "
+        "from the rows OR from the authority's binding. No C_BUILD gate "
+        "names it, and unlike the seal codes there is no post-seal router "
+        "to own it either. Needs a ruling: a new gate (an R4-level act on "
+        "the approved closed enum), or an assignment to an existing one "
+        "with the reasoning written down.",
+}
+
+
 def classify_builder_failure(code: str) -> tuple:
     """(stage, gate) for a `build_supplement_from_authority` refusal.
 
-    Refuses a caller bug and refuses an unknown code. Both refusals are
-    louder than a default, because the gate name is what the F1/F2 row
-    carries and a defaulted gate writes a defect under a name nobody
-    ruled."""
+    Refuses a caller bug, refuses an unmapped-but-known code with its open
+    question, and refuses an unknown code. All three refusals are louder
+    than a default, because the gate name is what the F1/F2 row carries and
+    a defaulted gate writes a defect under a name nobody ruled."""
+    if code in UNMAPPED_BUILDER_CODES:
+        raise ClassificationError(
+            "builder code %r reaches callers but no ratified gate names it. "
+            "%s\n\nThis is recorded as UNMAPPED rather than guessed, for "
+            "BD-1's reason: a picked gate would put a defect on record "
+            "under a name nobody ruled." % (code, UNMAPPED_BUILDER_CODES[code]))
     if code in CALLER_ERROR_BUILDER_CODES:
         raise ClassificationError(
             "builder code %r is a CALLER BUG (a forbidden or unknown "

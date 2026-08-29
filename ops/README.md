@@ -25,6 +25,7 @@
 
 | 文件 | 是什么 |
 |---|---|
+| [`HOW_TO_SEND_THE_SOL_ROUND3_REVIEW.md`](HOW_TO_SEND_THE_SOL_ROUND3_REVIEW.md) | **给 Aaron 的操作单**：第 3 轮复审的提示词早已 ISSUED，可能从没真发出去。含可直接粘的开场段、`MUST_NOT_BE` 清单、返回后我要做的四步。**2026-08-29 复查：十份参考件自 pin `d34ce7c` 起全部未动，可以原样发** |
 | [`REHEARSAL_SAMPLE_2026-08-29.md`](REHEARSAL_SAMPLE_2026-08-29.md) | **整条链第一次端到端走通的样本输出**（全合成输入，零治理写入，`day_strata_dryrun`）。两条路径：事件旗标缺失 → 生产者拒绝；旗标齐全 → builder 在 authority 分区拒绝。**首次走通就抓到一个真缺陷**：`run_c_build` 把所有 builder 异常都记成 `row_schema_blind`，而 builder 也校验 authority —— 于是 B_DERIVE 的 custody 缺陷被记到 C_BUILD 的行模式门下。已订正 |
 | [`MEASURED_WHAT_THE_REGISTRY_APPEND_UNLOCKS.md`](MEASURED_WHAT_THE_REGISTRY_APPEND_UNLOCKS.md) | **registry 追加授权的实测**（合成 registry 干跑，真实登记簿未动）。**结论：追加 P1 解开的门数是 0**，五道门的翻转全部来自 P2；但 P1 是**结构必需**（没有它 `chain_does_not_start_at_proposal`）。**P1 不随提交作废，P2 会** —— 所以等的成本是零。**builder 建议：现在别给**，等接线过 fresh Sol 之后，理由四条可复算，数字全部由 `tests/test_what_the_registry_append_unlocks.py` 产出 |
 | [`PREPARED_C_BUILD_1_GATE_WIRING.md`](PREPARED_C_BUILD_1_GATE_WIRING.md) | **已写好、待落地的 C_BUILD_1 三门接线**（补丁 106 行同名 `.patch`）。阻塞原因不是缺授权 —— Aaron 08-29 明确批了「把五道门建成真的分类器」；阻塞的是 `supplement_runner.py` 此刻被 fresh Sol 持有（C_BUILD_2 措辞第 3 轮，仍未返回），改它会让那一轮席位白烧。**含一条自我订正**：该文件从来不在 `FROZEN_HASHES` 里，我按一条过期记忆少干了活 |

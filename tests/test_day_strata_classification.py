@@ -125,26 +125,43 @@ class TestClassification(unittest.TestCase):
 
 
 def _builder_codes_from_source():
-    """Every literal code `build_supplement_from_authority` can raise.
+    """Every code that can escape `build_supplement_from_authority`,
+    TRANSITIVELY.
 
-    Derived, for the same reason every other table here is: a hand-written
-    mirror goes stale, and this project produced five instances of exactly
-    that in one day. The sixth was the one that made this table necessary --
-    `run_c_build` classified all of these as `row_schema_blind` on a comment
-    claiming the builder only validates rows."""
+    WIDENED 2026-08-29. The first version scanned only raise sites inside
+    the function body, and `production_payload_unsupported_type` -- raised
+    one level down in `_freeze_value` -- escaped both the table and this
+    test. The test claimed "every builder refusal is mapped" while looking
+    at a fraction of them: the guard was narrower than its claim, which is
+    the defect this repository keeps producing.
+
+    Following calls within the module is still not a proof of reachability
+    (a call inside a branch that can never be taken is counted), and that
+    is the safe direction: over-counting forces a code into the tables,
+    under-counting lets one out."""
     root = Path(__file__).resolve().parents[1] / "src" / "itsf" / "mc"
     tree = ast.parse(io.open(root / "supplement_production.py",
                              encoding="utf-8").read())
-    fn = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
-          and n.name == "build_supplement_from_authority"]
-    codes = set()
-    for f in fn:
-        for node in ast.walk(f):
+    fns = {n.name: n for n in ast.walk(tree)
+           if isinstance(n, ast.FunctionDef)}
+
+    def walk(name, seen):
+        if name in seen or name not in fns:
+            return set()
+        seen.add(name)
+        codes = set()
+        for node in ast.walk(fns[name]):
             if (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)
                     and node.exc.args
                     and isinstance(node.exc.args[0], ast.Constant)):
                 codes.add(node.exc.args[0].value)
-    return codes
+            if isinstance(node, ast.Call):
+                callee = getattr(node.func, "id", None)
+                if callee and callee != name:
+                    codes |= walk(callee, seen)
+        return codes
+
+    return walk("build_supplement_from_authority", set())
 
 
 class TestTheBuilderTableIsDerivedToo(unittest.TestCase):
@@ -153,7 +170,8 @@ class TestTheBuilderTableIsDerivedToo(unittest.TestCase):
 
     def test_every_builder_code_is_mapped_or_marked_a_caller_bug(self):
         known = (set(dsc.STAGE_GATE_OF_BUILDER_CODE)
-                 | set(dsc.CALLER_ERROR_BUILDER_CODES))
+                 | set(dsc.CALLER_ERROR_BUILDER_CODES)
+                 | set(dsc.UNMAPPED_BUILDER_CODES))
         missing = sorted(_builder_codes_from_source() - known)
         self.assertEqual(
             [], missing,
@@ -168,13 +186,37 @@ class TestTheBuilderTableIsDerivedToo(unittest.TestCase):
 
     def test_neither_builder_table_names_a_code_it_cannot_raise(self):
         stale = sorted((set(dsc.STAGE_GATE_OF_BUILDER_CODE)
-                        | set(dsc.CALLER_ERROR_BUILDER_CODES))
+                        | set(dsc.CALLER_ERROR_BUILDER_CODES)
+                        | set(dsc.UNMAPPED_BUILDER_CODES))
                        - _builder_codes_from_source())
         self.assertEqual([], stale, "stale builder entries: %s" % stale)
 
-    def test_the_two_builder_tables_do_not_overlap(self):
-        self.assertEqual([], sorted(set(dsc.STAGE_GATE_OF_BUILDER_CODE)
-                                    & set(dsc.CALLER_ERROR_BUILDER_CODES)))
+    def test_the_three_builder_tables_do_not_overlap(self):
+        """A code in two tables would take whichever branch was written
+        first, and the other table would be a lie nobody could see."""
+        tables = {"mapped": set(dsc.STAGE_GATE_OF_BUILDER_CODE),
+                  "caller_bug": set(dsc.CALLER_ERROR_BUILDER_CODES),
+                  "unmapped": set(dsc.UNMAPPED_BUILDER_CODES)}
+        for a in tables:
+            for b in tables:
+                if a < b:
+                    with self.subTest(pair=(a, b)):
+                        self.assertEqual([], sorted(tables[a] & tables[b]))
+
+    def test_the_transitive_scan_reaches_deeper_than_the_body(self):
+        """The correction itself, executed. `production_payload_unsupported_
+        type` is raised in `_freeze_value`, one level below the builder, and
+        a body-only scan cannot see it."""
+        found = _builder_codes_from_source()
+        self.assertIn("production_payload_unsupported_type", found)
+
+    def test_an_unmapped_code_refuses_with_its_open_question(self):
+        with self.assertRaises(dsc.ClassificationError) as caught:
+            dsc.classify_builder_failure("production_payload_unsupported_type")
+        message = str(caught.exception)
+        self.assertIn("no ratified gate names it", message)
+        self.assertIn("INTEGRITY defect", message)
+        self.assertIn("nobody ruled", message)
 
     def test_every_mapped_pair_is_a_real_stage_and_gate(self):
         for code, (stage, gate) in sorted(
