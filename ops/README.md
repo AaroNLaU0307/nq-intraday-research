@@ -25,6 +25,7 @@
 
 | 文件 | 是什么 |
 |---|---|
+| [`RULING_SOL_C_BUILD_2_R5_HOLD_2026-08-30.md`](RULING_SOL_C_BUILD_2_R5_HOLD_2026-08-30.md) | **第 5 轮 HOLD，`SPECIFICATION_VERDICT=FAIL`＋`ENGINEERING_QUALITY_VERDICT=FAIL`**。三个 HIGH 各自 10/10 全绿。**它让我看见的不是四个缺陷，是五轮共同的错**：我一直用 AST 检查器去证明一个**运行期属性**，而满足任何形状却违反语义的表达式集合是无穷的。**换了仪器**：`test_resolve_partial_observed_behaviour.py` 包住真实文件调用、驱动真实函数、对观测到的动作断言 —— 三个 HIGH 各被点名抓住 |
 | [`RULING_SOL_C_BUILD_2_R4_HOLD_2026-08-30.md`](RULING_SOL_C_BUILD_2_R4_HOLD_2026-08-30.md) | **第 4 轮 HOLD，四条全部成立、全部复现**。两个 HIGH 在合同 12/12 全绿下通过：① 同形路径被 set 去重＋溯源是函数级不是路径级；② 删除动作作为**值**被调用，名字黑名单看不见。MEDIUM：64-hex 只认小写；**`REVIEWED_SET_UNCHANGED_SINCE` 是错误自报**。**根因我上一轮自己列出过却没去修** —— 列出弱点不等于处理弱点。已改为路径敏感有序列表＋封闭调用世界＋range 声称机械核实 |
 | [`FINDINGS_SOL_R3_REPRODUCED_2026-08-30.md`](FINDINGS_SOL_R3_REPRODUCED_2026-08-30.md) | **两条 HOLD 发现的复现证据**。含一件比结论更值得记的事：**第一次复现是错的**（全红），因为我的变异守在测试会触发的条件上；Sol 的守在测试从不触发的条件上。停在第一次就会写下「无法复现」而缺陷仍在 |
 | [`DECISION_PACKET_FOUR_OPEN_2026-08-29.md`](DECISION_PACKET_FOUR_OPEN_2026-08-29.md) | **四件待裁的决裁包**（已由 Fable 顾问级答复，见 `RULING_FABLE_FOUR_OPEN_2026-08-30.md`）。**第 2 件已撤回** —— 它是一件 owner 已裁事项，我当未决送出去了 |
@@ -73,6 +74,8 @@
 
 | 文件 | 交给谁 / 结果 |
 |---|---|
+| [`PROMPT_C_BUILD_2_WORDING_SOL_ROUND6.md`](PROMPT_C_BUILD_2_WORDING_SOL_ROUND6.md) | **第 6 轮，`PREPARED_NOT_ISSUED`**。§1.1 摆出五轮同一形状的证据，§1.2 说明换仪器，§3 请它**攻击观测器本身**（`os.open`／`shutil`／子进程绕过、场景集完整性、计数不等于因果） |
+| [`OFF_LIMITS_COMPANION_R6.md`](OFF_LIMITS_COMPANION_R6.md) | 第 6 轮的禁区伴随件 |
 | [`OFF_LIMITS_COMPANION_R5.md`](OFF_LIMITS_COMPANION_R5.md) | **第 5 轮的禁区伴随件**，随提示词一同交付。D-2 裁定要求它独立存在：第二个席位被烧时，禁区清单写在提示词里而交付载体是 Review Packet，**清单没跟过去**。含可执行的检索边界与「工具落盘请报路径、不要打开」 |
 | [`PROMPT_C_BUILD_2_WORDING_SOL_ROUND5.md`](PROMPT_C_BUILD_2_WORDING_SOL_ROUND5.md) | **第 5 轮，`PREPARED_NOT_ISSUED`**。§1.1 记着本轮最该记的一条：**第 4 轮的两个根因，我在第 4 轮 §4 里自己列出过，然后没去修** —— 列出弱点不等于处理弱点。所以 §4 改成「要么已修、要么明确接受并写明代价」，不再是「可能错的地方」清单 |
 | [`PROMPT_C_BUILD_2_WORDING_SOL_ROUND4.md`](PROMPT_C_BUILD_2_WORDING_SOL_ROUND4.md) | **第 4 轮，`PREPARED_NOT_ISSUED`**，等 Aaron 发。第 3 轮两条 HOLD 发现已修，含**我用 Sol 自己的反对意见攻击我的修复**的记录 —— 机制在发出前两次抓到我（合同只枚举函数体；`_preserve` 有两个调用点我只声明了一个）。§0 是**可执行的检索边界**，不是散文 —— 上一轮席位的曝光事故成因就是它 |

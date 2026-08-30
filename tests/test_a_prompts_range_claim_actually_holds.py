@@ -72,11 +72,30 @@ class TestALiveRangeClaimIsTrue(unittest.TestCase):
                 continue
             pin = PIN.search(text)
             if not pin:
-                continue                      # placeholder: filled at issue
-            files = [f for f in ROW.findall(text) if (REPO / f).exists()]
+                # ROUND 5 MEDIUM, first false green: this used to `continue`
+                # for ANY prompt without a pin, including an ISSUED one --
+                # so an issued delivery with no pin passed WITHOUT A SINGLE
+                # GIT CALL. A placeholder is only legitimate before issue.
+                if status.group(1) == "ISSUED":
+                    offenders.append("%s: ISSUED with no pin at all -- the "
+                                     "line a reviewer is told to trust is "
+                                     "absent, and nothing was checked"
+                                     % path.name)
+                continue
+            listed = ROW.findall(text)
+            # ROUND 5 MEDIUM, second false green: this used to FILTER the
+            # table by `.exists()`, so a reviewed path that had been DELETED
+            # was silently dropped and never queried. A missing reviewed
+            # file is the loudest possible change, not a row to skip.
+            missing = [f for f in listed if not (REPO / f).exists()]
+            if missing:
+                offenders.append("%s: its table lists reviewed paths that do "
+                                 "not exist: %s" % (path.name, missing))
+                continue
+            files = listed
             if not files:
                 offenders.append("%s: declares a pin but its table lists no "
-                                 "reference file that exists" % path.name)
+                                 "reference file at all" % path.name)
                 continue
             code, out = _git("log", "--format=%h %s",
                              "%s..HEAD" % pin.group(1), "--", *files)

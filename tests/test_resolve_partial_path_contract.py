@@ -1,39 +1,44 @@
-"""A PATH-SENSITIVE, CLOSED-WORLD contract over `resolve_partial`'s exits.
+"""DECLARATION HYGIENE for `resolve_partial`'s exits. NOT the obligations.
 
-ROUND 4 HOLD, and the objection named the root cause exactly:
+WHAT THIS FILE CLAIMED FOR THREE ROUNDS, AND WHY THE CLAIM WAS WRONG.
+It said it enforced three obligations -- that `already_sealed` had read
+FINAL, that nothing destroyed a `.partial`, that `retry_permitted` had
+preserved something. Rounds 3, 4 and 5 each walked through the then-current
+version, and round 5's three counter-examples ended the argument:
 
-    合同推导是路径不敏感的集合，并且只识别有限的调用语法；
-    它仍会把"同形但语义不同的路径"折叠掉。
+    existing = ((final.read_bytes, intended)[1] if incident_id == "..."
+                else final.read_bytes())     -> text passes, reads nothing
+    (out / preserved).write_bytes(intended[:0])
+                                             -> allowed callee, empties the file
+    an early `return path.name` in `_preserve`
+                                             -> the rename never happens
 
-Both HIGHs reproduced at 12/12 GREEN before anything was changed:
+None of those is a syntax bug to be pattern-matched away. **"This path read
+FINAL before answering" is a RUNTIME property, and for any shape a checker
+demands, the set of expressions satisfying the shape while violating the
+semantics is infinite.** Five rounds of tightening the shape was five
+rounds of solving the wrong problem.
 
-    a SECOND `already_sealed` path whose guard reads identically but whose
-    `existing` is bound to `intended` rather than to a read of FINAL
-    -> the set DEDUPLICATED it away, and the provenance check only proved
-       that SOME line in the function reads FINAL, not that THIS path does
+SO THE CLAIM IS NARROWED TO WHAT IS GENUINELY SYNTACTIC: a new exit cannot
+appear without being declared. That is real, useful, and checkable -- it
+forces an author to write the path down and a reviewer to see it.
 
-    `next(iter((Path.unlink,)))(out / preserved)` after `_preserve`
-    -> the destructive call is reached as a VALUE, so a check that reads
-       call names never sees it; the row still says `preserved_as=...`
-       while the file is gone
+THE OBLIGATIONS MOVED to `test_resolve_partial_observed_behaviour.py`,
+which wraps the real filesystem calls, drives the real function, and
+asserts on what was actually done. All three round-5 counter-examples fail
+there, each named for what it really did.
 
-TWO ROOT CAUSES, and this file attacks those rather than the two examples.
+WHAT REMAINS HERE, and it still earns its place:
 
-1. PATH-INSENSITIVE, SET-BASED. Exits are now an ORDERED LIST, compared
-   element by element, and each carries the BINDINGS VISIBLE ON ITS OWN
-   PATH. Two identically-shaped paths are two entries, and obligation (a)
-   is answered against this path's bindings, not the function's.
-
-   The target is straight-line plus if/else with no loops, so a linear
-   walk that copies bindings per branch is exact rather than approximate.
-   `test_the_target_is_still_loop_free` keeps that premise honest.
-
-2. OPEN-WORLD CALL RECOGNITION. Blacklisting destructive NAMES is an open
-   world -- round 4 escaped it twice. The call world is now CLOSED: every
-   call inside `resolve_partial` and its helpers must match one of a small
-   set of permitted SHAPES with a permitted callee. A call whose `func` is
-   itself a call, a subscript, a lambda, or anything else is refused
-   without needing to know what it resolves to.
+1. THE EXIT LIST IS ORDERED AND CLOSED. Exits are compared element by
+   element, never as a set -- round 4 walked a second `already_sealed`
+   path through a set that deduplicated it.
+2. THE CALL WORLD IS CLOSED BY SHAPE. `Name(...)` and `x.attr(...)` with
+   enumerated callees; a callee that is a Call, Subscript or Lambda is
+   refused. This does NOT close effects -- round 5 proved that with an
+   allowed `write_bytes` -- and no longer pretends to.
+3. THE STATEMENT WORLD IS CLOSED. An unrecognised statement type fails
+   loudly rather than being walked past.
 """
 
 import ast
@@ -252,9 +257,14 @@ class TestTheExitLISTIsClosed(unittest.TestCase):
                                                 ast.AsyncFor))
 
 
-class TestObligationA_isAnsweredOnTHISPath(unittest.TestCase):
-    """Round 4's first HIGH. The old check proved SOME line in the function
-    read FINAL; it did not prove this path did."""
+class TestTheDeclaredShapeOfAlreadySealed(unittest.TestCase):
+    """A SHAPE check, and labelled as one since round 5.
+
+    It catches a path whose guard compares nothing, or compares a name
+    bound to something with no read in it. It does NOT establish that a
+    read happened -- round 5's conditional expression satisfies every
+    lexical form of this and reads nothing. That obligation is owned by
+    `test_resolve_partial_observed_behaviour.py`."""
 
     def test_every_already_sealed_exit_compares_a_name_read_from_FINAL(self):
         seen = 0
@@ -284,7 +294,10 @@ class TestObligationA_isAnsweredOnTHISPath(unittest.TestCase):
         self.assertGreaterEqual(seen, 1, "no already_sealed exit was checked")
 
 
-class TestObligationC_isAnsweredOnTHISPath(unittest.TestCase):
+class TestTheDeclaredShapeOfRetryPermitted(unittest.TestCase):
+    """Shape only, same caveat: it checks that a name bound from
+    `_preserve` is passed. Whether the file it names still holds the
+    residue is observed elsewhere."""
 
     def test_every_retry_permitted_exit_preserves_on_its_own_path(self):
         seen = 0
@@ -305,8 +318,11 @@ class TestObligationC_isAnsweredOnTHISPath(unittest.TestCase):
         self.assertGreaterEqual(seen, 1)
 
 
-class TestObligationB_theCallWorldIsCLOSED(unittest.TestCase):
-    """Round 4's second HIGH. A blacklist of destructive NAMES is an open
+class TestTheCallWorldIsClosedBySHAPE(unittest.TestCase):
+    """Shapes, not effects -- round 5 emptied a preserved file with an
+    ALLOWED `write_bytes`, so this closes routes and not consequences.
+
+    Round 4's second HIGH. A blacklist of destructive NAMES is an open
     world: `next(iter((Path.unlink,)))(...)` reaches the deletion as a
     VALUE and no name check can see it. So the permitted shapes are
     enumerated instead, and everything else is refused without needing to
