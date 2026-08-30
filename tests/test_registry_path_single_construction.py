@@ -80,6 +80,23 @@ _KNOWN_SCRIPT_CONSTRUCTIONS = {
     # root, so only the clean-gate allowlist entry still spells the path --
     # and that one is gate semantics the ruling said not to touch.
     "scripts/s0_real_run.py": 1,   # clean-gate allowlist entry only
+    # ADDED 2026-08-31. This one is not a path CONSTRUCTION at all -- the
+    # strings are the text of the CR1 canonical grammar block, which names
+    # the relative path inside its own prose and must stay verbatim or the
+    # approved hash changes. Registered rather than reworded for exactly
+    # that reason: rewording it to please a guard would alter the artifact
+    # the guard exists to protect.
+    #
+    # The guard cannot tell grammar text from a path construction, and that
+    # is not a defect in it. A migration has to find every spelling, and a
+    # walk that tried to judge intent would miss the ones that matter.
+    #
+    # MEASURED. I first typed 6 here and the walk found 3 --
+    # the sixth hand-typed number to come out wrong tonight, and
+    # this one inside the table whose own comment argues against
+    # typing things. Register the FILE by hand; take the COUNT
+    # from the walk.
+    "scripts/r4v2_block_builder.py": 3,
 }
 
 #: THE HOLE THIS GUARD HAD, found by the migration it was written for.
