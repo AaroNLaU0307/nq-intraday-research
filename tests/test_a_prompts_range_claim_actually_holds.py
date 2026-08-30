@@ -29,6 +29,7 @@ pin is a fact about the moment of issue, so it should be filled then and
 verified here, not written days early and hoped over.
 """
 
+import json
 import re
 import subprocess
 import unittest
@@ -128,16 +129,38 @@ class TestALiveRangeClaimIsTrue(unittest.TestCase):
                         "currently protects nothing and should be removed "
                         "with its rationale")
 
-    def test_the_scan_found_prompts_and_a_live_one(self):
-        """Vacuity, twice over: a glob typo, or every prompt being RETURNED,
-        would make the check above pass over nothing."""
+    def test_the_scan_found_prompts_at_all(self):
+        """Vacuity against a glob typo. The OTHER vacuity worry -- every
+        prompt being RETURNED, so the check above passes over nothing -- is
+        covered by `TestTheCheckCanActuallyFail`, which drives the mechanism
+        over a real file and a real stale pin."""
         self.assertGreaterEqual(len(_prompts()), 3)
-        live = [p.name for p in _prompts()
-                if (STATUS.search(p.read_text(encoding="utf-8"))
-                    or [None]) and any(
-                        s in p.read_text(encoding="utf-8")
-                        for s in ("DELIVERY_STATUS=%s" % k for k in LIVE))]
-        self.assertTrue(live, "no live prompt to check")
+
+    def test_a_live_prompt_exists_EXACTLY_WHEN_the_register_is_armed(self):
+        """REPLACED an assertion that a live prompt always exists, 2026-08-30.
+
+        It went red the moment round 6 returned and its register entries were
+        cleared -- correctly, because between rounds NOTHING is in flight and
+        no prompt is live. "There is always a live review" is simply false.
+
+        What is always true is the correspondence, and it is the stronger
+        claim: a review is in flight exactly when its delivery says so and its
+        artifacts are frozen. Either half without the other is a real defect
+        -- an ISSUED prompt with an empty register means a reviewer is holding
+        bytes nothing is protecting, and an armed register with no live prompt
+        means the freeze outlives the review and the next repair collides
+        with it. Both have happened here."""
+        live = sorted(p.name for p in _prompts()
+                      if any("DELIVERY_STATUS=%s" % k in
+                             p.read_text(encoding="utf-8") for k in LIVE))
+        register = json.loads(
+            (OPS / "ARTIFACTS_UNDER_REVIEW.json").read_text(encoding="utf-8"))
+        armed = sorted({e["review_id"] for e in register["under_review"]})
+        self.assertEqual(
+            bool(live), bool(armed),
+            "live prompts %s but armed reviews %s -- a review is in flight "
+            "exactly when its delivery says ISSUED and its artifacts are "
+            "frozen; either half alone is the defect" % (live, armed))
 
     def test_the_round4_packet_records_the_correction(self):
         """The miss itself stays on record; a fix that erased it would hide

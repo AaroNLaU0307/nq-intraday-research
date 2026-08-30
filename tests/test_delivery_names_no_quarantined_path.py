@@ -254,7 +254,7 @@ def test_a_live_delivery_carries_the_register_itself():
     # 2026-08-27 — demoting the packet to `reference` went green.
     no_delivery = sorted(
         rid for rid, group in by_review.items()
-        if not any(e.get("role", "delivery") == "delivery" for e in group))
+        if not any(e.get("is_the_delivery_document") for e in group))
     assert not no_delivery, (
         "these review sets have no entry with role 'delivery', so nothing "
         "in them is required to carry the off-limits list — a reviewer "
@@ -262,7 +262,7 @@ def test_a_live_delivery_carries_the_register_itself():
         "quarantined:\n  " + "\n  ".join(no_delivery))
 
     deliveries = {e["path"] for e in entries
-                  if e.get("role", "delivery") == "delivery"}
+                  if e.get("is_the_delivery_document")}
     missing = [p.relative_to(REPO).as_posix()
                for p, text in _live_delivery_documents()
                if p.suffix == ".md"

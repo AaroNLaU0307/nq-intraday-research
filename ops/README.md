@@ -26,6 +26,8 @@
 | 文件 | 是什么 |
 |---|---|
 | [`RULING_SOL_C_BUILD_2_R5_HOLD_2026-08-30.md`](RULING_SOL_C_BUILD_2_R5_HOLD_2026-08-30.md) | **第 5 轮 HOLD，`SPECIFICATION_VERDICT=FAIL`＋`ENGINEERING_QUALITY_VERDICT=FAIL`**。三个 HIGH 各自 10/10 全绿。**它让我看见的不是四个缺陷，是五轮共同的错**：我一直用 AST 检查器去证明一个**运行期属性**，而满足任何形状却违反语义的表达式集合是无穷的。**换了仪器**：`test_resolve_partial_observed_behaviour.py` 包住真实文件调用、驱动真实函数、对观测到的动作断言 —— 三个 HIGH 各被点名抓住 |
+| [`RULING_SOL_C_BUILD_2_R6_HOLD_2026-08-30.md`](RULING_SOL_C_BUILD_2_R6_HOLD_2026-08-30.md) | **第 6 轮 HOLD，两个 HIGH 全部复现**。观测器只包了四个名字（`_saved` 从未被填充），`builtins.open` / `os.open` / `shutil.*` 全部不可见 —— **而提示词 §4 写着我已经修了它，那句话在字节里是假的**。第二条：「每个已声明出口都触达」的 `reached` 是**手打集合**，不是执行轨迹。**根因是同一个错下沉一层**：R3–R5 枚举语法形状，R6 枚举拦截点，两者的违规集合都无穷。闭合方式 = **不观测操作，观测状态**（目录逐字节快照 diff，对机制闭合） |
+| [`OWNER_DECISIONS_2026-08-30.md`](OWNER_DECISIONS_2026-08-30.md) | **OD-1：Aaron 裁定措辞复审上限 8 轮**，到 8 轮按当时最好的方式发出，不开第 9 轮。上限由 `tests/test_the_review_round_cap_is_respected.py` **从本文件读出**而非写死；并强制第 8 轮把仍站着的残留标 `ACCEPTED_BY_CAP` 而非 `ACCEPTED` —— **到期是停止迭代，不是残留已闭合** |
 | [`RULING_SOL_C_BUILD_2_R4_HOLD_2026-08-30.md`](RULING_SOL_C_BUILD_2_R4_HOLD_2026-08-30.md) | **第 4 轮 HOLD，四条全部成立、全部复现**。两个 HIGH 在合同 12/12 全绿下通过：① 同形路径被 set 去重＋溯源是函数级不是路径级；② 删除动作作为**值**被调用，名字黑名单看不见。MEDIUM：64-hex 只认小写；**`REVIEWED_SET_UNCHANGED_SINCE` 是错误自报**。**根因我上一轮自己列出过却没去修** —— 列出弱点不等于处理弱点。已改为路径敏感有序列表＋封闭调用世界＋range 声称机械核实 |
 | [`FINDINGS_SOL_R3_REPRODUCED_2026-08-30.md`](FINDINGS_SOL_R3_REPRODUCED_2026-08-30.md) | **两条 HOLD 发现的复现证据**。含一件比结论更值得记的事：**第一次复现是错的**（全红），因为我的变异守在测试会触发的条件上；Sol 的守在测试从不触发的条件上。停在第一次就会写下「无法复现」而缺陷仍在 |
 | [`DECISION_PACKET_FOUR_OPEN_2026-08-29.md`](DECISION_PACKET_FOUR_OPEN_2026-08-29.md) | **四件待裁的决裁包**（已由 Fable 顾问级答复，见 `RULING_FABLE_FOUR_OPEN_2026-08-30.md`）。**第 2 件已撤回** —— 它是一件 owner 已裁事项，我当未决送出去了 |

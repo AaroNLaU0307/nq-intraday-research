@@ -498,31 +498,24 @@ class TestEveryDECLAREDExitIsActuallyReached(unittest.TestCase):
         self.assertIsNone(action)
         self.assertIn("supplement_post_promotion_verify", str(error))
 
-    def test_every_declared_exit_NAME_is_reached_by_some_test(self):
-        """The closing assertion. It is a coverage claim about THIS file,
-        so it is derived from the contract rather than restated."""
-        import sys
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from test_resolve_partial_path_contract import DECLARED_EXITS
-
-        declared = {name for _kind, name, _guard in DECLARED_EXITS}
-        reached = {
-            "already_sealed", "supplement_seal_conflict", "retry_permitted",
-            "promote", "supplement_partial_verify",
-            "divergent_partial_exists", "incident_id_malformed",
-            "supplement_post_promotion_verify",
-        }
-        never = sorted(declared - reached)
-        self.assertEqual(
-            [], never,
-            "these exits are DECLARED in the contract and executed by no "
-            "test here: %s -- a declared-but-unreached exit is counted as "
-            "accounted for by the contract while nothing has ever seen what "
-            "it does." % never)
-        stale = sorted(reached - declared)
-        self.assertEqual([], stale,
-                         "this file claims to reach exits the contract does "
-                         "not declare: %s" % stale)
+    # REMOVED 2026-08-30, round 6 HIGH-2. What stood here was
+    # `test_every_declared_exit_NAME_is_reached_by_some_test`, and its
+    # docstring said the claim was "derived from the contract rather than
+    # restated". Only half of it was: `declared` came from DECLARED_EXITS,
+    # `reached` was a set LITERAL typed out beside it. Sol added an
+    # `unseen_exit` to the contract and to that literal, gave it no
+    # scenario, and this file stayed green -- so the coverage claim was
+    # worth nothing, while reading as though the seam were closed.
+    #
+    # A HAND-WRITTEN MIRROR OF DERIVED DATA is the recurring shape here
+    # (`_divergent_name` assembled by hand; a prompt guard parsing a table
+    # format I had invented; `role` vs `is_the_delivery_document`). The
+    # mirror never announces that it has gone stale.
+    #
+    # The claim now lives in `test_resolve_partial_state_diff.py`
+    # (`TestEveryDeclaredExitIsReachedBYEXECUTION`), where `reached` is
+    # accumulated from the exit each REAL run actually returned or raised.
+    # An exit no scenario drives cannot enter it, whatever anyone types.
 
 
 if __name__ == "__main__":

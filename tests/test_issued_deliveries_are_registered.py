@@ -220,7 +220,7 @@ class TestAnIssuedDeliveryIsArmed(unittest.TestCase):
                            "count it proves nothing" % len(records))
         armed = {e["review_id"] for e in entries}
         docs = {e["path"] for e in entries
-                if e.get("role", "delivery") == "delivery"}
+                if e.get("is_the_delivery_document")}
         verdict = re.compile(r"^(RULING|VERDICT)=", re.M)
         over = set()
         for path in records:
