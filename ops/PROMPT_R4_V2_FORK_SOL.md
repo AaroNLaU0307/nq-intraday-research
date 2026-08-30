@@ -26,6 +26,10 @@ registry 仓根：`C:\Users\Aaron\quant-data\itsf-registry`（**本轮许可读*
 
 禁区清单随包交付：`ops/OFF_LIMITS_COMPANION_R4V2.md`，请一并读。
 
+**权威登记册**：`ops/OUTCOME_CARRYING_ARTIFACTS.json` 的 `carries_outcome`。
+点名它是为了让你**有东西可以对照** —— 只拿到交付件却无从核对任何路径，
+本身就是 D-2 那次烧掉席位的形状。随包件点名不算：席位可能只拿到这一份。
+
 ---
 
 ## 1. 只问一个问题 —— 但这不是封口
@@ -135,18 +139,18 @@ REVIEWED_SET_UNCHANGED_SINCE=<发行时填入>
 
 | sha256 | bytes | 路径 |
 |---|---|---|
-| <发行时填入> | <发行时填入> | `ops/R4_PROPOSAL_V2_CR1_REPOSITORY_ANCHORING_2026-08-31.md` |
-| <发行时填入> | <发行时填入> | `ops/RULING_FABLE_S5_AND_R4_2026-08-27.md` |
-| <发行时填入> | <发行时填入> | `ops/RULING_SOL_R4_HOLD_2026-08-31.md` |
-| <发行时填入> | <发行时填入> | `ops/R4_PROPOSAL_CR1_REPOSITORY_ANCHORING_2026-08-31.md` |
-| <发行时填入> | <发行时填入> | `ops/MIGRATION_ROUTE_A_COMPLETED_2026-08-31.md` |
-| <发行时填入> | <发行时填入> | `ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md` |
-| <发行时填入> | <发行时填入> | `ops/TRIAL_REGISTRY.md` |
-| <发行时填入> | <发行时填入> | `scripts/r4v2_block_builder.py` |
-| <发行时填入> | <发行时填入> | `tests/test_a_proposal_states_the_hash_of_its_own_block.py` |
-| <发行时填入> | <发行时填入> | `tests/test_registry_path_single_construction.py` |
-| <发行时填入> | <发行时填入> | `tests/test_registry_absence_refuses.py` |
-| <发行时填入> | <发行时填入> | `ops/OFF_LIMITS_COMPANION_R4V2.md` |
+| <发行时填入> | <发行时填入> |  |
+| <发行时填入> | <发行时填入> |  |
+| <发行时填入> | <发行时填入> |  |
+| <发行时填入> | <发行时填入> |  |
+| <发行时填入> | <发行时填入> |  |
+| <发行时填入> | <发行时填入> |  |
+| <发行时填入> | <发行时填入> |  |
+| <发行时填入> | <发行时填入> |  |
+| <发行时填入> | <发行时填入> |  |
+| <发行时填入> | <发行时填入> |  |
+| <发行时填入> | <发行时填入> |  |
+| <发行时填入> | <发行时填入> |  |
 
 **delivery**：`ops/PROMPT_R4_V2_FORK_SOL.md`，字节见 `ops/ARTIFACTS_UNDER_REVIEW.json`。
 
