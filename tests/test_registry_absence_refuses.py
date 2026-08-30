@@ -154,8 +154,9 @@ class TestWhatTheDefectLookedLike(unittest.TestCase):
         from itsf.mc import supplement_registry as sr
         import io
         repo = Path(__file__).resolve().parents[1]
-        real = io.open(repo / "ops" / "TRIAL_REGISTRY.md",
-                       encoding="utf-8").read()
+        with io.open(repo / "ops" / "TRIAL_REGISTRY.md",
+                     encoding="utf-8") as handle:
+            real = handle.read()
         _v_empty, r_empty = sr.find_live_authorization("", "MC-DS-S001")
         _v_real, r_real = sr.find_live_authorization(real, "MC-DS-S001")
         self.assertEqual(r_empty, r_real,

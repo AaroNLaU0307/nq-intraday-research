@@ -131,6 +131,12 @@ def test_the_pin_is_the_derived_one_not_a_typed_one():
 
     wrong = []
     for review_id, group in sorted(by_review.items()):
+        # The delivery carries this value for schema reasons and marks
+        # it inapplicable (`unchanged_since_applies_to_this_entry`).
+        # Requiring one pin across the group is still correct -- what
+        # was wrong was the record ASSERTING the pin holds for the
+        # delivery, which a fresh Sol seat measured as false: three
+        # commits touched it after that pin. The entry now says so.
         declared = {e["unchanged_since"] for e in group}
         if len(declared) != 1:
             wrong.append(f"{review_id}: {len(declared)} different pins in "
