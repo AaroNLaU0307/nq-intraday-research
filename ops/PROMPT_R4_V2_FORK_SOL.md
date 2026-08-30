@@ -139,18 +139,18 @@ REVIEWED_SET_UNCHANGED_SINCE=<发行时填入>
 
 | sha256 | bytes | 路径 |
 |---|---|---|
-| <发行时填入> | <发行时填入> |  |
-| <发行时填入> | <发行时填入> |  |
-| <发行时填入> | <发行时填入> |  |
-| <发行时填入> | <发行时填入> |  |
-| <发行时填入> | <发行时填入> |  |
-| <发行时填入> | <发行时填入> |  |
-| <发行时填入> | <发行时填入> |  |
-| <发行时填入> | <发行时填入> |  |
-| <发行时填入> | <发行时填入> |  |
-| <发行时填入> | <发行时填入> |  |
-| <发行时填入> | <发行时填入> |  |
-| <发行时填入> | <发行时填入> |  |
+| <发行时填入> | <发行时填入> | `ops/R4_PROPOSAL_V2_CR1_REPOSITORY_ANCHORING_2026-08-31.md` |
+| <发行时填入> | <发行时填入> | `ops/RULING_FABLE_S5_AND_R4_2026-08-27.md` |
+| <发行时填入> | <发行时填入> | `ops/RULING_SOL_R4_HOLD_2026-08-31.md` |
+| <发行时填入> | <发行时填入> | `ops/R4_PROPOSAL_CR1_REPOSITORY_ANCHORING_2026-08-31.md` |
+| <发行时填入> | <发行时填入> | `ops/MIGRATION_ROUTE_A_COMPLETED_2026-08-31.md` |
+| <发行时填入> | <发行时填入> | `ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md` |
+| <发行时填入> | <发行时填入> | `ops/TRIAL_REGISTRY.md` |
+| <发行时填入> | <发行时填入> | `scripts/r4v2_block_builder.py` |
+| <发行时填入> | <发行时填入> | `tests/test_a_proposal_states_the_hash_of_its_own_block.py` |
+| <发行时填入> | <发行时填入> | `tests/test_registry_path_single_construction.py` |
+| <发行时填入> | <发行时填入> | `tests/test_registry_absence_refuses.py` |
+| <发行时填入> | <发行时填入> | `ops/OFF_LIMITS_COMPANION_R4V2.md` |
 
 **delivery**：`ops/PROMPT_R4_V2_FORK_SOL.md`，字节见 `ops/ARTIFACTS_UNDER_REVIEW.json`。
 
