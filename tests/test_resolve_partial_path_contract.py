@@ -341,6 +341,67 @@ def _exits():
     return walker.exits
 
 
+class TestTheEXITApproximationIsExactHere(unittest.TestCase):
+    """`_always_exits` looks only at a body's LAST statement. That is exact
+    for this function, and the premise is checked rather than asserted.
+
+    IT IS EXACT WHEN no statement before the last one leaves the function.
+    If an earlier `return` existed, everything after it would be dead code
+    that the walk would happily attribute to a path -- declaring exits that
+    nothing can reach, and (worse) attaching real exits to guards that were
+    never evaluated.
+
+    ADDED 2026-08-30 rather than left in a residual table. Round 8's whole
+    lesson was that the walker is upstream of two other instruments, so an
+    approximation living there deserves a check and not a footnote."""
+
+    def _bodies(self):
+        """Every statement list the walk will ever judge."""
+        function = _resolve_partial()
+        out = [function.body]
+        for node in ast.walk(function):
+            if isinstance(node, ast.If):
+                out += [node.body, node.orelse]
+        return [b for b in out if b]
+
+    def test_no_body_exits_before_its_last_statement(self):
+        for body in self._bodies():
+            # `_always_exits([stmt])`, NOT `isinstance(stmt, Return)`.
+            # The first version asked only whether an earlier statement WAS
+            # a return, so an earlier `if A: return` / `else: raise` -- which
+            # leaves on every path -- was invisible to it. A guard narrower
+            # than the property it names, for the tenth time this month;
+            # this one at least was caught by trying to mutate it.
+            early = [stmt for stmt in body[:-1] if _always_exits([stmt])]
+            with self.subTest(line=body[0].lineno):
+                self.assertEqual(
+                    [], [stmt.lineno for stmt in early],
+                    "a statement list leaves the function before its last "
+                    "statement, at line(s) %s. `_always_exits` reads only "
+                    "the last one, so everything after that point is dead "
+                    "code the walk would still attribute to a path."
+                    % [stmt.lineno for stmt in early])
+
+    def test_the_premise_scan_found_real_bodies(self):
+        """Vacuity: an empty list of bodies would pass the check above while
+        establishing nothing."""
+        bodies = self._bodies()
+        self.assertGreaterEqual(
+            len(bodies), 5,
+            "found %d statement lists in resolve_partial; the function has "
+            "several branches, so a lower number means the scan is broken"
+            % len(bodies))
+
+    def test_the_check_would_FIRE_on_an_early_exit(self):
+        """Driven over a constructed body, because the real one is clean and
+        a clean subject proves nothing about the checker."""
+        tree = ast.parse("def f():\n    return 1\n    x = 2\n")
+        body = tree.body[0].body
+        early = [stmt for stmt in body[:-1]
+                 if isinstance(stmt, (ast.Return, ast.Raise))]
+        self.assertEqual(1, len(early))
+
+
 class TestTheExitLISTIsClosed(unittest.TestCase):
 
     def test_the_declared_exits_match_ONE_FOR_ONE_in_order(self):

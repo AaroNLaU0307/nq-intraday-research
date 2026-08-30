@@ -587,12 +587,20 @@ def _g_seal_staging_partial(ctx: GateContext) -> None:
     #   1. Nothing is ever sealed on this path — `assert_real_run_allowed`,
     #      directory creation and P2 all still refuse, so there is no
     #      staging outcome for this gate to classify.
-    #   2. Its WORDING is out for review (`ops/PROMPT_C_BUILD_2_WORDING_
-    #      SOL_ROUND3.md`, ISSUED, pin d34ce7c). R2 was HOLD'd for asserting
-    #      one zero-side-effect rule across all three checkpoints, and
-    #      C_BUILD_2 is the checkpoint that broke it: staging writes
-    #      `.partial` BEFORE it can verify it. Wiring a gate whose
-    #      specification is under review is building on an unsettled spec.
+    #   2. WAS "its wording is out for review". THAT IS NO LONGER TRUE and
+    #      the comment said otherwise for five rounds -- it still cited
+    #      ROUND3 and pin d34ce7c, a review that returned on 2026-08-30 and
+    #      was followed by four more. A comment asserting a review is in
+    #      progress, months after it closed, is the same defect this whole
+    #      review kept finding in my own claims: a sentence that was true
+    #      when written and false when read.
+    #
+    #      Where the wording actually stands: eight rounds, all HOLD, all
+    #      findings reproduced and closed, capped by Aaron's OD-1 and
+    #      delivered at `ops/DELIVERY_C_BUILD_2_WORDING_AT_CAP_2026-08-30.md`
+    #      with its residuals marked ACCEPTED_BY_CAP. The specification is
+    #      settled; reason 1 is what still makes this gate unreachable, and
+    #      reason 1 alone is enough.
     _fail("C_BUILD", "seal_staging_partial", "SupplementRunnerError",
           "unreachable in this build: nothing is ever sealed (and the "
           "C_BUILD_2 wording is out for review)")
