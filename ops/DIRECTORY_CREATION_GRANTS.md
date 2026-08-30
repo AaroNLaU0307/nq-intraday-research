@@ -101,6 +101,7 @@ DIRECTORY_CREATION_AUTHORIZED=NO
 | # | ts | 授权文本（逐字） | 封闭路径清单 | 执行者 | 门前快照 | 门后快照 | 状态 |
 |---|---|---|---|---|---|---|---|
 | 1 | 2026-08-29 | **Aaron 亲笔、主动逐字发送**：「授权在 C:\Users\Aaron\quant-data\itsf-runs\supplements 与 C:\Users\Aaron\quant-data\itsf-runs-archive\supplements 这两条逐字路径上创建目录。」 | 两条，无通配符：`C:\Users\Aaron\quant-data\itsf-runs\supplements` · `C:\Users\Aaron\quant-data\itsf-runs-archive\supplements` | 主代理手工（Opus 5 builder seat） | `DIRGRANT_A1_PRE_GATE_SNAPSHOT.json` sha256 `7345bef75e712ab2ae92e4dbef301025…` —— 19＋15 条目，两目标均**不存在** | `DIRGRANT_A1_POST_GATE_SNAPSHOT.json` sha256 `b20e8ffd2498f40e0c67a3c1e059d711…` —— diff **恰为**两条 `dir supplements`，无增无删无字节，两者均空 | **USED（用掉即失效）** |
+| 2 | 2026-08-31 | **Aaron 逐字回贴 builder 呈块**（形制乙，OD-4；决裁席对该形制自陈 MEDIUM 置信，如实留存）：「授权在 C:\Users\Aaron\quant-data\itsf-registry 这一条逐字路径上创建目录。这是本次授权的封闭清单，仅此一条，不含通配符。」 | 一条，无通配符：`C:\Users\Aaron\quant-data\itsf-registry` | 主代理手工（Opus 5 builder seat），单条 mkdir，非批量 | `DIRGRANT_A2_PRE_GATE_SNAPSHOT.json` sha256 `3c0f0f7ae49f935b…` —— `quant-data` 全递归 **20360** 条目，目标**不存在** | `DIRGRANT_A2_POST_GATE_SNAPSHOT.json` sha256 `eb5c40888dcc6cfa…` —— **20361** 条目，diff **恰为**一条 `dir itsf-registry`，零删除、零字节变更，新目录为空 | **USED（用掉即失效）** |
 
 ### 第 1 行的执行记录
 
@@ -243,3 +244,54 @@ SEVERITY=流程缺陷，非代码缺陷
 
 `tests/test_no_settled_question_is_sent_to_adjudication.py` —— 决裁包里的问题
 不得已在 `OWNER_DECISIONS_*` 里被裁过。
+
+---
+
+## 第 2 行的证据事故 —— **如实记录，因为它发生在存证本身上**
+
+授权、执行、门后 diff 全部成立。**出问题的是我签的那份门前存证不是盘上那份。**
+
+### 发生了什么
+
+```
+1  我先写了一个门前快照脚本，全集定成整个 quant-data 全递归 —— 那下面有
+   9.5 GB 的 databento-archive。它跑了两分钟没结果，被转进后台。
+2  我判断范围定错了（A1 的先例只快照相关的两条根），taskkill 后重写了一份
+   窄范围的，跑出来、宣布 sha256 = 608ef475…
+3  执行 mkdir。
+4  **那个旧进程根本没被杀掉。** 它随后跑完，把它自己的宽范围快照
+   写进了同一个文件名，**覆盖掉 608ef475…**。盘上现在是 3c0f0f7a…
+```
+
+### 事实层面没有坏，签名层面坏了
+
+目标创建前不存在，有**三处独立测量**支持：
+旧进程的扫描结果（`itsf-registry in it: False`）、我 mkdir 前的复测、
+以及那份被覆盖的窄快照。**但我宣布过一个哈希，而盘上不是它。**
+
+### 补救与最终证据
+
+用**同一宽格式**重做门后快照，使 diff 在全深度上可比：
+
+```
+门前  3c0f0f7ae49f935b…   20360 条目
+门后  eb5c40888dcc6cfa…   20361 条目
+diff  added=[('dir','itsf-registry',None)]   removed=[]   新目录为空
+```
+
+**这一对是可比的、成立的，也是台账第 2 行记的那一对。**
+被覆盖的 608ef475… 不再存在，本节即是它的去向记录 —— 不留一个悬空的哈希。
+
+### 成因，是我的
+
+**我在没有复查的情况下认定 `taskkill` 成功了。** 之后的每一步都建立在
+「那个进程已经死了」这个未经验证的前提上。
+
+**规则**：杀掉一个后台任务之后，凡是依赖「它已经死了」的动作之前，
+必须先复查它确实死了。本月这一族错误的又一个变体 ——
+**声称（这次是对自己声称）比事实宽**。
+
+**它没有影响本次授权的正确性，但它可能影响过。**
+如果那个旧进程是在 mkdir **之后**才扫描的，覆盖进去的就会是一份
+「目标已存在」的门前快照 —— 那会让本次执行按 fail-closed 判失败，
+而且是被我自己的操作制造出来的假失败。
