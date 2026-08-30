@@ -150,17 +150,24 @@ class TestALiveRangeClaimIsTrue(unittest.TestCase):
         bytes nothing is protecting, and an armed register with no live prompt
         means the freeze outlives the review and the next repair collides
         with it. Both have happened here."""
-        live = sorted(p.name for p in _prompts()
-                      if any("DELIVERY_STATUS=%s" % k in
-                             p.read_text(encoding="utf-8") for k in LIVE))
+        # ISSUED only, NOT the whole LIVE set. Getting this wrong is what
+        # the guard's first version did, within the hour: it keyed on LIVE,
+        # which includes PREPARED_NOT_ISSUED, and went red the moment a
+        # round-7 packet was prepared. A PREPARED packet is CORRECTLY
+        # unarmed -- "finish the edits, commit, THEN arm" is the ordering
+        # this repository learned twice the hard way, so a prepared-and-
+        # unarmed prompt is the rule being followed, not broken.
+        issued = sorted(p.name for p in _prompts()
+                        if "DELIVERY_STATUS=ISSUED" in
+                        p.read_text(encoding="utf-8"))
         register = json.loads(
             (OPS / "ARTIFACTS_UNDER_REVIEW.json").read_text(encoding="utf-8"))
         armed = sorted({e["review_id"] for e in register["under_review"]})
         self.assertEqual(
-            bool(live), bool(armed),
-            "live prompts %s but armed reviews %s -- a review is in flight "
+            bool(issued), bool(armed),
+            "ISSUED prompts %s but armed reviews %s -- a review is in flight "
             "exactly when its delivery says ISSUED and its artifacts are "
-            "frozen; either half alone is the defect" % (live, armed))
+            "frozen; either half alone is the defect" % (issued, armed))
 
     def test_the_round4_packet_records_the_correction(self):
         """The miss itself stays on record; a fix that erased it would hide
