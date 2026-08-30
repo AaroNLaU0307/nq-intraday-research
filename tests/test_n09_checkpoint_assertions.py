@@ -295,7 +295,15 @@ class TestCBuild2DuringStaging(_Tmp):
     def test_nothing_is_ever_unlinked_by_the_staging_path(self):
         """(b) as a property of the CODE rather than of one run. No scenario
         test enumerates every scenario; a single delete here is the ratified
-        prohibition broken."""
+        prohibition broken.
+
+        ROUND 5 ADDENDUM. The sentence above is true and was half the
+        story. A code-shape check can also be SATISFIED while the property
+        is violated -- round 5 emptied a preserved file with an ALLOWED
+        call. The complement is
+        `tests/test_resolve_partial_observed_behaviour.py`, which asserts
+        on the operations actually performed. Shapes catch what scenarios
+        miss; observation catches what shapes miss. Neither is optional."""
         for name, source in self._reachable_sources(sr.resolve_partial).items():
             tree = ast.parse(source)
             calls = {getattr(n.func, "attr", getattr(n.func, "id", ""))

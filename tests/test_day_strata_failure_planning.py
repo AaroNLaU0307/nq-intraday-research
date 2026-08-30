@@ -9,8 +9,12 @@ an observation. So the way to write a false statement into the registry is
 not to make a mistake: it is to trust that default. The refusal is what
 stands between those two.
 
-NOTHING HERE APPENDS, and `TestThePlannerCannotWrite` measures that rather
-than trusting the docstring.
+NOTHING HERE APPENDS. `TestThePlannerHasNoWriteCallInItsSource` reads the
+module's AST for that, and `tests/test_the_refusing_entries_really_write_
+nothing.py` runs the planner and watches the filesystem. The pair is
+deliberate: round 5 destroyed a file with an ALLOWED call, so a name-based
+check is not the whole story -- and no scenario set enumerates every path,
+so an observation is not the whole story either.
 """
 
 import ast
@@ -223,10 +227,21 @@ class TestASuccessCannotBecomeAFailureRow(unittest.TestCase):
                       str(caught.exception))
 
 
-class TestThePlannerCannotWrite(unittest.TestCase):
-    """Measured, not asserted in prose. The eight authorization fields are
-    NO; a module that described rows AND could append them would be one
-    edit away from appending one."""
+class TestThePlannerHasNoWriteCallInItsSource(unittest.TestCase):
+    """WAS `TestThePlannerCannotWrite`, and the rename is the finding.
+
+    This reads the module's AST, so what it establishes is that no write
+    CALL APPEARS -- not that no write HAPPENS. Round 5 made the distinction
+    expensive: it destroyed a file using `write_bytes`, a call that was on
+    the ALLOWED list, and no name-based check could see it.
+
+    The complement is `tests/test_the_refusing_entries_really_write_
+    nothing.py`, which runs this planner and watches the filesystem.
+    Neither subsumes the other: a shape check sees paths no scenario
+    reaches; an observation sees effects no name list anticipates.
+
+    The eight authorization fields are NO; a module that described rows AND
+    could append them would be one edit away from appending one."""
 
     FORBIDDEN = ("open", "write_text", "write_bytes", "mkdir", "unlink",
                  "rename", "replace", "touch", "remove", "rmtree",
