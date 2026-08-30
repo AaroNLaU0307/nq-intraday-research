@@ -379,13 +379,53 @@ def test_exercising_the_supplement_surface_writes_nothing_protected():
                                        "the supplement surface")
 
 
-def test_the_registry_still_carries_no_supplement_event():
-    """The whole point of default-refuse. If a SUPPLEMENT_ row ever
-    appears here without a separate authorization round, this goes red."""
+#: Every SUPPLEMENT_ row that exists BY AUTHORIZATION, with the record that
+#: authorised it. A row not listed here has appeared without an
+#: authorization round, which is what this guard is for.
+#:
+#: REGISTERED, NOT REMOVED, 2026-08-31. The test used to assert the registry
+#: carried NO supplement row at all -- an empty registry standing in for
+#: "nothing appeared unauthorised". Aaron authorised P1 that day, so the
+#: proxy stopped being true while the property it stood for still held. A
+#: proxy that fails when the property is intact is only half the danger; the
+#: other half is a proxy that holds after the property is gone, which is how
+#: three tests read a tombstone and passed earlier the same day.
+AUTHORISED_SUPPLEMENT_ROWS = {
+    ("SUPPLEMENT_PROPOSED", "MC-DS-S001"):
+        "Aaron, 2026-08-31, 「追加 P1」; recorded in "
+        "ops/P1_APPENDED_MC_DS_S001_2026-08-31.md; registry commit e53234e",
+}
+
+
+def test_no_supplement_event_appeared_without_authorization():
+    """The whole point of default-refuse. A SUPPLEMENT_ row that is not in
+    AUTHORISED_SUPPLEMENT_ROWS appeared without an authorization round, and
+    adding a name there is a deliberate act with a record behind it -- not a
+    way to make this quiet."""
     text = (_rb.REGISTRY_REPO_ROOT / _rb.REGISTRY_PATH).read_bytes().decode("utf-8")
     rows = [ln for ln in text.splitlines()
             if ln.strip().startswith("|") and "SUPPLEMENT_" in ln]
-    assert rows == [], rows
+    unregistered = []
+    for line in rows:
+        token = next((t for t in line.split("|") if "SUPPLEMENT_" in t), "")
+        sid = next((p.strip("[]") for p in line.split()
+                    if p.startswith("[MC-DS-S")), "")
+        if (token.strip(" *"), sid) not in AUTHORISED_SUPPLEMENT_ROWS:
+            unregistered.append(line)
+    assert unregistered == [], (
+        "a SUPPLEMENT_ row is present that no authorization record covers:\n"
+        + "\n".join(unregistered))
+
+
+def test_every_authorised_row_is_actually_there():
+    """The other direction. A registration that outlives its row would let
+    the check above pass over something that no longer exists, and would
+    quietly widen what counts as authorised."""
+    text = (_rb.REGISTRY_REPO_ROOT / _rb.REGISTRY_PATH).read_bytes().decode("utf-8")
+    for (token, sid), why in sorted(AUTHORISED_SUPPLEMENT_ROWS.items()):
+        assert any(token in ln and sid in ln for ln in text.splitlines()), (
+            "%s for %s is registered as authorised (%s) but no such row is "
+            "in the registry" % (token, sid, why))
 
 
 # ===========================================================================

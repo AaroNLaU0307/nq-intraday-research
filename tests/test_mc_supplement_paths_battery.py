@@ -326,13 +326,23 @@ def real_highest_sequence() -> int:
     return max(values)
 
 
+#: The probe uses a DIFFERENT supplement id from the live one. REPOINTED
+#: 2026-08-31: Aaron authorised the real P1 for MC-DS-S001, so the live
+#: registry now carries one, and a synthetic P1 for that same id is
+#: `P1 -> P1` -- an illegal transition. These tests are about the GLOBAL
+#: SEQUENCE namespace, which a second id exercises just as well: the
+#: collision was with the chain, not with the numbering.
+PROBE_SID = SID2
+
+
 def seq_outcome(value) -> str:
     """Append ONE synthetic P1 (a non-authorization proposal row) to the
     real registry text IN MEMORY and report the resolver's verdict."""
-    text = REAL_REGISTRY_TEXT + "\n" + row("P1", seq=str(value)) + "\n"
+    text = (REAL_REGISTRY_TEXT + "\n"
+            + row("P1", sid=PROBE_SID, seq=str(value)) + "\n")
     chains, refusal = sr.resolve_supplement_chains(text)
     if refusal is None:
-        assert sorted(chains) == [SID]
+        assert sorted(chains) == sorted({SID, PROBE_SID}), sorted(chains)
         return "OK"
     assert chains == {}, "a refused resolution must yield NO chains"
     assert refusal.code in sr.REFUSAL_CODES, refusal.code
@@ -504,9 +514,18 @@ def test_the_anchored_pattern_table_covers_both_modules():
 def test_real_registry_authorizes_nothing_and_is_only_read():
     chains, refusal = sr.resolve_supplement_chains(REAL_REGISTRY_TEXT)
     assert refusal is None, f"the real registry does not resolve: {refusal}"
-    assert chains == {}, (
-        "the real registry already carries a supplement chain — this "
-        "battery assumes it carries none")
+    # REWRITTEN 2026-08-31. This asserted `chains == {}` -- an empty registry
+    # standing in for "authorizes nothing". Aaron authorised the real P1 for
+    # MC-DS-S001 that day, so a chain now exists and the proxy stopped being
+    # true while the PROPERTY the test is named for still held. The property
+    # is checked directly now: whatever chains exist, none of them authorises
+    # anything, because authorisation is a live P2 and there is none.
+    for sid, chain in sorted(chains.items()):
+        live = getattr(chain, "live_authorizations", ())
+        assert len(live) == 0, (
+            "%s carries %d live authorization(s); this battery may not run "
+            "against a registry that authorises anything" % (sid, len(live)))
+        assert not getattr(chain, "problem", ""), (sid, chain.problem)
     assert real_highest_sequence() >= 13, (
         "the registry is append-only, so its highest sequence can only "
         "grow from the measured 13")
@@ -1102,16 +1121,17 @@ def test_zero_and_negative_sequence_cells_are_refused():
 
 def test_two_appended_rows_must_be_consecutive():
     highest = real_highest_sequence()
+    # Two DISTINCT probe ids, neither of them the live chain's -- see PROBE_SID.
     good = (REAL_REGISTRY_TEXT + "\n"
-            + row("P1", seq=str(highest + 1)) + "\n"
-            + row("P1", sid=SID2, seq=str(highest + 2)) + "\n")
+            + row("P1", sid="MC-DS-S002", seq=str(highest + 1)) + "\n"
+            + row("P1", sid="MC-DS-S003", seq=str(highest + 2)) + "\n")
     chains, refusal = sr.resolve_supplement_chains(good)
     assert refusal is None, f"unexpected refusal: {refusal}"
-    assert sorted(chains) == [SID, SID2]
+    assert sorted(chains) == [SID, "MC-DS-S002", "MC-DS-S003"]
 
     gapped = (REAL_REGISTRY_TEXT + "\n"
-              + row("P1", seq=str(highest + 1)) + "\n"
-              + row("P1", sid=SID2, seq=str(highest + 3)) + "\n")
+              + row("P1", sid="MC-DS-S002", seq=str(highest + 1)) + "\n"
+              + row("P1", sid="MC-DS-S003", seq=str(highest + 3)) + "\n")
     chains, refusal = sr.resolve_supplement_chains(gapped)
     assert chains == {} and refusal is not None
     assert refusal.code == "supplement_seq_not_next_value", refusal.code
