@@ -69,11 +69,55 @@ def live_packets():
             and any("DELIVERY_STATUS=%s" % k in text for k in LIVE)]
 
 
-def collected_tests(path):
-    """How many tests pytest would collect from `path`.
+class Uncountable(Exception):
+    """This file's collected count cannot be established from the AST.
 
-    Module-level `def test_*` plus every `def test_*` inside a class. Read
-    from the AST, so it costs nothing and cannot run anything."""
+    RAISED RATHER THAN GUESSED, 2026-08-31, after this counter shipped a
+    wrong number to a reviewer. `tests/test_registry_boundary.py` carries a
+    `@pytest.mark.parametrize` whose argvalues are a NAME, not a literal --
+    `_REFUSAL_STUBS`, five entries. The walk counted the function once;
+    pytest collects five. 14 against 18, and the packet quoted 14.
+
+    The old docstring said "how many tests pytest would collect", which was
+    wider than the code by exactly that gap. A counter that cannot see
+    parametrisation must SAY so; silently returning the smaller number is
+    the could-not-look / nothing-is-there collapse this repository refuses
+    everywhere else -- and here it collapsed inside the guard built to stop
+    stale numbers reaching a reviewer."""
+
+
+def _parametrize_factor(node):
+    """How many cases a decorator multiplies a test into.
+
+    A literal list or tuple is countable. A NAME is not, without importing
+    the module and running its top level -- which this file will not do."""
+    factor = 1
+    for dec in getattr(node, "decorator_list", []):
+        if not isinstance(dec, ast.Call):
+            continue
+        name = getattr(dec.func, "attr", None) or getattr(dec.func, "id", None)
+        if name != "parametrize":
+            continue
+        values = dec.args[1] if len(dec.args) > 1 else None
+        if isinstance(values, (ast.List, ast.Tuple)):
+            factor *= len(values.elts)
+        else:
+            raise Uncountable(
+                "%s is parametrised over %s, which is not a literal; the "
+                "number of cases cannot be read from the source"
+                % (node.name, ast.unparse(values) if values else "?"))
+    return factor
+
+
+def defined_tests(path):
+    """How many test FUNCTIONS are defined -- parametrisation not applied.
+
+    Split out 2026-08-31. `collected_tests` began multiplying by
+    parametrisation, and the indentation walk below cannot see cases at all,
+    so the two derivations stopped measuring the same thing and started
+    disagreeing on files where both were right. Two routes to one number is
+    the point; two routes to two different numbers is noise wearing the
+    costume of a cross-check."""
     tree = ast.parse(Path(path).read_text(encoding="utf-8"))
     count = 0
     for node in tree.body:
@@ -84,6 +128,27 @@ def collected_tests(path):
                 isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
                 and child.name.startswith("test")
                 for child in node.body)
+    return count
+
+
+def collected_tests(path):
+    """How many tests pytest would collect from `path`.
+
+    Module-level `def test_*` plus every `def test_*` inside a class, each
+    multiplied by its parametrisation. Read from the AST, so it costs
+    nothing and cannot run anything -- and RAISES `Uncountable` rather than
+    under-report when the source does not say."""
+    tree = ast.parse(Path(path).read_text(encoding="utf-8"))
+    count = 0
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.name.startswith("test"):
+                count += _parametrize_factor(node)
+        elif isinstance(node, ast.ClassDef):
+            for child in node.body:
+                if (isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and child.name.startswith("test")):
+                    count += _parametrize_factor(child)
     return count
 
 
@@ -99,7 +164,16 @@ def stale_claims(packet):
                 "that cannot run is not a check -- round 7 shipped one."
                 % (packet.name, target))
             continue
-        actual = collected_tests(REPO / target)
+        try:
+            actual = collected_tests(REPO / target)
+        except Uncountable as exc:
+            problems.append(
+                "%s quotes a number for %s, whose count cannot be read from "
+                "the source: %s. Quote a file whose count IS readable, or "
+                "quote no number -- a guess that happens to be wrong is what "
+                "sent 14 to a reviewer when pytest reports 18."
+                % (packet.name, target, exc))
+            continue
         if actual != quoted:
             problems.append(
                 "%s: claims %d passed for %s, which now holds %d tests. The "
@@ -186,11 +260,19 @@ class TestTheCounterAgreesWithPytest(unittest.TestCase):
             source = path.read_text(encoding="utf-8")
             by_indent = [m for m in pattern.finditer(source)
                          if len(m.group("indent")) <= 4]
+            # DEFINITIONS against definitions. `collected_tests` counts
+            # CASES, which a regex cannot see, so comparing it here would
+            # make the two routes disagree wherever both are right.
             self.assertEqual(
-                len(by_indent), collected_tests(path),
+                len(by_indent), defined_tests(path),
                 "the AST walk and the indentation walk disagree on %s; one "
                 "of them is wrong and a packet's numbers depend on which"
                 % path.name)
+            try:
+                self.assertGreaterEqual(collected_tests(path),
+                                        defined_tests(path))
+            except Uncountable:
+                pass          # named loudly by `stale_claims`, not silenced
             checked += 1
         self.assertGreater(checked, 50,
                            "only %d files compared; at that count this "
@@ -202,7 +284,7 @@ class TestTheCounterAgreesWithPytest(unittest.TestCase):
         source = (REPO / "tests" / "test_m6_chain.py").read_text(
             encoding="utf-8")
         naive = re.findall(r"^\s*(?:async )?def (test\w*)", source, re.M)
-        self.assertEqual(collected_tests(REPO / "tests" / "test_m6_chain.py"),
+        self.assertEqual(defined_tests(REPO / "tests" / "test_m6_chain.py"),
                          len(naive) - 1,
                          "the nested `@property def test_only` this rule "
                          "exists for is gone; find the new witness or drop "

@@ -315,3 +315,5 @@ builder 核：`supplement_contract.py:539` 引用其裁定 R-A/R-C，而当日�
 **编号更正，2026-08-30（本次追加时发现）**：本台账 4–9 号**各出现两次** —— 早前的会话在 4 号处重启了编号，与原 1–9 序列相撞。台账是追加式，**旧行不改**；本次三行改用 10/11/12 继续真正的最大号。引用 4–9 号时必须连同所在小节一起指明，单凭号码是有歧义的。机械检查见 `tests/test_the_seat_ledger_ids_are_unique.py`。
 
 | 13 | 2026-08-30 | Codex GPT-5.6 Sol，fresh session（review `c-build-2-wording-r8`，上限轮） | 受审集 1 delivery ＋ 12 reference | 席位自陈 `SEAT_STATUS=BLIND`、`FORBIDDEN_PATHS_OPENED=NONE`、`SOURCE_WRITES=NONE`、`PERSISTED_SEARCH_OUTPUT=NONE`；变异全部进程内进行 | **`NOT_EXPOSED`**（席位自评，builder 未下调） | 该会话仍可承担未来 outcome-blind 角色 | 无缺陷。**第 12 行那次边界违例的成因（边界只约束人、不约束他被要求跑的代码）已在 R8 随包件逐条列出九个会枚举 `ops/` 的治理测试并写明允许，本行是该修复生效的量度** |
+
+| 14 | 2026-08-31 | Codex GPT-5.6 Sol，fresh session（review `r4-cr1-anchoring`） | 受审集 1 delivery ＋ 12 reference；**本轮特许读 registry 仓与见证根**（判据即跨仓冷读，不给读则只能采信 builder） | 席位自陈 `SEAT_STATUS=BLIND`、`FORBIDDEN_PATHS_OPENED=NONE`、`SOURCE_WRITES=NONE`、`PERSISTED_SEARCH_OUTPUT=NONE`、**`REGISTRY_REPO_READ=YES`** | **`NOT_EXPOSED`**（席位自评，builder 未下调）。registry 是治理事件链，不含绩效数值；随包件已写明「若在里面读到像绩效的东西即为事故」，席位未申报此类 | 该会话仍可承担未来 outcome-blind 角色 | 无缺陷。**特许读是本轮设计的一部分**，不是失控：不给读，证伪器就只能由 builder 自证 |
