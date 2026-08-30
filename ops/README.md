@@ -14,7 +14,7 @@
 |---|---|
 | [`RECOVERY_ANCHOR.md`](RECOVERY_ANCHOR.md) | **任何会话从这里开始**（D-2 拆锚，2026-08-26）。outcome-clean，永不隔离，blind 席位可安全读 |
 | [`NEXT_HANDOFF.md`](NEXT_HANDOFF.md) | **下一份要交出去的东西**，固定文件名；同时是复审禁区清单的常驻载体 |
-| `MC_TO_STRATEGY_MASTER_PLAN.md` | DAG、节点状态、租约、停止点的**权威**，§ 编号最高者为准。**恢复入口已于 §16 迁至 `RECOVERY_ANCHOR.md`**。**⚠ OFF-LIMITS —— outcome-carrying，blind 席位不得读**（此处刻意不给链接） |
+| `MC_TO_STRATEGY_MASTER_PLAN.md` | **OFF-LIMITS（outcome-carrying，不得打开）** · DAG、节点状态、租约、停止点的**权威**，§ 编号最高者为准。**恢复入口已于 §16 迁至 `RECOVERY_ANCHOR.md`**。**⚠ OFF-LIMITS —— outcome-carrying，blind 席位不得读**（此处刻意不给链接） |
 | [`TRIAL_REGISTRY.md`](TRIAL_REGISTRY.md) | 事件真相源，append-only。S0／supplement／MC 三个生命周期共用一份 |
 | [`DECISION_PACKET_REMAINING_FABLE.md`](DECISION_PACKET_REMAINING_FABLE.md) | **现在挂着的交付**——其余十项决定交 Fable，`dec-remaining-2026-08-26`。每项先答 `DELEGABLE`：Fable 上轮自己把多数划为 Aaron-only |
 | [`PROMPT_ITEM6_SOL_REVIEW.md`](PROMPT_ITEM6_SOL_REVIEW.md) | **现在挂着的交付** —— ND1 R3 提案复核第二次交付，`rv-6cd8abb41a43-1ddf0617d52e`。第一次因缺 packet／哈希被判 REJECTED_INCOMPLETE（origin=BUILDER） |
@@ -50,7 +50,7 @@
 | [`PREPARED_C_BUILD_1_GATE_WIRING.md`](PREPARED_C_BUILD_1_GATE_WIRING.md) | **已写好、待落地的 C_BUILD_1 三门接线**（补丁 106 行同名 `.patch`）。阻塞原因不是缺授权 —— Aaron 08-29 明确批了「把五道门建成真的分类器」；阻塞的是 `supplement_runner.py` 此刻被 fresh Sol 持有（C_BUILD_2 措辞第 3 轮，仍未返回），改它会让那一轮席位白烧。**含一条自我订正**：该文件从来不在 `FROZEN_HASHES` 里，我按一条过期记忆少干了活 |
 | [`WAITING_ON_AARON.md`](WAITING_ON_AARON.md) | **等 Aaron 一句话的完整清单**，大白话，每条附 builder 推荐。A1 目录授权（`quant-data` 下两条逐字路径）· A2/A3 迁移 ①②（必须分两句）· A4 迁移 ③（**建议别给**：本机单卷，给了也执行不了）· B1 MATERIALITY · B2 真实数据运行授权（**唯一不可逆的一条，现在不该批**）。另列 builder 已自行接手、不再等他的四项 |
 | [`DECISION_PACKET_FOUR_OPEN_2026-08-26.md`](DECISION_PACKET_FOUR_OPEN_2026-08-26.md) | 四项待裁。Fable 已裁，但**裁决工件不在盘上**——见下一行 |
-| [`RULING_FABLE_FOUR_OPEN_2026-08-26.md`](outcome_quarantine/RULING_FABLE_FOUR_OPEN_2026-08-26.md) | **Fable 对 D-1..D-4 的裁决全文**，逐字节转录，SHA256 `90CC7110…749B86` 已复核 **⚠ outcome-carrying**（自身携带累计 exposure 计数，转录同时已隔离） |
+| [`RULING_FABLE_FOUR_OPEN_2026-08-26.md`](outcome_quarantine/RULING_FABLE_FOUR_OPEN_2026-08-26.md) | **OFF-LIMITS（outcome-carrying，不得打开）** · **Fable 对 D-1..D-4 的裁决全文**，逐字节转录，SHA256 `90CC7110…749B86` 已复核 **⚠ outcome-carrying**（自身携带累计 exposure 计数，转录同时已隔离） |
 | [`FINDINGS_FABLE_FOUR_OPEN_TRANSPORT_STOP.md`](FINDINGS_FABLE_FOUR_OPEN_TRANSPORT_STOP.md) | **传输 STOP**：四项裁决未转录未执行；另含两条已复核的 builder 自身缺陷（指令指向隔离件；隔离值扩散进 10 份未登记文件，其中 3 份是测试） |
 | [`PREP_ITEM3_SAVE_DIR_CONFIGURABLE.md`](PREP_ITEM3_SAVE_DIR_CONFIGURABLE.md) | **第 3 项交付物**：`_SAVE_DIR` 配置化设计 ＋ **范围发现**——同一缺陷在 `header.py:201` 还有第二处，D-4 未点名 |
 | [`PREP_ITEM2_QUARANTINE_MIGRATION.md`](PREP_ITEM2_QUARANTINE_MIGRATION.md) | **第 2 项交付物**：迁移可行性实测（生产代码零路径引用）＋计划。**发现裁定未区分仓根台账**，三选一待 Aaron |
@@ -73,11 +73,11 @@
 | [`DELEGATED_RULINGS_2026-08-24.md`](DELEGATED_RULINGS_2026-08-24.md) | N06 终态 ＋ N-D2/N-D3 共 32 项，Sol 委托裁定 `DELEGATED=YES` |
 | [`RULING_MC_REG_COLLISION_SOL_RATIFICATION_2026-08-25.md`](RULING_MC_REG_COLLISION_SOL_RATIFICATION_2026-08-25.md) | MC-REG-COLLISION-001 批准（C2 被整条替换） |
 | [`RULING_PROPOSAL_MC_REG_COLLISION_FABLE_2026-08-25.md`](RULING_PROPOSAL_MC_REG_COLLISION_FABLE_2026-08-25.md) | 上一条的 Fable 提案 |
-| [`RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md`](outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md) | N-D2/N-D3 的 Fable 提案 **⚠ outcome-carrying** |
+| [`RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md`](outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md) | **OFF-LIMITS（outcome-carrying，不得打开）** · N-D2/N-D3 的 Fable 提案 **⚠ outcome-carrying** |
 | [`ND1_PROFILE_RATIFICATION.md`](ND1_PROFILE_RATIFICATION.md) | N-D1 profile 批准。**目录创建／写探针／执行是三次独立授权** |
 | [`DECISION_PACKET_N00_AND_ND1.md`](DECISION_PACKET_N00_AND_ND1.md) | N00 与 N-D1 决策包，含 `N00_MISSING_AUTHORITY_CHECKLIST` 与 §D.3.4 |
-| [`DECISION_PACKET_ND2_ND3.md`](outcome_quarantine/DECISION_PACKET_ND2_ND3.md) | N-D2/N-D3 合并决策包 **⚠ outcome-carrying** |
-| [`ND2_ND3_RULING_REVIEW_FINDINGS.md`](outcome_quarantine/ND2_ND3_RULING_REVIEW_FINDINGS.md) | 对上一条裁定的复核发现 **⚠ outcome-carrying** |
+| [`DECISION_PACKET_ND2_ND3.md`](outcome_quarantine/DECISION_PACKET_ND2_ND3.md) | **OFF-LIMITS（outcome-carrying，不得打开）** · N-D2/N-D3 合并决策包 **⚠ outcome-carrying** |
+| [`ND2_ND3_RULING_REVIEW_FINDINGS.md`](outcome_quarantine/ND2_ND3_RULING_REVIEW_FINDINGS.md) | **OFF-LIMITS（outcome-carrying，不得打开）** · 对上一条裁定的复核发现 **⚠ outcome-carrying** |
 | [`DECISION_MC_REGISTRY_COLLISION.md`](DECISION_MC_REGISTRY_COLLISION.md) | 两份已批准工件相抵的记录；末尾 STATUS 段为收口 |
 | [`S0_OUTPUT_ROOTS_OPERATIONS_DECISION.md`](S0_OUTPUT_ROOTS_OPERATIONS_DECISION.md) | L-5 输出根运维决策 |
 
@@ -97,7 +97,7 @@
 | [`N09_EXECUTION_PATH_A2_SOL_PROMPT.md`](N09_EXECUTION_PATH_A2_SOL_PROMPT.md) | Sol，两次 TRANSPORT_STOP 后被 Review Packet 取代 |
 | [`MC_REG_COLLISION_SOL_RATIFICATION_PROMPT.md`](MC_REG_COLLISION_SOL_RATIFICATION_PROMPT.md) | Sol，已 RATIFIED_AS_MODIFIED |
 | [`MC_REGISTRY_COLLISION_FABLE_PROMPT.md`](MC_REGISTRY_COLLISION_FABLE_PROMPT.md) | Fable，已出提案 |
-| [`ND2_ND3_FABLE_DECISION_PROMPT.md`](outcome_quarantine/ND2_ND3_FABLE_DECISION_PROMPT.md) | Fable，32 项 **⚠ outcome-carrying** |
+| [`ND2_ND3_FABLE_DECISION_PROMPT.md`](outcome_quarantine/ND2_ND3_FABLE_DECISION_PROMPT.md) | **OFF-LIMITS（outcome-carrying，不得打开）** · Fable，32 项 **⚠ outcome-carrying** |
 | [`N06_DISPOSITION_AND_ND2_ND3_RATIFICATION_SOL_PROMPT.md`](N06_DISPOSITION_AND_ND2_ND3_RATIFICATION_SOL_PROMPT.md) | Sol，N06 终态＋32 项批准 |
 | [`N06_ROUND2_SOL_PROMPT.md`](N06_ROUND2_SOL_PROMPT.md) · [`N06_ROUND3_SOL_PROMPT.md`](N06_ROUND3_SOL_PROMPT.md) · [`N06_ROUND4_SOL_PROMPT.md`](N06_ROUND4_SOL_PROMPT.md) | N06 二/三/四轮 |
 | [`N06_REVIEW_HANDOFF.md`](N06_REVIEW_HANDOFF.md) | N06 首轮交接 |
@@ -153,7 +153,7 @@
 | [`N09_EXECUTION_PATH_DESIGN.md`](N09_EXECUTION_PATH_DESIGN.md) | R1（已被 R2 取代，正文保留原样） |
 | [`N06_HOLD_RED_PROOF.md`](N06_HOLD_RED_PROOF.md) | N06 四个 High 的红证 |
 | [`N06_HOLD_REPAIR_EVIDENCE.md`](N06_HOLD_REPAIR_EVIDENCE.md) · [`N06_ROUND2_HOLD_REPAIR_EVIDENCE.md`](N06_ROUND2_HOLD_REPAIR_EVIDENCE.md) · [`N06_ROUND3_HOLD_REPAIR_EVIDENCE.md`](N06_ROUND3_HOLD_REPAIR_EVIDENCE.md) | 各轮修复证据 |
-| [`MC_FACTORY_BOUNDARY_STAGE_I.md`](outcome_quarantine/MC_FACTORY_BOUNDARY_STAGE_I.md) | factory boundary 的 Stage I 记录 **⚠ outcome-carrying** |
+| [`MC_FACTORY_BOUNDARY_STAGE_I.md`](outcome_quarantine/MC_FACTORY_BOUNDARY_STAGE_I.md) | **OFF-LIMITS（outcome-carrying，不得打开）** · factory boundary 的 Stage I 记录 **⚠ outcome-carrying** |
 | [`ND1_ENGINEERING_EVIDENCE_PACKET.md`](ND1_ENGINEERING_EVIDENCE_PACKET.md) | N-D1 工程证据 |
 | [`N00_N08_PROVENANCE_AUDIT_2026-08-25.md`](N00_N08_PROVENANCE_AUDIT_2026-08-25.md) | N00／N08 只读 provenance 审计 |
 
@@ -173,7 +173,7 @@
 | 文件 | 是什么 |
 |---|---|
 | [`TRIAL_REGISTRY.md`](TRIAL_REGISTRY.md) | 事件真相源 |
-| [`EXPOSURE_LEDGER.md`](EXPOSURE_LEDGER.md) | §10.1 合规承载件，逐行转录仓根权威台账 **⚠ outcome-carrying** |
+| [`EXPOSURE_LEDGER.md`](EXPOSURE_LEDGER.md) | **OFF-LIMITS（outcome-carrying，不得打开）** · §10.1 合规承载件，逐行转录仓根权威台账 **⚠ outcome-carrying** |
 | [`REVIEWER_EXPOSURE_LOG.md`](REVIEWER_EXPOSURE_LOG.md) | 席位暴露，**不是**研究 exposure |
 | [`FEASIBILITY_ERRATA_REGISTER.md`](FEASIBILITY_ERRATA_REGISTER.md) | feasibility 历史文档勘误 |
 | [`OUTPUT_ROOTS_READINESS_CHECKLIST.md`](OUTPUT_ROOTS_READINESS_CHECKLIST.md) | 输出根就绪证明记录 |
@@ -182,14 +182,14 @@
 
 | 文件 | 是什么 |
 |---|---|
-| [`MC_DR5_BUILD_PACKET.md`](outcome_quarantine/MC_DR5_BUILD_PACKET.md) | MC/DR-5 build packet，含 §13.5 的 P2 授权模板 **⚠ outcome-carrying** |
+| [`MC_DR5_BUILD_PACKET.md`](outcome_quarantine/MC_DR5_BUILD_PACKET.md) | **OFF-LIMITS（outcome-carrying，不得打开）** · MC/DR-5 build packet，含 §13.5 的 P2 授权模板 **⚠ outcome-carrying** |
 | [`MC_DR5_CONSUMER_SOURCE_MATRIX.md`](MC_DR5_CONSUMER_SOURCE_MATRIX.md) | consumer 的来源矩阵 |
 | [`MC_COST_PROBE_FINDINGS.md`](MC_COST_PROBE_FINDINGS.md) | N16 单位成本实测 |
 | [`RUNTIME_DEVIATION_PACKET_SAVE_DIR.md`](RUNTIME_DEVIATION_PACKET_SAVE_DIR.md) | 对 qros-runtime 硬编码 `_SAVE_DIR` 的偏离记录 |
 | [`QROS_FIRST_RUN_2026-08-24.md`](QROS_FIRST_RUN_2026-08-24.md) | 本项目首次接入 L6 runtime |
 | [`S0_T001_POST_RUN_ATTESTATION.md`](S0_T001_POST_RUN_ATTESTATION.md) | S0-T001 盲式收口 attestation（哈希被代码 pin） |
-| [`S0_T001_RESULT_DECISION_ADDENDUM.md`](outcome_quarantine/S0_T001_RESULT_DECISION_ADDENDUM.md) | S0 结果裁决 addendum **⚠ outcome-carrying** |
-| [`S0_T001_RESULT_REVEAL_ATTESTATION.md`](outcome_quarantine/S0_T001_RESULT_REVEAL_ATTESTATION.md) | 揭盲 attestation **⚠ outcome-carrying** |
+| [`S0_T001_RESULT_DECISION_ADDENDUM.md`](outcome_quarantine/S0_T001_RESULT_DECISION_ADDENDUM.md) | **OFF-LIMITS（outcome-carrying，不得打开）** · S0 结果裁决 addendum **⚠ outcome-carrying** |
+| [`S0_T001_RESULT_REVEAL_ATTESTATION.md`](outcome_quarantine/S0_T001_RESULT_REVEAL_ATTESTATION.md) | **OFF-LIMITS（outcome-carrying，不得打开）** · 揭盲 attestation **⚠ outcome-carrying** |
 
 | [`MIGRATION_R5_QUARANTINE_SUBTREE_2026-08-27.md`](MIGRATION_R5_QUARANTINE_SUBTREE_2026-08-27.md) | **R5 迁移执行记录**：10 迁 2 留、三处条件偏离、以及我把一份活跃复审弄失效的记录 |
 
@@ -198,7 +198,11 @@
 **该前缀下一切路径关闭。** 权威判据仍是
 [`OUTCOME_CARRYING_ARTIFACTS.json`](OUTCOME_CARRYING_ARTIFACTS.json)——
 **前缀是便利，不是替代**：注册表 12 条里有 **2 条不在这个前缀下**（两份
-`EXPOSURE_LEDGER.md`，R1 裁 A′ 留在原地）。只查前缀会漏掉它们。
+`EXPOSURE_LEDGER.md` —— **OFF-LIMITS，outcome-carrying，不得打开** ——
+R1 裁 A′ 留在原地）。只查前缀会漏掉它们。
+
+下面逐条列出**只是为了标记它们是禁区**，不是引导你去读。
+**以下每一条都是 OFF-LIMITS（outcome-carrying，不得打开）：**
 
 ```
 outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md          DAG／节点台账（旧恢复入口）

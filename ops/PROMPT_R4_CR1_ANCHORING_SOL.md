@@ -2,7 +2,7 @@
 
 ```ini
 REVIEW_ID=r4-cr1-anchoring
-DELIVERY_STATUS=PREPARED_NOT_ISSUED
+DELIVERY_STATUS=ISSUED
 RECOMMENDED_MODEL=Codex GPT-5.6 Sol
 EFFORT_INTENT=VERY_HIGH
 RECOMMENDED_EFFORT=Extra High
@@ -64,7 +64,7 @@ registry 仓根：`C:\Users\Aaron\quant-data\itsf-registry`（**本轮许可读*
 ## 2. 受审集
 
 ```
-REVIEWED_SET_UNCHANGED_SINCE=<发行时填入>
+REVIEWED_SET_UNCHANGED_SINCE=4c536a2550086a795cb518279d28b413925c7fee
 ```
 
 **语义**：该 commit 之后没有任何 commit 触碰过下表的参考件。
@@ -72,22 +72,22 @@ REVIEWED_SET_UNCHANGED_SINCE=<发行时填入>
 
 | sha256 | bytes | 路径 |
 |---|---|---|
-| <发行时填入> | <发行时填入> | `ops/R4_PROPOSAL_CR1_REPOSITORY_ANCHORING_2026-08-31.md` |
-| <发行时填入> | <发行时填入> | `ops/RULING_FABLE_S5_AND_R4_2026-08-27.md` |
-| <发行时填入> | <发行时填入> | `ops/REGISTRY_MIGRATION_PLAN_ROUTE_A.md` |
-| <发行时填入> | <发行时填入> | `ops/MIGRATION_ROUTE_A_COMPLETED_2026-08-31.md` |
-| <发行时填入> | <发行时填入> | `ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md` |
-| <发行时填入> | <发行时填入> | `ops/TRIAL_REGISTRY.md` |
-| <发行时填入> | <发行时填入> | `src/itsf/mc/registry_boundary.py` |
-| <发行时填入> | <发行时填入> | `tests/test_registry_absence_refuses.py` |
-| <发行时填入> | <发行时填入> | `tests/test_registry_path_single_construction.py` |
-| <发行时填入> | <发行时填入> | `tests/test_registry_boundary.py` |
-| <发行时填入> | <发行时填入> | `tests/test_registry_witness.py` |
-| <发行时填入> | <发行时填入> | `ops/OFF_LIMITS_COMPANION_R4.md` |
+| `9f1269f1c8e8e88767d14d87ed36169240729e806d253bfd01b1e13dab4e2cec` | 8866 | `ops/R4_PROPOSAL_CR1_REPOSITORY_ANCHORING_2026-08-31.md` |
+| `5a30398b8d6dbd35bc702362e458d6c10c135d3c692082d1c71819136db400c5` | 15702 | `ops/RULING_FABLE_S5_AND_R4_2026-08-27.md` |
+| `2dac910421ec3d6ba94c2cb94f5a20ba6f16e0584fbdfdebb36f0f31f9a69a33` | 21471 | `ops/REGISTRY_MIGRATION_PLAN_ROUTE_A.md` |
+| `fdb18eb71273a4eb8a08adbda885f5f66531292bb8c1be2a4aa4f35063a747e1` | 3690 | `ops/MIGRATION_ROUTE_A_COMPLETED_2026-08-31.md` |
+| `eb8b6567d99760ee7438e8105e08f48a0584e0798175a9a236a6be5bf73b96b0` | 37109 | `ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md` |
+| `bf96a2861f64d0b5251696f01dd130d983e57cd4da815ade6ed4cef6ff25a0ae` | 2608 | `ops/TRIAL_REGISTRY.md` |
+| `1cf258afd4e56dd3b37fb1c84adaaa635f55aec13c01092c919ad7851e00f17c` | 12939 | `src/itsf/mc/registry_boundary.py` |
+| `a54eea0d2bf03d46a19959ed4d041e1671f70b162727609e7274de84dc5a6057` | 7665 | `tests/test_registry_absence_refuses.py` |
+| `52cb18c008b032bbe273670261870eeb70136a508482ebd948799193a74bb246` | 10548 | `tests/test_registry_path_single_construction.py` |
+| `783e32567a501ba52742a39654ba6ab2f7612e5ef0fe00b718d43c3dccc64c30` | 19411 | `tests/test_registry_boundary.py` |
+| `0937332c368287bf89614f2f278dc876faf79569ef266059e4917c6ce163e9fb` | 13289 | `tests/test_registry_witness.py` |
+| `7f83623d06b573217b6926ba2c4acba9a2bb502ad908de680354648ece9bad21` | 2642 | `ops/OFF_LIMITS_COMPANION_R4.md` |
 
 **delivery**：`ops/PROMPT_R4_CR1_ANCHORING_SOL.md`，字节见 `ops/ARTIFACTS_UNDER_REVIEW.json`。
 
-**核对你读的是当前文件**：line <发行时填入> of it must read
+**核对你读的是当前文件**：line 67 of it must read
 `REVIEWED_SET_UNCHANGED_SINCE` 那一行。对不上 ⇒ 陈旧粘贴 ⇒ **STOP**，回磁盘重读。
 
 **受审集里那份 `ops/TRIAL_REGISTRY.md` 是墓碑，不是 registry。** 它在集内，
