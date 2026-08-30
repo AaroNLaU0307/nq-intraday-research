@@ -14,6 +14,7 @@ COMPANION_OF=ops/PROMPT_C_BUILD_2_WORDING_SOL_ROUND7.md
 下面逐条列出**只是为了标记它们是禁区**，不是引导你去读：
 
 ```
+OFF-LIMITS   ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md
 OFF-LIMITS   ops/outcome_quarantine/**   整个子树，不得打开、不得搜索、不得列目录
 OFF-LIMITS   ops/EXPOSURE_LEDGER.md      研究轴台账
 OFF-LIMITS   EXPOSURE_LEDGER.md          仓根那一份
