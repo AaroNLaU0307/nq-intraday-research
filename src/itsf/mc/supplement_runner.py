@@ -915,6 +915,55 @@ def _preserve(path: Path, incident_id: str) -> str:
     return target.name
 
 
+#: Characters that cannot appear in a plain file name. Not a list I
+#: invented: these are the separators plus the NTFS stream marker.
+_FORBIDDEN_IN_A_NAME = ("/", "\\", ":")
+
+
+def _require_plain_name(filename: str) -> str:
+    """REFUSE anything that is not a bare file name.
+
+    ADDED 2026-08-30 after round 7 DISPROVED this function's own docstring.
+    It claimed "Every write this function performs lands under `out_dir`",
+    and `resolve_partial(out, "../escaped.json", ...)` promoted a file into
+    out_dir's PARENT. Nothing validated `filename`; `out / filename` simply
+    resolved wherever it was pointed, and an absolute path would have
+    replaced `out` entirely.
+
+    The claim was in the docstring for months. What makes this worth saying
+    is that the claim was never the defect -- the MISSING CHECK was, and the
+    claim is what made nobody look for it.
+
+    A NAME, not a path. So the refusal is stated over the argument's own
+    vocabulary rather than over mechanisms:
+
+      * empty, or not equal to its own basename -- catches "..", "a/b",
+        "/abs", "C:/abs" (whose basename is "abs" on Windows)
+      * containing a separator or a colon -- catches the NTFS alternate
+        data stream form "x.json:evidence", whose basename IS itself and
+        which writes bytes that a directory listing never shows. Round 7
+        found that stream class separately; this is the half of it that
+        belongs to the production path.
+    """
+    # `.` and `..` are named explicitly because pathlib does NOT strip
+    # them: `Path("..").name` is `".."`, so the basename comparison below
+    # holds and `out / ".."` walks to the parent. Measured, not assumed --
+    # the first version of this check let `..` straight through and the
+    # call died on a PermissionError reading a directory.
+    if (not filename or filename in (".", "..")
+            or filename != Path(filename).name):
+        raise SupplementRunnerError(
+            "filename_not_a_plain_name",
+            f"{filename!r} is not a bare file name; every write must land "
+            "directly under out_dir")
+    for ch in _FORBIDDEN_IN_A_NAME:
+        if ch in filename:
+            raise SupplementRunnerError(
+                "filename_not_a_plain_name",
+                f"{filename!r} contains {ch!r}")
+    return filename
+
+
 def resolve_partial(out_dir: Path, filename: str, intended: bytes, *,
                     incident_id: str) -> PartialAction:
     """Stage `intended` into `<filename>.partial` and decide what happens.
@@ -938,9 +987,13 @@ def resolve_partial(out_dir: Path, filename: str, intended: bytes, *,
                                         UNLINKED them; silent delete is now
                                         forbidden)
 
-    Every write this function performs lands under `out_dir`.
+    Every write this function performs lands under `out_dir` — and since
+    round 7 that is CHECKED rather than asserted. `_require_plain_name`
+    refuses anything that is not a bare file name; before it, this
+    sentence was simply false for `../escaped.json`.
     """
     out = Path(out_dir)
+    _require_plain_name(filename)
     final = out / filename
     partial = out / (filename + sc.PARTIAL_SUFFIX)
 

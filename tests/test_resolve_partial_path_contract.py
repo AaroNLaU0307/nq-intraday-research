@@ -54,6 +54,11 @@ HELPERS = ("_preserve", "_divergent_name")
 #: identical are two exits, and collapsing them is what round 4 walked
 #: through.
 DECLARED_EXITS = [
+    # ADDED 2026-08-30, round 7. Two entries for ONE helper because the
+    # helper raises from two places, and two raise sites are two paths --
+    # the very distinction the state instrument had collapsed away.
+    ("raise", "filename_not_a_plain_name", "VIA _require_plain_name"),
+    ("raise", "filename_not_a_plain_name", "VIA _require_plain_name"),
     ("return", "already_sealed", "final.exists() AND existing == intended"),
     ("raise", "supplement_seal_conflict", "final.exists()"),
     ("raise", "divergent_partial_exists",
@@ -82,6 +87,11 @@ DECLARED_EXITS = [
 ALLOWED_NAME_CALLS = frozenset({
     "PartialAction", "SupplementRunnerError", "Path", "str", "len",
     "_preserve", "_divergent_name",
+    # ADDED 2026-08-30 as a deliberate act, not to silence a failure:
+    # round 7 disproved the "every write lands under out_dir" claim with
+    # `resolve_partial(out, "../escaped.json", ...)`, and this is the
+    # refusal that makes the claim true. It only reads and raises.
+    "_require_plain_name",
     "repr",                      # _divergent_name's refusal message
 })
 ALLOWED_ATTR_CALLS = frozenset({
@@ -119,7 +129,13 @@ def _raises_of(name, path, seen=None):
         if (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)
                 and node.exc.args
                 and isinstance(node.exc.args[0], ast.Constant)):
-            out.append((node.exc.args[0].value, path))
+            # The RAISE line inside the helper travels too, added 2026-08-30.
+            # One call site can reach two different raises in the same helper
+            # (`_require_plain_name` refuses an unnamed path and a forbidden
+            # character from two statements), and those are two paths. The
+            # call-site line alone collapses them, which is the same shape as
+            # the collapse round 7 found one level up.
+            out.append((node.exc.args[0].value, path, node.lineno))
         if isinstance(node, ast.Call):
             callee = getattr(node.func, "id", None)
             if callee and callee in fns and callee != name:
@@ -145,10 +161,17 @@ class _PathWalk:
     def __init__(self):
         self.exits = []          # ordered, never deduplicated
 
-    def _record(self, kind, name, guards, binds, node=None):
+    def _record(self, kind, name, guards, binds, node=None, raise_line=None):
         self.exits.append({"kind": kind, "name": name,
                            "guard": " AND ".join(guards),
-                           "binds": dict(binds), "node": node})
+                           "binds": dict(binds), "node": node,
+                           #: The raise line INSIDE a helper, when this exit
+                           #: came through one. With `node.lineno` (the call
+                           #: site) it forms the exit's PATH IDENTITY, which
+                           #: `test_resolve_partial_state_diff.py` matches
+                           #: real runs against. Round 7's HIGH-1 was that
+                           #: instrument having only the NAME to go on.
+                           "raise_line": raise_line})
 
     def _helper_exits(self, stmt, guards, binds):
         for node in ast.walk(stmt):
@@ -156,8 +179,16 @@ class _PathWalk:
                 continue
             callee = getattr(node.func, "id", None)
             if callee and callee in _FNS():
-                for code, via in _raises_of(callee, callee):
-                    self._record("raise", code, guards + ["VIA " + via], binds)
+                for code, via, raise_line in _raises_of(callee, callee):
+                    # The CALL node, added 2026-08-30. A helper exit's identity
+                    # is the CALL SITE, not the helper: `_preserve` raises
+                    # `divergent_partial_exists` on branch C and again on
+                    # branch E, and those are two different paths through
+                    # resolve_partial. Round 7 found the state instrument
+                    # collapsing exactly that pair, so the line has to travel
+                    # with the exit or nothing downstream can tell them apart.
+                    self._record("raise", code, guards + ["VIA " + via],
+                                 binds, node, raise_line)
 
     #: Statement types this walk UNDERSTANDS. Everything else is refused
     #: rather than walked past, for the same reason the call world is

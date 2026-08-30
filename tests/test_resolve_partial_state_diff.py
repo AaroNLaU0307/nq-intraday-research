@@ -51,10 +51,14 @@ WHAT STATE CANNOT SEE, said plainly rather than left for the next reviewer:
     unwrapped API", and it is the honest cost of the change.
 """
 
+import ctypes
 import hashlib
 import os
+import sys
+import traceback
 import unittest
 from collections import Counter
+from ctypes import wintypes
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -68,15 +72,81 @@ RESIDUE = b"irreplaceable partial residue"
 INCIDENT = "INC-0123456789ab"
 
 
+_MAX_STREAM_NAME = 260 + 36
+
+
+class _StreamData(ctypes.Structure):
+    _fields_ = [("StreamSize", ctypes.c_longlong),
+                ("cStreamName", ctypes.c_wchar * _MAX_STREAM_NAME)]
+
+
+def alternate_streams(path):
+    """Every NAMED data stream of `path`; the default stream excluded.
+
+    ROUND 7's HIGH-2. The snapshot hashed each file's default data stream and
+    called the result "every blob of bytes in the directory". On NTFS that is
+    false: `x.json:evidence` holds real bytes, a directory listing never shows
+    it, and `Path.read_bytes` never reads it. Sol deleted a `.partial` and
+    rewrote FINAL with identical main bytes -- `BLOBS_LOST=[]`, `ADS_SURVIVES=
+    False`. The claim was wider than the instrument, which is the shape this
+    whole review keeps finding.
+
+    ENUMERATED, not narrowed. Writing "the default data stream only" into the
+    docstring would have been the cheap answer and would have been honest, but
+    it would also have left real bytes in a governed directory that nothing
+    watches. `FindFirstStreamW` is the OS's own answer to "what streams does
+    this file have", so the universe stays the FILE rather than becoming a
+    list of stream names someone remembered to write down.
+
+    Off NTFS there are no alternate streams to miss, so returning nothing
+    there is the correct answer rather than a gap -- and
+    `TestTheStreamWalkIsREAL` refuses to pass vacuously on a platform where
+    the walk cannot run.
+    """
+    if sys.platform != "win32":
+        return []
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.FindFirstStreamW.restype = wintypes.HANDLE
+    k32.FindFirstStreamW.argtypes = [wintypes.LPCWSTR, ctypes.c_int,
+                                     ctypes.c_void_p, wintypes.DWORD]
+    k32.FindNextStreamW.restype = wintypes.BOOL
+    k32.FindNextStreamW.argtypes = [wintypes.HANDLE, ctypes.c_void_p]
+    k32.FindClose.argtypes = [wintypes.HANDLE]
+    data = _StreamData()
+    handle = k32.FindFirstStreamW(str(path), 0, ctypes.byref(data), 0)
+    if handle == wintypes.HANDLE(-1).value:
+        return []
+    found = []
+    try:
+        while True:
+            name = data.cStreamName
+            if name.endswith(":$DATA"):
+                name = name[:-len(":$DATA")]
+            if name and name != ":":          # ":" is the default stream
+                found.append(name)
+            if not k32.FindNextStreamW(handle, ctypes.byref(data)):
+                break
+    finally:
+        k32.FindClose(handle)
+    return found
+
+
 def snapshot(root):
-    """name -> sha256 for every file under `root`. The DIRECTORY is the
-    universe: nothing is declared and then looked for."""
+    """name -> sha256 for every file under `root`, ALTERNATE STREAMS INCLUDED.
+
+    The DIRECTORY is the universe: nothing is declared and then looked for.
+    A named stream appears under its full `file:stream` key, so losing one is
+    losing a blob exactly as losing a file is."""
     root = Path(root)
     out = {}
     for entry in sorted(root.rglob("*")):
-        if entry.is_file():
-            out[entry.relative_to(root).as_posix()] = hashlib.sha256(
-                entry.read_bytes()).hexdigest()
+        if not entry.is_file():
+            continue
+        key = entry.relative_to(root).as_posix()
+        out[key] = hashlib.sha256(entry.read_bytes()).hexdigest()
+        for stream in alternate_streams(entry):
+            with open(str(entry) + stream, "rb") as handle:
+                out[key + stream] = hashlib.sha256(handle.read()).hexdigest()
     return out
 
 
@@ -90,40 +160,113 @@ def blobs_lost(before, after):
     return sorted((Counter(before.values()) - Counter(after.values())).elements())
 
 
+RUNNER_FILE = os.path.abspath(sr.__file__)
+
+
 class _Run:
-    """One real call, with the directory snapshotted either side."""
+    """One real call, with the directory snapshotted either side.
+
+    THE ROOT IS THE PARENT of out_dir, not out_dir. Round 7 promoted a file
+    through `resolve_partial(out, "../escaped.json", ...)` and this instrument
+    reported an empty diff, because it was looking only inside the directory
+    the write had just left. Snapshotting the parent is what makes an escape
+    visible at all; the runner now refuses one, and both halves are needed --
+    the refusal so it cannot happen, the wider snapshot so a future one is
+    not invisible again."""
 
     def __init__(self, case, final_state, partial_state, *,
-                 incident=INCIDENT, extra=None):
+                 incident=INCIDENT, extra=None, filename=NAME,
+                 lie_partial=None, lie_final=None):
         holder = TemporaryDirectory()
         case.addCleanup(holder.cleanup)
         self.root = Path(holder.name)
-        self.final = self.root / NAME
-        self.partial = self.root / (NAME + sc.PARTIAL_SUFFIX)
+        self.out = self.root / "out"
+        self.out.mkdir()
+        self.final = self.out / NAME
+        self.partial = self.out / (NAME + sc.PARTIAL_SUFFIX)
         _place(self.final, final_state)
         _place(self.partial, partial_state)
         if extra:
-            extra(self.root)
+            extra(self.out)
 
         self.before = snapshot(self.root)
+        self._lines = []
+        real_read = Path.read_bytes
+
+        def read_bytes(this):
+            data = real_read(this)
+            if (lie_partial and data == INTENDED
+                    and this.name.endswith(sc.PARTIAL_SUFFIX)):
+                return lie_partial
+            if lie_final and data == INTENDED and this.name == NAME:
+                return lie_final
+            return data
+
+        Path.read_bytes = read_bytes
+        sys.settrace(self._trace)
         try:
-            self.action = sr.resolve_partial(self.root, NAME, INTENDED,
+            self.action = sr.resolve_partial(self.out, filename, INTENDED,
                                              incident_id=incident)
             self.error = None
         except Exception as exc:                              # noqa: BLE001
             self.action, self.error = None, exc
+        finally:
+            sys.settrace(None)
+            Path.read_bytes = real_read
         self.after = snapshot(self.root)
+
+    def _trace(self, frame, event, arg):
+        """Record the lines executed inside `resolve_partial` ITSELF.
+
+        The last one is the line the call left through, which is the half of
+        an exit's identity that says WHICH path took it. A helper raise leaves
+        through its call site, so branch C and branch E stop being the same
+        thing the moment this is recorded."""
+        if (frame.f_code.co_name != "resolve_partial"
+                or os.path.abspath(frame.f_code.co_filename) != RUNNER_FILE):
+            return None
+
+        def local(inner, inner_event, inner_arg):
+            if inner_event == "line":
+                self._lines.append(inner.f_lineno)
+            return local
+
+        self._lines.append(frame.f_lineno)
+        return local
 
     @property
     def exit_name(self):
-        """The exit ACTUALLY taken, read off the real result.
-
-        This is the derivation round 6's coverage claim was missing: it typed
-        the reached set out by hand next to a derived declared set, so an exit
-        nothing executed counted as covered."""
+        """The exit ACTUALLY taken, read off the real result."""
         if self.error is not None:
             return getattr(self.error, "code", type(self.error).__name__)
         return self.action.action
+
+    @property
+    def path_id(self):
+        """(name, exit line, helper raise line) — the exit's PATH identity.
+
+        ROUND 7's HIGH-1. This used to be the NAME alone, and
+        `DECLARED_EXITS` carries the same name twice on purpose:
+        `divergent_partial_exists` and `incident_id_malformed` each occur
+        once on branch C and once on branch E. Reducing to `{name}` let
+        branch C's two exits stand in for branch E's, which had never been
+        executed at all -- and an extra unreachable declaration of an
+        already-covered name passed too.
+
+        Worse than a miss: the DECLARED_EXITS comment says in as many words
+        `A list, never a set: two paths that look identical are two exits,
+        and collapsing them is what round 4 walked through`. I read that
+        comment, wrote the file underneath it, and collapsed them anyway."""
+        helper_line = None
+        if self.error is not None:
+            for frame in reversed(traceback.extract_tb(
+                    self.error.__traceback__)):
+                if (os.path.abspath(frame.filename) == RUNNER_FILE
+                        and frame.name != "resolve_partial"):
+                    helper_line = frame.lineno
+                    break
+        return (self.exit_name, self._lines[-1] if self._lines else None,
+                helper_line)
 
     @property
     def lost(self):
@@ -200,7 +343,9 @@ class TestBranchCMovesRatherThanDeletes(unittest.TestCase):
     def test_the_residue_is_present_under_the_divergent_name(self):
         run = _Run(self, "absent", "residue")
         self.assertEqual("retry_permitted", run.exit_name)
-        expected = sr._divergent_name(NAME, INCIDENT)
+        # "out/" because the snapshot root is now out_dir's PARENT, which is
+        # what makes an escaping write visible at all. See _Run's docstring.
+        expected = "out/" + sr._divergent_name(NAME, INCIDENT)
         self.assertEqual(hashlib.sha256(RESIDUE).hexdigest(),
                          run.after.get(expected),
                          "after %r the directory holds %r"
@@ -210,7 +355,7 @@ class TestBranchCMovesRatherThanDeletes(unittest.TestCase):
         """Unblocking the path is the other half of the ratified MODIFY;
         without it the rename would preserve evidence and wedge the run."""
         run = _Run(self, "absent", "residue")
-        self.assertNotIn(NAME + sc.PARTIAL_SUFFIX, run.after)
+        self.assertNotIn("out/" + NAME + sc.PARTIAL_SUFFIX, run.after)
 
     def test_a_second_incident_refuses_rather_than_clobbering(self):
         run = _Run(self, "absent", "residue",
@@ -220,71 +365,122 @@ class TestBranchCMovesRatherThanDeletes(unittest.TestCase):
         self.assertEqual([], run.lost)
 
 
-class TestEveryDeclaredExitIsReachedBYEXECUTION(unittest.TestCase):
-    """Round 6's HIGH-2, closed.
+class TestEveryDeclaredPATHIsReachedBYEXECUTION(unittest.TestCase):
+    """Round 7's HIGH-1, and the third instrument this claim has needed.
 
-    The old version compared a DERIVED `declared` set against a HAND-TYPED
-    `reached` set, under a docstring claiming both were derived. Sol added an
-    `unseen_exit` to the contract and to that literal, gave it no scenario,
-    and both suites stayed green.
+        R6  `reached` was a set LITERAL typed beside a derived `declared`.
+            An exit nothing executed counted as covered.
+        R7  `reached` became real, but both sides were reduced to `{name}`.
+            `DECLARED_EXITS` carries `divergent_partial_exists` and
+            `incident_id_malformed` TWICE each -- once on branch C, once on
+            branch E -- so branch C's exits stood in for branch E's, which
+            had never executed at all. An extra unreachable declaration of
+            an already-covered name passed as well.
 
-    Here `reached` is accumulated from `run.exit_name` -- the value the real
-    function actually returned or raised. An exit no scenario drives cannot
-    appear in it, whatever anyone types."""
+    What makes R7 worse than R6 is that DECLARED_EXITS says, in the comment
+    directly above the list: `A list, never a set: two paths that look
+    identical are two exits, and collapsing them is what round 4 walked
+    through`. The warning was written, the reason was recorded, and the
+    collapse happened underneath it anyway.
 
-    def _reached(self):
-        reached = {_Run(self, f, p).exit_name for f, p in SCENARIOS}
-        reached.add(_Run(self, "absent", "residue",
-                         incident="not a valid incident id").exit_name)
-        reached.add(_Run(self, "absent", "residue",
-                         extra=lambda root: (root / sr._divergent_name(
-                             NAME, INCIDENT)).write_bytes(b"first")).exit_name)
-        reached |= {self._with_lying_read(after_replace)
-                    for after_replace in (False, True)}
-        return reached
+    THE IDENTITY IS NOW THE PATH, derived on both sides and never typed:
 
-    def _with_lying_read(self, after_replace):
-        """Branch E and the post-promotion verify both need a read to diverge
-        from what is on disk, which no directory state can produce. Driving
-        them needs an intervention; COUNTING them still comes from the real
-        result."""
-        real = Path.read_bytes
-        seen = {"replaced": False}
-        real_replace = os.replace
+        declared  (name, call-site line, raise line inside the helper)
+                  from the AST walk, which knows both because the walker
+                  now carries the Call node and the helper's raise line
+        executed  the same triple, from `sys.settrace` over resolve_partial's
+                  own frame plus the traceback's helper frame
 
-        def replace(src, dst):
-            seen["replaced"] = True
-            return real_replace(src, dst)
+    Both sides are 12 entries and 12 distinct triples, so a declared path
+    cannot be satisfied by a different path that happens to share a name.
+    """
 
-        def read_bytes(self):
-            data = real(self)
-            if seen["replaced"] == after_replace and data == INTENDED:
-                return b"a divergent re-read"
-            return data
-
-        Path.read_bytes, os.replace = read_bytes, replace
-        try:
-            return _Run(self, "absent", "absent").exit_name
-        finally:
-            Path.read_bytes, os.replace = real, real_replace
-
-    def test_every_declared_exit_name_was_actually_executed(self):
-        import sys
+    def _declared(self):
         sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from test_resolve_partial_path_contract import DECLARED_EXITS
+        import test_resolve_partial_path_contract as contract
+        return [(e["name"], getattr(e["node"], "lineno", None),
+                 e["raise_line"]) for e in contract._exits()]
 
-        declared = {name for _kind, name, _guard in DECLARED_EXITS}
-        reached = self._reached()
+    def _executed(self):
+        """Every path, driven for real. The cross product first, then the
+        cases that need a specific argument or a lying read."""
+        divergent = lambda root: (root / sr._divergent_name(
+            NAME, INCIDENT)).write_bytes(b"an earlier incident")
+        runs = [_Run(self, f, p) for f, p in SCENARIOS]
+        runs += [
+            # the two refusals inside _require_plain_name: one is not a
+            # basename, the other carries a forbidden character
+            _Run(self, "absent", "absent", filename="../escaped.json"),
+            _Run(self, "absent", "absent", filename=NAME + ":evidence"),
+            # branch C, via _preserve
+            _Run(self, "absent", "residue", extra=divergent),
+            _Run(self, "absent", "residue", incident="not-an-incident-id"),
+            # branch E, via the SAME helper from a DIFFERENT call site --
+            # the pair round 7 proved had never run
+            _Run(self, "absent", "absent", extra=divergent,
+                 lie_partial=b"the staged bytes re-read differently"),
+            _Run(self, "absent", "absent", incident="not-an-incident-id",
+                 lie_partial=b"the staged bytes re-read differently"),
+            _Run(self, "absent", "absent",
+                 lie_partial=b"the staged bytes re-read differently"),
+            _Run(self, "absent", "absent",
+                 lie_final=b"the promotion did not survive"),
+        ]
+        return runs
+
+    def test_the_tracer_actually_saw_something(self):
+        """Vacuity first. `sys.settrace` is silently inert under some
+        runners, and an empty trace would make every path id `(name, None,
+        ...)` -- which would still compare equal often enough to look
+        healthy."""
+        run = _Run(self, "absent", "absent")
+        self.assertTrue(run._lines,
+                        "the tracer recorded no lines, so every path id "
+                        "below is missing the half that identifies it")
+        self.assertEqual("promote", run.exit_name)
+
+    def test_the_declared_paths_are_distinguishable_at_all(self):
+        """If the declared triples were not distinct, the comparison below
+        would be a name check wearing a longer tuple."""
+        declared = self._declared()
+        self.assertEqual(len(declared), len(set(declared)),
+                         "declared paths collide: %s" % declared)
+        names = [name for name, _line, _raise in declared]
+        self.assertLess(len(set(names)), len(names),
+                        "no name repeats in the contract, so this test "
+                        "proves nothing about collapsing -- if that is "
+                        "genuinely true now, delete this file's premise "
+                        "rather than leaving it passing vacuously")
+
+    def test_every_declared_path_was_actually_executed(self):
+        declared, executed = set(self._declared()), {
+            run.path_id for run in self._executed()}
         self.assertEqual(
-            [], sorted(declared - reached),
-            "declared by the contract and executed by nothing here: %s -- "
-            "such an exit is counted as accounted for while no instrument "
-            "has ever seen what it does"
-            % sorted(declared - reached))
+            [], sorted(declared - executed),
+            "declared by the contract and executed by nothing here: %s\n"
+            "A path is (name, exit line, helper raise line). Two exits "
+            "sharing a name are two paths, and one of them running does "
+            "not cover the other." % sorted(declared - executed))
         self.assertEqual(
-            [], sorted(reached - declared),
-            "executed here but not declared in the contract: %s"
-            % sorted(reached - declared))
+            [], sorted(executed - declared),
+            "executed here but declared nowhere: %s"
+            % sorted(executed - declared))
+
+    def test_a_DUPLICATE_unreachable_declaration_is_caught(self):
+        """Sol's round-7 mutation, run against the fix.
+
+        Declaring an extra copy of an already-covered NAME, reachable by
+        nothing, passed the previous version -- `DUPLICATE_UNREACHABLE_
+        SUCCESS=True` in his report. Here the copy carries its own line, so
+        it is its own path and nothing covers it."""
+        declared = set(self._declared())
+        ghost = ("divergent_partial_exists", 10 ** 6, 10 ** 6)
+        self.assertNotIn(ghost, declared)
+        executed = {run.path_id for run in self._executed()}
+        self.assertTrue(
+            (declared | {ghost}) - executed,
+            "an unreachable duplicate of a covered name was treated as "
+            "covered, which is exactly the round-7 finding")
 
 
 class TestTheInstrumentIsNotVACUOUS(unittest.TestCase):
@@ -343,6 +539,53 @@ class TestTheInstrumentIsNotVACUOUS(unittest.TestCase):
         (root / "b").unlink()
         self.assertEqual(1, len(blobs_lost(before, snapshot(root))))
 
+    def test_an_ADS_TRUNCATION_is_reported(self):
+        """SOL'S ROUND-7 MUTATION. Under the shipped version this was
+        `BLOBS_LOST=[]` while `ADS_SURVIVES=False`."""
+        if sys.platform != "win32":
+            self.skipTest("alternate data streams are an NTFS feature")
+
+        def mutate(root):
+            target = str(root / "residue.partial") + ":evidence"
+            with open(target, "wb") as handle:
+                handle.write(b"")
+
+        def prepare(root):
+            with open(str(root / "residue.partial") + ":evidence", "wb") as h:
+                h.write(b"evidence nobody can see in a directory listing")
+
+        holder = TemporaryDirectory()
+        self.addCleanup(holder.cleanup)
+        root = Path(holder.name)
+        (root / "residue.partial").write_bytes(RESIDUE)
+        prepare(root)
+        before = snapshot(root)
+        self.assertEqual(2, len(before),
+                         "the stream was not snapshotted at all: %r" % before)
+        mutate(root)
+        self.assertEqual(1, len(blobs_lost(before, snapshot(root))),
+                         "an alternate stream was emptied and the diff was "
+                         "silent, which is round 7's HIGH-2 exactly")
+
+    def test_the_MAIN_bytes_surviving_does_not_excuse_a_lost_stream(self):
+        """The precise shape of the bypass: same main bytes either side."""
+        if sys.platform != "win32":
+            self.skipTest("alternate data streams are an NTFS feature")
+        holder = TemporaryDirectory()
+        self.addCleanup(holder.cleanup)
+        root = Path(holder.name)
+        victim = root / "residue.partial"
+        victim.write_bytes(RESIDUE)
+        with open(str(victim) + ":evidence", "wb") as handle:
+            handle.write(b"the only copy of something")
+        before = snapshot(root)
+        victim.unlink()
+        (root / "residue.partial").write_bytes(RESIDUE)   # main bytes restored
+        after = snapshot(root)
+        self.assertIn(hashlib.sha256(RESIDUE).hexdigest(), after.values(),
+                      "the main bytes really are back")
+        self.assertEqual(1, len(blobs_lost(before, after)))
+
     def test_an_untouched_directory_really_reports_nothing(self):
         self.assertEqual([], self._pair(lambda root: None))
 
@@ -353,6 +596,49 @@ class TestTheInstrumentIsNotVACUOUS(unittest.TestCase):
         (root / "deep").mkdir()
         (root / "deep" / "x.json").write_bytes(b"x")
         self.assertEqual(["deep/x.json"], sorted(snapshot(root)))
+
+
+class TestTheStreamWalkIsREAL(unittest.TestCase):
+    """Non-vacuity for the stream walk itself.
+
+    `alternate_streams` returning `[]` is indistinguishable from a broken
+    ctypes binding, and a broken binding would make every ADS test above pass
+    while measuring nothing. On Windows the walk must actually find a stream
+    that was actually written."""
+
+    def test_a_written_stream_is_found_and_read_back(self):
+        if sys.platform != "win32":
+            self.skipTest("alternate data streams are an NTFS feature")
+        holder = TemporaryDirectory()
+        self.addCleanup(holder.cleanup)
+        target = Path(holder.name) / "x.json"
+        target.write_bytes(b"main")
+        with open(str(target) + ":evidence", "wb") as handle:
+            handle.write(b"stream bytes")
+        self.assertEqual([":evidence"], alternate_streams(target))
+        snap = snapshot(Path(holder.name))
+        self.assertEqual(
+            hashlib.sha256(b"stream bytes").hexdigest(),
+            snap.get("x.json:evidence"),
+            "the walk found the stream but the snapshot did not record it: "
+            "%r" % snap)
+
+    def test_a_file_with_no_streams_reports_none(self):
+        if sys.platform != "win32":
+            self.skipTest("alternate data streams are an NTFS feature")
+        holder = TemporaryDirectory()
+        self.addCleanup(holder.cleanup)
+        plain = Path(holder.name) / "plain.json"
+        plain.write_bytes(b"x")
+        self.assertEqual([], alternate_streams(plain))
+
+    def test_the_runner_can_no_longer_CREATE_one(self):
+        """The production half of the same finding. A filename carrying a
+        colon would have written into a stream of a different file; round 7's
+        out_dir fix refuses it, so both halves are closed rather than one."""
+        run = _Run(self, "absent", "absent", filename=NAME + ":evidence")
+        self.assertEqual("filename_not_a_plain_name", run.exit_name)
+        self.assertEqual({}, run.after)
 
 
 if __name__ == "__main__":
