@@ -1,0 +1,177 @@
+＃ R4 v2 —— **单问复审**：收窄主张算不算在 R4 内自行扩权
+
+```ini
+REVIEW_ID=r4-v2-fork
+DELIVERY_STATUS=PREPARED_NOT_ISSUED
+RECOMMENDED_MODEL=Codex GPT-5.6 Sol
+EFFORT_INTENT=VERY_HIGH
+RECOMMENDED_EFFORT=Extra High
+EXECUTION_MODE=STANDARD
+ROLE=verifier（单一问题裁断）
+WINDOW=NEW_TOP_LEVEL_SESSION
+MUST_NOT_BE=builder；被审字节的作者；ops/RULING_FABLE_S5_AND_R4_2026-08-27 的决裁席（Fable 5）；
+            **review r4-cr1-anchoring 的那个会话**（它给了 v1 的 HOLD）；
+            迁移方案 Route A 的前序复审会话
+LANE=FULL
+OUTCOME_EXPOSED=NONE
+PREREG_SEALED=N/A
+SCOPE=NARROW —— 见 §1，并读 §1 末尾那段
+```
+
+**READ THIS PROMPT FROM DISK, not from a paste.**
+`C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework\ops\PROMPT_R4_V2_FORK_SOL.md`
+
+框架仓根：`C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework`
+registry 仓根：`C:\Users\Aaron\quant-data\itsf-registry`（**本轮许可读**）
+
+禁区清单随包交付：`ops/OFF_LIMITS_COMPANION_R4V2.md`，请一并读。
+
+---
+
+## 1. 只问一个问题 —— 但这不是封口
+
+**唯一要你裁的：**
+
+> 上一席位判 v1 的锚点主张**触发了证伪器**（须回决裁层重裁）。
+> v2 的回应不是解决那个问题，而是**收窄主张**：
+> 承认「路径做发现、commit 对做验证」，并把「仓被移动即找不到」
+> 写成明白的、未关闭的残留。
+>
+> **这样的收窄，算不算「在 R4 内自行扩权」？**
+
+```
+甲  不算 —— 桥仍只引用 S4，没有引入任何新钉法，只是把主张缩到事实内
+乙  算   —— v2 作废，桥回决裁层
+```
+
+**builder 倾向甲，并明说甲对 builder 有利**（不必回决裁层）。
+builder 上一次自己判「澄清 vs 新判据」判偏了，偏向也对自己有利，
+**所以这一次不自己判**。
+
+### 范围窄是预算决定，**不是封口**
+
+Aaron 2026-08-31（OD-6）裁定只问这一条，理由是 v1 四条阻断里的**另外三条
+现在都由常驻守卫机械核对**（见 §3）。
+
+**但如果你在别处看到东西，照说。** 一份「只问一个问题」的包若被用来
+把审查席引开，那它就是在做本项目反复要避免的事。
+`OUT_OF_SCOPE_FINDINGS` 字段就是留给这个的。
+
+---
+
+## 2. 回答这个问题需要的最小事实
+
+**v1 为什么被判触发**（上一席位实测，builder 已复现）：
+
+```
+框架仓 object DB 里查 N1   ->  不存在
+registry 仓里查 N1         ->  存在
+```
+
+`commit hash` 只能在**已经被定位的** object database 里确认身份，
+**它不能发现仓在哪**。v1 却写了一句加粗的
+「A FILESYSTEM PATH IS NOT THE ANCHOR」——**否掉了真正承重的那一半**。
+
+**v2 改成什么**（逐字在 `ops/R4_PROPOSAL_V2_CR1_REPOSITORY_ANCHORING_2026-08-31.md` §1 的块里）：
+
+```
+DISCOVERY     墓碑所述位置是找到它的**唯一**手段；机器局部；
+              仓被移动而墓碑未更新 => 冷读者找不到。
+              **本语法不关闭这条**，并把「移动 registry 仓」定为
+              必须同时更新墓碑的受治理动作
+VERIFICATION  找到之后，由 S4 交叉互钉确认是不是那个仓
+```
+
+**裁定原文的证伪器**（`ops/RULING_FABLE_S5_AND_R4_2026-08-27`，在受审集内）：
+
+> 若 R4 起草时发现 S4 交叉互钉不足以让冷读者单凭字节完成跨仓解析
+> （**即桥必须引入 S4 之外的新钉法**），本裁定「桥引用 S4 即可」的前提即被证伪，
+> 桥的设计须回到决裁层重裁而非在 R4 内自行扩权。
+
+**问题的实质**：括号里那句把触发条件绑在「**必须引入新钉法**」上。
+v2 没有引入任何钉法，它把主张缩小了。**这算不算触发？**
+
+---
+
+## 3. 另外三条阻断：**已机械化，请核对而不是重推**
+
+```
+核验  python -m pytest tests/test_a_proposal_states_the_hash_of_its_own_block.py -q
+预期  9 passed
+```
+
+该文件的检查顺序是刻意的：
+
+```
+一  先证明口径复算得出**已批准的** c251335f…
+    —— 不成立则此处用的哈希方法不是批准时那个，其余数字全错
+二  提案声称的 R4_CANONICAL_SHA256 == 它自己携带的块的哈希
+三  「未改字段」**逐行比对 R3**（v1 死在复述上：手抄漏了 8 个字段）
+```
+
+变异证红：块里改一个字段值 -> 三条同时红。
+
+```
+核验  python -m pytest tests/test_registry_path_single_construction.py -q
+预期  7 passed
+核验  python -m pytest tests/test_registry_absence_refuses.py -q
+预期  11 passed
+```
+
+**分界（strictly after N1）是可实测的**，请自行确认而非采信：
+
+```
+N1 的父提交里取 ops/TRIAL_REGISTRY.md   ->  不存在（N1 才首次加入）
+迁移当时 registry 里的 CR1 行数          ->  0（N1 搬文件，不写行）
+```
+
+---
+
+## 4. 受审集
+
+```
+REVIEWED_SET_UNCHANGED_SINCE=<发行时填入>
+```
+
+| sha256 | bytes | 路径 |
+|---|---|---|
+| <发行时填入> | <发行时填入> | `ops/R4_PROPOSAL_V2_CR1_REPOSITORY_ANCHORING_2026-08-31.md` |
+| <发行时填入> | <发行时填入> | `ops/RULING_FABLE_S5_AND_R4_2026-08-27.md` |
+| <发行时填入> | <发行时填入> | `ops/RULING_SOL_R4_HOLD_2026-08-31.md` |
+| <发行时填入> | <发行时填入> | `ops/R4_PROPOSAL_CR1_REPOSITORY_ANCHORING_2026-08-31.md` |
+| <发行时填入> | <发行时填入> | `ops/MIGRATION_ROUTE_A_COMPLETED_2026-08-31.md` |
+| <发行时填入> | <发行时填入> | `ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md` |
+| <发行时填入> | <发行时填入> | `ops/TRIAL_REGISTRY.md` |
+| <发行时填入> | <发行时填入> | `scripts/r4v2_block_builder.py` |
+| <发行时填入> | <发行时填入> | `tests/test_a_proposal_states_the_hash_of_its_own_block.py` |
+| <发行时填入> | <发行时填入> | `tests/test_registry_path_single_construction.py` |
+| <发行时填入> | <发行时填入> | `tests/test_registry_absence_refuses.py` |
+| <发行时填入> | <发行时填入> | `ops/OFF_LIMITS_COMPANION_R4V2.md` |
+
+**delivery**：`ops/PROMPT_R4_V2_FORK_SOL.md`，字节见 `ops/ARTIFACTS_UNDER_REVIEW.json`。
+
+**`ops/TRIAL_REGISTRY.md` 在集内的是墓碑，不是 registry** —— 它是桥的第一跳。
+真 registry 在另一个仓。
+
+**v1 也在集内**（`R4_PROPOSAL_CR1_...`，无 V2 字样），因为你要判的是
+「v1 → v2 的这次收窄」，两份都得看得见。
+
+**核对你读的是当前文件**：line <发行时填入> of it must read
+`REVIEWED_SET_UNCHANGED_SINCE` 那一行。对不上 ⇒ **STOP**，回磁盘重读。
+
+---
+
+## 5. 交付要求
+
+```
+FORK_RULING=                  甲|乙 —— 收窄主张算不算在 R4 内自行扩权
+REASONING=                    一段就够，但要能被 Aaron 直接读懂
+MECHANISED_THREE_CONFIRMED=   YES|NO —— §3 三条核验跑过了吗？数字对得上吗？
+BOUNDARY_INDEPENDENTLY_TESTED= YES|NO —— strictly after N1，你自己测了吗？
+OUT_OF_SCOPE_FINDINGS=        范围外看到的东西，照说
+SEAT_STATUS= / FORBIDDEN_PATHS_OPENED= / SOURCE_WRITES= / PERSISTED_SEARCH_OUTPUT=
+REGISTRY_REPO_READ=           YES|NO
+```
+
+**判「乙」是完全可以的结果。** v2 作废、桥回决裁层，
+比一个没人独立判过的、对 builder 有利的读法被默认采纳要好。
