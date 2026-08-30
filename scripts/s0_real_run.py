@@ -37,7 +37,14 @@ TRIAL_ID = "S0-T001"
 # Research randomness derives exclusively from
 # contracts.RESEARCH_BOOTSTRAP_SEEDS (7/13/31, frozen S0 §9/App A).
 ENGINEERING_SEED = 20260731    # packet §5 (re-rendered per DR-02)
-REGISTRY = REPO / "ops" / "TRIAL_REGISTRY.md"
+# REPOINTED 2026-08-31, migration Route A step S6. This used to build
+# the path from REPO, which is this repository -- the one whose path
+# runs through OneDrive. It now defers to the boundary's frozen
+# constant, so the registry has one root and changing it means
+# changing one line that a reviewer can see.
+from itsf.mc.registry_boundary import (REGISTRY_PATH as _REG_REL,
+                                       REGISTRY_REPO_ROOT as _REG_ROOT)
+REGISTRY = _REG_ROOT / _REG_REL
 # L-5 ruling (Aaron 2026-08-10): governed output roots move OUT of the
 # OneDrive-synced repo tree to the ruled local roots in contracts. The
 # constants below keep their historical ROLES (build_gates()'s runs_root

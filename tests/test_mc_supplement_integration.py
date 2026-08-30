@@ -27,6 +27,7 @@ from pathlib import Path
 
 import pytest
 
+from itsf.mc import registry_boundary as _rb
 from itsf.mc import supplement_contract as sc
 from itsf.mc import supplement_runner as runner
 
@@ -344,7 +345,12 @@ def test_forbidden_edges_name_pairs_that_are_otherwise_plausible():
 # ===========================================================================
 
 PROTECTED = (
+    # The OLD path stays: after migration Route A it holds a
+    # tombstone, and a tombstone is still a file nothing may write.
     REPO / "ops" / "TRIAL_REGISTRY.md",
+    # ADDED 2026-08-31: the registry moved, so this is where an
+    # unauthorised write would now actually do damage.
+    _rb.REGISTRY_REPO_ROOT / _rb.REGISTRY_PATH,
     REPO / "EXPOSURE_LEDGER.md",
     REPO / "ops" / "S0_T001_POST_RUN_ATTESTATION.md",
 )
@@ -376,7 +382,7 @@ def test_exercising_the_supplement_surface_writes_nothing_protected():
 def test_the_registry_still_carries_no_supplement_event():
     """The whole point of default-refuse. If a SUPPLEMENT_ row ever
     appears here without a separate authorization round, this goes red."""
-    text = (REPO / "ops" / "TRIAL_REGISTRY.md").read_bytes().decode("utf-8")
+    text = (_rb.REGISTRY_REPO_ROOT / _rb.REGISTRY_PATH).read_bytes().decode("utf-8")
     rows = [ln for ln in text.splitlines()
             if ln.strip().startswith("|") and "SUPPLEMENT_" in ln]
     assert rows == [], rows
@@ -533,7 +539,7 @@ def test_the_runner_discovers_the_registry_resolver_through_its_seam():
     API, so the two lanes could run concurrently. This is the test that
     the seam actually closed."""
     from itsf.mc import supplement_registry as sr
-    text = (REPO / "ops" / "TRIAL_REGISTRY.md").read_bytes().decode("utf-8")
+    text = (_rb.REGISTRY_REPO_ROOT / _rb.REGISTRY_PATH).read_bytes().decode("utf-8")
     chain = runner._default_resolver(text, sc.FIRST_SUPPLEMENT_ID)
     assert type(chain).__name__ == "ChainResolution"
     assert chain is not None
@@ -547,7 +553,7 @@ def test_the_real_registry_resolves_cleanly_to_zero_authorizations():
     """Not "it refused" — it must resolve WITHOUT DEFECT and find nothing.
     A parser that refused the real registry outright would produce the
     same "not authorized" outcome for the wrong reason."""
-    text = (REPO / "ops" / "TRIAL_REGISTRY.md").read_bytes().decode("utf-8")
+    text = (_rb.REGISTRY_REPO_ROOT / _rb.REGISTRY_PATH).read_bytes().decode("utf-8")
     chain = runner._default_resolver(text, sc.FIRST_SUPPLEMENT_ID)
     assert chain.problem == "", chain.problem
     assert len(chain.live_authorizations) == 0

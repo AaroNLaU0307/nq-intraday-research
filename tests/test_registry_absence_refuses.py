@@ -118,11 +118,29 @@ class TestATombstoneIsRefusedByName(unittest.TestCase):
         t = self._tomb("")
         self.assertEqual(0, rb.read_snapshot(str(t)).n_bytes)
 
-    def test_the_real_registry_carries_no_marker(self):
-        """Otherwise the guard would refuse the live registry."""
-        repo = Path(__file__).resolve().parents[1]
-        text = (repo / "ops" / "TRIAL_REGISTRY.md").read_text(encoding="utf-8")
-        self.assertNotIn(rb.REGISTRY_TOMBSTONE_MARKER, text)
+    def test_the_LIVE_registry_carries_no_marker(self):
+        """Otherwise the guard would refuse the live registry.
+
+        REPOINTED 2026-08-31: `repo / "ops" / "TRIAL_REGISTRY.md"` is where
+        the registry USED to be, and after migration Route A that path holds
+        the tombstone. Asking the tombstone whether it is a tombstone is not
+        the question this test exists for."""
+        live = rb.REGISTRY_REPO_ROOT / rb.REGISTRY_PATH
+        self.assertNotIn(rb.REGISTRY_TOMBSTONE_MARKER,
+                         live.read_text(encoding="utf-8"))
+
+    def test_the_OLD_path_really_is_a_tombstone(self):
+        """The other half, and it is new information rather than bookkeeping:
+        before the migration there was nothing to assert here. If this ever
+        stops holding, either the tombstone was removed -- leaving a path that
+        reads as an unauthorised registry, the exact defect the marker
+        exists for -- or someone put a readable copy back, which GIT_ONLY
+        forbids."""
+        old = Path(__file__).resolve().parents[1] / "ops" / "TRIAL_REGISTRY.md"
+        text = old.read_text(encoding="utf-8")
+        self.assertIn(rb.REGISTRY_TOMBSTONE_MARKER, text)
+        with self.assertRaises(rb.BoundaryError):
+            rb.read_snapshot(str(old))
 
 
 class TestWhatTheDefectLookedLike(unittest.TestCase):

@@ -75,7 +75,46 @@ def _constructions(path: Path):
 #: change to the real-run stack, not to this window's subject. So the
 #: exception is named, counted, and will fail if it grows.
 _KNOWN_SCRIPT_CONSTRUCTIONS = {
-    "scripts/s0_real_run.py": 2,   # REGISTRY constant + clean-gate allowlist
+    # WAS 2 until 2026-08-31. Migration Route A step S6 replaced the REGISTRY
+    # constant's own construction with an import of the boundary's frozen
+    # root, so only the clean-gate allowlist entry still spells the path --
+    # and that one is gate semantics the ruling said not to touch.
+    "scripts/s0_real_run.py": 1,   # clean-gate allowlist entry only
+}
+
+#: THE HOLE THIS GUARD HAD, found by the migration it was written for.
+#:
+#: It walked `src/` and `scripts/` and never `tests/`. So when S6 repointed
+#: the path, eight test-side constructions stayed pointed at the old
+#: location -- and the failure mode was not a red test. The old path now
+#: holds a TOMBSTONE, which parses cleanly and yields zero rows, so
+#: `test_mc_supplement_paths_battery`'s "real registry" became an empty
+#: sequence namespace. One assert on "no numbered rows" is the only reason
+#: that surfaced at all.
+#:
+#: Registered rather than converged, for the same reason as the script
+#: above: a test that deliberately reads the OLD path (to prove it is a
+#: tombstone) is correct and must not be rewritten to read the new one. What
+#: matters is that the set is enumerated, so the next migration can find
+#: every one instead of discovering them by silent pass.
+_KNOWN_TEST_CONSTRUCTIONS = {
+    # MEASURED, not typed. My first version of this table was written
+    # from a grep and named seven files with eight constructions; the
+    # walk finds twelve files with 26. A hand-written mirror of derived
+    # data, wrong on its first outing -- which is the argument for the
+    # walk existing, made against the person who wrote the walk.
+    "tests/test_mc_supplement_integration.py": 1,
+    "tests/test_mc_supplement_paths_battery.py": 1,
+    "tests/test_mc_supplement_registry.py": 1,
+    "tests/test_mc_supplement_runner.py": 2,
+    "tests/test_nd1_profile_revision_chain.py": 1,
+    "tests/test_registry_absence_refuses.py": 7,
+    "tests/test_registry_boundary.py": 2,
+    "tests/test_registry_path_single_construction.py": 2,
+    "tests/test_registry_witness.py": 2,
+    "tests/test_s0_runner.py": 5,
+    "tests/test_the_writer_rulings_are_already_in_the_contract.py": 1,
+    "tests/test_what_the_registry_append_unlocks.py": 1,
 }
 
 
@@ -94,6 +133,24 @@ class TestOneConstructionSite(unittest.TestCase):
                          "the set of registry-path constructions under "
                          "scripts/ changed; a migration would have to find "
                          "and update every one")
+
+    def test_test_constructions_are_exactly_the_registered_ones(self):
+        """ADDED 2026-08-31, because the migration walked past these.
+
+        A test pointing at the old path does not necessarily go red -- the
+        tombstone parses -- so this set has to be enumerated rather than
+        trusted to announce itself."""
+        found = {}
+        for path in sorted((REPO / "tests").rglob("*.py")):
+            hits = _constructions(path)
+            if hits:
+                found[path.relative_to(REPO).as_posix()] = len(hits)
+        self.assertEqual(
+            _KNOWN_TEST_CONSTRUCTIONS, found,
+            "the set of registry-path constructions under tests/ changed. "
+            "Registering one is fine; leaving it unregistered means the next "
+            "migration cannot find it, and a test reading the old path can "
+            "pass while reasoning about a tombstone.")
 
     def test_the_scan_actually_reaches_files(self):
         """THE PREMISE THE GUARD BELOW CANNOT PROVE ABOUT ITSELF.

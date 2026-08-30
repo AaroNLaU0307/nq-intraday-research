@@ -40,7 +40,8 @@ from pathlib import Path
 from types import MappingProxyType
 
 __all__ = ["RegistrySnapshot", "MediatedResolution", "BoundaryError",
-           "REGISTRY_PATH", "BOUNDARY_RULING", "read_snapshot", "mediate",
+           "REGISTRY_PATH", "REGISTRY_REPO_ROOT", "BOUNDARY_RULING",
+           "read_snapshot", "mediate",
            "resolve_registry", "supplement_chain", "resolve_for_supplement"]
 
 BOUNDARY_RULING = "MC_REG_COLLISION_001_C2_AS_MODIFIED_2026-08-25"
@@ -49,7 +50,22 @@ BOUNDARY_RULING_DELEGATED = True
 #: The one governed path. Relative to the repo root.
 REGISTRY_PATH = "ops/TRIAL_REGISTRY.md"
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+#: THE REGISTRY'S REPOSITORY ROOT, frozen as an exact string.
+#:
+#: Repointed 2026-08-31 by migration Route A, step S6. It used to be
+#: `Path(__file__).resolve().parents[3]` -- this repository -- and this
+#: repository's path runs through OneDrive, because the Desktop known folder
+#: is redirected there. That was measured, not assumed, and a sync agent
+#: that is dormant today can be woken while a redirection does not
+#: un-redirect itself.
+#:
+#: FROZEN AND NOT OVERRIDABLE FROM THE ENVIRONMENT, as the route requires. A
+#: governed path that a variable can move is a governed path in name only;
+#: whoever changes it should have to change bytes a reviewer can see.
+#:
+#: `ops/TRIAL_REGISTRY.md` stays the relative path on purpose -- the approved
+#: CR1 block names it verbatim, so those sentences remain literally true.
+REGISTRY_REPO_ROOT = Path(r"C:\Users\Aaron\quant-data\itsf-registry")
 
 
 class BoundaryError(RuntimeError):
@@ -180,7 +196,8 @@ def _read_text(path: Path) -> str:
 
 def read_snapshot(path: str | Path | None = None) -> RegistrySnapshot:
     """Read the registry ONCE and freeze what was read."""
-    target = Path(path) if path is not None else (_REPO_ROOT / REGISTRY_PATH)
+    target = (Path(path) if path is not None
+              else REGISTRY_REPO_ROOT / REGISTRY_PATH)
     text = _read_text(target)
     return RegistrySnapshot(
         text=text,

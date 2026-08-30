@@ -74,6 +74,7 @@ from pathlib import Path
 import pytest
 
 from itsf.contracts import RULED_ARCHIVE_ROOT, RULED_RUNS_ROOT
+from itsf.mc import registry_boundary as _rb
 from itsf.mc import supplement_contract as sc
 from itsf.mc import supplement_registry as sr
 from itsf.mc import supplement_runner as r
@@ -302,8 +303,18 @@ def row_accepted(line: str) -> sr.SupplementEvent:
 
 # --- the real registry, READ-ONLY, for the global sequence namespace only ---
 
-REAL_REGISTRY_PATH = REPO / "ops" / "TRIAL_REGISTRY.md"
+# REPOINTED 2026-08-31 by migration Route A. This used to build the path
+# from REPO -- the framework repository -- and after S5 that location
+# holds a TOMBSTONE. The tombstone parses cleanly and yields zero rows,
+# so `real_highest_sequence` did not error; it reported an empty
+# namespace. A test reading the wrong file and passing is worse than one
+# that fails, and only the assert on "no numbered rows" caught it.
+REAL_REGISTRY_PATH = _rb.REGISTRY_REPO_ROOT / _rb.REGISTRY_PATH
 REAL_REGISTRY_TEXT = REAL_REGISTRY_PATH.read_text(encoding="utf-8")
+assert _rb.REGISTRY_TOMBSTONE_MARKER not in REAL_REGISTRY_TEXT, (
+    "the path this battery calls the real registry is a tombstone; "
+    "it parses to zero rows and every sequence test below would be "
+    "reasoning about an empty namespace")
 
 
 def real_highest_sequence() -> int:
