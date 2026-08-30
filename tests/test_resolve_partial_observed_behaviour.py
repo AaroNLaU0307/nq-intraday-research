@@ -62,6 +62,7 @@ class _Observer:
     """Counts the real operations a call performs, by path."""
 
     def __init__(self):
+        self._saved = {}
         self.reads = []
         self.writes = []
         self.unlinks = []
@@ -95,6 +96,11 @@ class _Observer:
     def __exit__(self, *exc):
         Path.read_bytes, Path.write_bytes = self._rb, self._wb
         Path.unlink, os.replace = self._ul, self._rp
+        import builtins
+        import shutil
+        for (mod, name), original in getattr(self, "_saved", {}).items():
+            setattr({"builtins": builtins, "os": os,
+                     "shutil": shutil}[mod], name, original)
         return False
 
     def reads_of(self, path):
@@ -144,6 +150,56 @@ class TestAlreadySealedREALLYReadTheFinalFile(unittest.TestCase):
         self.assertIsNone(r["action"])
         self.assertIn("supplement_seal_conflict", str(r["error"]))
         self.assertGreaterEqual(len(r["obs"].reads_of(r["final"])), 1)
+
+
+class TestTheReadIsCAUSAL_notMerelyCounted(unittest.TestCase):
+    """§3 of the round-6 packet named this and round 5 taught me not to
+    leave a named weakness unhandled.
+
+    Counting proves a read HAPPENED. It does not prove the bytes read were
+    the ones compared -- a path that reads once and then compares something
+    else passes a counter. So this makes the read LIE: FINAL holds the
+    intended bytes, but `read_bytes` returns different ones. If the answer
+    is still `already_sealed`, the answer did not depend on the read, and
+    the comparison is decorative."""
+
+    def _with_lying_read(self, lie):
+        tmp = TemporaryDirectory()
+        out = Path(tmp.name)
+        final = out / NAME
+        final.write_bytes(INTENDED)          # on DISK it really matches
+        real = Path.read_bytes
+
+        def read_bytes(self):
+            return lie if str(self) == str(final) else real(self)
+
+        Path.read_bytes = read_bytes
+        try:
+            try:
+                action, error = sr.resolve_partial(
+                    out, NAME, INTENDED, incident_id=INCIDENT), None
+            except Exception as exc:                          # noqa: BLE001
+                action, error = None, exc
+        finally:
+            Path.read_bytes = real
+        return action, error, tmp
+
+    def test_a_lying_read_changes_the_answer(self):
+        action, error, _tmp = self._with_lying_read(b"not what is on disk")
+        self.assertIsNone(
+            action,
+            "FINAL's read returned bytes that differ from `intended`, and "
+            "the answer was still %r. The comparison therefore did not use "
+            "what was read -- counting the read proved nothing."
+            % (action.action if action else None))
+        self.assertIn("supplement_seal_conflict", str(error))
+
+    def test_and_a_truthful_read_still_answers_already_sealed(self):
+        """The control. If the answer were `supplement_seal_conflict`
+        whatever the read returned, the test above would prove nothing."""
+        action, error, _tmp = self._with_lying_read(INTENDED)
+        self.assertIsNotNone(action, error)
+        self.assertEqual("already_sealed", action.action)
 
 
 class TestRetryPermittedREALLYPreservedTheBytes(unittest.TestCase):
