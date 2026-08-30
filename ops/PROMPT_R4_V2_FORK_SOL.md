@@ -2,7 +2,7 @@
 
 ```ini
 REVIEW_ID=r4-v2-fork
-DELIVERY_STATUS=PREPARED_NOT_ISSUED
+DELIVERY_STATUS=ISSUED
 RECOMMENDED_MODEL=Codex GPT-5.6 Sol
 EFFORT_INTENT=VERY_HIGH
 RECOMMENDED_EFFORT=Extra High
@@ -134,23 +134,23 @@ N1 的父提交里取 ops/TRIAL_REGISTRY.md   ->  不存在（N1 才首次加入
 ## 4. 受审集
 
 ```
-REVIEWED_SET_UNCHANGED_SINCE=<发行时填入>
+REVIEWED_SET_UNCHANGED_SINCE=2a783111f8780762fa6c34b6b8bd7b8953e7e6b7
 ```
 
 | sha256 | bytes | 路径 |
 |---|---|---|
-| <发行时填入> | <发行时填入> | `ops/R4_PROPOSAL_V2_CR1_REPOSITORY_ANCHORING_2026-08-31.md` |
-| <发行时填入> | <发行时填入> | `ops/RULING_FABLE_S5_AND_R4_2026-08-27.md` |
-| <发行时填入> | <发行时填入> | `ops/RULING_SOL_R4_HOLD_2026-08-31.md` |
-| <发行时填入> | <发行时填入> | `ops/R4_PROPOSAL_CR1_REPOSITORY_ANCHORING_2026-08-31.md` |
-| <发行时填入> | <发行时填入> | `ops/MIGRATION_ROUTE_A_COMPLETED_2026-08-31.md` |
-| <发行时填入> | <发行时填入> | `ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md` |
-| <发行时填入> | <发行时填入> | `ops/TRIAL_REGISTRY.md` |
-| <发行时填入> | <发行时填入> | `scripts/r4v2_block_builder.py` |
-| <发行时填入> | <发行时填入> | `tests/test_a_proposal_states_the_hash_of_its_own_block.py` |
-| <发行时填入> | <发行时填入> | `tests/test_registry_path_single_construction.py` |
-| <发行时填入> | <发行时填入> | `tests/test_registry_absence_refuses.py` |
-| <发行时填入> | <发行时填入> | `ops/OFF_LIMITS_COMPANION_R4V2.md` |
+| `10190d54f595485c45afc6837e64edb228fdb50444834e5b0000e294ce42c672` | 8499 | `ops/R4_PROPOSAL_V2_CR1_REPOSITORY_ANCHORING_2026-08-31.md` |
+| `5a30398b8d6dbd35bc702362e458d6c10c135d3c692082d1c71819136db400c5` | 15702 | `ops/RULING_FABLE_S5_AND_R4_2026-08-27.md` |
+| `7ea86474ce886dffa80d9540037e93f657e1603bcda20d26aa6512a10553cfa7` | 6332 | `ops/RULING_SOL_R4_HOLD_2026-08-31.md` |
+| `9f1269f1c8e8e88767d14d87ed36169240729e806d253bfd01b1e13dab4e2cec` | 8866 | `ops/R4_PROPOSAL_CR1_REPOSITORY_ANCHORING_2026-08-31.md` |
+| `fdb18eb71273a4eb8a08adbda885f5f66531292bb8c1be2a4aa4f35063a747e1` | 3690 | `ops/MIGRATION_ROUTE_A_COMPLETED_2026-08-31.md` |
+| `eb8b6567d99760ee7438e8105e08f48a0584e0798175a9a236a6be5bf73b96b0` | 37109 | `ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md` |
+| `bf96a2861f64d0b5251696f01dd130d983e57cd4da815ade6ed4cef6ff25a0ae` | 2608 | `ops/TRIAL_REGISTRY.md` |
+| `d8e4342c5f4408def1f0abd0f96a99d6a84fc6c148ea09e0a13e6df0a55153f5` | 5444 | `scripts/r4v2_block_builder.py` |
+| `516290cc4a5f3a544fe0ebb3cc4f0fc4776386cfa07abb854f246f0d9e865d7c` | 5795 | `tests/test_a_proposal_states_the_hash_of_its_own_block.py` |
+| `f1820fdeed2b991177bcc31762ae94ab3c7fc6dbcacc11ef9d81ca3e2dd78f08` | 11504 | `tests/test_registry_path_single_construction.py` |
+| `a54eea0d2bf03d46a19959ed4d041e1671f70b162727609e7274de84dc5a6057` | 7665 | `tests/test_registry_absence_refuses.py` |
+| `591979df11d766748362bf62663ffebf3a4285a53205b61784492195274a4112` | 2489 | `ops/OFF_LIMITS_COMPANION_R4V2.md` |
 
 **delivery**：`ops/PROMPT_R4_V2_FORK_SOL.md`，字节见 `ops/ARTIFACTS_UNDER_REVIEW.json`。
 
@@ -160,7 +160,7 @@ REVIEWED_SET_UNCHANGED_SINCE=<发行时填入>
 **v1 也在集内**（`R4_PROPOSAL_CR1_...`，无 V2 字样），因为你要判的是
 「v1 → v2 的这次收窄」，两份都得看得见。
 
-**核对你读的是当前文件**：line <发行时填入> of it must read
+**核对你读的是当前文件**：line 137 of it must read
 `REVIEWED_SET_UNCHANGED_SINCE` 那一行。对不上 ⇒ **STOP**，回磁盘重读。
 
 ---
