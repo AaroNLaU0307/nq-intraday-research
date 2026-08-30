@@ -2,7 +2,7 @@
 
 ```ini
 REVIEW_ID=c-build-2-wording-r7
-DELIVERY_STATUS=PREPARED_NOT_ISSUED
+DELIVERY_STATUS=ISSUED
 RECOMMENDED_MODEL=Codex GPT-5.6 Sol
 EFFORT_INTENT=VERY_HIGH
 RECOMMENDED_EFFORT=Extra High
@@ -152,7 +152,7 @@ PARTIAL ∈ {absent, ==intended, !=intended}
 ## 2. 受审集
 
 ```
-REVIEWED_SET_UNCHANGED_SINCE=<发行时填入>
+REVIEWED_SET_UNCHANGED_SINCE=18d59b275e70740ab089512aa030d75e8aeee53f
 ```
 
 **语义**：该 commit 之后没有任何 commit 触碰过下表的参考件。
@@ -160,26 +160,26 @@ REVIEWED_SET_UNCHANGED_SINCE=<发行时填入>
 
 | sha256 | bytes | 路径 |
 |---|---|---|
-| <发行时填入> | <发行时填入> | `src/itsf/mc/supplement_runner.py` |
-| <发行时填入> | <发行时填入> | `src/itsf/mc/supplement_contract.py` |
-| <发行时填入> | <发行时填入> | `tests/test_resolve_partial_state_diff.py` |
-| <发行时填入> | <发行时填入> | `tests/test_resolve_partial_observed_behaviour.py` |
-| <发行时填入> | <发行时填入> | `tests/test_resolve_partial_path_contract.py` |
-| <发行时填入> | <发行时填入> | `tests/test_a_prompts_range_claim_actually_holds.py` |
-| <发行时填入> | <发行时填入> | `tests/test_the_register_speaks_one_vocabulary.py` |
-| <发行时填入> | <发行时填入> | `tests/test_the_review_round_cap_is_respected.py` |
-| <发行时填入> | <发行时填入> | `tests/test_every_sealed_final_was_read_back.py` |
-| <发行时填入> | <发行时填入> | `tests/test_c_build_2_wording_coverage.py` |
-| <发行时填入> | <发行时填入> | `ops/RULING_SOL_C_BUILD_2_R6_HOLD_2026-08-30.md` |
-| <发行时填入> | <发行时填入> | `ops/OWNER_DECISIONS_2026-08-30.md` |
-| <发行时填入> | <发行时填入> | `ops/OFF_LIMITS_COMPANION_R7.md` |
+| `981d098819f340b460b094bbcc284039973417f43e4ba65b252967d4d5c352b2` | 50099 | `src/itsf/mc/supplement_runner.py` |
+| `34b2a17ed2e1617e34457882d7df7b4bcc0cc8d658003f8ea5a07a607bdfe0cf` | 32616 | `src/itsf/mc/supplement_contract.py` |
+| `e159092fe4f4bc5180f71e8b1957fad2203c398a81a2ce6d8951cab0dffccd5b` | 15715 | `tests/test_resolve_partial_state_diff.py` |
+| `06a8ce72f7d5f0217da91625b1139bf318583f9f45e8df2454e3f636c7fd67db` | 22911 | `tests/test_resolve_partial_observed_behaviour.py` |
+| `054d0d6309ef464f80ad8c8aa6f0f5fff7e41605e1a13bd85e574e2efdbc8ce6` | 18211 | `tests/test_resolve_partial_path_contract.py` |
+| `f7ccddd7a1c42f5c5745f09b70c106037d9c64c10327a2e507980e391786e500` | 9691 | `tests/test_a_prompts_range_claim_actually_holds.py` |
+| `ca392514ea5ba66a5b6845035a85ca5cddf6f39f0bfff2fb578774b665d1b6c0` | 6668 | `tests/test_the_register_speaks_one_vocabulary.py` |
+| `be23ef8886933fb2cf1b15d810c92bdd65f16e0cd5d7cef035cfe9a52aae4f1c` | 8852 | `tests/test_the_review_round_cap_is_respected.py` |
+| `c2987bafbe62e3a16dcc3249016985c91cac8259b04bec4ec959423300d1be95` | 6100 | `tests/test_every_sealed_final_was_read_back.py` |
+| `4d4874c5e22b5adff47312bb03c0e405418fb894446b9ecd87a46e7ecef42613` | 11556 | `tests/test_c_build_2_wording_coverage.py` |
+| `2d1913fb66066efd220a373c11c0b606a6a03c7daa4f052efb1a8e27149777fa` | 7930 | `ops/RULING_SOL_C_BUILD_2_R6_HOLD_2026-08-30.md` |
+| `c9e3f13dddb9020b4f2ed76607e6291c640c858e1b002e15170aa7382b57d266` | 2190 | `ops/OWNER_DECISIONS_2026-08-30.md` |
+| `a6131cc10a886aab1bbab6bee24c85645431eb71bf94b8cbe12a39073a6c46c3` | 1461 | `ops/OFF_LIMITS_COMPANION_R7.md` |
 
 **delivery**：`ops/PROMPT_C_BUILD_2_WORDING_SOL_ROUND7.md`，
 字节见 `ops/ARTIFACTS_UNDER_REVIEW.json`。
 
 **本轮重点受审件是第三行** `test_resolve_partial_state_diff.py` —— 换掉的那个仪器。
 
-**核对你读的是当前文件**：line <发行时填入> of it must read
+**核对你读的是当前文件**：line 155 of it must read
 `REVIEWED_SET_UNCHANGED_SINCE` 那一行。对不上 ⇒ 陈旧粘贴 ⇒ **STOP**，回磁盘重读。
 
 ---
