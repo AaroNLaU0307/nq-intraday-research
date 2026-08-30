@@ -1,4 +1,135 @@
 {
  "_comment": "Frozen while a reviewer holds them. Remove an entry when the review returns; an empty list is the normal state. `unchanged_since` is the commit the declaration pins: no commit after it may touch the path. HEAD itself is NEVER pinned -- committing the review prompt moves HEAD, so a HEAD pin is stale the moment it is written (measured 2026-08-25: a Sol session STOPped on exactly that). Nothing on ops/OUTCOME_CARRYING_ARTIFACTS.json may be listed here. Each entry declares role: \"delivery\" (a document authored for this review; must itself carry the off-limits list) or \"reference\" (pre-existing bytes handed along; scanned for unmarked quarantined paths, but NOT required to carry governance text — requiring that would mean editing an approved record to satisfy a test). Guarded by tests/test_artifacts_under_review_are_frozen.py and tests/test_review_artifacts_are_outcome_clean.py",
- "under_review": []
+ "under_review": [
+  {
+   "path": "ops/PROMPT_C_BUILD_2_WORDING_SOL_ROUND8.md",
+   "sha256": "1646646784ba040729857044604c927b87f73294ddbc3228938d23c4531f691a",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 8 轮（上限轮）",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r8",
+   "unchanged_since": "4d4385e4a07dc04fecbcc22dc28226779743d18d",
+   "is_the_delivery_document": true,
+   "role": "delivery"
+  },
+  {
+   "path": "src/itsf/mc/supplement_runner.py",
+   "sha256": "1e1684767d76327435dd42f761e90ecfcda9f34b80313dee3eab826fee7e0ff3",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 8 轮（上限轮）",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r8",
+   "unchanged_since": "4d4385e4a07dc04fecbcc22dc28226779743d18d",
+   "is_the_delivery_document": false,
+   "role": "reference"
+  },
+  {
+   "path": "src/itsf/mc/supplement_contract.py",
+   "sha256": "34b2a17ed2e1617e34457882d7df7b4bcc0cc8d658003f8ea5a07a607bdfe0cf",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 8 轮（上限轮）",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r8",
+   "unchanged_since": "4d4385e4a07dc04fecbcc22dc28226779743d18d",
+   "is_the_delivery_document": false,
+   "role": "reference"
+  },
+  {
+   "path": "tests/test_resolve_partial_state_diff.py",
+   "sha256": "2c9cdf1d6f8956aebe3584a9d2764d3ab25fe557961a3368d96844f03b1ae253",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 8 轮（上限轮）",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r8",
+   "unchanged_since": "4d4385e4a07dc04fecbcc22dc28226779743d18d",
+   "is_the_delivery_document": false,
+   "role": "reference"
+  },
+  {
+   "path": "tests/test_resolve_partial_path_contract.py",
+   "sha256": "33648134bbc7c8d99202ea168be9d87a0a23970847e0aa465b16af7d6e12d9aa",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 8 轮（上限轮）",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r8",
+   "unchanged_since": "4d4385e4a07dc04fecbcc22dc28226779743d18d",
+   "is_the_delivery_document": false,
+   "role": "reference"
+  },
+  {
+   "path": "tests/test_resolve_partial_observed_behaviour.py",
+   "sha256": "06a8ce72f7d5f0217da91625b1139bf318583f9f45e8df2454e3f636c7fd67db",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 8 轮（上限轮）",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r8",
+   "unchanged_since": "4d4385e4a07dc04fecbcc22dc28226779743d18d",
+   "is_the_delivery_document": false,
+   "role": "reference"
+  },
+  {
+   "path": "tests/test_a_prompts_measured_numbers_are_current.py",
+   "sha256": "4b47f6bd81a01c7f44912adfabce5c2d76d664516c40c5a2fe54a1537b7a08d6",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 8 轮（上限轮）",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r8",
+   "unchanged_since": "4d4385e4a07dc04fecbcc22dc28226779743d18d",
+   "is_the_delivery_document": false,
+   "role": "reference"
+  },
+  {
+   "path": "tests/test_the_seat_ledger_ids_are_unique.py",
+   "sha256": "7532541c105160e208fda348f7ac68058e6818077d6de5a7b1a9eebfc05d9b0c",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 8 轮（上限轮）",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r8",
+   "unchanged_since": "4d4385e4a07dc04fecbcc22dc28226779743d18d",
+   "is_the_delivery_document": false,
+   "role": "reference"
+  },
+  {
+   "path": "tests/test_the_review_round_cap_is_respected.py",
+   "sha256": "be23ef8886933fb2cf1b15d810c92bdd65f16e0cd5d7cef035cfe9a52aae4f1c",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 8 轮（上限轮）",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r8",
+   "unchanged_since": "4d4385e4a07dc04fecbcc22dc28226779743d18d",
+   "is_the_delivery_document": false,
+   "role": "reference"
+  },
+  {
+   "path": "tests/test_c_build_2_wording_coverage.py",
+   "sha256": "4d4874c5e22b5adff47312bb03c0e405418fb894446b9ecd87a46e7ecef42613",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 8 轮（上限轮）",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r8",
+   "unchanged_since": "4d4385e4a07dc04fecbcc22dc28226779743d18d",
+   "is_the_delivery_document": false,
+   "role": "reference"
+  },
+  {
+   "path": "ops/RULING_SOL_C_BUILD_2_R7_HOLD_2026-08-30.md",
+   "sha256": "22888d25535103d8fe62f316d980dc5bc6967f7beb47bd507cb9a51c650760e1",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 8 轮（上限轮）",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r8",
+   "unchanged_since": "4d4385e4a07dc04fecbcc22dc28226779743d18d",
+   "is_the_delivery_document": false,
+   "role": "reference"
+  },
+  {
+   "path": "ops/OWNER_DECISIONS_2026-08-30.md",
+   "sha256": "c9e3f13dddb9020b4f2ed76607e6291c640c858e1b002e15170aa7382b57d266",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 8 轮（上限轮）",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r8",
+   "unchanged_since": "4d4385e4a07dc04fecbcc22dc28226779743d18d",
+   "is_the_delivery_document": false,
+   "role": "reference"
+  },
+  {
+   "path": "ops/OFF_LIMITS_COMPANION_R8.md",
+   "sha256": "0c8b0d980b977367cc88450ff133d0912dc961ac7df877cbb1688537dc033200",
+   "issued_to": "fresh Sol, C_BUILD_2 措辞复审第 8 轮（上限轮）",
+   "issued_at": "2026-08-30",
+   "review_id": "c-build-2-wording-r8",
+   "unchanged_since": "4d4385e4a07dc04fecbcc22dc28226779743d18d",
+   "is_the_delivery_document": false,
+   "role": "reference"
+  }
+ ]
 }

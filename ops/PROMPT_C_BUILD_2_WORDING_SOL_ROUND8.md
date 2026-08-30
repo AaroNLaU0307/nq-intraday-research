@@ -2,7 +2,7 @@
 
 ```ini
 REVIEW_ID=c-build-2-wording-r8
-DELIVERY_STATUS=PREPARED_NOT_ISSUED
+DELIVERY_STATUS=ISSUED
 RECOMMENDED_MODEL=Codex GPT-5.6 Sol
 EFFORT_INTENT=VERY_HIGH
 RECOMMENDED_EFFORT=Extra High
@@ -196,7 +196,7 @@ R8 随包件已逐条列出会枚举 `ops/` 的九个测试，并写明**跑它�
 ## 2. 受审集
 
 ```
-REVIEWED_SET_UNCHANGED_SINCE=<发行时填入>
+REVIEWED_SET_UNCHANGED_SINCE=4d4385e4a07dc04fecbcc22dc28226779743d18d
 ```
 
 **语义**：该 commit 之后没有任何 commit 触碰过下表的参考件。
@@ -204,25 +204,25 @@ REVIEWED_SET_UNCHANGED_SINCE=<发行时填入>
 
 | sha256 | bytes | 路径 |
 |---|---|---|
-| <发行时填入> | <发行时填入> | `src/itsf/mc/supplement_runner.py` |
-| <发行时填入> | <发行时填入> | `src/itsf/mc/supplement_contract.py` |
-| <发行时填入> | <发行时填入> | `tests/test_resolve_partial_state_diff.py` |
-| <发行时填入> | <发行时填入> | `tests/test_resolve_partial_path_contract.py` |
-| <发行时填入> | <发行时填入> | `tests/test_resolve_partial_observed_behaviour.py` |
-| <发行时填入> | <发行时填入> | `tests/test_a_prompts_measured_numbers_are_current.py` |
-| <发行时填入> | <发行时填入> | `tests/test_the_seat_ledger_ids_are_unique.py` |
-| <发行时填入> | <发行时填入> | `tests/test_the_review_round_cap_is_respected.py` |
-| <发行时填入> | <发行时填入> | `tests/test_c_build_2_wording_coverage.py` |
-| <发行时填入> | <发行时填入> | `ops/RULING_SOL_C_BUILD_2_R7_HOLD_2026-08-30.md` |
-| <发行时填入> | <发行时填入> | `ops/OWNER_DECISIONS_2026-08-30.md` |
-| <发行时填入> | <发行时填入> | `ops/OFF_LIMITS_COMPANION_R8.md` |
+| `1e1684767d76327435dd42f761e90ecfcda9f34b80313dee3eab826fee7e0ff3` | 52665 | `src/itsf/mc/supplement_runner.py` |
+| `34b2a17ed2e1617e34457882d7df7b4bcc0cc8d658003f8ea5a07a607bdfe0cf` | 32616 | `src/itsf/mc/supplement_contract.py` |
+| `2c9cdf1d6f8956aebe3584a9d2764d3ab25fe557961a3368d96844f03b1ae253` | 29464 | `tests/test_resolve_partial_state_diff.py` |
+| `33648134bbc7c8d99202ea168be9d87a0a23970847e0aa465b16af7d6e12d9aa` | 20448 | `tests/test_resolve_partial_path_contract.py` |
+| `06a8ce72f7d5f0217da91625b1139bf318583f9f45e8df2454e3f636c7fd67db` | 22911 | `tests/test_resolve_partial_observed_behaviour.py` |
+| `4b47f6bd81a01c7f44912adfabce5c2d76d664516c40c5a2fe54a1537b7a08d6` | 12649 | `tests/test_a_prompts_measured_numbers_are_current.py` |
+| `7532541c105160e208fda348f7ac68058e6818077d6de5a7b1a9eebfc05d9b0c` | 4132 | `tests/test_the_seat_ledger_ids_are_unique.py` |
+| `be23ef8886933fb2cf1b15d810c92bdd65f16e0cd5d7cef035cfe9a52aae4f1c` | 8852 | `tests/test_the_review_round_cap_is_respected.py` |
+| `4d4874c5e22b5adff47312bb03c0e405418fb894446b9ecd87a46e7ecef42613` | 11556 | `tests/test_c_build_2_wording_coverage.py` |
+| `22888d25535103d8fe62f316d980dc5bc6967f7beb47bd507cb9a51c650760e1` | 8155 | `ops/RULING_SOL_C_BUILD_2_R7_HOLD_2026-08-30.md` |
+| `c9e3f13dddb9020b4f2ed76607e6291c640c858e1b002e15170aa7382b57d266` | 2190 | `ops/OWNER_DECISIONS_2026-08-30.md` |
+| `0c8b0d980b977367cc88450ff133d0912dc961ac7df877cbb1688537dc033200` | 2569 | `ops/OFF_LIMITS_COMPANION_R8.md` |
 
 **delivery**：`ops/PROMPT_C_BUILD_2_WORDING_SOL_ROUND8.md`，
 字节见 `ops/ARTIFACTS_UNDER_REVIEW.json`。
 
 **本轮重点受审件是第三行与第四行** —— 换过的仪器，以及它和合同的接缝。
 
-**核对你读的是当前文件**：line <发行时填入> of it must read
+**核对你读的是当前文件**：line 199 of it must read
 `REVIEWED_SET_UNCHANGED_SINCE` 那一行。对不上 ⇒ 陈旧粘贴 ⇒ **STOP**，回磁盘重读。
 
 ---
