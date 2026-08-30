@@ -2,7 +2,7 @@
 
 ```ini
 REVIEW_ID=c-build-2-wording-r6
-DELIVERY_STATUS=PREPARED_NOT_ISSUED
+DELIVERY_STATUS=ISSUED
 RECOMMENDED_MODEL=Codex GPT-5.6 Sol
 EFFORT_INTENT=VERY_HIGH
 RECOMMENDED_EFFORT=Extra High
@@ -99,7 +99,7 @@ ISSUED 但无 pin        -> 旧版 continue，零 git 调用  =>  现在直接�
 ## 2. 受审集
 
 ```
-REVIEWED_SET_UNCHANGED_SINCE=<发行时填入>
+REVIEWED_SET_UNCHANGED_SINCE=6395da49dc2cdaee9f9e84eb057b25dda869f8af
 ```
 
 **语义**：该 commit 之后没有任何 commit 触碰过下表的参考件。
@@ -107,26 +107,26 @@ REVIEWED_SET_UNCHANGED_SINCE=<发行时填入>
 
 | sha256 | bytes | 路径 |
 |---|---|---|
-| <发行时填入> | <发行时填入> | `src/itsf/mc/supplement_runner.py` |
-| <发行时填入> | <发行时填入> | `src/itsf/mc/supplement_contract.py` |
-| <发行时填入> | <发行时填入> | `tests/test_resolve_partial_observed_behaviour.py` |
-| <发行时填入> | <发行时填入> | `tests/test_resolve_partial_path_contract.py` |
-| <发行时填入> | <发行时填入> | `tests/test_a_prompts_range_claim_actually_holds.py` |
-| <发行时填入> | <发行时填入> | `tests/test_every_sealed_final_was_read_back.py` |
-| <发行时填入> | <发行时填入> | `tests/test_c_build_2_wording_coverage.py` |
-| <发行时填入> | <发行时填入> | `tests/test_n09_checkpoint_assertions.py` |
-| <发行时填入> | <发行时填入> | `tests/test_every_approval_is_accounted_for.py` |
-| <发行时填入> | <发行时填入> | `tests/test_the_ratified_preimage_is_reconstructible.py` |
-| <发行时填入> | <发行时填入> | `ops/RULING_SOL_C_BUILD_2_R5_HOLD_2026-08-30.md` |
-| <发行时填入> | <发行时填入> | `ops/OFF_LIMITS_COMPANION_R6.md` |
+| `981d098819f340b460b094bbcc284039973417f43e4ba65b252967d4d5c352b2` | 50099 | `src/itsf/mc/supplement_runner.py` |
+| `34b2a17ed2e1617e34457882d7df7b4bcc0cc8d658003f8ea5a07a607bdfe0cf` | 32616 | `src/itsf/mc/supplement_contract.py` |
+| `02c411389a30bfef1e84794f99b752cd98abcbb387a837effb713ca99d221caa` | 23052 | `tests/test_resolve_partial_observed_behaviour.py` |
+| `054d0d6309ef464f80ad8c8aa6f0f5fff7e41605e1a13bd85e574e2efdbc8ce6` | 18211 | `tests/test_resolve_partial_path_contract.py` |
+| `d8c207f8637e4bada2feb359fb0c35b9ade02eba851157129470d51f43231397` | 7846 | `tests/test_a_prompts_range_claim_actually_holds.py` |
+| `c2987bafbe62e3a16dcc3249016985c91cac8259b04bec4ec959423300d1be95` | 6100 | `tests/test_every_sealed_final_was_read_back.py` |
+| `4d4874c5e22b5adff47312bb03c0e405418fb894446b9ecd87a46e7ecef42613` | 11556 | `tests/test_c_build_2_wording_coverage.py` |
+| `267863b964eccbbe59a4c8b6069f5cf63b36138a2b8f7c7eae857f7f020af811` | 27138 | `tests/test_n09_checkpoint_assertions.py` |
+| `4ae94ad34a5c2d4c06a8dd7a99aeef546356fb2ba8b384faf6cd8082f4ea1097` | 13730 | `tests/test_every_approval_is_accounted_for.py` |
+| `3b8fd362614ee7e7c689bde19d9797b501464de5bc2caa57cb8271963effae50` | 6869 | `tests/test_the_ratified_preimage_is_reconstructible.py` |
+| `1e28255b695f1aa5590067631f9798bcdc0af81421eb2e1ffdfa2905599b251b` | 3686 | `ops/RULING_SOL_C_BUILD_2_R5_HOLD_2026-08-30.md` |
+| `bafdc75a150011e4fc9f0cafad72de5fc0c06696eb9a01b446516d57defc72fa` | 2644 | `ops/OFF_LIMITS_COMPANION_R6.md` |
 
 **delivery**：`ops/PROMPT_C_BUILD_2_WORDING_SOL_ROUND6.md`，字节见 `ops/ARTIFACTS_UNDER_REVIEW.json`。
 
 **本轮的重点受审件是第三行** `test_resolve_partial_observed_behaviour.py` ——
 换掉的那个仪器本身。
 
-**核对你读的是当前文件**：line 999 of it must read 那一行 ——
-`REVIEWED_SET_UNCHANGED_SINCE` 必须等于发行时记入登记册的 commit。
+**核对你读的是当前文件**：line 102 of it must read 那一行 ——
+`REVIEWED_SET_UNCHANGED_SINCE` 必须是 `6395da49dc2cdaee9f9e84eb057b25dda869f8af`。
 对不上 ⇒ 陈旧粘贴 ⇒ **STOP**，回磁盘重读。
 
 **一处如实交代**：本节是**补写的**。第一版的第 6 轮包**根本没有受审集**——
