@@ -25,7 +25,11 @@ ROUND_CAP=8（Aaron 2026-08-30 裁定 OD-1）——本轮之后只剩一轮
 仓根：`C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework`
 
 禁区清单随包交付：`ops/OFF_LIMITS_COMPANION_R7.md`，请一并读。
-检索边界见该件，本文件不复述。
+检索边界与逐条禁区见该件，本文件不复述。
+
+**权威登记册**：`ops/OUTCOME_CARRYING_ARTIFACTS.json` 的 `carries_outcome`。
+点名它是为了让你**有东西可以对照**——只读交付件却无从核对任何路径，
+本身就是 D-2 那次烧掉席位的形状。
 
 ---
 

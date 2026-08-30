@@ -10,11 +10,14 @@ COMPANION_OF=ops/PROMPT_C_BUILD_2_WORDING_SOL_ROUND7.md
 
 ## 永不打开
 
+**权威在 `ops/OUTCOME_CARRYING_ARTIFACTS.json` 的 `carries_outcome`。**
+下面逐条列出**只是为了标记它们是禁区**，不是引导你去读：
+
 ```
-ops/outcome_quarantine/**              整个子树，不得打开、不得搜索、不得列目录
-ops/EXPOSURE_LEDGER.md                 研究轴台账
-EXPOSURE_LEDGER.md                     仓根那一份
-ops/OUTCOME_CARRYING_ARTIFACTS.json    其 carries_outcome 下列出的全部路径
+OFF-LIMITS   ops/outcome_quarantine/**   整个子树，不得打开、不得搜索、不得列目录
+OFF-LIMITS   ops/EXPOSURE_LEDGER.md      研究轴台账
+OFF-LIMITS   EXPOSURE_LEDGER.md          仓根那一份
+OFF-LIMITS   ops/OUTCOME_CARRYING_ARTIFACTS.json 的 carries_outcome 下全部路径
 ```
 
 逐条点名只为**标记禁区**，不是引导你去读。
