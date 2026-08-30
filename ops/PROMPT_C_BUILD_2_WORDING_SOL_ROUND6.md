@@ -96,7 +96,44 @@ ISSUED 但无 pin        -> 旧版 continue，零 git 调用  =>  现在直接�
 ```
 两条均已变异证红。
 
-## 2. 你上一轮对 §4「接受」的裁定，我的应答
+## 2. 受审集
+
+```
+REVIEWED_SET_UNCHANGED_SINCE=<发行时填入>
+```
+
+**语义**：该 commit 之后没有任何 commit 触碰过下表的参考件。
+本提示自身不在该 range 内（发出 delivery 就是对它的一次提交，无不动点）。
+
+| sha256 | bytes | 路径 |
+|---|---|---|
+| <发行时填入> | <发行时填入> | `src/itsf/mc/supplement_runner.py` |
+| <发行时填入> | <发行时填入> | `src/itsf/mc/supplement_contract.py` |
+| <发行时填入> | <发行时填入> | `tests/test_resolve_partial_observed_behaviour.py` |
+| <发行时填入> | <发行时填入> | `tests/test_resolve_partial_path_contract.py` |
+| <发行时填入> | <发行时填入> | `tests/test_a_prompts_range_claim_actually_holds.py` |
+| <发行时填入> | <发行时填入> | `tests/test_every_sealed_final_was_read_back.py` |
+| <发行时填入> | <发行时填入> | `tests/test_c_build_2_wording_coverage.py` |
+| <发行时填入> | <发行时填入> | `tests/test_n09_checkpoint_assertions.py` |
+| <发行时填入> | <发行时填入> | `tests/test_every_approval_is_accounted_for.py` |
+| <发行时填入> | <发行时填入> | `tests/test_the_ratified_preimage_is_reconstructible.py` |
+| <发行时填入> | <发行时填入> | `ops/RULING_SOL_C_BUILD_2_R5_HOLD_2026-08-30.md` |
+| <发行时填入> | <发行时填入> | `ops/OFF_LIMITS_COMPANION_R6.md` |
+
+**delivery**：`ops/PROMPT_C_BUILD_2_WORDING_SOL_ROUND6.md`，字节见 `ops/ARTIFACTS_UNDER_REVIEW.json`。
+
+**本轮的重点受审件是第三行** `test_resolve_partial_observed_behaviour.py` ——
+换掉的那个仪器本身。
+
+**核对你读的是当前文件**：line 999 of it must read 那一行 ——
+`REVIEWED_SET_UNCHANGED_SINCE` 必须等于发行时记入登记册的 commit。
+对不上 ⇒ 陈旧粘贴 ⇒ **STOP**，回磁盘重读。
+
+**一处如实交代**：本节是**补写的**。第一版的第 6 轮包**根本没有受审集**——
+我把 §2 编号给了别的内容，传输表和 pin 一起漏了。发行守卫会在武装时拦下，
+但那是兜底不是流程；和第 5 轮「先武装后改文件」是同一类顺序错误。
+
+## 3. 你上一轮对 §5「接受」的裁定，我的应答
 
 ```
 你说：接受①；②、④不应接受；③范围原则可接受但两个 helper 内部未闭合
@@ -109,7 +146,7 @@ ISSUED 但无 pin        -> 旧版 continue，零 git 调用  =>  现在直接�
 - **③（范围只覆盖 helper 外壳）** —— 你是对的。**行为观测按效果断言，不按函数边界**：
   无论字节是被哪个函数删的、清空的、没改名的，观测到的就是观测到的。
 
-## 3. 请攻击这里
+## 4. 请攻击这里
 
 1. **观测器本身。** 写这一节时它只包 `pathlib` 四个方法；
    **写完这一节之后我把它修了**（上一轮的教训就是「列出弱点不等于处理弱点」）：
@@ -132,23 +169,23 @@ ISSUED 但无 pin        -> 旧版 continue，零 git 调用  =>  现在直接�
    三条现已各有场景驱动，并加一条断言：**声明集里的每个出口名都必须被本文件跑到**，
    反向也查（不得声称跑到合同没声明的出口）。
 
-## 4. 本轮接受的残留
+## 5. 本轮接受的残留
 
 | 残留 | 为什么接受 | 代价 |
 |---|---|---|
 | `DECLARED_EXITS` 顺序敏感 | 你上一轮同意接受 | 重排要改声明 |
-| 观测器不包子进程／ctypes／提前绑定的局部名 | 挡住它们需要 import 钩子或 seccomp 级手段，代价与本项目不相称 | §3 第 1 条 |
-| —— | 该条已做完，不再是残留 | 见 §3 第 3 条 |
-| 场景集手写 | 无法机械枚举「真实文件系统状态」 | §3 第 2 条 |
+| 观测器不包子进程／ctypes／提前绑定的局部名 | 挡住它们需要 import 钩子或 seccomp 级手段，代价与本项目不相称 | §4 第 1 条 |
+| —— | 该条已做完，不再是残留 | 见 §4 第 3 条 |
+| 场景集手写 | 无法机械枚举「真实文件系统状态」 | §4 第 2 条 |
 
-## 5. 交付要求
+## 6. 交付要求
 
 沿用第 5 轮字段，另加：
 
 ```
 INSTRUMENT_ASSESSMENT=  从 AST 检查改为行为观测，是否闭合了你 R3–R5 的反对？
                         若否，给出一条既绕过观测器又绕过合同的路径并跑出来。
-SCENARIO_COMPLETENESS=  §3 第 2 条：有没有第六种真实状态是场景集没覆盖的？
+SCENARIO_COMPLETENESS=  §4 第 2 条：有没有第六种真实状态是场景集没覆盖的？
 ```
 
 **HOLD 受欢迎。前五轮都是 HOLD，每一轮的发现都成立，而第 5 轮让我换掉了整个仪器。**
