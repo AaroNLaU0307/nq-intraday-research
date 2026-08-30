@@ -51,6 +51,7 @@ WHAT STATE CANNOT SEE, said plainly rather than left for the next reviewer:
     unwrapped API", and it is the honest cost of the change.
 """
 
+import ast
 import ctypes
 import hashlib
 import os
@@ -176,7 +177,7 @@ class _Run:
 
     def __init__(self, case, final_state, partial_state, *,
                  incident=INCIDENT, extra=None, filename=NAME,
-                 lie_partial=None, lie_final=None):
+                 lie_partial=None, lie_final=None, lie_partial_from=1):
         holder = TemporaryDirectory()
         case.addCleanup(holder.cleanup)
         self.root = Path(holder.name)
@@ -193,11 +194,20 @@ class _Run:
         self._lines = []
         real_read = Path.read_bytes
 
+        partial_reads = [0]
+
         def read_bytes(this):
             data = real_read(this)
-            if (lie_partial and data == INTENDED
-                    and this.name.endswith(sc.PARTIAL_SUFFIX)):
-                return lie_partial
+            if this.name.endswith(sc.PARTIAL_SUFFIX):
+                partial_reads[0] += 1
+                # WHICH read lies matters, and getting it wrong hid three
+                # declared paths. `resolve_partial` reads the partial TWICE
+                # when one is already staged: once to decide branch C, once
+                # to verify what it staged. A lie on the first read sends the
+                # call down branch C, so the fall-through tail is never
+                # reached and its exits look unreachable.
+                if lie_partial and partial_reads[0] >= lie_partial_from:
+                    return lie_partial
             if lie_final and data == INTENDED and this.name == NAME:
                 return lie_final
             return data
@@ -242,31 +252,38 @@ class _Run:
         return self.action.action
 
     @property
-    def path_id(self):
-        """(name, exit line, helper raise line) — the exit's PATH identity.
+    def helper_raise_line(self):
+        """The line INSIDE a helper that raised, or None for a direct exit.
 
-        ROUND 7's HIGH-1. This used to be the NAME alone, and
-        `DECLARED_EXITS` carries the same name twice on purpose:
-        `divergent_partial_exists` and `incident_id_malformed` each occur
-        once on branch C and once on branch E. Reducing to `{name}` let
-        branch C's two exits stand in for branch E's, which had never been
-        executed at all -- and an extra unreachable declaration of an
-        already-covered name passed too.
+        One call site can reach two different raises in one helper --
+        `_require_plain_name` refuses an unnamed path at one statement and a
+        forbidden character at another -- and those are two paths whose route
+        through `resolve_partial` is identical. Without this they collapse."""
+        if self.error is None:
+            return None
+        for frame in reversed(traceback.extract_tb(self.error.__traceback__)):
+            if (os.path.abspath(frame.filename) == RUNNER_FILE
+                    and frame.name != "resolve_partial"):
+                return frame.lineno
+        return None
 
-        Worse than a miss: the DECLARED_EXITS comment says in as many words
-        `A list, never a set: two paths that look identical are two exits,
-        and collapsing them is what round 4 walked through`. I read that
-        comment, wrote the file underneath it, and collapsed them anyway."""
-        helper_line = None
-        if self.error is not None:
-            for frame in reversed(traceback.extract_tb(
-                    self.error.__traceback__)):
-                if (os.path.abspath(frame.filename) == RUNNER_FILE
-                        and frame.name != "resolve_partial"):
-                    helper_line = frame.lineno
-                    break
+    @property
+    def exit_site_id(self):
+        """(name, exit line, helper raise line) — the EXIT SITE, and that is
+        all it ever was.
+
+        NAMED HONESTLY AFTER ROUND 8. This was called `path_id` and the packet
+        called it a path identity. It is not: two branches that fall through
+        and rejoin leave by the same line, so `promote` reached with bytes
+        already staged and `promote` reached having just staged them shared
+        one value. Sol deleted one of those scenarios and coverage stayed
+        green.
+
+        Path identity moved to `_declared_paths` plus the executed line
+        TRACE, which distinguishes them. This stays for the cases where the
+        exit site is genuinely the question."""
         return (self.exit_name, self._lines[-1] if self._lines else None,
-                helper_line)
+                self.helper_raise_line)
 
     @property
     def lost(self):
@@ -365,122 +382,136 @@ class TestBranchCMovesRatherThanDeletes(unittest.TestCase):
         self.assertEqual([], run.lost)
 
 
+def _declared_paths():
+    """Every declared path, as (name, statement lines, helper raise line).
+
+    THE THIRD COMPONENT is what separates two refusals raised from the SAME
+    call site by different statements inside one helper -- `_require_plain_name`
+    rejects an unnamed path at one line and a forbidden character at another.
+    Their statement lines through `resolve_partial` are identical, so without
+    it they collapse, which is the same defect one scope down.
+
+    Both halves come from the AST walk. The DOCSTRING line is dropped because
+    the tracer reports the `def` line where the walker reports the first
+    statement -- a fixed, measured offset, not a fudge: with it removed the
+    correspondence below is exact on every path."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import test_resolve_partial_path_contract as contract
+    function = contract._resolve_partial()
+    doc = function.body[0]
+    docstring_line = (doc.lineno if isinstance(doc, ast.Expr)
+                      and isinstance(doc.value, ast.Constant) else None)
+    return [(e["name"], frozenset(e["lines"]) - {docstring_line},
+             e["raise_line"]) for e in contract._exits()]
+
+
 class TestEveryDeclaredPATHIsReachedBYEXECUTION(unittest.TestCase):
-    """Round 7's HIGH-1, and the third instrument this claim has needed.
+    """Round 8's HIGH, and the FOURTH instrument this one claim has needed.
 
         R6  `reached` was a set LITERAL typed beside a derived `declared`.
-            An exit nothing executed counted as covered.
-        R7  `reached` became real, but both sides were reduced to `{name}`.
-            `DECLARED_EXITS` carries `divergent_partial_exists` and
-            `incident_id_malformed` TWICE each -- once on branch C, once on
-            branch E -- so branch C's exits stood in for branch E's, which
-            had never executed at all. An extra unreachable declaration of
-            an already-covered name passed as well.
+        R7  Derived, but reduced to `{name}`. Branch C's exits stood in for
+            branch E's, which had never executed.
+        R8  Derived and name-plus-line -- which identifies the EXIT SITE, not
+            the path. Two branches that fall through and rejoin share their
+            exit line, so `promote` reached with bytes already staged and
+            `promote` reached having just staged them were one identity. Sol
+            deleted one of those scenarios from the generator and the
+            coverage assertion stayed green.
 
-    What makes R7 worse than R6 is that DECLARED_EXITS says, in the comment
-    directly above the list: `A list, never a set: two paths that look
-    identical are two exits, and collapsing them is what round 4 walked
-    through`. The warning was written, the reason was recorded, and the
-    collapse happened underneath it anyway.
+    Each round the collapse got smaller and each round it was still a
+    collapse. The root cause was upstream the whole time: the AST walker
+    walked everything after an `if` ONCE, carrying the guards from before it,
+    so the two rejoining paths were never two declarations to begin with.
+    Fixing the walker to fork the remainder turned 12 declared exits into 17
+    -- none of them new code, five of them always executable and counted as
+    someone else.
 
-    THE IDENTITY IS NOW THE PATH, derived on both sides and never typed:
+    THE IDENTITY IS NOW THE PATH ITSELF, derived on both sides:
 
-        declared  (name, call-site line, raise line inside the helper)
-                  from the AST walk, which knows both because the walker
-                  now carries the Call node and the helper's raise line
-        executed  the same triple, from `sys.settrace` over resolve_partial's
-                  own frame plus the traceback's helper frame
+        declared  the set of statement lines the walk passes to reach an exit
+        executed  the lines `sys.settrace` records inside resolve_partial
 
-    Both sides are 12 entries and 12 distinct triples, so a declared path
-    cannot be satisfied by a different path that happens to share a name.
+    A declared path matches a run when every one of its lines was executed,
+    and the match must be UNIQUE -- two declarations fitting one trace would
+    mean the identity had collapsed again, so that is a failure here rather
+    than a silent pass.
     """
 
-    def _declared(self):
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
-        import test_resolve_partial_path_contract as contract
-        return [(e["name"], getattr(e["node"], "lineno", None),
-                 e["raise_line"]) for e in contract._exits()]
-
-    def _executed(self):
-        """Every path, driven for real. The cross product first, then the
-        cases that need a specific argument or a lying read."""
+    def _runs(self):
+        """Every declared path, driven for real."""
         divergent = lambda root: (root / sr._divergent_name(
             NAME, INCIDENT)).write_bytes(b"an earlier incident")
+        lie = b"the staged bytes re-read differently"
         runs = [_Run(self, f, p) for f, p in SCENARIOS]
         runs += [
-            # the two refusals inside _require_plain_name: one is not a
-            # basename, the other carries a forbidden character
             _Run(self, "absent", "absent", filename="../escaped.json"),
             _Run(self, "absent", "absent", filename=NAME + ":evidence"),
-            # branch C, via _preserve
             _Run(self, "absent", "residue", extra=divergent),
             _Run(self, "absent", "residue", incident="not-an-incident-id"),
-            # branch E, via the SAME helper from a DIFFERENT call site --
-            # the pair round 7 proved had never run
-            _Run(self, "absent", "absent", extra=divergent,
-                 lie_partial=b"the staged bytes re-read differently"),
-            _Run(self, "absent", "absent", incident="not-an-incident-id",
-                 lie_partial=b"the staged bytes re-read differently"),
-            _Run(self, "absent", "absent",
-                 lie_partial=b"the staged bytes re-read differently"),
-            _Run(self, "absent", "absent",
-                 lie_final=b"the promotion did not survive"),
         ]
+        # The tail, reached BOTH ways -- with a byte-identical residue already
+        # staged, and having staged the bytes in this call. Round 8 proved
+        # those are two paths; before it, only one of each pair ever ran.
+        for staged, first_lie in (("absent", 1), ("intended", 2)):
+            runs += [
+                _Run(self, "absent", staged, extra=divergent, lie_partial=lie,
+                     lie_partial_from=first_lie),
+                _Run(self, "absent", staged, incident="not-an-incident-id",
+                     lie_partial=lie, lie_partial_from=first_lie),
+                _Run(self, "absent", staged, lie_partial=lie,
+                     lie_partial_from=first_lie),
+                _Run(self, "absent", staged,
+                     lie_final=b"the promotion did not survive"),
+            ]
         return runs
 
     def test_the_tracer_actually_saw_something(self):
-        """Vacuity first. `sys.settrace` is silently inert under some
-        runners, and an empty trace would make every path id `(name, None,
-        ...)` -- which would still compare equal often enough to look
-        healthy."""
+        """Vacuity first. `sys.settrace` is inert under some runners, and an
+        empty trace would make every path match nothing -- or everything."""
         run = _Run(self, "absent", "absent")
-        self.assertTrue(run._lines,
-                        "the tracer recorded no lines, so every path id "
-                        "below is missing the half that identifies it")
+        self.assertTrue(run._lines, "the tracer recorded no lines")
         self.assertEqual("promote", run.exit_name)
 
     def test_the_declared_paths_are_distinguishable_at_all(self):
-        """If the declared triples were not distinct, the comparison below
-        would be a name check wearing a longer tuple."""
-        declared = self._declared()
+        declared = _declared_paths()
         self.assertEqual(len(declared), len(set(declared)),
-                         "declared paths collide: %s" % declared)
-        names = [name for name, _line, _raise in declared]
-        self.assertLess(len(set(names)), len(names),
-                        "no name repeats in the contract, so this test "
-                        "proves nothing about collapsing -- if that is "
-                        "genuinely true now, delete this file's premise "
-                        "rather than leaving it passing vacuously")
+                         "two declared paths are identical: %s" % declared)
+        names = [name for name, _lines, _raised in declared]
+        self.assertLess(
+            len(set(names)), len(names),
+            "no name repeats, so this file's premise -- that a name is not "
+            "an identity -- is not being tested by anything")
+
+    def test_two_rejoining_paths_are_NOT_the_same_declaration(self):
+        """Sol's exact pair, named. `promote` with bytes already staged and
+        `promote` having staged them here."""
+        promotes = [lines for name, lines, _raised in _declared_paths()
+                    if name == "promote"]
+        self.assertEqual(2, len(promotes))
+        self.assertNotEqual(promotes[0], promotes[1])
 
     def test_every_declared_path_was_actually_executed(self):
-        declared, executed = set(self._declared()), {
-            run.path_id for run in self._executed()}
+        declared, runs = _declared_paths(), self._runs()
+        covered = set()
+        for run in runs:
+            trace = set(run._lines)
+            fits = [d for d in declared
+                    if d[0] == run.exit_name and d[1] <= trace
+                    and d[2] == run.helper_raise_line]
+            self.assertEqual(
+                1, len(fits),
+                "a run exiting via %s fits %d declared paths, not exactly "
+                "one. Zero means the walk does not model what the code did; "
+                "more than one means the identity has collapsed again."
+                % (run.exit_name, len(fits)))
+            covered.add(fits[0])
+        missing = sorted((name, sorted(lines), raised)
+                          for name, lines, raised in set(declared) - covered)
         self.assertEqual(
-            [], sorted(declared - executed),
+            [], missing,
             "declared by the contract and executed by nothing here: %s\n"
-            "A path is (name, exit line, helper raise line). Two exits "
-            "sharing a name are two paths, and one of them running does "
-            "not cover the other." % sorted(declared - executed))
-        self.assertEqual(
-            [], sorted(executed - declared),
-            "executed here but declared nowhere: %s"
-            % sorted(executed - declared))
-
-    def test_a_DUPLICATE_unreachable_declaration_is_caught(self):
-        """Sol's round-7 mutation, run against the fix.
-
-        Declaring an extra copy of an already-covered NAME, reachable by
-        nothing, passed the previous version -- `DUPLICATE_UNREACHABLE_
-        SUCCESS=True` in his report. Here the copy carries its own line, so
-        it is its own path and nothing covers it."""
-        declared = set(self._declared())
-        ghost = ("divergent_partial_exists", 10 ** 6, 10 ** 6)
-        self.assertNotIn(ghost, declared)
-        executed = {run.path_id for run in self._executed()}
-        self.assertTrue(
-            (declared | {ghost}) - executed,
-            "an unreachable duplicate of a covered name was treated as "
-            "covered, which is exactly the round-7 finding")
+            "A path is the set of statements that reach the exit, so two "
+            "branches sharing an exit line are still two paths." % missing)
 
 
 class TestTheInstrumentIsNotVACUOUS(unittest.TestCase):

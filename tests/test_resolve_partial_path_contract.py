@@ -54,27 +54,70 @@ HELPERS = ("_preserve", "_divergent_name")
 #: identical are two exits, and collapsing them is what round 4 walked
 #: through.
 DECLARED_EXITS = [
-    # ADDED 2026-08-30, round 7. Two entries for ONE helper because the
-    # helper raises from two places, and two raise sites are two paths --
-    # the very distinction the state instrument had collapsed away.
-    ("raise", "filename_not_a_plain_name", "VIA _require_plain_name"),
-    ("raise", "filename_not_a_plain_name", "VIA _require_plain_name"),
-    ("return", "already_sealed", "final.exists() AND existing == intended"),
-    ("raise", "supplement_seal_conflict", "final.exists()"),
+    # REGENERATED 2026-08-30 after round 8. The walker now FORKS THE
+    # REMAINDER at every branch that falls through, so two branches that
+    # rejoin no longer share one declared exit. That is why `promote`,
+    # `supplement_partial_verify` and the post-promotion verify each appear
+    # TWICE: once reached with a byte-identical residue already staged, once
+    # reached having staged the bytes here. Sol proved those two were
+    # indistinguishable, and that deleting one scenario left coverage green.
+    #
+    # 12 entries became 17. NONE of the new ones is a new code path -- they
+    # were always executable and were being counted as one.
+    ("raise", "filename_not_a_plain_name",
+     'VIA _require_plain_name'),
+    ("raise", "filename_not_a_plain_name",
+     'VIA _require_plain_name'),
+    ("return", "already_sealed",
+     'final.exists() AND existing == intended'),
+    ("raise", "supplement_seal_conflict",
+     'final.exists() AND NOT(existing == intended)'),
     ("raise", "divergent_partial_exists",
-     "partial.exists() AND residue != intended AND VIA _preserve"),
+     'NOT(final.exists()) AND partial.exists() AND residue != '
+     'intended AND VIA _preserve'),
     ("raise", "incident_id_malformed",
-     "partial.exists() AND residue != intended AND VIA _preserve -> "
-     "_divergent_name"),
-    ("return", "retry_permitted", "partial.exists() AND residue != intended"),
+     'NOT(final.exists()) AND partial.exists() AND residue != '
+     'intended AND VIA _preserve -> _divergent_name'),
+    ("return", "retry_permitted",
+     'NOT(final.exists()) AND partial.exists() AND residue != '
+     'intended'),
     ("raise", "divergent_partial_exists",
-     "partial.read_bytes() != intended AND VIA _preserve"),
+     'NOT(final.exists()) AND partial.exists() AND NOT(residue '
+     '!= intended) AND partial.read_bytes() != intended AND '
+     'VIA _preserve'),
     ("raise", "incident_id_malformed",
-     "partial.read_bytes() != intended AND VIA _preserve -> _divergent_name"),
-    ("raise", "supplement_partial_verify", "partial.read_bytes() != intended"),
+     'NOT(final.exists()) AND partial.exists() AND NOT(residue '
+     '!= intended) AND partial.read_bytes() != intended AND '
+     'VIA _preserve -> _divergent_name'),
+    ("raise", "supplement_partial_verify",
+     'NOT(final.exists()) AND partial.exists() AND NOT(residue '
+     '!= intended) AND partial.read_bytes() != intended'),
     ("raise", "supplement_post_promotion_verify",
-     "final.read_bytes() != intended"),
-    ("return", "promote", ""),
+     'NOT(final.exists()) AND partial.exists() AND NOT(residue '
+     '!= intended) AND NOT(partial.read_bytes() != intended) '
+     'AND final.read_bytes() != intended'),
+    ("return", "promote",
+     'NOT(final.exists()) AND partial.exists() AND NOT(residue '
+     '!= intended) AND NOT(partial.read_bytes() != intended) '
+     'AND NOT(final.read_bytes() != intended)'),
+    ("raise", "divergent_partial_exists",
+     'NOT(final.exists()) AND NOT(partial.exists()) AND '
+     'partial.read_bytes() != intended AND VIA _preserve'),
+    ("raise", "incident_id_malformed",
+     'NOT(final.exists()) AND NOT(partial.exists()) AND '
+     'partial.read_bytes() != intended AND VIA _preserve -> '
+     '_divergent_name'),
+    ("raise", "supplement_partial_verify",
+     'NOT(final.exists()) AND NOT(partial.exists()) AND '
+     'partial.read_bytes() != intended'),
+    ("raise", "supplement_post_promotion_verify",
+     'NOT(final.exists()) AND NOT(partial.exists()) AND '
+     'NOT(partial.read_bytes() != intended) AND '
+     'final.read_bytes() != intended'),
+    ("return", "promote",
+     'NOT(final.exists()) AND NOT(partial.exists()) AND '
+     'NOT(partial.read_bytes() != intended) AND '
+     'NOT(final.read_bytes() != intended)'),
 ]
 
 #: THE CLOSED CALL WORLD. Anything not matching one of these shapes with a
@@ -155,14 +198,41 @@ def _action_of(call):
     return ast.unparse(call.func)
 
 
+def _always_exits(body):
+    """Whether every path through `body` leaves the function.
+
+    Only the LAST statement is consulted, plus the both-branches case for a
+    trailing `if`. That is exact for a loop-free function whose statement
+    world is closed -- which `test_the_target_is_still_loop_free` and the
+    UNDERSTOOD tuple both enforce -- and it fails in the SAFE direction
+    anyway: judging an exiting branch as falling through duplicates a
+    declared path that nothing can execute, which the coverage assertion
+    reports rather than hides."""
+    if not body:
+        return False
+    last = body[-1]
+    if isinstance(last, (ast.Return, ast.Raise)):
+        return True
+    if isinstance(last, ast.If):
+        return _always_exits(last.body) and _always_exits(last.orelse)
+    return False
+
+
 class _PathWalk:
     """Straight-line + if/else walk carrying per-path bindings."""
 
     def __init__(self):
         self.exits = []          # ordered, never deduplicated
 
-    def _record(self, kind, name, guards, binds, node=None, raise_line=None):
+    def _record(self, kind, name, guards, binds, node=None, raise_line=None,
+                lines=()):
         self.exits.append({"kind": kind, "name": name,
+                           #: Every statement line on the path that reaches
+                           #: this exit. Added 2026-08-30 so a downstream
+                           #: instrument can match a declared PATH against
+                           #: an executed one -- the exit line alone made
+                           #: two branches that rejoin indistinguishable.
+                           "lines": tuple(lines),
                            "guard": " AND ".join(guards),
                            "binds": dict(binds), "node": node,
                            #: The raise line INSIDE a helper, when this exit
@@ -173,7 +243,7 @@ class _PathWalk:
                            #: instrument having only the NAME to go on.
                            "raise_line": raise_line})
 
-    def _helper_exits(self, stmt, guards, binds):
+    def _helper_exits(self, stmt, guards, binds, lines=()):
         for node in ast.walk(stmt):
             if not isinstance(node, ast.Call):
                 continue
@@ -188,7 +258,7 @@ class _PathWalk:
                     # collapsing exactly that pair, so the line has to travel
                     # with the exit or nothing downstream can tell them apart.
                     self._record("raise", code, guards + ["VIA " + via],
-                                 binds, node, raise_line)
+                                 binds, node, raise_line, lines)
 
     #: Statement types this walk UNDERSTANDS. Everything else is refused
     #: rather than walked past, for the same reason the call world is
@@ -199,8 +269,10 @@ class _PathWalk:
     UNDERSTOOD = (ast.If, ast.Assign, ast.Return, ast.Raise, ast.Expr,
                   ast.Pass, ast.ImportFrom, ast.Import)
 
-    def walk(self, body, guards, binds):
-        for stmt in body:
+    def walk(self, body, guards, binds, lines=()):
+        lines = list(lines)
+        for index, stmt in enumerate(body):
+            lines.append(stmt.lineno)
             if not isinstance(stmt, self.UNDERSTOOD):
                 raise AssertionError(
                     "resolve_partial contains a %s at line %d. This walk "
@@ -219,22 +291,40 @@ class _PathWalk:
                     "silently miss them." % (stmt.lineno,
                                              ast.unparse(stmt)[:60]))
             if isinstance(stmt, ast.If):
-                self.walk(stmt.body,
-                          guards + [ast.unparse(stmt.test)], dict(binds))
-                self.walk(stmt.orelse,
-                          guards + ["NOT(%s)" % ast.unparse(stmt.test)],
-                          dict(binds))
-                continue
-            self._helper_exits(stmt, guards, binds)
+                # FORK THE REMAINDER, 2026-08-30 (round 8 HIGH).
+                #
+                # This used to walk both branches and then `continue`, which
+                # walked everything AFTER the `if` exactly once, carrying the
+                # guards from BEFORE it. Two branches that fall through and
+                # rejoin therefore produced ONE declared exit between them.
+                # Sol measured the consequence: the "nothing staged, write
+                # it" path and the "identical residue already staged, skip
+                # the write" path both end at `promote` on the same line, so
+                # they shared an identity -- and deleting one of them from
+                # the scenario generator left the coverage assertion green.
+                #
+                # A branch that exits on every path has no remainder. One
+                # that falls through carries the rest of the function with
+                # it, once per branch, under that branch's guard.
+                test = ast.unparse(stmt.test)
+                rest = body[index + 1:]
+                for branch, guard in ((stmt.body, test),
+                                      (stmt.orelse, "NOT(%s)" % test)):
+                    tail = (list(branch) if _always_exits(branch)
+                            else list(branch) + rest)
+                    self.walk(tail, guards + [guard], dict(binds),
+                              lines)
+                return
+            self._helper_exits(stmt, guards, binds, lines)
             if isinstance(stmt, ast.Assign) and isinstance(stmt.targets[0],
                                                            ast.Name):
                 binds[stmt.targets[0].id] = ast.unparse(stmt.value)
             elif isinstance(stmt, ast.Return) and stmt.value is not None:
-                self._record("return", _action_of(stmt.value), guards, binds,
-                             stmt.value)
+                self._record("return", _action_of(stmt.value), guards,
+                             binds, stmt.value, None, lines)
             elif isinstance(stmt, ast.Raise):
-                self._record("raise", _action_of(stmt.exc), guards, binds,
-                             stmt.exc)
+                self._record("raise", _action_of(stmt.exc), guards,
+                             binds, stmt.exc, None, lines)
 
 
 def _resolve_partial():
