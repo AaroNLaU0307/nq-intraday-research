@@ -236,6 +236,75 @@ def _assert_c_build_1(before: tuple, after: tuple, label: str) -> None:
 
 
 # ===========================================================================
+# C_BUILD_2 - during staging
+# ===========================================================================
+#
+# THE MECHANISM ALREADY EXISTED. `seal_supplement_production` re-derives
+# every decisive fact from the authority, writes a payload IT rebuilt, and
+# calls `resolve_partial` for the staging and `.partial` recovery. What was
+# missing was only the layer that CLASSIFIES its refusal - which is exactly
+# what `run_c_build` is to the row builder.
+#
+# TWO OWNERS, AND ASKING IN THE RIGHT ORDER. A seal refusal is owned by a
+# gate (Router A) or by Router B, and BD-1 ruled that two codes get no gate
+# at all. So this asks `seal_failure_router` FIRST - who owns this - and
+# only then `classify_seal_failure` - which gate. Asking for the gate first
+# would raise ClassificationError for a Router B code and invite a caller
+# to swallow it, which is how a ruled no-gate code acquires a gate by
+# accident. An unmapped code raises out of `seal_failure_router` loudly,
+# fail-closed, exactly as BD-1 requires.
+#
+# THE GREEN-GATE TRAP, DELIBERATE AND DOCUMENTED. When Router B owns the
+# refusal, NO gate names it, so the five C_BUILD gates go green over a seal
+# that did not happen. That is the ruled design - and it is why this
+# returns `local_seal_ok` beside the outcome instead of returning the
+# outcome alone. A caller that reads only the gates has not read the
+# answer. `test_a_router_b_refusal_leaves_the_gates_green` executes that
+# trap rather than leaving it to be discovered.
+
+
+class SealStagingResult(NamedTuple):
+    """What C_BUILD_2 produced. BOTH fields are the answer, never one."""
+    outcome: CBuildOutcome        # what the gates classify
+    local_seal_ok: bool           # what `decide_after_seal` needs
+    local_seal_sha256: str = ""   # what `run_c_build_3` recomputes against
+    router_b_code: str = ""       # non-empty when Router B owns the refusal
+
+
+def run_c_build_2(*, product, out_dir, authority, prepared,
+                  incident_id: str) -> SealStagingResult:
+    """Seal and stage, and classify whatever that produced.
+
+    WRITES, BY CONSTRUCTION. `CHECKPOINT_OF` records why C_BUILD_2 cannot
+    carry a no-writes rule: staging writes `<name>.partial` before it can
+    verify it. R2 was HOLD'd for asserting one zero-side-effect rule across
+    all three checkpoints.
+
+    Building this is engineering; running it against a real output root is
+    not - see SUPPLEMENT_PRODUCTION_IS_NOT_AUTHORIZATION."""
+    from . import supplement_production as _sp
+
+    try:
+        action, digest = _sp.seal_supplement_production(
+            product, out_dir, authority=authority, prepared=prepared,
+            incident_id=incident_id)
+    except Exception as exc:                       # noqa: BLE001
+        code = getattr(exc, "code", None)
+        if code is None:
+            raise
+        # WHO owns it, before WHICH gate. Unmapped raises out of here.
+        if dsc.seal_failure_router(code) == dsc.ROUTER_B:
+            return SealStagingResult(CBuildOutcome((), None, None), False,
+                                     router_b_code=code)
+        stage, gate = dsc.classify_seal_failure(code)
+        return SealStagingResult(
+            CBuildOutcome((), None,
+                          CBuildFailure(gate, code, str(exc), stage)),
+            False)
+    return SealStagingResult(CBuildOutcome((), action, None), True, digest)
+
+
+# ===========================================================================
 # C_BUILD_3 — after the archive attempt
 # ===========================================================================
 #

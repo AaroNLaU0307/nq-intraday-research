@@ -37,8 +37,13 @@ MODULE = Path(sb.__file__)
 
 #: The runner's own split, named here so a change to the contract's table
 #: shows up as a failure rather than as a quietly different measurement.
-CLASSIFIERS = ("row_schema_blind", "day_set_exact", "rows_digest_recompute")
-UNCONDITIONAL = ("seal_staging_partial", "archive_policy_a")
+#: It DID: `seal_staging_partial` moved from the right column to the left on
+#: 2026-09-01 when `run_c_build_2` gave it an outcome to classify, and these
+#: tests went red rather than quietly measuring something else. That is the
+#: whole reason the split is pinned here instead of inferred at run time.
+CLASSIFIERS = ("row_schema_blind", "day_set_exact", "rows_digest_recompute",
+               "seal_staging_partial")
+UNCONDITIONAL = ("archive_policy_a",)
 
 
 def _blobs():
@@ -106,7 +111,7 @@ class TestAbsenceIsARefusal(unittest.TestCase):
         self.assertFalse(report.passed)
         self.assertFalse(report.outcome_attached)
 
-    def test_the_three_classifiers_say_they_classified_nothing(self):
+    def test_every_classifier_says_it_classified_nothing(self):
         report = sb.run_build_gates(_ctx(), None)
         detail = dict(report.results)
         for name in CLASSIFIERS:
@@ -116,7 +121,7 @@ class TestAbsenceIsARefusal(unittest.TestCase):
 class TestTheFiveAreNotAlike(unittest.TestCase):
     """The measurement, not a reading of the comments."""
 
-    def test_the_two_unconditional_gates_never_read_the_outcome(self):
+    def test_the_unconditional_gate_never_reads_the_outcome(self):
         ctx = sb.assemble_build_context(_ctx(), _Tripwire())
         for name in UNCONDITIONAL:
             with self.assertRaises(sr.SupplementRunnerError) as caught:
@@ -132,7 +137,7 @@ class TestTheFiveAreNotAlike(unittest.TestCase):
                 sr.GATES[name](ctx)
             self.assertIn("read .belongs_to", str(caught.exception))
 
-    def test_a_clean_outcome_passes_three_and_cannot_pass_the_other_two(self):
+    def test_a_clean_outcome_passes_four_and_cannot_pass_the_last(self):
         report = sb.run_build_gates(_ctx(), fx._run())
         detail = dict(report.results)
         for name in CLASSIFIERS:

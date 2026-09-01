@@ -20,14 +20,14 @@ never ran. That is why this module has no default outcome and no way to
 proceed without one -- the same reason `supplement_derive` refuses to invent
 a prepared input.
 
-ONLY THREE OF THE FIVE ARE CLASSIFIERS -- measured, and it is the finding
-this module exists to surface. `row_schema_blind`, `day_set_exact` and
-`rows_digest_recompute` (C_BUILD_1) route through the classifier and can pass
-once an outcome is attached. `seal_staging_partial` (C_BUILD_2) and
-`archive_policy_a` (C_BUILD_3) call `_fail` UNCONDITIONALLY -- they never read
-the outcome at all, so no input whatsoever makes them pass. Their refusals are
-by design and each states its own reason: nothing on this path is ever sealed
-or archived, and Router B, not an ordinary gate, owns the archive outcome.
+ONLY FOUR OF THE FIVE ARE CLASSIFIERS -- measured, and the count has already
+moved once. `row_schema_blind`, `day_set_exact`, `rows_digest_recompute`
+(C_BUILD_1) and, since 2026-09-01, `seal_staging_partial` (C_BUILD_2) route
+through the classifier and pass once an outcome is attached. Only
+`archive_policy_a` (C_BUILD_3) calls `_fail` UNCONDITIONALLY, and that is a
+RULING rather than unfinished work: `ROUTER_OF` gives its outcome to Router B,
+because routing it as an ordinary gate sends a refusal to F2 while ratified
+`ND1_ARCHIVE_FAILURE_POLICY=A` requires A1.
 
 That distinction is the whole reason this reports rather than runs. "Refused"
 is one word for two different situations, and only one of them is answered by

@@ -177,15 +177,20 @@ class TestCBuildNowREADSTheContextAndThatIsTheTripwireFiring(unittest.TestCase):
         full = _bare(c_build_outcome=CBuildOutcome((), None, None))
         ctxmod.assert_complete(full, "C_BUILD")
 
-    def test_the_two_gates_deliberately_left_as_stubs_still_are(self):
-        """`seal_staging_partial` (its wording is what Sol just HELD on) and
-        `archive_policy_a` (Router B owns its outcome) were excluded from
-        the patch ON PURPOSE, each for a stated reason. If either quietly
-        becomes a classifier, the reason went with it."""
+    def test_the_gate_deliberately_left_as_a_stub_still_is(self):
+        """WAS two gates. `seal_staging_partial` was wired on 2026-09-01
+        once `run_c_build_2` gave it an outcome to classify -- its stated
+        reason ("nothing on this path is ever sealed") turned out to be
+        about a missing classifier rather than a missing mechanism, so the
+        reason expired and the exclusion went with it.
+
+        `archive_policy_a` stays, and its reason is a RULING: Router B owns
+        its outcome. If it quietly becomes a classifier, the ruling went
+        with it."""
         import inspect
 
         from itsf.mc import supplement_runner as sr
-        for gate in ("seal_staging_partial", "archive_policy_a"):
+        for gate in ("archive_policy_a",):
             with self.subTest(gate=gate):
                 source = inspect.getsource(getattr(sr, "_g_" + gate))
                 self.assertIn("unreachable in this build", source)

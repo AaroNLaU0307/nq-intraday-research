@@ -30,12 +30,18 @@ REPO = Path(__file__).resolve().parents[1]
 RUNNER = REPO / "src" / "itsf" / "mc" / "supplement_runner.py"
 RECORD = REPO / "ops" / "PREPARED_C_BUILD_1_GATE_WIRING.md"
 
-WIRED = ("row_schema_blind", "day_set_exact", "rows_digest_recompute")
-#: Excluded on purpose, each for a reason that must still hold.
+WIRED = ("row_schema_blind", "day_set_exact", "rows_digest_recompute",
+         # 2026-09-01. Its old exclusion read "its WORDING is what Sol just
+         # HELD on, and nothing on this path is ever sealed" -- and the
+         # second half turned out to be about a MISSING CLASSIFIER, not a
+         # missing mechanism: `seal_supplement_production` already sealed
+         # and staged in full. `run_c_build_2` supplies the outcome, so the
+         # exclusion's own reason no longer holds and the gate is wired.
+         "seal_staging_partial")
+#: Excluded on purpose, and now only one -- for a reason that is a RULING
+#: rather than unfinished work, which is why it does not expire the way the
+#: other exclusion did.
 EXCLUDED = {
-    "seal_staging_partial":
-        "C_BUILD_2. Its WORDING is what Sol just HELD on, and nothing on "
-        "this path is ever sealed.",
     "archive_policy_a":
         "C_BUILD_3. Router B owns its outcome (ROUTER_OF); wiring it as an "
         "ordinary gate re-creates the Policy-A contradiction.",
@@ -44,7 +50,7 @@ EXCLUDED = {
 
 class TestTheWiringLanded(unittest.TestCase):
 
-    def test_the_three_C_BUILD_1_gates_are_classifiers_now(self):
+    def test_every_wired_gate_is_a_classifier_now(self):
         from itsf.mc import supplement_runner as sr
         for gate in WIRED:
             with self.subTest(gate=gate):
@@ -86,7 +92,7 @@ class TestTheTwoExclusionsAreStillJustified(unittest.TestCase):
     reason stops being true, the exclusion needs revisiting rather than
     inheriting."""
 
-    def test_both_excluded_gates_still_refuse_unconditionally(self):
+    def test_the_remaining_excluded_gate_still_refuses_unconditionally(self):
         from itsf.mc import supplement_runner as sr
         for gate in EXCLUDED:
             with self.subTest(gate=gate):

@@ -580,31 +580,30 @@ def _g_rows_digest_recompute(ctx: GateContext) -> None:
 
 
 def _g_seal_staging_partial(ctx: GateContext) -> None:
-    # C_BUILD_2, and DELIBERATELY still refusing while the three C_BUILD_1
-    # gates above have been wired. Two reasons, neither of them "not got
-    # to it yet":
+    # C_BUILD_2, WIRED 2026-09-01, and what changed is worth stating
+    # precisely because the previous comment was almost right.
     #
-    #   1. Nothing is ever sealed on this path — `assert_real_run_allowed`,
-    #      directory creation and P2 all still refuse, so there is no
-    #      staging outcome for this gate to classify.
-    #   2. WAS "its wording is out for review". THAT IS NO LONGER TRUE and
-    #      the comment said otherwise for five rounds -- it still cited
-    #      ROUND3 and pin d34ce7c, a review that returned on 2026-08-30 and
-    #      was followed by four more. A comment asserting a review is in
-    #      progress, months after it closed, is the same defect this whole
-    #      review kept finding in my own claims: a sentence that was true
-    #      when written and false when read.
+    # It said this gate was unreachable because "nothing is ever sealed on
+    # this path, so there is no staging outcome for this gate to classify".
+    # The first half is still true and the second half was the error: the
+    # SEALING MECHANISM already existed in full --
+    # `seal_supplement_production` re-derives from the authority, rebuilds
+    # the payload and calls `resolve_partial` for staging. What was missing
+    # was never the mechanism, only a producer that CLASSIFIES its refusal,
+    # which `day_strata_pipeline.run_c_build_2` now is.
     #
-    #      Where the wording actually stands: eight rounds, all HOLD, all
-    #      findings reproduced and closed, capped by Aaron's OD-1 and
-    #      delivered at `ops/DELIVERY_C_BUILD_2_WORDING_AT_CAP_2026-08-30.md`
-    #      with its residuals marked ACCEPTED_BY_CAP. The specification is
-    #      settled; reason 1 is what still makes this gate unreachable, and
-    #      reason 1 alone is enough.
-    _fail("C_BUILD", "seal_staging_partial", "SupplementRunnerError",
-          "unreachable in this build: nothing is ever sealed; the "
-          "C_BUILD_2 wording closed at cap on 2026-08-30 and is NOT "
-          "what makes this unreachable")
+    # SO THIS IS NOT AN OPENING. Absence of an outcome is still a refusal,
+    # and everything that stops a real run -- `assert_real_run_allowed`,
+    # directory creation, and a live P2 -- refuses exactly as before.
+    # Wiring a classifier is engineering; running it is not, and the two
+    # were separated by Aaron's 2026-08-29 ruling.
+    #
+    # Wording: eight rounds, all HOLD, all findings reproduced and closed,
+    # capped by OD-1 and delivered at
+    # `ops/DELIVERY_C_BUILD_2_WORDING_AT_CAP_2026-08-30.md`. Its §0 records
+    # one thing this wiring leans on: the post-round-8 repair has never
+    # been independently reviewed.
+    _classify_c_build_1(ctx, "seal_staging_partial")
 
 
 def _g_archive_policy_a(ctx: GateContext) -> None:

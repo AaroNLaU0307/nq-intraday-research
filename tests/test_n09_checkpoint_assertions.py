@@ -395,16 +395,39 @@ class TestCBuild2DuringStaging(_Tmp):
                          "the scan does not descend into imported modules; "
                          "if it now does, this boundary note is stale")
 
-    def test_the_gate_for_this_checkpoint_refuses_unconditionally(self):
-        """Why none of the above is a gate test: `seal_staging_partial` is a
-        default-refuse stub. The assertions therefore live in the MECHANISM
-        the gate would classify, which is what can be held today."""
-        ctx = sr.GateContext(supplement_id="MC-DS-S001", head_commit="0" * 40,
-                             registry_text="", runs_root=None,
-                             archive_root=None)
+    def _ctx(self, outcome=None):
+        return sr.GateContext(supplement_id="MC-DS-S001", head_commit="0" * 40,
+                              registry_text="", runs_root=None,
+                              archive_root=None, c_build_outcome=outcome)
+
+    def test_absence_of_an_outcome_is_still_a_refusal(self):
+        """WAS `test_the_gate_for_this_checkpoint_refuses_unconditionally`,
+        and that name stopped being true on 2026-09-01 when the gate was
+        wired to `_classify_c_build_1`. What survives the change is the part
+        that mattered: with nothing attached the gate has classified
+        nothing, and a pass would report 'no defect' about a seal that never
+        happened."""
+        with self.assertRaises(sr.SupplementRunnerError) as caught:
+            sr.GATES["seal_staging_partial"](self._ctx())
+        self.assertIn("classified nothing", str(caught.exception))
+
+    def test_it_reports_a_staging_refusal_under_its_own_name(self):
+        from itsf.mc.day_strata_pipeline import CBuildFailure, CBuildOutcome
+        failure = CBuildFailure("seal_staging_partial",
+                                "supplement_seal_conflict", "different bytes")
+        ctx = self._ctx(CBuildOutcome((), None, failure))
         with self.assertRaises(sr.SupplementRunnerError) as caught:
             sr.GATES["seal_staging_partial"](ctx)
-        self.assertIn("nothing is ever sealed", str(caught.exception))
+        self.assertIn("supplement_seal_conflict", str(caught.exception))
+
+    def test_it_does_not_claim_a_refusal_that_belongs_to_another_gate(self):
+        """`belongs_to` is what keeps one producer refusal from being
+        reported five times under five names."""
+        from itsf.mc.day_strata_pipeline import CBuildFailure, CBuildOutcome
+        failure = CBuildFailure("day_set_exact", "production_day_set_drift",
+                                "missing days")
+        ctx = self._ctx(CBuildOutcome((), None, failure))
+        sr.GATES["seal_staging_partial"](ctx)          # passes: not its own
 
 
 class TestCBuild3AfterAnArchiveAttempt(unittest.TestCase):
