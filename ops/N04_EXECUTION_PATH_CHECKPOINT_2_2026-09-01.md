@@ -138,14 +138,22 @@ if outcome.failure is not None:      # <- 条件式断言
 另外把两处 `getattr(failure, "stage", "?")` 改成直接读字段——
 **字段被改名时应该抛异常，而不是渲染成一个问号继续往下走。**
 
-## 6. 下一步不是「再建一段」，而是一个要你定的岔口
+## 6. 下一步，以及归属
 
 ```
 要让 run_supplement_production 能返回，缺的是
-  ①  seal / staging 机制（C_BUILD_2）
-  ②  archive + Router B 接线（C_BUILD_3，且不得当普通门接）
-  ③  一条 live 的 P2 —— 且必须在 ①② 之后签，否则重蹈
-      ops/P2_WITHDRAWN_NO_EXECUTION_PATH_2026-08-31.md 记的那个顺序错误
+  ①  seal / staging 机制（C_BUILD_2）              -> builder（我）
+  ②  archive + Router B 接线（C_BUILD_3）          -> builder（我）
+      且不得当普通门接：那会经 Router A 走到 F2，与已批 POLICY=A 矛盾
+  ③  一条 live 的 P2                                -> Aaron，且仅 Aaron
+      且必须在 ①② 之后签，否则重蹈
+      ops/P2_WITHDRAWN_NO_EXECUTION_PATH_2026-08-31.md 记的顺序错误
 ```
 
 **①② 是真正的剩余工程量，也是唯一真正「缺代码」的部分。**
+
+归属按 2026-08-29 的授权：工程决定归 builder，Aaron 保留六类。
+建 ①② 属工程；**但「建代码不等于跑代码」——真正创建 runs/archive 目录、
+以及签 ③，仍然逐次需要你的精确授权。**
+
+本记录初稿把 ①② 也写成「要你定的岔口」，**那是把我该做的决定推给你**，已订正。
