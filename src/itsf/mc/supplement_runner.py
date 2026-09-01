@@ -602,8 +602,9 @@ def _g_seal_staging_partial(ctx: GateContext) -> None:
     #      settled; reason 1 is what still makes this gate unreachable, and
     #      reason 1 alone is enough.
     _fail("C_BUILD", "seal_staging_partial", "SupplementRunnerError",
-          "unreachable in this build: nothing is ever sealed (and the "
-          "C_BUILD_2 wording is out for review)")
+          "unreachable in this build: nothing is ever sealed; the "
+          "C_BUILD_2 wording closed at cap on 2026-08-30 and is NOT "
+          "what makes this unreachable")
 
 
 def _g_archive_policy_a(ctx: GateContext) -> None:
