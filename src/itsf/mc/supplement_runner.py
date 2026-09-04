@@ -1151,9 +1151,12 @@ def run_supplement_production(supplement_id: str = sc.FIRST_SUPPLEMENT_ID,
     # remaining gap is data acquisition behind a gate that already refuses --
     # not a missing path, and not something to open from here.
     raise SupplementRunNotAuthorized(
-        f"{supplement_id}: a live authorization row exists and an execution "
-        "path now exists (supplement_chain), but this entry cannot supply "
-        "the chain's dataset-side inputs (universe, vol_method, "
-        "flag_by_date) without a Development-data read, which is gated. "
-        "N04 still ships DEFAULT-REFUSE: the ratification authorizes "
-        "grammar, not execution")
+        f"{supplement_id}: a live authorization row exists and a GATE-FIRST "
+        "execution path now exists "
+        "(supplement_chain.run_supplement_gate_first: A_PRECHECK, then "
+        "B_DERIVE, then an owned run-directory step, then the three C_BUILD "
+        "moments). What this entry still cannot supply is the chain's "
+        "dataset-side inputs (universe, vol_method, flag_by_date), because "
+        "building them is a Development-data read and no job_dir is "
+        "configured anywhere. N04 still ships DEFAULT-REFUSE: the "
+        "ratification authorizes grammar, not execution")

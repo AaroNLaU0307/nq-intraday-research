@@ -26,12 +26,14 @@ retracted on 2026-09-02 after a reviewing seat refuted its elimination.
 from __future__ import annotations
 
 import dataclasses as _dc
+from pathlib import Path
 
 from . import day_strata_pipeline as _dsp
 from . import supplement_contract as _sc
 from . import supplement_runner as _sr
 
 __all__ = ["ChainResult", "ChainRefusal", "run_supplement_chain",
+           "run_supplement_gate_first", "refuse_to_create_run_directory",
            "ARCHIVE_SEAM", "ARCHIVED_BYTES_DELETED"]
 
 
@@ -233,3 +235,87 @@ def run_supplement_chain(base_ctx, *, planned, authority, prepared, universe,
     return ChainResult(verdict, tuple(outcome.rows),
                        staging.local_seal_sha256,
                        getattr(archive_report, "status", ""))
+
+# ===========================================================================
+# The gate-first composition (H2 repair, 2026-09-02)
+# ===========================================================================
+#
+# THE FINDING. `run_supplement_chain` runs the three C_BUILD moments and
+# nothing else, so a caller could reach P4 without a single one of the 13
+# A_PRECHECK or 5 B_DERIVE gates having passed. The precheck/derive/build
+# modules only REPORT; `run_supplement_production` refuses unconditionally
+# and never calls any of this. Components existed; a path did not -- the
+# same shape as `ops/P2_WITHDRAWN_NO_EXECUTION_PATH_2026-08-31.md`.
+#
+# WHY BUILDING IT OPENS NOTHING. A_PRECHECK contains the live-authorization
+# gates, and they refuse today for want of a P2. Composing the stages in
+# order does not weaken that -- it makes the refusal happen at the first
+# gate that should raise it, instead of never being asked.
+#
+# THE DIRECTORY STEP IS NOW OWNED. `<id>_<UTC>` had no owner: the planner
+# refuses to create it, the chain assumed it, and nothing named the gap.
+# `make_run_directory` is a REQUIRED callable with no default, so a caller
+# must say who creates it. `refuse_to_create_run_directory` is what an
+# unauthorized caller passes, and it refuses by name --
+# `DIRECTORY_CREATION_AUTHORIZED=NO` stays true and becomes visible.
+
+
+def refuse_to_create_run_directory(target) -> "NoReturn":
+    """The default posture: naming the step without performing it."""
+    raise ChainRefusal(
+        "RUN_DIRECTORY", "directory_creation_not_authorized",
+        "%s would have to be created, and ND1 says "
+        "DIRECTORY_CREATION_AUTHORIZED=NO. Creating a directory under the "
+        "governed roots is a separate authorization from Aaron; pass a "
+        "callable that does it only once he has given one." % target)
+
+
+def run_supplement_gate_first(base_ctx, *, planned, prepared, universe,
+                              vol_method, flag_by_date,
+                              event_na_mapping: str, incident_id: str,
+                              archive_before, archive_after_reader,
+                              make_run_directory):
+    """A_PRECHECK, then B_DERIVE, then the run directory, then the chain.
+
+    Every stop is a `ChainRefusal` naming the stage and gate. `prepared` and
+    `make_run_directory` are required with no defaults, for the reason every
+    layer below states: a default would let a caller omit one and leave this
+    to find it."""
+    from . import supplement_authority as _sa
+
+    for name in _sc.GATE_TABLE["A_PRECHECK"]:
+        try:
+            _sr.GATES[name](base_ctx)
+        except _sr.SupplementRunnerError as exc:
+            raise ChainRefusal("A_PRECHECK", getattr(exc, "code", name),
+                               str(exc)) from exc
+
+    try:
+        authority = _sa.derive_supplement_authority(
+            prepared, supplement_id=base_ctx.supplement_id)
+    except Exception as exc:                       # noqa: BLE001
+        raise ChainRefusal("B_DERIVE", getattr(exc, "code", "authority_mint"),
+                           str(exc)) from exc
+    ctx = _dc.replace(base_ctx, authority=authority, prepared=prepared)
+    for name in _sc.GATE_TABLE["B_DERIVE"]:
+        try:
+            _sr.GATES[name](ctx)
+        except _sr.SupplementRunnerError as exc:
+            raise ChainRefusal("B_DERIVE", getattr(exc, "code", name),
+                               str(exc)) from exc
+
+    make_run_directory(planned.runs_target)
+    target = Path(planned.runs_target)
+    if not target.is_dir():
+        # NAMED, because a bare FileNotFoundError out of the sealer was one
+        # of the things H2 reported.
+        raise ChainRefusal("RUN_DIRECTORY", "run_directory_absent",
+                           "%s does not exist after make_run_directory "
+                           "returned" % target)
+
+    return run_supplement_chain(
+        ctx, planned=planned, authority=authority, prepared=prepared,
+        universe=universe, vol_method=vol_method, flag_by_date=flag_by_date,
+        event_na_mapping=event_na_mapping, incident_id=incident_id,
+        archive_before=archive_before,
+        archive_after_reader=archive_after_reader)

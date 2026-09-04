@@ -353,5 +353,83 @@ def test_it_creates_no_directory_of_its_own(prod, authority, tmp_path):
     assert invented == [], (
         "the chain created directories nobody asked for: %s" % invented)
     assert (planned.runs_target / dss.SUPPLEMENT_FILENAME).is_file()
+
+# ===========================================================================
+# The gate-first composition (H2)
+# ===========================================================================
+
+class TestTheGateFirstPath(unittest.TestCase):
+    """H2, from the 2026-09-02 engineering-safety HOLD: components existed
+    and a path did not, so P4 was reachable with none of the 18 A_PRECHECK
+    or B_DERIVE gates ever asked."""
+
+    def test_it_refuses_at_A_PRECHECK_today(self):
+        """And it refuses for the RIGHT reason -- the live-authorization
+        gates. This is why composing the stages opens nothing: the first
+        stage already says no."""
+        with self.assertRaises(chain.ChainRefusal) as caught:
+            chain.run_supplement_gate_first(
+                _base_ctx(), planned=object(), prepared=object(),
+                universe=object(), vol_method=object(), flag_by_date={},
+                event_na_mapping="none", incident_id=fx.INC,
+                archive_before=(), archive_after_reader=tuple,
+                make_run_directory=chain.refuse_to_create_run_directory)
+        self.assertEqual("A_PRECHECK", caught.exception.moment)
+
+    def test_it_asks_the_gates_in_the_contracts_order(self):
+        """The stage order is the contract's, so a refusal names the first
+        gate that should have raised it rather than whichever ran first."""
+        import ast
+        tree = ast.parse(MODULE.read_text(encoding="utf-8"))
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef)
+                  and n.name == "run_supplement_gate_first")
+        stages = [n.slice.value for n in ast.walk(fn)
+                  if isinstance(n, ast.Subscript)
+                  and getattr(n.value, "attr", "") == "GATE_TABLE"
+                  and isinstance(getattr(n, "slice", None), ast.Constant)]
+        self.assertEqual(["A_PRECHECK", "B_DERIVE"], stages)
+
+    def test_the_directory_step_is_owned_and_refuses_by_default(self):
+        """`<id>_<UTC>` had no owner: the planner refuses to create it, the
+        chain assumed it, and nothing named the gap."""
+        with self.assertRaises(chain.ChainRefusal) as caught:
+            chain.refuse_to_create_run_directory(Path("X"))
+        self.assertEqual("directory_creation_not_authorized",
+                         caught.exception.code)
+        self.assertIn("DIRECTORY_CREATION_AUTHORIZED=NO",
+                      str(caught.exception))
+
+    def test_make_run_directory_and_prepared_are_required(self):
+        """A default would let a caller omit either and leave this to find
+        one -- the same rule every layer below states."""
+        import inspect
+        params = inspect.signature(chain.run_supplement_gate_first).parameters
+        for name in ("prepared", "make_run_directory", "planned"):
+            self.assertIn(name, params)
+            self.assertIs(params[name].default, inspect.Parameter.empty, name)
+
+    def test_a_directory_that_was_not_actually_made_is_NAMED(self):
+        """H2 reported a bare FileNotFoundError escaping when `out_dir` did
+        not exist. A callable that returns without creating anything is the
+        same situation, and it now stops with a name."""
+        from itsf.mc import supplement_authority as _sa
+
+        with mock.patch.object(sr, "GATES", {k: (lambda ctx: None)
+                                             for k in sr.GATES}),                 mock.patch.object(_sa, "derive_supplement_authority",
+                                  return_value=object()):
+            with self.assertRaises(chain.ChainRefusal) as caught:
+                chain.run_supplement_gate_first(
+                    _base_ctx(), planned=mock.Mock(
+                        runs_target=Path("no-such-directory-anywhere")),
+                    prepared=object(), universe=object(),
+                    vol_method=object(), flag_by_date={},
+                    event_na_mapping="none", incident_id=fx.INC,
+                    archive_before=(), archive_after_reader=tuple,
+                    make_run_directory=lambda target: None)
+        self.assertEqual("RUN_DIRECTORY", caught.exception.moment)
+        self.assertEqual("run_directory_absent", caught.exception.code)
+
+
 if __name__ == "__main__":
     unittest.main()
