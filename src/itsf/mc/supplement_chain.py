@@ -19,7 +19,8 @@ layers before it. `universe`, `vol_method`, `flag_by_date` and
 dataset is the caller that has to be authorized to. Building this is
 engineering; running it is not.
 
-ONE GAP IS LEFT OPEN ON PURPOSE, see `ARCHIVED_BYTES_DELETED_HAS_NO_VERDICT`.
+ONE CASE LOOKED UNRULED AND WAS NOT, see `ARCHIVED_BYTES_DELETED` and BD-2 in
+`decide_after_seal`.
 """
 from __future__ import annotations
 
@@ -30,31 +31,24 @@ from . import supplement_contract as _sc
 from . import supplement_runner as _sr
 
 __all__ = ["ChainResult", "ChainRefusal", "run_supplement_chain",
-           "ARCHIVE_SEAM", "ARCHIVED_BYTES_DELETED_HAS_NO_VERDICT"]
+           "ARCHIVE_SEAM", "ARCHIVED_BYTES_DELETED"]
 
 
-#: THE OPEN GAP, stated rather than papered over.
+#: THE CASE THAT LOOKED UNRULED, AND WAS NOT (BD-2, 2026-09-02).
 #:
 #: `run_c_build_3` can find `archived_bytes_deleted`: the local seal survived
 #: the archive attempt, but bytes that were already in the archive are gone.
-#: Ratified `ND1_ARCHIVE_FAILURE_POLICY=A` says P4 requires
-#: `local_seal_ok AND archive_ok`, so this must not become P4 -- but Router B
-#: cannot express it either. `decide_after_seal` reaches A1 only by calling
-#: `classify_archive_report`, and that raises `archive_ok_has_no_code` for a
-#: report whose own status is `archive_ok`. `archive_sealed_run` verifies the
-#: copy it just made; it does not watch bytes it archived on an earlier run.
+#: `archive_sealed_run` verifies the copy it just made and never looks at
+#: bytes archived on an earlier run, so its report can say `archive_ok` while
+#: R3 §1's C_BUILD_3 assertion (b) -- "无任何已归档字节被删除" -- is violated.
 #:
-#: So the report can say ok while the checkpoint says the archive destroyed
-#: evidence, and no ruled answer covers that pair. Choosing one here would be
-#: this project's oldest defect -- a claim wider than its warrant -- and
-#: choosing A1 silently would hand a terminal state to a case nobody ruled
-#: on. It refuses instead, loudly and by name, and the decision is owed.
-ARCHIVED_BYTES_DELETED_HAS_NO_VERDICT = (
-    "c_build_3 reported `archived_bytes_deleted`: the local seal survived but "
-    "previously archived bytes did not. Policy A forbids P4 (archive is not "
-    "ok) and Router B cannot reach A1 from a report whose status is "
-    "archive_ok, so no ruled verdict covers this pair. Refusing rather than "
-    "inventing one -- this needs Aaron's decision, not a default.")
+#: This was first filed as a decision owed to Aaron. That was an
+#: OVER-ESCALATION: his reserved categories are cost, the Primary metric,
+#: sample splitting, when real data is touched, promotion/falsification, and
+#: creating quant-data directories. A terminal-state mapping is none of them,
+#: so it is the builder's, and it is settled in `decide_after_seal` by
+#: elimination over a CLOSED answer space rather than by preference.
+ARCHIVED_BYTES_DELETED = "archived_bytes_deleted"
 
 #: `local_seal_absent` and `local_seal_mutated` need no ruling: they say the
 #: local seal did not survive, which is exactly `local_seal_ok=False`, and
@@ -163,21 +157,27 @@ def run_supplement_chain(base_ctx, *, authority, prepared, universe,
         archive_before=tuple(archive_before), archive_after=tuple(after))
 
     local_seal_ok = True
+    post_archive_ok = True
     if post.failure is not None:
         code = post.failure.code
         if code in LOCAL_SEAL_LOST_CODES:
             local_seal_ok = False
+        elif code == ARCHIVED_BYTES_DELETED:
+            # BD-2. The checkpoint refutes a report that says archive_ok, and
+            # Router B is TOLD that rather than handed a synthesized failing
+            # report -- see `decide_after_seal` for why A1 is the ratified
+            # enum's remainder rather than a preference.
+            post_archive_ok = False
         else:
-            # `archived_bytes_deleted` and anything added later. Refusing an
-            # unmapped code is the same fail-closed rule BD-1 applies to
-            # seal codes: it must not quietly acquire a verdict.
+            # Anything added to C_BUILD_3 later. Fail-closed, the same rule
+            # BD-1 applies to seal codes: a code nobody classified must not
+            # quietly acquire a verdict.
             raise ChainRefusal("C_BUILD_3", code,
-                               ARCHIVED_BYTES_DELETED_HAS_NO_VERDICT
-                               if code == "archived_bytes_deleted"
-                               else "no ruled verdict covers %r" % code)
+                               "no ruled verdict covers %r" % code)
     try:
         verdict = _sr.decide_after_seal(local_seal_ok=local_seal_ok,
-                                        archive_report=archive_report)
+                                        archive_report=archive_report,
+                                        post_archive_ok=post_archive_ok)
     except _sr.SupplementRunnerError as exc:
         raise ChainRefusal("C_BUILD_3", getattr(exc, "code", "router_b"),
                            str(exc)) from exc

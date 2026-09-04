@@ -187,16 +187,41 @@ def test_a_lost_local_seal_is_refused_by_router_b(prod, authority, tmp_path):
     assert "nothing was sealed" in str(caught.value)
 
 
-def test_archived_bytes_deleted_refuses_rather_than_inventing_a_verdict(
-        prod, authority, tmp_path):
-    """THE OPEN GAP, executed. Policy A forbids P4 and Router B cannot reach
-    A1 from an `archive_ok` report, so no ruled verdict covers this pair."""
+def test_archived_bytes_deleted_reaches_A1_and_never_P4(prod, authority,
+                                                        tmp_path):
+    """BD-2, executed. The report says `archive_ok` -- it verifies the copy
+    it just made -- while C_BUILD_3 finds bytes archived EARLIER are gone.
+    Policy A forbids P4, the seal plainly survived so a refused seal is
+    false, and this router's answer space is closed: A1 is the remainder."""
     before = (("old.json", 3, "a" * 64),)
-    with pytest.raises(chain.ChainRefusal) as caught:
-        _drive(authority, prod, tmp_path, before=before, after=())
-    assert caught.value.moment == "C_BUILD_3"
-    assert caught.value.code == "archived_bytes_deleted"
-    assert "needs Aaron's decision" in str(caught.value)
+    result = _drive(authority, prod, tmp_path, before=before, after=())
+    assert result.verdict == "A1"
+    assert result.sealed is False
+    assert result.archive_status == "archive_ok", (
+        "the report itself said ok; if it now says otherwise this test is "
+        "no longer exercising the disagreement it was written for")
+
+
+def test_A1_here_is_not_the_same_as_carrying_on(prod, authority, tmp_path):
+    """The half of BD-2 that makes the elimination sufficient. A1 is a
+    NON-TERMINAL trap -- `P5` is unreachable until an explicit `A2` -- so
+    mapping destroyed evidence onto it blocks completion rather than
+    waving it through."""
+    assert "A1" in sc.NON_TERMINAL_TRAPS
+    assert "A1" not in sc.TERMINAL_SHORT_IDS
+
+
+def test_an_unknown_C_BUILD_3_code_still_refuses(prod, authority, tmp_path):
+    """BD-2 settled ONE code. Fail-closed is still the rule for the next
+    one, exactly as BD-1 requires of seal codes."""
+    broken = dsp.CBuildOutcome(
+        (), None, dsp.CBuildFailure("archive_policy_a", "some_future_code",
+                                    "stubbed"))
+    with mock.patch.object(dsp, "run_c_build_3", return_value=broken):
+        with pytest.raises(chain.ChainRefusal) as caught:
+            _drive(authority, prod, tmp_path)
+    assert caught.value.code == "some_future_code"
+    assert "no ruled verdict covers" in str(caught.value)
 
 
 def test_a_router_b_seal_code_never_reaches_the_gates(prod, authority,

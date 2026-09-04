@@ -82,6 +82,7 @@
 | 文件 | 是什么 |
 |---|---|
 | [`BUILDER_DECISIONS_2026-08-29.md`](BUILDER_DECISIONS_2026-08-29.md) | **builder 自裁，不是 owner 裁定**（依 Aaron 2026-08-29「很多决定不需要问我」的工程分工，与 `OWNER_DECISIONS_*` 严格分开）。**BD-1** 两个未决封印码不归门、归路由器 B —— 套用已被测试执行的 `archive_policy_a` 先例，而非新原则；`GATE_TABLE` 是已批准封闭枚举，加门属 R4 级，挑一个不合适的门会把缺陷记到没人裁定过的名下。**BD-2** qros 席位台账：建，但只向前记，历史标 UNKNOWN 不回填。**BD-3** qros 倒转默认：采纳 |
+| [`BUILDER_DECISIONS_2026-09-02.md`](BUILDER_DECISIONS_2026-09-02.md) | **BD-2：`archived_bytes_deleted` 的终态是 A1**。由封闭答案空间的排除法得到（P4 被 Policy A 排除，「被拒的 seal」被「seal 活着」排除），而 A1 是**非终态陷阱**、挡住完成——这一点是排除法在此处足够的原因。实现用 `decide_after_seal(post_archive_ok=)` 把检查点的判定**告诉**路由器，而不是合成一份失败报告去骗过 `classify_archive_report`。**并记下我自己的两个错**：先把这条越级递给了 Aaron，随后被要求转给 Fable 裁决——而 Fable 可顾问不可代签 |
 | [`OWNER_DECISIONS_2026-08-26.md`](OWNER_DECISIONS_2026-08-26.md) | **Aaron 采纳八项**＋逐项结算表（哪几项完成了、其余还欠他哪个具体动作） |
 | [`OWNER_DECISIONS_2026-08-25.md`](OWNER_DECISIONS_2026-08-25.md) | **Aaron 本人**四项裁定，`DELEGATED=NO` |
 | [`DELEGATED_RULINGS_2026-08-24.md`](DELEGATED_RULINGS_2026-08-24.md) | N06 终态 ＋ N-D2/N-D3 共 32 项，Sol 委托裁定 `DELEGATED=YES` |

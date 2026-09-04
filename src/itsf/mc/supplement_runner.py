@@ -868,15 +868,48 @@ def classify_archive_report(report) -> str:
                                 "archive_failed but no structural cause found")
 
 
-def decide_after_seal(*, local_seal_ok: bool, archive_report) -> str:
+def decide_after_seal(*, local_seal_ok: bool, archive_report,
+                      post_archive_ok: bool = True) -> str:
     """Policy A (`ND1_ARCHIVE_FAILURE_POLICY=A`, ratified):
     `P4_SUPPLEMENT_SEALED_REQUIRES=local_seal_ok AND archive_ok`. A local
     seal that succeeded while the archive failed does NOT become a P4 —
-    it becomes A1, and P5 stays unreachable until A2."""
+    it becomes A1, and P5 stays unreachable until A2.
+
+    `post_archive_ok` IS THE C_BUILD_3 CHECKPOINT'S VERDICT, and it exists
+    because a report can say `archive_ok` while the checkpoint refutes it.
+    BD-2 (2026-09-02, builder seat) settled the one case that produces it:
+
+      `run_c_build_3` reports `archived_bytes_deleted` — the local seal
+      survived, but bytes ALREADY in the archive are gone. Two facts make
+      that reachable: `archive_sealed_run` verifies the copy it just made
+      and never looks at bytes archived on an earlier run, while R3 §1's
+      C_BUILD_3 assertion (b) is exactly "无任何已归档字节被删除".
+
+    WHY A1 IS NOT AN INVENTION. This router's answer space is CLOSED —
+    P4, A1, or a refused seal. P4 is forbidden, because Policy A requires
+    archive_ok and a ratified checkpoint assertion has just been violated.
+    A refused seal is false on its face: the seal survived, which is the
+    whole difference between this code and `local_seal_absent` /
+    `local_seal_mutated`. Two of the three are excluded, so A1 is what the
+    ratified enum leaves — not what a builder preferred.
+
+    AND A1 DOES NOT UNDER-REACT to evidence being destroyed. It is a
+    NON-TERMINAL trap: `P5` stays unreachable until an explicit `A2`, so
+    this blocks completion rather than waving it through. Had A1 meant
+    "carry on", the elimination above would not have been enough on its
+    own.
+    """
     if not local_seal_ok:
         raise SupplementRunnerError("local_seal_failed",
                                     "no P4 and no A1: nothing was sealed")
     if getattr(archive_report, "status", None) == "archive_ok":
+        if not post_archive_ok:
+            # The report and the checkpoint disagree, and the checkpoint is
+            # the one that re-read the bytes. `classify_archive_report`
+            # cannot be consulted here: it refuses an `archive_ok` report by
+            # design, and synthesizing a failing report to get past it would
+            # be manufacturing evidence to reach a verdict.
+            return "A1"
         return "P4"
     classify_archive_report(archive_report)      # validates / may refuse
     return "A1"
