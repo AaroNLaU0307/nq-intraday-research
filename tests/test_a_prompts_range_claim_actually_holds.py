@@ -72,10 +72,18 @@ def _issued_deliveries():
 
     Keyed on the declaration rather than the name, so the next vehicle -- a
     packet, a prompt, or something not yet invented -- is counted by saying
-    what it is."""
+    what it is.
+
+    ANCHORED, and that matters. The first version used a plain substring,
+    which read `ops/HOW_TO_SEND_THE_SOL_ROUND3_REVIEW.md` -- a document that
+    QUOTES another file's status in a sentence -- as declaring itself issued.
+    Acting on that false positive nearly rewrote a descriptive sentence into
+    a false claim. `test_issued_deliveries_are_registered._STATUS` was
+    already anchored; this now matches it."""
+    ANCHORED = re.compile(r"^DELIVERY_STATUS=ISSUED\s*$", re.M)
     out = []
     for path in sorted(OPS.glob("*.md")):
-        if "DELIVERY_STATUS=ISSUED" in path.read_text(encoding="utf-8"):
+        if ANCHORED.search(path.read_text(encoding="utf-8")):
             out.append(path)
     return out
 

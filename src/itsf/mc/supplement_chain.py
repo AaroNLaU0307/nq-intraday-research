@@ -19,8 +19,9 @@ layers before it. `universe`, `vol_method`, `flag_by_date` and
 dataset is the caller that has to be authorized to. Building this is
 engineering; running it is not.
 
-ONE CASE LOOKED UNRULED AND WAS NOT, see `ARCHIVED_BYTES_DELETED` and BD-5 in
-`decide_after_seal`.
+ONE CASE HAS NO RULED TERMINAL and refuses by name -- see
+`ARCHIVED_BYTES_DELETED_HAS_NO_RULED_TERMINAL`. BD-5 said otherwise and was
+retracted on 2026-09-02 after a reviewing seat refuted its elimination.
 """
 from __future__ import annotations
 
@@ -34,7 +35,7 @@ __all__ = ["ChainResult", "ChainRefusal", "run_supplement_chain",
            "ARCHIVE_SEAM", "ARCHIVED_BYTES_DELETED"]
 
 
-#: THE CASE THAT LOOKED UNRULED, AND WAS NOT (BD-5, 2026-09-02).
+#: THE CASE THAT LOOKED UNRULED, WAS RULED, AND IS UNRULED AGAIN.
 #:
 #: `run_c_build_3` can find `archived_bytes_deleted`: the local seal survived
 #: the archive attempt, but bytes that were already in the archive are gone.
@@ -42,13 +43,23 @@ __all__ = ["ChainResult", "ChainRefusal", "run_supplement_chain",
 #: bytes archived on an earlier run, so its report can say `archive_ok` while
 #: R3 §1's C_BUILD_3 assertion (b) -- "无任何已归档字节被删除" -- is violated.
 #:
-#: This was first filed as a decision owed to Aaron. That was an
-#: OVER-ESCALATION: his reserved categories are cost, the Primary metric,
-#: sample splitting, when real data is touched, promotion/falsification, and
-#: creating quant-data directories. A terminal-state mapping is none of them,
-#: so it is the builder's, and it is settled in `decide_after_seal` by
-#: elimination over a CLOSED answer space rather than by preference.
+#: It was first filed as owed to Aaron, then taken back as BD-5 on the
+#: reasoning that a terminal-state mapping touches none of his six reserved
+#: categories. That part still holds -- but BD-5's ELIMINATION did not, and a
+#: builder deciding a question is no licence to decide it wrongly. The
+#: refutation is recorded in full at the constant below.
 ARCHIVED_BYTES_DELETED = "archived_bytes_deleted"
+
+#: Why it refuses rather than reaching a terminal. Written out because the
+#: last attempt to shortcut this reasoning produced BD-5, which was wrong.
+ARCHIVED_BYTES_DELETED_HAS_NO_RULED_TERMINAL = (
+    "the local seal survived but previously archived bytes did not, and no "
+    "ratified terminal covers that. P3's successors are P4, A1, F2 and CR1; "
+    "Policy A forbids P4; an A1 row requires an `archive_code` and this is "
+    "not one of the five; and A2, A1's only exit, asserts only that THIS "
+    "run's copy matches. Naming a terminal needs a ruling among four "
+    "successors or an amendment to a ratified closed enum, and neither is "
+    "a builder's to make.")
 
 #: `local_seal_absent` and `local_seal_mutated` need no ruling: they say the
 #: local seal did not survive, which is exactly `local_seal_ok=False`, and
@@ -157,17 +168,24 @@ def run_supplement_chain(base_ctx, *, authority, prepared, universe,
         archive_before=tuple(archive_before), archive_after=tuple(after))
 
     local_seal_ok = True
-    post_archive_ok = True
     if post.failure is not None:
         code = post.failure.code
         if code in LOCAL_SEAL_LOST_CODES:
             local_seal_ok = False
         elif code == ARCHIVED_BYTES_DELETED:
-            # BD-5. The checkpoint refutes a report that says archive_ok, and
-            # Router B is TOLD that rather than handed a synthesized failing
-            # report -- see `decide_after_seal` for why A1 is the ratified
-            # enum's remainder rather than a preference.
-            post_archive_ok = False
+            # BD-5 RETRACTED 2026-09-02. It routed this to A1 by an
+            # elimination the reviewing seat refuted and that reproduces:
+            # P3's ratified successors are P4, A1, F2 AND CR1, so the space
+            # was never closed; an A1 row requires an `archive_code` and
+            # this is not one of the five; and A2, A1's only exit, asserts
+            # things about THIS run's copy, so it could not discharge the
+            # defect even if the row could be written.
+            #
+            # Refusing by name again. Naming the terminal now needs a ruling
+            # among four successors or an amendment to a ratified closed
+            # enum -- neither is a builder's to make.
+            raise ChainRefusal("C_BUILD_3", code,
+                               ARCHIVED_BYTES_DELETED_HAS_NO_RULED_TERMINAL)
         else:
             # Anything added to C_BUILD_3 later. Fail-closed, the same rule
             # BD-1 applies to seal codes: a code nobody classified must not
@@ -176,8 +194,7 @@ def run_supplement_chain(base_ctx, *, authority, prepared, universe,
                                "no ruled verdict covers %r" % code)
     try:
         verdict = _sr.decide_after_seal(local_seal_ok=local_seal_ok,
-                                        archive_report=archive_report,
-                                        post_archive_ok=post_archive_ok)
+                                        archive_report=archive_report)
     except _sr.SupplementRunnerError as exc:
         raise ChainRefusal("C_BUILD_3", getattr(exc, "code", "router_b"),
                            str(exc)) from exc

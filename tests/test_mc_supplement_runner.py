@@ -616,31 +616,37 @@ def test_a_failed_local_seal_produces_neither_p4_nor_a1():
     assert ei.value.code == "local_seal_failed"
 
 
-def test_the_checkpoint_can_refute_a_report_that_says_archive_ok():
-    """BD-5. `archive_sealed_run` verifies the copy it just made and never
-    looks at bytes archived earlier, so its report can say ok while
-    C_BUILD_3 finds archived bytes destroyed. Policy A forbids P4 there."""
-    ok = FakeReport(ok=True, status="archive_ok", inventory=FakeInventory())
-    assert r.decide_after_seal(local_seal_ok=True, archive_report=ok,
-                               post_archive_ok=False) == "A1"
+def test_router_b_has_no_checkpoint_override_any_more():
+    """BD-5 RETRACTED 2026-09-02. It added `post_archive_ok` so that
+    `archived_bytes_deleted` could reach A1. The reviewing seat refuted the
+    elimination behind it and the refutation reproduces:
 
+      * P3's ratified successors are P4, A1, F2 AND CR1. What BD-5 called a
+        closed answer space was this function's return set, not the state
+        machine's -- F2 and CR1 were never eliminated.
+      * an A1 row requires `archive_code`, and `archived_bytes_deleted` is
+        not one of the five ARCHIVE_CODES, so the row cannot be written.
+      * A2, A1's only exit, asserts things about THIS run's copy.
 
-def test_the_refutation_does_not_leak_into_the_ordinary_paths():
-    """Default True, so every existing caller is unchanged -- and a FAILED
-    report is already A1 without needing it."""
+    The parameter is gone and the case refuses upstream by name. Asserted
+    against the SIGNATURE so a quiet re-introduction fails here."""
     import inspect
 
     sig = inspect.signature(r.decide_after_seal)
-    assert sig.parameters["post_archive_ok"].default is True
-    bad = FakeReport(inventory=None)
-    assert r.decide_after_seal(local_seal_ok=True, archive_report=bad,
-                               post_archive_ok=False) == "A1"
-    with pytest.raises(r.SupplementRunnerError) as ei:
-        r.decide_after_seal(local_seal_ok=False,
-                            archive_report=FakeReport(status="archive_ok"),
-                            post_archive_ok=False)
-    assert ei.value.code == "local_seal_failed", (
-        "a lost local seal outranks the checkpoint's verdict")
+    assert "post_archive_ok" not in sig.parameters
+    assert sorted(sig.parameters) == ["archive_report", "local_seal_ok"]
+
+
+def test_the_ratified_successors_of_P3_are_four_not_three():
+    """The measured fact that retracted BD-5, pinned so the argument cannot
+    be made again from memory."""
+    from itsf.mc import supplement_contract as _sc
+
+    successors = sorted(e.short_id for e in _sc.EVENTS.values()
+                        if "P3" in getattr(e, "predecessors", ()))
+    assert successors == ["A1", "CR1", "F2", "P4"], successors
+    assert "archived_bytes_deleted" not in _sc.ARCHIVE_CODES
+    assert "archive_code" in _sc.EVENTS["A1"].required_fields
 
 
 def test_classifier_covers_every_declared_archive_code():

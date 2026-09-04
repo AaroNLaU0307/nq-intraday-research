@@ -12,7 +12,21 @@ promotion-falsified / quant-data 建目录。
 
 ---
 
-## BD-5 `archived_bytes_deleted` 的终态：**A1**
+## BD-5 `archived_bytes_deleted` 的终态：~~**A1**~~ —— **2026-09-02 收回**
+
+> **收回。** 复审席位反驳了下面的排除法，反驳可复现：
+> P3 的已批后继是 `P4 / A1 / F2 / CR1` **四个**——我把「Router B 函数的
+> 返回值集合」当成了「状态机的后继集合」，F2 与 CR1 从未被排除；
+> `A1` 行必填 `archive_code`，而 `archived_bytes_deleted` 不在 5 个
+> `ARCHIVE_CODES` 里，**这行根本写不出来**；`A2` 作为 A1 的唯一出口，
+> 只断言**本次 run 拷贝**的一致性，治不了「更早归档的字节被删」。
+>
+> 代码已退回**具名拒绝**，`post_archive_ok` 参数移除。
+> 详见 `ops/REVIEW_RESULT_ENG_SAFETY_2026-09-02.md` §3。
+>
+> **下面的原文保留**，因为一条被推翻的裁定的价值，在于它错在哪里可被读到。
+> 其中「这条不占 Aaron 六类保留项、因而归 builder」一半仍然成立——
+> **但『可以由我决定』不等于『可以由我决定错』。**
 
 ### 起因，以及我先犯的错
 

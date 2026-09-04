@@ -188,28 +188,28 @@ def test_a_lost_local_seal_is_refused_by_router_b(prod, authority, tmp_path):
     assert "nothing was sealed" in str(caught.value)
 
 
-def test_archived_bytes_deleted_reaches_A1_and_never_P4(prod, authority,
-                                                        tmp_path):
-    """BD-5, executed. The report says `archive_ok` -- it verifies the copy
-    it just made -- while C_BUILD_3 finds bytes archived EARLIER are gone.
-    Policy A forbids P4, the seal plainly survived so a refused seal is
-    false, and this router's answer space is closed: A1 is the remainder."""
+def test_archived_bytes_deleted_has_no_ruled_terminal_and_refuses(
+        prod, authority, tmp_path):
+    """BD-5 RETRACTED 2026-09-02. This used to assert A1, on an elimination
+    the reviewing seat refuted and that reproduces: P3's ratified successors
+    are P4, A1, F2 AND CR1, so the space was never closed; an A1 row needs an
+    `archive_code` and this is not one of the five; and A2, A1's only exit,
+    asserts things about THIS run's copy. It refuses by name again."""
     before = (("old.json", 3, "a" * 64),)
-    result = _drive(authority, prod, tmp_path, before=before, after=())
-    assert result.verdict == "A1"
-    assert result.sealed is False
-    assert result.archive_status == "archive_ok", (
-        "the report itself said ok; if it now says otherwise this test is "
-        "no longer exercising the disagreement it was written for")
+    with pytest.raises(chain.ChainRefusal) as caught:
+        _drive(authority, prod, tmp_path, before=before, after=())
+    assert caught.value.moment == "C_BUILD_3"
+    assert caught.value.code == "archived_bytes_deleted"
+    assert "no ratified terminal covers that" in str(caught.value)
 
 
-def test_A1_here_is_not_the_same_as_carrying_on(prod, authority, tmp_path):
-    """The half of BD-5 that makes the elimination sufficient. A1 is a
-    NON-TERMINAL trap -- `P5` is unreachable until an explicit `A2` -- so
-    mapping destroyed evidence onto it blocks completion rather than
-    waving it through."""
-    assert "A1" in sc.NON_TERMINAL_TRAPS
-    assert "A1" not in sc.TERMINAL_SHORT_IDS
+def test_the_successor_set_that_retracted_BD_5(prod, authority, tmp_path):
+    """The measured fact, pinned here as well as at the router: the argument
+    must not be reconstructible from memory."""
+    successors = sorted(e.short_id for e in sc.EVENTS.values()
+                        if "P3" in getattr(e, "predecessors", ()))
+    assert successors == ["A1", "CR1", "F2", "P4"], successors
+    assert "archived_bytes_deleted" not in sc.ARCHIVE_CODES
 
 
 def test_an_unknown_C_BUILD_3_code_still_refuses(prod, authority, tmp_path):
