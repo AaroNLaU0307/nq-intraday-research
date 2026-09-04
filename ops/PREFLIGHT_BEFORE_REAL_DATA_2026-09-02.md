@@ -3,7 +3,10 @@
 ```ini
 RECORD_TYPE=PREFLIGHT（不授权、不执行、未读任何 Development 数据）
 BY=Opus 5，builder seat，2026-09-02
-HEAD=bbae823edc782cf999120cb8441bf3bafae4304f
+MEASURED_AT=bbae823edc782cf999120cb8441bf3bafae4304f
+# 不写 HEAD=：提交这份记录本身就会移动 HEAD，写下的那一刻即为陈旧。
+# 这正是冻结登记册表头记着的那条（2026-08-25 有一个 Sol 会话为此 STOP）。
+# ③ 必须绑定**签署当时**的 HEAD，不是这里的任何一个值。
 按 Aaron 2026-09-02 的七项要求逐条回答
 ```
 
@@ -151,10 +154,16 @@ RESIDUAL（不阻塞，但要一起进下一次 review）
 ## 5. 当前完整 40 位 HEAD
 
 ```
-bbae823edc782cf999120cb8441bf3bafae4304f
+测量时     bbae823edc782cf999120cb8441bf3bafae4304f
+本记录提交后  见 git（提交这份文件必然再次移动 HEAD）
 ```
 
-工作树在提交后干净（`git status --short` 为空）。
+**这里不钉一个「当前 HEAD」，因为写下的那一刻它就过期了** ——
+提交这份 preflight 本身就移动 HEAD。冻结登记册表头为同一原因记着
+「HEAD itself is NEVER pinned」，2026-08-25 有一个 Sol 会话正为此 STOP 过。
+
+**③ 必须绑定签署当时的 HEAD。** 我会在你要签之前，用 `git rev-parse HEAD`
+当场报给你，并确认工作树干净。
 
 ## 6. ① 的精确授权需求
 
