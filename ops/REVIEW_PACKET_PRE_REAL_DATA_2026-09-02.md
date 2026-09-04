@@ -2,6 +2,9 @@
 
 ```ini
 PACKET_TYPE=ENGINEERING_SAFETY_REVIEW（不是 A2，不是 Stage I，不解开任何 QROS 门）
+REVIEW_ID=ENG-SAFETY-PRE-REAL-DATA-001
+DELIVERY_STATUS=ISSUED
+COMPANION=ops/NEXT_HANDOFF.md（禁读清单的载体；必须与本包一同交付）
 PREPARED_BY=Opus 5，builder seat
 DISPATCHED_BY=Aaron（我不得自行调用任何审阅席位）
 MEASURED_AT=0cefc1503858ecf3b1dc5c90ec8bb3de9b1daa97
@@ -11,6 +14,25 @@ ROUNDS=一轮。不开无限复审循环（Aaron 2026-09-02）
 ```
 
 ---
+
+## 0. 受审集 —— **先逐字节核对，再开工**
+
+标准动作：对下表每一行 `sha256 <路径>`，重算并比对。**不符即 STOP 并报告，不要继续。**
+聊天里贴过来的字节永远不是真相来源；请从磁盘读。
+
+| sha256 | bytes | 路径 | 角色 |
+|---|---|---|---|
+| `c34a9d13368eb4106d432c0b77ce25f7fd8e56f43642e5d1dee4f20e46c6d41a` | `6148` | `src/itsf/data/dbn_loader.py` | reference |
+| `6ec6345734e97f2f9d718da8caade481b8f23827870299b6c2334fc046970000` | `2934` | `src/itsf/guards.py` | reference |
+| `f0078a653a6b2f46980e62142780a1ef3913e8b6bd4d9748d0cdf99b54ec77ee` | `21391` | `src/itsf/mc/day_strata_classify.py` | reference |
+| `4f181e5938b7e83b8837b93195e8ec1834b32a1ca160b5af2ce8c0a19387c8b7` | `8560` | `src/itsf/mc/supplement_chain.py` | reference |
+| `bda85429e1aab979ce033d4aafae04241b935514452e58d49e4b534c2a519e54` | `33867` | `src/itsf/mc/supplement_contract.py` | reference |
+| `d15611ce834f228069521e48c248a1936e2804a9894d1ca2c5c38c2e48f8290a` | `4853` | `src/itsf/mc/supplement_inputs.py` | reference |
+| `6d3d48fe3013b797d1205f92aed93c207166919cb2f79e17f08eb018940097fb` | `55988` | `src/itsf/mc/supplement_runner.py` | reference |
+
+本包自身的 sha256 记录在 `ops/ARTIFACTS_UNDER_REVIEW.json`
+（一份文档无法钉住自己的哈希）。禁读清单在 `ops/NEXT_HANDOFF.md`，
+**必须与本包一同交付**。
 
 ## 0. 给审阅席位的三条硬约束
 
@@ -25,22 +47,24 @@ ROUNDS=一轮。不开无限复审循环（Aaron 2026-09-02）
 **本次复审通过不等于 ① 被批准。** ① 只有 Aaron 能批。
 **也不满足 A2 或 Stage I** —— `qros status` 现为两者皆 `NOT_SATISFIED`，本包不改变这一点。
 
-## 1. 禁读清单（由 `ops/OUTCOME_CARRYING_ARTIFACTS.json` 机器生成，非手抄）
+## 1. 禁读清单
 
-| # | 禁读路径 | 它复述了什么 |
-|---|---|---|
-| 1 | `EXPOSURE_LEDGER.md` | revealed verdict、cumulative exposure count、endpoint spread value、zero-direction cell count |
-| 2 | `ops/EXPOSURE_LEDGER.md` | cumulative exposure count |
-| 3 | `ops/outcome_quarantine/DECISION_PACKET_ND2_ND3.md` | addendum feasibility assertion |
-| 4 | `ops/outcome_quarantine/MC_DR5_BUILD_PACKET.md` | revealed verdict |
-| 5 | `ops/outcome_quarantine/MC_FACTORY_BOUNDARY_STAGE_I.md` | revealed verdict |
-| 6 | `ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md` | revealed verdict、cumulative exposure count |
-| 7 | `ops/outcome_quarantine/ND2_ND3_FABLE_DECISION_PROMPT.md` | revealed verdict、cumulative exposure count |
-| 8 | `ops/outcome_quarantine/ND2_ND3_RULING_REVIEW_FINDINGS.md` | zero-direction cell count |
-| 9 | `ops/outcome_quarantine/RULING_FABLE_FOUR_OPEN_2026-08-26.md` | cumulative exposure count |
-| 10 | `ops/outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md` | revealed verdict、cumulative exposure count、addendum feasibility assertion、endpoint spread value、zero-direction cell count |
-| 11 | `ops/outcome_quarantine/S0_T001_RESULT_DECISION_ADDENDUM.md` | revealed verdict、addendum feasibility assertion、endpoint spread value |
-| 12 | `ops/outcome_quarantine/S0_T001_RESULT_REVEAL_ATTESTATION.md` | revealed verdict、cumulative exposure count |
+【OFF-LIMITS】以下 %d 条为 outcome-carrying，**一律禁读**（由 ops/OUTCOME_CARRYING_ARTIFACTS.json 机器生成，非手抄）：
+
+```
+EXPOSURE_LEDGER.md
+ops/EXPOSURE_LEDGER.md
+ops/outcome_quarantine/DECISION_PACKET_ND2_ND3.md
+ops/outcome_quarantine/MC_DR5_BUILD_PACKET.md
+ops/outcome_quarantine/MC_FACTORY_BOUNDARY_STAGE_I.md
+ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md
+ops/outcome_quarantine/ND2_ND3_FABLE_DECISION_PROMPT.md
+ops/outcome_quarantine/ND2_ND3_RULING_REVIEW_FINDINGS.md
+ops/outcome_quarantine/RULING_FABLE_FOUR_OPEN_2026-08-26.md
+ops/outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md
+ops/outcome_quarantine/S0_T001_RESULT_DECISION_ADDENDUM.md
+ops/outcome_quarantine/S0_T001_RESULT_REVEAL_ATTESTATION.md
+```
 
 ## 2. 请审的四块，按承重排序
 

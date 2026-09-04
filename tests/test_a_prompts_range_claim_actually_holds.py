@@ -55,6 +55,31 @@ def _prompts():
     return sorted(OPS.glob("PROMPT_*.md"))
 
 
+def _issued_deliveries():
+    """Every ops document that DECLARES itself issued, whatever it is called.
+
+    WIDENED 2026-09-02. `_prompts()` globs `PROMPT_*.md`, and the
+    correspondence check below used it while claiming something about "its
+    DELIVERY" -- so a Review Packet, which is a delivery vehicle this
+    repository already uses and which `test_issued_deliveries_are_registered`
+    already understands, was invisible. The register was armed for
+    ENG-SAFETY-PRE-REAL-DATA-001 by a packet that said
+    `DELIVERY_STATUS=ISSUED`, and this guard reported no live delivery at all:
+    the guard was narrower than its claim, the shape this repository keeps
+    producing. The sister guard in `test_artifacts_under_review_are_frozen`
+    learned the same lesson on 2026-08-26 and stopped assuming the carrier's
+    filename; this one had not.
+
+    Keyed on the declaration rather than the name, so the next vehicle -- a
+    packet, a prompt, or something not yet invented -- is counted by saying
+    what it is."""
+    out = []
+    for path in sorted(OPS.glob("*.md")):
+        if "DELIVERY_STATUS=ISSUED" in path.read_text(encoding="utf-8"):
+            out.append(path)
+    return out
+
+
 def _git(*args):
     out = subprocess.run(["git", "-C", str(REPO), *args],
                          capture_output=True, encoding="utf-8",
@@ -157,9 +182,11 @@ class TestALiveRangeClaimIsTrue(unittest.TestCase):
         # unarmed -- "finish the edits, commit, THEN arm" is the ordering
         # this repository learned twice the hard way, so a prepared-and-
         # unarmed prompt is the rule being followed, not broken.
-        issued = sorted(p.name for p in _prompts()
-                        if "DELIVERY_STATUS=ISSUED" in
-                        p.read_text(encoding="utf-8"))
+        # `_issued_deliveries`, NOT `_prompts`: this sentence is about a
+        # review's DELIVERY, and a Review Packet is one. Keying on the
+        # PROMPT_ glob made the claim narrower than its words -- see that
+        # helper for the measurement that found it.
+        issued = sorted(p.name for p in _issued_deliveries())
         register = json.loads(
             (OPS / "ARTIFACTS_UNDER_REVIEW.json").read_text(encoding="utf-8"))
         armed = sorted({e["review_id"] for e in register["under_review"]})
