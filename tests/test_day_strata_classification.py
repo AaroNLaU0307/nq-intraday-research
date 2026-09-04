@@ -225,7 +225,14 @@ class TestTheBuilderTableIsDerivedToo(unittest.TestCase):
         must not inherit the builder's answer."""
         with self.assertRaises(dsc.ClassificationError) as caught:
             dsc.classify_seal_failure("production_payload_unsupported_type")
-        self.assertIn("in neither table", str(caught.exception))
+        # It is now RECORDED as unmapped rather than merely absent -- BD-6
+        # widened the derivation and every surfaced code must be in some
+        # table. The ruling is unchanged and is what this asserts: the seal
+        # side still refuses, and the reason names the scope split.
+        self.assertIn("UNMAPPED", str(caught.exception))
+        self.assertIn("freeze_payload", str(caught.exception))
+        self.assertNotIn("production_payload_unsupported_type",
+                         dsc.STAGE_GATE_OF_SEAL_CODE)
 
     def test_the_unmapped_MECHANISM_survives_the_table_emptying(self):
         """The table is empty now. Emptying it must not delete the branch:
@@ -244,55 +251,150 @@ class TestTheBuilderTableIsDerivedToo(unittest.TestCase):
 
 
 
-def _seal_codes_from_source():
-    """Every literal code the seal step can refuse with, derived.
+def _raised_in(fn):
+    for node in ast.walk(fn):
+        if (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)
+                and node.exc.args
+                and isinstance(node.exc.args[0], ast.Constant)):
+            yield node.exc.args[0].value
 
-    Two sources: `seal_supplement_production`'s own drift checks, and the
-    `resolve_partial` codes it inherits by calling it. Both are read from
-    source so a new refusal joins this check by existing."""
+
+def _transitive_codes(tree, entry):
+    """Codes reachable from `entry`, FOLLOWING CALLS within the module."""
+    fns = {n.name: n for n in ast.walk(tree)
+           if isinstance(n, ast.FunctionDef)}
+
+    def walk(name, seen):
+        if name in seen or name not in fns:
+            return set()
+        seen.add(name)
+        codes = set(_raised_in(fns[name]))
+        for node in ast.walk(fns[name]):
+            if isinstance(node, ast.Call):
+                callee = getattr(node.func, "id", None)
+                if callee and callee != name:
+                    codes |= walk(callee, seen)
+        return codes
+
+    return walk(entry, set())
+
+
+def _seal_codes_from_source():
+    """Every literal code the seal step can refuse with, derived
+    TRANSITIVELY.
+
+    WIDENED 2026-09-02 (BD-3), and it is the SAME widening the builder
+    derivation got on 2026-08-29. This version scanned only the body of
+    `seal_supplement_production`, so ten codes raised one level down --
+    `production_product_type` out of `_product_receipt` among them --
+    escaped both the seal tables and this test. The test claimed "every
+    seal refusal is mapped" while looking at seven of seventeen: the guard
+    was narrower than its claim, which is the shape this repository keeps
+    producing.
+
+    NOT found by reading. Composing the chain end to end handed a real
+    caller a `ClassificationError` on `production_product_type`, and the
+    scan was widened to ask how many more there were.
+
+    Over-counting is the safe direction here, exactly as it is for the
+    builder: a call inside a branch that can never be taken still forces a
+    code into the tables, while under-counting lets one out."""
     root = Path(__file__).resolve().parents[1] / "src" / "itsf" / "mc"
-    codes = set()
     prod = ast.parse(io.open(root / "supplement_production.py",
                              encoding="utf-8").read())
-    seal = [n for n in ast.walk(prod) if isinstance(n, ast.FunctionDef)
-            and n.name == "seal_supplement_production"]
-    for fn in seal:
-        for node in ast.walk(fn):
-            if (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)
-                    and node.exc.args
-                    and isinstance(node.exc.args[0], ast.Constant)):
-                codes.add(node.exc.args[0].value)
+    codes = _transitive_codes(prod, "seal_supplement_production")
     runner = ast.parse(io.open(root / "supplement_runner.py",
                                encoding="utf-8").read())
-    rp = [n for n in ast.walk(runner) if isinstance(n, ast.FunctionDef)
-          and n.name in ("resolve_partial", "_preserve", "_divergent_name")]
-    for fn in rp:
-        for node in ast.walk(fn):
-            if (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)
-                    and node.exc.args
-                    and isinstance(node.exc.args[0], ast.Constant)):
-                codes.add(node.exc.args[0].value)
+    codes |= _transitive_codes(runner, "resolve_partial")
     return {c for c in codes if isinstance(c, str)}
 
 
 class TestTheSealTableIsDerivedToo(unittest.TestCase):
 
+    def _known(self):
+        return (set(dsc.STAGE_GATE_OF_SEAL_CODE)
+                | set(dsc.ROUTER_B_SEAL_CODES)
+                | set(dsc.CALLER_ERROR_SEAL_CODES)
+                | set(dsc.UNMAPPED_SEAL_CODES))
+
     def test_every_seal_code_is_mapped_or_recorded_as_undecided(self):
-        known = (set(dsc.STAGE_GATE_OF_SEAL_CODE)
-                 | set(dsc.ROUTER_B_SEAL_CODES))
-        missing = sorted(_seal_codes_from_source() - known)
+        missing = sorted(_seal_codes_from_source() - self._known())
         self.assertEqual(
             [], missing,
-            "these seal refusals are in neither table: %s\nAdd each to "
+            "these seal refusals are in no seal table: %s\nAdd each to "
             "STAGE_GATE_OF_SEAL_CODE with the raise site that justifies the "
-            "gate, or to ROUTER_B_SEAL_CODES with the reason." % missing)
+            "gate, to ROUTER_B_SEAL_CODES with the reason no gate names it, "
+            "to CALLER_ERROR_SEAL_CODES if it is a programming error, or to "
+            "UNMAPPED_SEAL_CODES with the open question." % missing)
 
-    def test_the_two_tables_do_not_overlap(self):
-        """A code in both tables would have two routers, and the one that
-        won would be whichever branch was written first."""
-        both = sorted(set(dsc.STAGE_GATE_OF_SEAL_CODE)
-                      & set(dsc.ROUTER_B_SEAL_CODES))
-        self.assertEqual([], both)
+    def test_the_derivation_actually_follows_calls(self):
+        """The half that makes the check above worth anything. Before the
+        BD-3 widening this returned seven codes and missed ten, including
+        one a real caller then hit."""
+        found = _seal_codes_from_source()
+        self.assertIn("production_product_type", found,
+                      "raised in `_product_receipt`, one level below the "
+                      "seal -- if this is absent the scan stopped at the "
+                      "function body again")
+        self.assertGreaterEqual(len(found), 17)
+
+    def test_no_seal_table_names_a_code_the_seal_cannot_raise(self):
+        """The other direction: a table entry for a code nobody raises is a
+        rule about nothing, and it rots silently."""
+        stale = sorted(self._known() - _seal_codes_from_source())
+        self.assertEqual([], stale)
+
+    def test_the_four_tables_do_not_overlap(self):
+        """A code in two tables would have two answers, and the one that won
+        would be whichever branch was written first."""
+        tables = {
+            "STAGE_GATE_OF_SEAL_CODE": set(dsc.STAGE_GATE_OF_SEAL_CODE),
+            "ROUTER_B_SEAL_CODES": set(dsc.ROUTER_B_SEAL_CODES),
+            "CALLER_ERROR_SEAL_CODES": set(dsc.CALLER_ERROR_SEAL_CODES),
+            "UNMAPPED_SEAL_CODES": set(dsc.UNMAPPED_SEAL_CODES),
+        }
+        names = sorted(tables)
+        for i, a in enumerate(names):
+            for b in names[i + 1:]:
+                self.assertEqual(sorted(tables[a] & tables[b]), [],
+                                 "%s and %s share a code" % (a, b))
+
+    def test_each_bucket_refuses_in_its_own_words(self):
+        """One message for all of them would tell a caller to "add it
+        somewhere" without saying which question is open."""
+        with self.assertRaises(dsc.ClassificationError) as caller:
+            dsc.classify_seal_failure("production_product_type")
+        self.assertIn("CALLER BUG", str(caller.exception))
+
+        with self.assertRaises(dsc.ClassificationError) as unmapped:
+            dsc.classify_seal_failure("production_rebuild_refused")
+        self.assertIn("UNMAPPED", str(unmapped.exception))
+        self.assertIn("inner", str(unmapped.exception))
+
+        with self.assertRaises(dsc.ClassificationError) as unknown:
+            dsc.classify_seal_failure("production_never_heard_of_it")
+        self.assertIn("in no seal table", str(unknown.exception))
+
+    def test_the_router_refuses_them_too_rather_than_picking_one(self):
+        for code in ("production_product_type", "production_rebuild_refused",
+                     "production_never_heard_of_it"):
+            with self.subTest(code=code):
+                with self.assertRaises(dsc.ClassificationError):
+                    dsc.seal_failure_router(code)
+
+    def test_no_builder_answer_was_carried_over_to_the_seal_side(self):
+        """The first BD-6 draft gave three shared raise sites the builder's
+        answers. `test_the_SEAL_side_still_refuses_the_same_code` refused
+        that at once and was right: `freeze_payload` widens the seal path's
+        scope, so one shared site genuinely means different things on the
+        two paths. Since one was wrong, none were taken."""
+        for code in ("production_authority_type",
+                     "production_payload_unsupported_type",
+                     "production_supplement_id_divergence"):
+            with self.subTest(code=code):
+                self.assertIn(code, dsc.STAGE_GATE_OF_BUILDER_CODE)
+                self.assertNotIn(code, dsc.STAGE_GATE_OF_SEAL_CODE)
+                self.assertIn(code, dsc.UNMAPPED_SEAL_CODES)
 
     def test_neither_table_names_a_code_the_seal_cannot_raise(self):
         found = _seal_codes_from_source()
@@ -363,7 +465,7 @@ class TestTheSealTableIsDerivedToo(unittest.TestCase):
         operator needs different actions."""
         with self.assertRaises(dsc.ClassificationError) as caught:
             dsc.classify_seal_failure("brand_new_code")
-        self.assertIn("in neither table", str(caught.exception))
+        self.assertIn("in no seal table", str(caught.exception))
 
     def test_the_ruling_that_emptied_the_undecided_set_is_recorded(self):
         """The predecessor of this test said: "If it ever empties, it

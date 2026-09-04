@@ -17,6 +17,7 @@ is asserted against the source, and the partition is asserted to be exact.
 """
 
 import ast
+import hashlib
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -189,7 +190,7 @@ def test_a_lost_local_seal_is_refused_by_router_b(prod, authority, tmp_path):
 
 def test_archived_bytes_deleted_reaches_A1_and_never_P4(prod, authority,
                                                         tmp_path):
-    """BD-2, executed. The report says `archive_ok` -- it verifies the copy
+    """BD-5, executed. The report says `archive_ok` -- it verifies the copy
     it just made -- while C_BUILD_3 finds bytes archived EARLIER are gone.
     Policy A forbids P4, the seal plainly survived so a refused seal is
     false, and this router's answer space is closed: A1 is the remainder."""
@@ -203,7 +204,7 @@ def test_archived_bytes_deleted_reaches_A1_and_never_P4(prod, authority,
 
 
 def test_A1_here_is_not_the_same_as_carrying_on(prod, authority, tmp_path):
-    """The half of BD-2 that makes the elimination sufficient. A1 is a
+    """The half of BD-5 that makes the elimination sufficient. A1 is a
     NON-TERMINAL trap -- `P5` is unreachable until an explicit `A2` -- so
     mapping destroyed evidence onto it blocks completion rather than
     waving it through."""
@@ -212,7 +213,7 @@ def test_A1_here_is_not_the_same_as_carrying_on(prod, authority, tmp_path):
 
 
 def test_an_unknown_C_BUILD_3_code_still_refuses(prod, authority, tmp_path):
-    """BD-2 settled ONE code. Fail-closed is still the rule for the next
+    """BD-5 settled ONE code. Fail-closed is still the rule for the next
     one, exactly as BD-1 requires of seal codes."""
     broken = dsp.CBuildOutcome(
         (), None, dsp.CBuildFailure("archive_policy_a", "some_future_code",
@@ -260,6 +261,91 @@ def test_a_seal_conflict_stops_at_the_second_moment(prod, authority,
         _drive(authority, prod, tmp_path)
     assert caught.value.moment == "C_BUILD_2"
     assert "supplement_seal_conflict" in str(caught.value)
+
+
+def test_bars_to_P4_with_NOTHING_mocked_but_the_archive(prod, authority,
+                                                        tmp_path):
+    """THE END-TO-END, and the strongest thing that can be shown without
+    touching Development data.
+
+    Synthetic 1-minute bars -> `build_universe` -> day contexts -> the RULED
+    vol and event methods -> real rows -> the three C_BUILD_1 gates -> the
+    real production sealer -> `resolve_partial` -> Router B -> P4. The two
+    S0 universe builders are NOT patched here, unlike everywhere else in
+    this file, so the vol and event mappings are the real ones.
+
+    Only the archive step is substituted, and only because it copies a
+    directory tree; what the chain reads from it is a status.
+
+    WHAT THIS DOES NOT SHOW. The bars are synthetic. `load_real` has never
+    run, and this says nothing about what real bars would produce -- only
+    that every step between bars and a verdict is composed and works.
+    """
+    import test_s0_context as s0t
+    from itsf.mc import supplement_inputs as si
+
+    history = ["2026-07-%02d" % d for d in range(1, 32)]
+    dates = sorted(set(history) | set(authority.expected_day_set))
+    bars, schedule = s0t.make_market(dates)
+    inputs = si.assemble_chain_inputs(
+        bars_by_date=bars, schedule=schedule, events=s0t.NO_EVENTS,
+        expected_day_set=authority.expected_day_set)
+    assert sorted(inputs.flag_by_date) == sorted(authority.expected_day_set)
+
+    out = tmp_path / "seal"
+    out.mkdir()
+    with mock.patch.object(chain, "ARCHIVE_SEAM",
+                           mock.Mock(return_value=_Report("archive_ok"))):
+        result = chain.run_supplement_chain(
+            _base_ctx(), authority=authority, prepared=prod,
+            universe=inputs.universe, vol_method=inputs.vol_method,
+            flag_by_date=inputs.flag_by_date,
+            event_na_mapping=inputs.event_na_mapping, out_dir=out,
+            runs_dir=tmp_path / "runs", archive_root=tmp_path / "arch",
+            incident_id=fx.INC, archive_before=(),
+            archive_after_reader=tuple)
+
+    assert result.verdict == "P4"
+    assert len(result.rows) == len(authority.expected_day_set)
+    sealed = out / dss.SUPPLEMENT_FILENAME
+    assert sealed.is_file()
+    assert hashlib.sha256(sealed.read_bytes()).hexdigest() == \
+        result.local_seal_sha256
+
+
+def test_the_unscoped_event_map_is_refused_rather_than_trimmed_silently(
+        prod, authority, tmp_path):
+    """Why `assemble_chain_inputs` takes the sealed day set at all.
+
+    Measured: the synthetic market yields 36 structurally eligible days
+    against a 5-day sealed universe, and an unscoped mapping refuses with
+    `event_day_invented`. Scoping is the caller's job, and the gate is what
+    says so."""
+    import test_s0_context as s0t
+    from itsf.mc import supplement_inputs as si
+
+    history = ["2026-07-%02d" % d for d in range(1, 32)]
+    dates = sorted(set(history) | set(authority.expected_day_set))
+    bars, schedule = s0t.make_market(dates)
+    everything = si.assemble_chain_inputs(
+        bars_by_date=bars, schedule=schedule, events=s0t.NO_EVENTS,
+        expected_day_set=frozenset(dates))
+    assert len(everything.flag_by_date) > len(authority.expected_day_set)
+
+    out = tmp_path / "seal"
+    out.mkdir()
+    with pytest.raises(chain.ChainRefusal) as caught:
+        chain.run_supplement_chain(
+            _base_ctx(), authority=authority, prepared=prod,
+            universe=everything.universe, vol_method=everything.vol_method,
+            flag_by_date=everything.flag_by_date,
+            event_na_mapping=everything.event_na_mapping, out_dir=out,
+            runs_dir=tmp_path / "runs", archive_root=tmp_path / "arch",
+            incident_id=fx.INC, archive_before=(),
+            archive_after_reader=tuple)
+    assert caught.value.moment == "C_BUILD_1"
+    assert "event_day_invented" in str(caught.value)
+    assert list(out.iterdir()) == [], "it sealed despite refusing"
 
 
 def test_it_creates_no_directory_of_its_own(prod, authority, tmp_path):

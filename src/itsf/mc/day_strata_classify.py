@@ -31,7 +31,8 @@ __all__ = ["GATE_OF_PRODUCER_CODE", "classify_producer_failure",
            "classify_seal_failure", "ROUTER_B_SEAL_CODES",
            "seal_failure_router", "ROUTER_A", "ROUTER_B",
            "STAGE_GATE_OF_BUILDER_CODE", "CALLER_ERROR_BUILDER_CODES",
-           "classify_builder_failure", "UNMAPPED_BUILDER_CODES"]
+           "classify_builder_failure", "UNMAPPED_BUILDER_CODES",
+           "CALLER_ERROR_SEAL_CODES", "UNMAPPED_SEAL_CODES"]
 
 
 class ClassificationError(Exception):
@@ -127,6 +128,89 @@ STAGE_GATE_OF_SEAL_CODE = {
     "supplement_post_promotion_verify": ("C_BUILD", "seal_staging_partial"),
     "divergent_partial_exists": ("C_BUILD", "seal_staging_partial"),
     "incident_id_malformed": ("C_BUILD", "seal_staging_partial"),
+    # BD-6 (2026-09-02) added NO gate mappings here, deliberately. The
+    # widened derivation surfaced ten codes; the first draft gave three of
+    # them the BUILDER's answers, on the reasoning that the same raise site
+    # deserves the same ruling. `test_the_SEAL_side_still_refuses_the_same_code`
+    # refused that immediately, and it was right: `freeze_payload` freezes
+    # the WHOLE payload including the binding, so the seal path's source is
+    # genuinely more ambiguous than the builder path's, and at least one
+    # code must NOT inherit the builder's answer. Since one was wrong, none
+    # were taken -- the surfaced codes are recorded below instead.
+}
+
+#: BD-6. Programming errors and forgery routes, not run defects. Mirrors
+#: `CALLER_ERROR_BUILDER_CODES`: filing one as a gate failure would record a
+#: failed run that never happened.
+#:
+#:   `production_product_type`      a hand-assembled mapping was passed where
+#:                                  a `SupplementProduct` belongs (:361)
+#:   `production_not_factory_built` the product carries no receipt -- built by
+#:                                  hand or by `dataclasses.replace` (:367)
+#:   `production_payload_type`      `SupplementProduct.__post_init__` refusing
+#:                                  a non-Mapping payload (:134)
+#:   `filename_not_a_plain_name`   `resolve_partial` refusing a `filename`
+#:                                 that is not a bare name -- the round-7
+#:                                 path-escape fix. A caller passing
+#:                                 "../escaped.json" is a call-site bug (or
+#:                                 an attack), never a run defect.
+#:                                 SURFACED BY THIS SAME WIDENING: it was
+#:                                 added months ago, one helper below
+#:                                 `resolve_partial`, and no table had ever
+#:                                 seen it.
+CALLER_ERROR_SEAL_CODES = frozenset({
+    "production_product_type",
+    "production_not_factory_built",
+    "production_payload_type",
+    "filename_not_a_plain_name",
+})
+
+#: BD-6. Seal refusals that reach a caller and that NO ratified gate names.
+#: Recorded with the open question rather than given a gate, exactly as
+#: `UNMAPPED_BUILDER_CODES` requires: the gate name is what an F1/F2 row
+#: carries, so picking one puts a defect on record under a name nobody ruled.
+#:
+#: SEVEN AT ONCE, and that is a finding rather than a backlog. They were
+#: invisible while the derivation stopped at the seal's own function body,
+#: so "every seal refusal is mapped" was true of seven codes out of
+#: seventeen. Every one of these refuses loudly today; none of them can
+#: quietly acquire a gate. The next engineering review is the place for
+#: them -- they need a reader who is not the person who wrote the walk.
+UNMAPPED_SEAL_CODES: dict = {
+    "production_rebuild_refused":
+        "it WRAPS a varying inner `SupplementError` code (:324, "
+        'f"{exc.code}: {exc}"). Any single gate would file every inner '
+        "defect under one name, and the inner code may well have a gate of "
+        "its own. The open question is whether the wrapper should be "
+        "unwrapped and the INNER code classified instead -- not which gate "
+        "the wrapper gets.",
+    "production_payload_unsupported_type":
+        "RULED on the builder path, and ruled NOT to carry over here. "
+        "`freeze_payload` freezes the whole payload including the binding, "
+        "so on the seal path the offending value's source is ambiguous "
+        "between the rows and the authority. Recorded so the widened "
+        "derivation can see it; it still refuses, exactly as before.",
+    "production_authority_type":
+        "the builder path maps this to B_DERIVE/custody_authority_production. "
+        "Whether that carries to the seal path is the open question, and the "
+        "sister code above is why it is not assumed: one shared raise site "
+        "already turned out to mean different things on the two paths.",
+    "production_supplement_id_divergence":
+        "the builder path maps this to B_DERIVE/custody_authority_binding. "
+        "Same open question as the code above, and same reason for not "
+        "assuming the answer.",
+    "production_receipt_mismatch":
+        "a receipt COMPONENT does not describe this product (:346). The "
+        "receipt is neither a row nor the payload binding, so no existing "
+        "gate reaches it. Router B is the plausible owner -- the seal did "
+        "not complete -- but that set's size is pinned deliberately, so "
+        "adding to it is a ruling and not a tidy-up.",
+    "production_receipt_trial_mismatch":
+        "the receipt's `trial_id` is not the authority's (:350). Same shape "
+        "and same open question as the component mismatch above.",
+    "production_receipt_commit_mismatch":
+        "the receipt's `authorized_commit` is not the authority's (:353). "
+        "Same shape and same open question as the two above.",
 }
 
 #: RULED 2026-08-29, `ops/BUILDER_DECISIONS_2026-08-29.md` BD-1. These two
@@ -179,10 +263,32 @@ def seal_failure_router(code: str) -> str:
         return ROUTER_B
     if code in STAGE_GATE_OF_SEAL_CODE:
         return ROUTER_A
+    _refuse_unrouted_seal_code(code)
+
+
+def _refuse_unrouted_seal_code(code: str) -> "NoReturn":
+    """The three ways a seal code can fail to have a router, each said in
+    its own words. One message for all three would tell a caller "add it
+    somewhere" without saying which question is actually open."""
+    if code in UNMAPPED_SEAL_CODES:
+        raise ClassificationError(
+            "seal code %r reaches callers but no ratified gate names it. "
+            "%s\n\nRecorded as UNMAPPED rather than guessed, for BD-1's "
+            "reason: a picked gate would put a defect on record under a "
+            "name nobody ruled." % (code, UNMAPPED_SEAL_CODES[code]))
+    if code in CALLER_ERROR_SEAL_CODES:
+        raise ClassificationError(
+            "seal code %r is a CALLER BUG or a forgery route -- a "
+            "hand-built product, a missing receipt, a payload of the wrong "
+            "type -- not a run defect. It has no gate on purpose: filing a "
+            "programming error as a gate failure would record a failed run "
+            "that never happened. Fix the call site." % code)
     raise ClassificationError(
-        "seal code %r is in neither table, so no router owns it. Add it to "
+        "seal code %r is in no seal table, so no router owns it. Add it to "
         "STAGE_GATE_OF_SEAL_CODE with the raise site that justifies the "
-        "gate, or to ROUTER_B_SEAL_CODES with the reason no gate names it."
+        "gate, to ROUTER_B_SEAL_CODES with the reason no gate names it, to "
+        "CALLER_ERROR_SEAL_CODES if it is a programming error, or to "
+        "UNMAPPED_SEAL_CODES with the question that is actually open."
         % code)
 
 
@@ -300,9 +406,5 @@ def classify_seal_failure(code: str) -> tuple:
             % (code, ROUTER_B_SEAL_CODES[code]))
     pair = STAGE_GATE_OF_SEAL_CODE.get(code)
     if pair is None:
-        raise ClassificationError(
-            "seal code %r is in neither table. Add it to "
-            "STAGE_GATE_OF_SEAL_CODE with the raise site that justifies "
-            "the gate, or to ROUTER_B_SEAL_CODES with the reason no gate "
-            "names it (BD-1)." % code)
+        _refuse_unrouted_seal_code(code)
     return pair

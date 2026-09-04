@@ -617,7 +617,7 @@ def test_a_failed_local_seal_produces_neither_p4_nor_a1():
 
 
 def test_the_checkpoint_can_refute_a_report_that_says_archive_ok():
-    """BD-2. `archive_sealed_run` verifies the copy it just made and never
+    """BD-5. `archive_sealed_run` verifies the copy it just made and never
     looks at bytes archived earlier, so its report can say ok while
     C_BUILD_3 finds archived bytes destroyed. Policy A forbids P4 there."""
     ok = FakeReport(ok=True, status="archive_ok", inventory=FakeInventory())

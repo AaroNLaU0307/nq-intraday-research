@@ -877,7 +877,7 @@ def decide_after_seal(*, local_seal_ok: bool, archive_report,
 
     `post_archive_ok` IS THE C_BUILD_3 CHECKPOINT'S VERDICT, and it exists
     because a report can say `archive_ok` while the checkpoint refutes it.
-    BD-2 (2026-09-02, builder seat) settled the one case that produces it:
+    BD-5 (2026-09-02, builder seat) settled the one case that produces it:
 
       `run_c_build_3` reports `archived_bytes_deleted` — the local seal
       survived, but bytes ALREADY in the archive are gone. Two facts make

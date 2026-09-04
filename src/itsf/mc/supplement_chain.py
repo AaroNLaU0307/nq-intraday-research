@@ -19,7 +19,7 @@ layers before it. `universe`, `vol_method`, `flag_by_date` and
 dataset is the caller that has to be authorized to. Building this is
 engineering; running it is not.
 
-ONE CASE LOOKED UNRULED AND WAS NOT, see `ARCHIVED_BYTES_DELETED` and BD-2 in
+ONE CASE LOOKED UNRULED AND WAS NOT, see `ARCHIVED_BYTES_DELETED` and BD-5 in
 `decide_after_seal`.
 """
 from __future__ import annotations
@@ -34,7 +34,7 @@ __all__ = ["ChainResult", "ChainRefusal", "run_supplement_chain",
            "ARCHIVE_SEAM", "ARCHIVED_BYTES_DELETED"]
 
 
-#: THE CASE THAT LOOKED UNRULED, AND WAS NOT (BD-2, 2026-09-02).
+#: THE CASE THAT LOOKED UNRULED, AND WAS NOT (BD-5, 2026-09-02).
 #:
 #: `run_c_build_3` can find `archived_bytes_deleted`: the local seal survived
 #: the archive attempt, but bytes that were already in the archive are gone.
@@ -110,7 +110,7 @@ def _gates(ctx, outcome, checkpoint: str, moment: str) -> None:
 
 
 def run_supplement_chain(base_ctx, *, authority, prepared, universe,
-                         vol_method: str, flag_by_date, event_na_mapping: str,
+                         vol_method, flag_by_date, event_na_mapping: str,
                          out_dir, runs_dir, archive_root, incident_id: str,
                          archive_before, archive_after_reader):
     """Run the three moments in order and return where the chain got.
@@ -163,7 +163,7 @@ def run_supplement_chain(base_ctx, *, authority, prepared, universe,
         if code in LOCAL_SEAL_LOST_CODES:
             local_seal_ok = False
         elif code == ARCHIVED_BYTES_DELETED:
-            # BD-2. The checkpoint refutes a report that says archive_ok, and
+            # BD-5. The checkpoint refutes a report that says archive_ok, and
             # Router B is TOLD that rather than handed a synthesized failing
             # report -- see `decide_after_seal` for why A1 is the ratified
             # enum's remainder rather than a preference.

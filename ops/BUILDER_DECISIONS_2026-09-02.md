@@ -1,5 +1,8 @@
 # Builder 裁定 —— 2026-09-02
 
+编号承接 `ops/BUILDER_DECISIONS_2026-08-29.md`（BD-1..BD-4 已占用）。
+初稿把这两条误编为 BD-2 / BD-3，与该文件冲突，已改为 BD-5 / BD-6。
+
 BASIS=Aaron 2026-08-29「很多决定不需要问我」——工程判断归 builder，
 Aaron 保留六类：成本 / Primary 指标 / 样本切分 / 何时动真实数据 /
 promotion-falsified / quant-data 建目录。
@@ -9,7 +12,7 @@ promotion-falsified / quant-data 建目录。
 
 ---
 
-## BD-2 `archived_bytes_deleted` 的终态：**A1**
+## BD-5 `archived_bytes_deleted` 的终态：**A1**
 
 ### 起因，以及我先犯的错
 
@@ -79,7 +82,7 @@ P4                 Policy A：P4 需要 local_seal_ok AND archive_ok
 另外钉住：`local_seal_ok=False` **压过**检查点的判定——seal 没活下来时，
 结论仍是「nothing was sealed」。
 
-### 边界：BD-2 只定了**一个**码
+### 边界：BD-5 只定了**一个**码
 
 C_BUILD_3 将来新增的码**仍然失败关闭**——链路抛
 `no ruled verdict covers <code>`，与 BD-1 对封印码的要求一致。
@@ -87,7 +90,7 @@ C_BUILD_3 将来新增的码**仍然失败关闭**——链路抛
 
 ---
 
-## 与 BD-2 一起交回的两件事（**不是**我能定的）
+## 与 BD-5 一起交回的两件事（**不是**我能定的）
 
 ```
 ①  何时动真实数据        Aaron 保留的六类之一
@@ -96,3 +99,57 @@ C_BUILD_3 将来新增的码**仍然失败关闭**——链路抛
 
 这两件**不能转给 Fable**：Fable 可顾问不可代签，且由 Aaron 调用。
 若 Aaron 要 Fable 的**意见**（而非签字），我可以备送审包，由他发起。
+
+---
+
+## BD-6 封存码推导加宽为跟着调用走，并给新浮出的码分桶
+
+### 结论
+
+```
+推导      _seal_codes_from_source 改为递归跟随模块内调用
+          （与 builder 侧 2026-08-29 的加宽完全同型）
+          扫出的码：7 -> 18
+分桶      CALLER_ERROR_SEAL_CODES  4 条（调用方错误 / 伪造路线）
+          UNMAPPED_SEAL_CODES      7 条（各带自己的开放问题）
+          STAGE_GATE_OF_SEAL_CODE  不新增
+          ROUTER_B_SEAL_CODES      不新增（其数量是被刻意钉住的）
+```
+
+### 为什么是工程判断
+
+它不碰六类中的任何一类。它只回答「这个失败被记到哪一栏」，与 BD-1 同型。
+
+### 怎么发现的 —— **不是读出来的**
+
+把链路端到端组合起来之后，一个**真实调用方**吃到
+`ClassificationError: production_product_type is in neither table`。
+该码在 `_product_receipt` 里抛出，比 `seal_supplement_production` 低一层，
+而推导只扫函数体 —— **它同时逃过了表和那条本该管住它的测试**。
+
+**builder 侧 2026-08-29 已经为完全相同的缺陷加宽过一次**，注释里写着
+「守卫比它的声称更窄」。**封存侧一直留着那个缺陷。**
+
+加宽后另外还抓到 `filename_not_a_plain_name` ——
+**那是我自己第 7 轮加的越界防护，从来没有任何表见过它。**
+
+### 我先做错的一步，以及是谁拦下的
+
+初稿把三个「两条路径共用的 raise 点」直接沿用 builder 的答案，理由是
+「同一 raise 点该同一裁定」。
+
+`test_the_SEAL_side_still_refuses_the_same_code` **当场拒绝**，而且它是对的：
+
+> `freeze_payload` 冻结**整个** payload 含 binding，所以在封存路径上
+> 来源确实有歧义，该码**不得**继承 builder 的答案。
+
+**一个共用 raise 点已经被证明在两条路径上含义不同。既然有一个是错的，
+三个我一个都不拿。** 全部记为 UNMAPPED 并写下各自的开放问题。
+
+### 边界
+
+新增的桶**不给任何码一道门**。七条 UNMAPPED 全部大声拒绝，
+并说明**真正开放的问题是什么**（而不是「加到某处去」）。
+
+按 Aaron 2026-09-02 的安排，它们**不单独开审**，
+搭到下一个自然 review 节点一起过 —— 那里正需要一个不是我的读者。
