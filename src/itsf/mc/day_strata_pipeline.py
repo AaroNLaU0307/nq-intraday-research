@@ -204,9 +204,20 @@ def run_c_build(*, authority, prepared, universe, vol_method: str,
 
 
 def _declared_digest(product) -> str:
-    """The product's own `rows_digest`, however it carries it."""
-    for getter in (lambda p: p["rows_digest"],
-                   lambda p: getattr(p, "rows_digest")):
+    """The product's own `rows_digest`, in each shape one is actually built.
+
+    THE PAYLOAD CARRIER WAS MISSING UNTIL 2026-09-02, and the docstring said
+    "however it carries it" the whole time -- a sentence wider than the code
+    under it, which is this project's oldest defect. It was never caught
+    because every test drove this with a plain mapping; the real
+    `SupplementProduct` keeps its fields in `.payload`, so composing the
+    chain end to end refused with `product_carries_no_rows_digest` on a
+    perfectly good product. Each getter below now names what builds it.
+    """
+    for getter in (lambda p: p["rows_digest"],                 # test mapping
+                   lambda p: getattr(p, "rows_digest"),        # attr carrier
+                   lambda p: p.payload["rows_digest"]):        # the real one
+
         try:
             value = getter(product)
         except (KeyError, TypeError, AttributeError):

@@ -418,6 +418,33 @@ def checkpoint_of(gate_name: str) -> str:
     return CHECKPOINT_OF[gate_name]
 
 
+#: The three moments in the order they happen. Named so `gates_at` cannot
+#: return them in whatever order a dict comprehension produced.
+CHECKPOINT_ORDER = (CHECKPOINT_C_BUILD_1, CHECKPOINT_C_BUILD_2,
+                    CHECKPOINT_C_BUILD_3)
+
+
+def gates_at(checkpoint: str) -> tuple:
+    """The C_BUILD gates that run at one moment, in GATE_TABLE's order.
+
+    WHY THIS EXISTS AND WHAT IT PREVENTS. `run_stage_gates("C_BUILD", ctx)`
+    walks the whole table in one call, so it always reaches
+    `archive_policy_a` -- which is ruled to Router B and therefore always
+    refuses as a gate. An orchestrator built on stages could never complete
+    a chain no matter what the run did. Selecting by MOMENT is what
+    `CHECKPOINT_OF` was introduced for; this is its missing inverse.
+
+    Order comes from `GATE_TABLE`, not from `CHECKPOINT_OF`'s iteration
+    order, so the gate a refusal names stays reproducible from the
+    governance text."""
+    if checkpoint not in CHECKPOINT_ORDER:
+        raise SupplementGrammarError(
+            "checkpoint_outside_closed_enum",
+            "%r is not one of %s" % (checkpoint, list(CHECKPOINT_ORDER)))
+    return tuple(g for g in GATE_TABLE["C_BUILD"]
+                 if CHECKPOINT_OF[g] == checkpoint)
+
+
 #: N09 EXECUTION PATH R3 §5 — the precheck evidence's serializer, landing
 #: point, timing, and what a write failure becomes. The reviewer's Medium
 #: was that R2 required the table on disk and defined none of these four.

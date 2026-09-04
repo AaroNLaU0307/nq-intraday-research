@@ -1116,7 +1116,23 @@ def run_supplement_production(supplement_id: str = sc.FIRST_SUPPLEMENT_ID,
             "binding the supplement id, the full 40-hex commit and the "
             "output root (ratified profile: "
             "ND1_SUPPLEMENT_EXECUTION_AUTHORIZED=NO)")
+    # WAS "this build carries no execution path". That stopped being true on
+    # 2026-09-02, when `supplement_chain.run_supplement_chain` composed the
+    # three C_BUILD moments end to end and drove them to P4 over a real seal.
+    # Leaving the old sentence would have been the exact defect this file has
+    # been correcting all week: a refusal reason that was true when written
+    # and false when read.
+    #
+    # What is actually missing is one step EARLIER than the chain. The chain
+    # RECEIVES `universe`, `vol_method` and `flag_by_date`; building them
+    # means loading the S0 dataset, which is a Development-data read and is
+    # gated by `assert_real_run_allowed` at the top of this function. So the
+    # remaining gap is data acquisition behind a gate that already refuses --
+    # not a missing path, and not something to open from here.
     raise SupplementRunNotAuthorized(
-        f"{supplement_id}: a live authorization row exists but this build "
-        "carries no execution path — N04 ships DEFAULT-REFUSE and the "
-        "ratification authorizes grammar, not execution")
+        f"{supplement_id}: a live authorization row exists and an execution "
+        "path now exists (supplement_chain), but this entry cannot supply "
+        "the chain's dataset-side inputs (universe, vol_method, "
+        "flag_by_date) without a Development-data read, which is gated. "
+        "N04 still ships DEFAULT-REFUSE: the ratification authorizes "
+        "grammar, not execution")

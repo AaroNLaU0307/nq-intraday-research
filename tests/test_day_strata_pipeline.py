@@ -328,5 +328,40 @@ class TestCBuild3AfterTheArchiveAttempt(unittest.TestCase):
         self.assertEqual("local_seal_mutated", outcome.failure.code)
 
 
+
+class TestTheDigestAccessorReachesEveryCarrier(unittest.TestCase):
+    """THE COVERAGE THAT WAS MISSING, and its absence is why a wider-than-
+    true docstring survived. `_declared_digest` said "however it carries it"
+    while every test here drove it with a plain mapping -- so the real
+    `SupplementProduct`, which keeps its fields in `.payload`, refused with
+    `product_carries_no_rows_digest` the first time the chain composed one.
+
+    Each carrier below is a shape something actually builds."""
+
+    def test_a_plain_mapping(self):
+        self.assertEqual("d" * 64, pipe._declared_digest({"rows_digest":
+                                                          "d" * 64}))
+
+    def test_an_attribute_carrier(self):
+        class P:
+            rows_digest = "e" * 64
+        self.assertEqual("e" * 64, pipe._declared_digest(P()))
+
+    def test_the_real_production_product(self):
+        """The one that was missing. Built by the real factory, not by a
+        stand-in, so a change to where SupplementProduct keeps its fields
+        fails here rather than at the end of a chain."""
+        from itsf.mc import supplement_production as sp
+
+        payload = {"rows_digest": "f" * 64}
+        product = sp.SupplementProduct(payload)
+        self.assertEqual("f" * 64, pipe._declared_digest(product))
+
+    def test_a_product_carrying_none_of_them_still_refuses(self):
+        with self.assertRaises(dsr.DayStrataRowsError) as caught:
+            pipe._declared_digest(object())
+        self.assertEqual("product_carries_no_rows_digest",
+                         caught.exception.code)
+
 if __name__ == "__main__":
     unittest.main()
