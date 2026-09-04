@@ -274,6 +274,16 @@ def _assert_c_build_1(before: tuple, after: tuple, label: str) -> None:
 # trap rather than leaving it to be discovered.
 
 
+#: What `resolve_partial` returns when a seal actually EXISTS afterwards.
+#: `retry_permitted` is deliberately absent -- it means the path was
+#: unblocked for a future attempt, not that this one sealed.
+SEALED_ACTIONS = frozenset({"already_sealed", "promote"})
+
+
+def _SEALED_ACTIONS(action) -> bool:
+    return getattr(action, "action", None) in SEALED_ACTIONS
+
+
 class SealStagingResult(NamedTuple):
     """What C_BUILD_2 produced. BOTH fields are the answer, never one."""
     outcome: CBuildOutcome        # what the gates classify
@@ -312,7 +322,14 @@ def run_c_build_2(*, product, out_dir, authority, prepared,
             CBuildOutcome((), None,
                           CBuildFailure(gate, code, str(exc), stage)),
             False)
-    return SealStagingResult(CBuildOutcome((), action, None), True, digest)
+    # M1 (engineering-safety HOLD, 2026-09-02). `local_seal_ok` used to be
+    # an unconditional True on this path, and `retry_permitted` reaches it:
+    # `resolve_partial` returns that when it RENAMED divergent debris aside
+    # and unblocked the path -- nothing was sealed. Treating it as sealed
+    # made the chain perform a real archive copy and only afterwards let
+    # Router B say `local_seal_failed`. Read the action instead.
+    return SealStagingResult(CBuildOutcome((), action, None),
+                             _SEALED_ACTIONS(action), digest)
 
 
 # ===========================================================================

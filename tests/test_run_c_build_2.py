@@ -128,6 +128,43 @@ def test_the_conflict_destroyed_nothing(prod, authority, tmp_path):
     assert sealed.read_bytes() == tampered
 
 
+def test_retry_permitted_is_not_a_completed_seal(prod, authority, tmp_path):
+    """M1, from the engineering-safety HOLD.
+
+    `resolve_partial` returns `retry_permitted` when it renamed divergent
+    `.partial` debris aside and unblocked the path -- NOTHING was sealed.
+    This reported `local_seal_ok=True` for it, so a caller went on to do a
+    real archive copy and only then learned the seal never happened."""
+    from itsf.mc import supplement_runner as _sr
+
+    out = tmp_path / "seal"
+    out.mkdir()
+    product = _product(authority, prod)
+    action = _sr.PartialAction("retry_permitted", preserved_as="x.divergent")
+    with mock.patch.object(sp, "seal_supplement_production",
+                           return_value=(action, "f" * 64)):
+        result = _seal(product, authority, prod, out)
+    assert result.local_seal_ok is False, (
+        "retry_permitted means the path was unblocked, not that this "
+        "attempt sealed anything")
+    assert result.outcome.failure is None, (
+        "and it is not a gate failure either -- no gate names it"
+    )
+
+
+def test_the_two_actions_that_ARE_a_seal_still_report_ok(prod, authority,
+                                                         tmp_path):
+    """The other half, so the fix cannot pass by making everything False."""
+    out = tmp_path / "seal"
+    out.mkdir()
+    product = _product(authority, prod)
+    assert _seal(product, authority, prod, out).local_seal_ok is True
+    # sealing the same bytes again is `already_sealed`
+    second = _seal(product, authority, prod, out)
+    assert second.local_seal_ok is True
+    assert second.outcome.product.action == "already_sealed"
+
+
 class TestTheTwoOwners(unittest.TestCase):
     """Router A and Router B, and the order the producer asks in."""
 

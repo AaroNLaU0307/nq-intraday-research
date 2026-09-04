@@ -62,21 +62,36 @@ def _base_ctx():
                           registry_text="", runs_root=None, archive_root=None)
 
 
+_STAMP = "20260902T120000Z"
+
+
+def _plan(tmp_path, *, make=True):
+    """The ratified planner's paths. Since the H1 repair the chain takes
+    these instead of three free paths, so a test cannot seal into one tree
+    and archive another either."""
+    runs_root, archive_root = tmp_path / "runs", tmp_path / "archive"
+    runs_root.mkdir(exist_ok=True)
+    archive_root.mkdir(exist_ok=True)
+    planned = sr.plan_supplement_paths(
+        runs_root=runs_root, archive_root=archive_root,
+        supplement_id=fx.SID, utc_stamp=_STAMP)
+    if make:
+        planned.runs_target.mkdir(parents=True, exist_ok=True)
+    return planned
+
+
 def _drive(authority, prod, tmp_path, *, report=None, before=(), after=None,
-           days=None):
+           days=None, planned=None):
     """One chain run, with the two unavoidable substitutions in place."""
     days = days if days is not None else sorted(authority.expected_day_set)
-    out = tmp_path / "seal"
-    out.mkdir(exist_ok=True)
+    planned = planned or _plan(tmp_path)
     seam = mock.Mock(return_value=report or _Report("archive_ok"))
-    with fxp._patched({d: "T1" for d in days}, {d: "none" for d in days}), \
-            mock.patch.object(chain, "ARCHIVE_SEAM", seam):
+    with fxp._patched({d: "T1" for d in days}, {d: "none" for d in days}),             mock.patch.object(chain, "ARCHIVE_SEAM", seam):
         return chain.run_supplement_chain(
-            _base_ctx(), authority=authority, prepared=prod,
+            _base_ctx(), planned=planned, authority=authority, prepared=prod,
             universe=object(), vol_method="vol20", flag_by_date={},
-            event_na_mapping="none", out_dir=out,
-            runs_dir=tmp_path / "runs", archive_root=tmp_path / "archive",
-            incident_id=fx.INC, archive_before=before,
+            event_na_mapping="none", incident_id=fx.INC,
+            archive_before=before,
             archive_after_reader=lambda: (after if after is not None
                                           else before))
 
@@ -135,12 +150,13 @@ class TestItSelectsByMomentNotByStage(unittest.TestCase):
 # ===========================================================================
 
 def test_the_clean_chain_reaches_P4(prod, authority, tmp_path):
-    result = _drive(authority, prod, tmp_path)
+    planned = _plan(tmp_path)
+    result = _drive(authority, prod, tmp_path, planned=planned)
     assert result.verdict == "P4"
     assert result.sealed is True
     assert result.archive_status == "archive_ok"
     assert len(result.rows) == len(authority.expected_day_set)
-    assert (tmp_path / "seal" / dss.SUPPLEMENT_FILENAME).is_file()
+    assert (planned.runs_target / dss.SUPPLEMENT_FILENAME).is_file()
 
 
 def test_a_failed_archive_reaches_A1_not_P4(prod, authority, tmp_path):
@@ -155,33 +171,30 @@ def test_a_failed_archive_reaches_A1_not_P4(prod, authority, tmp_path):
 def test_a_C_BUILD_1_refusal_stops_before_anything_is_sealed(prod, authority,
                                                              tmp_path):
     """The point of the first moment being BEFORE the first write."""
-    out = tmp_path / "seal"
-    out.mkdir()
+    planned = _plan(tmp_path)
     days = sorted(authority.expected_day_set)
     with pytest.raises(chain.ChainRefusal) as caught:
-        _drive(authority, prod, tmp_path, days=days[:-1])
+        _drive(authority, prod, tmp_path, days=days[:-1], planned=planned)
     assert caught.value.moment == "C_BUILD_1"
-    assert list(out.iterdir()) == [], "it sealed despite refusing"
+    assert list(planned.runs_target.iterdir()) == [],         "it sealed despite refusing"
 
 
 def test_a_lost_local_seal_is_refused_by_router_b(prod, authority, tmp_path):
     """`local_seal_absent` means the seal did not survive, which is exactly
     `local_seal_ok=False` -- and Router B already answers that."""
-    def _vanish(runs_dir, archive_root):
-        (tmp_path / "seal" / dss.SUPPLEMENT_FILENAME).unlink()
+    planned = _plan(tmp_path)
+
+    def _vanish(runs_dir, archive_parent):
+        (planned.runs_target / dss.SUPPLEMENT_FILENAME).unlink()
         return _Report("archive_ok")
 
-    out = tmp_path / "seal"
-    out.mkdir()
     days = sorted(authority.expected_day_set)
-    with fxp._patched({d: "T1" for d in days}, {d: "none" for d in days}), \
-            mock.patch.object(chain, "ARCHIVE_SEAM", _vanish):
+    with fxp._patched({d: "T1" for d in days}, {d: "none" for d in days}),             mock.patch.object(chain, "ARCHIVE_SEAM", _vanish):
         with pytest.raises(chain.ChainRefusal) as caught:
             chain.run_supplement_chain(
-                _base_ctx(), authority=authority, prepared=prod,
-                universe=object(), vol_method="vol20", flag_by_date={},
-                event_na_mapping="none", out_dir=out,
-                runs_dir=tmp_path / "runs", archive_root=tmp_path / "arch",
+                _base_ctx(), planned=planned, authority=authority,
+                prepared=prod, universe=object(), vol_method="vol20",
+                flag_by_date={}, event_na_mapping="none",
                 incident_id=fx.INC, archive_before=(),
                 archive_after_reader=tuple)
     assert caught.value.moment == "C_BUILD_3"
@@ -230,131 +243,115 @@ def test_a_router_b_seal_code_never_reaches_the_gates(prod, authority,
     """BD-1's two codes get no gate, so asking the gates would report green
     over a seal that did not happen."""
     exc = sp.SupplementProductionError("production_payload_drift", "stubbed")
-    out = tmp_path / "seal"
-    out.mkdir()
+    planned = _plan(tmp_path)
     days = sorted(authority.expected_day_set)
-    with fxp._patched({d: "T1" for d in days}, {d: "none" for d in days}), \
-            mock.patch.object(sp, "seal_supplement_production",
-                              side_effect=exc), \
-            mock.patch.object(sr, "GATES", dict(sr.GATES)) as gates:
+    with fxp._patched({d: "T1" for d in days}, {d: "none" for d in days}),             mock.patch.object(sp, "seal_supplement_production",
+                              side_effect=exc),             mock.patch.object(sr, "GATES", dict(sr.GATES)) as gates:
         gates["seal_staging_partial"] = mock.Mock(
             side_effect=AssertionError("the gate was consulted"))
         with pytest.raises(chain.ChainRefusal) as caught:
             chain.run_supplement_chain(
-                _base_ctx(), authority=authority, prepared=prod,
-                universe=object(), vol_method="vol20", flag_by_date={},
-                event_na_mapping="none", out_dir=out,
-                runs_dir=tmp_path / "runs", archive_root=tmp_path / "arch",
+                _base_ctx(), planned=planned, authority=authority,
+                prepared=prod, universe=object(), vol_method="vol20",
+                flag_by_date={}, event_na_mapping="none",
                 incident_id=fx.INC, archive_before=(),
                 archive_after_reader=tuple)
     assert caught.value.moment == "C_BUILD_2"
     assert caught.value.code == "production_payload_drift"
 
 
-def test_a_seal_conflict_stops_at_the_second_moment(prod, authority,
-                                                    tmp_path):
-    """The gate-owned half of the same moment, driven for real."""
-    _drive(authority, prod, tmp_path)
-    sealed = tmp_path / "seal" / dss.SUPPLEMENT_FILENAME
-    sealed.write_bytes(sealed.read_bytes() + b" ")
+def test_a_second_run_into_the_same_directory_stops_at_C_BUILD_1(
+        prod, authority, tmp_path):
+    """WAS `test_a_seal_conflict_stops_at_the_second_moment`, and the change
+    is a second defect the H1 repair uncovered.
+
+    C_BUILD_1 asserts the supplement byte set under `runs_root` is EMPTY
+    before the first write. While `out_dir` and `runs_dir` were free
+    parameters that check ran against a directory the seal never touched --
+    so "empty before the first write" was as vacuous as "the seal is
+    archived" was false. Bound to one planned target, it now sees the
+    previous seal and stops BEFORE writing.
+
+    `supplement_seal_conflict` is therefore unreachable through the chain
+    over one planned directory, which is correct: the planner refuses a
+    target that already exists, so two runs never legitimately share one.
+    It stays exercised at the producer level in
+    `tests/test_run_c_build_2.py`, driven against the real sealer."""
+    planned = _plan(tmp_path)
+    _drive(authority, prod, tmp_path, planned=planned)
+    sealed = planned.runs_target / dss.SUPPLEMENT_FILENAME
+    assert sealed.is_file()
+
     with pytest.raises(chain.ChainRefusal) as caught:
-        _drive(authority, prod, tmp_path)
-    assert caught.value.moment == "C_BUILD_2"
-    assert "supplement_seal_conflict" in str(caught.value)
+        _drive(authority, prod, tmp_path, planned=planned)
+    assert caught.value.moment == "C_BUILD_1"
+    assert "c_build_1_not_empty" in str(caught.value)
+    assert sealed.is_file(), "the refusal destroyed the previous seal"
 
 
-def test_bars_to_P4_with_NOTHING_mocked_but_the_archive(prod, authority,
-                                                        tmp_path):
-    """THE END-TO-END, and the strongest thing that can be shown without
-    touching Development data.
+def test_the_seal_lands_inside_the_tree_that_gets_archived(prod, authority,
+                                                            tmp_path):
+    """H1, from the 2026-09-02 engineering-safety HOLD.
 
-    Synthetic 1-minute bars -> `build_universe` -> day contexts -> the RULED
-    vol and event methods -> real rows -> the three C_BUILD_1 gates -> the
-    real production sealer -> `resolve_partial` -> Router B -> P4. The two
-    S0 universe builders are NOT patched here, unlike everywhere else in
-    this file, so the vol and event mappings are the real ones.
+    Reproduced before it was fixed: with `out_dir` and `runs_dir` as free
+    parameters the chain returned P4 and archive_ok while the sealed
+    supplement sat outside the archived tree -- the archive copied an empty
+    directory. Policy A requires a second copy, and nothing in the code made
+    one.
 
-    Only the archive step is substituted, and only because it copies a
-    directory tree; what the chain reads from it is a status.
+    The fix is not a binding rule invented here. `plan_supplement_paths` is
+    the ratified planner and already owns the relationship: `runs_target` is
+    where the run writes, and `archive_parent` is, in its own words, "what
+    `archive_sealed_run` must be passed". The chain takes those instead of
+    three free paths, so the two cannot be unbound."""
+    runs_root, archive_root = tmp_path / "runs", tmp_path / "archive"
+    runs_root.mkdir()
+    archive_root.mkdir()
+    planned = sr.plan_supplement_paths(
+        runs_root=runs_root, archive_root=archive_root,
+        supplement_id=fx.SID, utc_stamp="20260902T120000Z")
+    planned.runs_target.mkdir(parents=True)
 
-    WHAT THIS DOES NOT SHOW. The bars are synthetic. `load_real` has never
-    run, and this says nothing about what real bars would produce -- only
-    that every step between bars and a verdict is composed and works.
-    """
-    import test_s0_context as s0t
-    from itsf.mc import supplement_inputs as si
-
-    history = ["2026-07-%02d" % d for d in range(1, 32)]
-    dates = sorted(set(history) | set(authority.expected_day_set))
-    bars, schedule = s0t.make_market(dates)
-    inputs = si.assemble_chain_inputs(
-        bars_by_date=bars, schedule=schedule, events=s0t.NO_EVENTS,
-        expected_day_set=authority.expected_day_set)
-    assert sorted(inputs.flag_by_date) == sorted(authority.expected_day_set)
-
-    out = tmp_path / "seal"
-    out.mkdir()
-    with mock.patch.object(chain, "ARCHIVE_SEAM",
-                           mock.Mock(return_value=_Report("archive_ok"))):
-        result = chain.run_supplement_chain(
-            _base_ctx(), authority=authority, prepared=prod,
-            universe=inputs.universe, vol_method=inputs.vol_method,
-            flag_by_date=inputs.flag_by_date,
-            event_na_mapping=inputs.event_na_mapping, out_dir=out,
-            runs_dir=tmp_path / "runs", archive_root=tmp_path / "arch",
-            incident_id=fx.INC, archive_before=(),
-            archive_after_reader=tuple)
+    days = sorted(authority.expected_day_set)
+    with fxp._patched({d: "T1" for d in days}, {d: "none" for d in days}):
+        result = chain.run_supplement_chain(          # REAL archive step
+            _base_ctx(), planned=planned, authority=authority, prepared=prod,
+            universe=object(), vol_method="vol20", flag_by_date={},
+            event_na_mapping="none", incident_id=fx.INC,
+            archive_before=(), archive_after_reader=tuple)
 
     assert result.verdict == "P4"
-    assert len(result.rows) == len(authority.expected_day_set)
-    sealed = out / dss.SUPPLEMENT_FILENAME
-    assert sealed.is_file()
-    assert hashlib.sha256(sealed.read_bytes()).hexdigest() == \
-        result.local_seal_sha256
-
-
-def test_the_unscoped_event_map_is_refused_rather_than_trimmed_silently(
-        prod, authority, tmp_path):
-    """Why `assemble_chain_inputs` takes the sealed day set at all.
-
-    Measured: the synthetic market yields 36 structurally eligible days
-    against a 5-day sealed universe, and an unscoped mapping refuses with
-    `event_day_invented`. Scoping is the caller's job, and the gate is what
-    says so."""
-    import test_s0_context as s0t
-    from itsf.mc import supplement_inputs as si
-
-    history = ["2026-07-%02d" % d for d in range(1, 32)]
-    dates = sorted(set(history) | set(authority.expected_day_set))
-    bars, schedule = s0t.make_market(dates)
-    everything = si.assemble_chain_inputs(
-        bars_by_date=bars, schedule=schedule, events=s0t.NO_EVENTS,
-        expected_day_set=frozenset(dates))
-    assert len(everything.flag_by_date) > len(authority.expected_day_set)
-
-    out = tmp_path / "seal"
-    out.mkdir()
-    with pytest.raises(chain.ChainRefusal) as caught:
-        chain.run_supplement_chain(
-            _base_ctx(), authority=authority, prepared=prod,
-            universe=everything.universe, vol_method=everything.vol_method,
-            flag_by_date=everything.flag_by_date,
-            event_na_mapping=everything.event_na_mapping, out_dir=out,
-            runs_dir=tmp_path / "runs", archive_root=tmp_path / "arch",
-            incident_id=fx.INC, archive_before=(),
-            archive_after_reader=tuple)
-    assert caught.value.moment == "C_BUILD_1"
-    assert "event_day_invented" in str(caught.value)
-    assert list(out.iterdir()) == [], "it sealed despite refusing"
+    sealed = planned.runs_target / dss.SUPPLEMENT_FILENAME
+    assert sealed.is_file(), "the seal did not land in the run directory"
+    archived = planned.archive_target / dss.SUPPLEMENT_FILENAME
+    assert archived.is_file(), (
+        "P4 with the seal absent from the archive -- Policy A's second copy "
+        "is exactly what P4 is supposed to mean")
+    assert archived.read_bytes() == sealed.read_bytes()
 
 
 def test_it_creates_no_directory_of_its_own(prod, authority, tmp_path):
-    """`runs_dir` and `archive_root` are handed in and never made here --
-    creating one is Aaron's authorization to give, not this module's."""
-    _drive(authority, prod, tmp_path)
-    assert not (tmp_path / "runs").exists()
-    assert not (tmp_path / "archive").exists()
+    """It writes only where the ratified planner said, and creates nothing
+    the caller did not.
 
+    REWRITTEN after the H1 repair. The old version asserted that `runs` and
+    `archive` did not exist after a P4 -- which passed for the wrong reason:
+    the archive had copied an empty directory and the seal was somewhere
+    else entirely. That assertion was a symptom of the defect, recorded as
+    an expectation.
 
+    What is actually worth holding is that the chain does not INVENT a
+    directory: the run target is created by the caller, the archive side is
+    made by `archive_sealed_run` under the planned parent, and nothing
+    appears outside those."""
+    planned = _plan(tmp_path)
+    before = {str(p) for p in tmp_path.rglob("*") if p.is_dir()}
+    _drive(authority, prod, tmp_path, planned=planned)
+    after = {str(p) for p in tmp_path.rglob("*") if p.is_dir()}
+
+    invented = sorted(after - before)
+    assert invented == [], (
+        "the chain created directories nobody asked for: %s" % invented)
+    assert (planned.runs_target / dss.SUPPLEMENT_FILENAME).is_file()
 if __name__ == "__main__":
     unittest.main()

@@ -120,11 +120,25 @@ def _gates(ctx, outcome, checkpoint: str, moment: str) -> None:
                                str(exc)) from exc
 
 
-def run_supplement_chain(base_ctx, *, authority, prepared, universe,
+def run_supplement_chain(base_ctx, *, planned, authority, prepared, universe,
                          vol_method, flag_by_date, event_na_mapping: str,
-                         out_dir, runs_dir, archive_root, incident_id: str,
+                         incident_id: str,
                          archive_before, archive_after_reader):
     """Run the three moments in order and return where the chain got.
+
+    `planned` IS A `PlannedPaths`, and taking one instead of three free paths
+    is the H1 repair (engineering-safety HOLD, 2026-09-02). The first version
+    took `out_dir`, `runs_dir` and `archive_root` independently, so a caller
+    could seal into one tree and archive another: reproduced at P4 with
+    `archive_ok` while the sealed supplement was not in the archive at all
+    and an empty directory had been copied. Policy A's second copy was not
+    guaranteed by anything.
+
+    The binding is NOT a rule invented here. `plan_supplement_paths` is the
+    ratified planner and already owns it -- `runs_target` is where the run
+    writes and `archive_parent` is, in its own words, "what
+    `archive_sealed_run` must be passed". Deriving both from one object makes
+    unbinding them impossible rather than merely discouraged.
 
     `archive_before` is the archive inventory taken BEFORE the attempt and
     `archive_after_reader` is a zero-argument callable that takes it again
@@ -133,13 +147,29 @@ def run_supplement_chain(base_ctx, *, authority, prepared, universe,
     of a real directory, and touching one is the caller's authorization to
     hold, not this module's.
     """
+    from pathlib import Path as _Path
+
+    out_dir = _Path(planned.runs_target)
     # --- moment 1: before the first write --------------------------------
-    outcome = _dsp.run_c_build(
-        authority=authority, prepared=prepared, universe=universe,
-        vol_method=vol_method, flag_by_date=flag_by_date,
-        event_na_mapping=event_na_mapping,
-        expected_day_set=authority.expected_day_set,
-        runs_root=runs_dir, archive_root=archive_root)
+    # `run_c_build` CLASSIFIES most failures into an outcome, but
+    # `_assert_c_build_1` raises `DayStrataRowsError` straight out -- so a
+    # producer refusal escaped this function as a bare exception while every
+    # other stop arrived as a `ChainRefusal`. Found by the H1 repair: once
+    # the seal landed in `runs_root`, a second run tripped
+    # `c_build_1_not_empty` and it came out unnamed. Same shape as H2's
+    # bare `FileNotFoundError`.
+    try:
+        outcome = _dsp.run_c_build(
+            authority=authority, prepared=prepared, universe=universe,
+            vol_method=vol_method, flag_by_date=flag_by_date,
+            event_na_mapping=event_na_mapping,
+            expected_day_set=authority.expected_day_set,
+            runs_root=out_dir, archive_root=planned.archive_parent)
+    except Exception as exc:                       # noqa: BLE001
+        code = getattr(exc, "code", None)
+        if code is None:
+            raise
+        raise ChainRefusal("C_BUILD_1", code, str(exc)) from exc
     _gates(base_ctx, outcome, _sc.CHECKPOINT_C_BUILD_1, "C_BUILD_1")
 
     # --- moment 2: during staging (writes `.partial` by construction) -----
@@ -160,7 +190,9 @@ def run_supplement_chain(base_ctx, *, authority, prepared, universe,
     _gates(base_ctx, staging.outcome, _sc.CHECKPOINT_C_BUILD_2, "C_BUILD_2")
 
     # --- moment 3: after the archive attempt, via Router B ----------------
-    archive_report = ARCHIVE_SEAM(runs_dir, archive_root)
+    # `archive_parent` by name -- the planner says so, and passing
+    # `archive_root` here is how H1 archived the wrong tree.
+    archive_report = ARCHIVE_SEAM(out_dir, planned.archive_parent)
     after = archive_after_reader()
     post = _dsp.run_c_build_3(
         sealed_path=_sealed_path(out_dir),
