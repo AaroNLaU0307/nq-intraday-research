@@ -1,0 +1,14 @@
+| # | 禁读路径 | 它复述了什么 |
+|---|---|---|
+| 1 | `EXPOSURE_LEDGER.md` | revealed verdict、cumulative exposure count、endpoint spread value、zero-direction cell count |
+| 2 | `ops/EXPOSURE_LEDGER.md` | cumulative exposure count |
+| 3 | `ops/outcome_quarantine/DECISION_PACKET_ND2_ND3.md` | addendum feasibility assertion |
+| 4 | `ops/outcome_quarantine/MC_DR5_BUILD_PACKET.md` | revealed verdict |
+| 5 | `ops/outcome_quarantine/MC_FACTORY_BOUNDARY_STAGE_I.md` | revealed verdict |
+| 6 | `ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md` | revealed verdict、cumulative exposure count |
+| 7 | `ops/outcome_quarantine/ND2_ND3_FABLE_DECISION_PROMPT.md` | revealed verdict、cumulative exposure count |
+| 8 | `ops/outcome_quarantine/ND2_ND3_RULING_REVIEW_FINDINGS.md` | zero-direction cell count |
+| 9 | `ops/outcome_quarantine/RULING_FABLE_FOUR_OPEN_2026-08-26.md` | cumulative exposure count |
+| 10 | `ops/outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md` | revealed verdict、cumulative exposure count、addendum feasibility assertion、endpoint spread value、zero-direction cell count |
+| 11 | `ops/outcome_quarantine/S0_T001_RESULT_DECISION_ADDENDUM.md` | revealed verdict、addendum feasibility assertion、endpoint spread value |
+| 12 | `ops/outcome_quarantine/S0_T001_RESULT_REVEAL_ATTESTATION.md` | revealed verdict、cumulative exposure count |
