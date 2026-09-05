@@ -884,10 +884,17 @@ def decide_after_seal(*, local_seal_ok: bool, archive_report) -> str:
         the state machine's. F2 and CR1 were never eliminated.
       * an `A1` row requires `archive_code`, and `archived_bytes_deleted`
         is not one of the five `ARCHIVE_CODES`. The row cannot be written.
-      * `A2`, A1's only exit, asserts `source_and_archive_exact_inventory
-        _match` and `per_file_sha256_match` for THIS run's copy. It says
-        nothing about bytes an earlier run archived, so it cannot discharge
-        this defect even if A1 could be written.
+      * `A2` asserts `source_and_archive_exact_inventory_match` and
+        `per_file_sha256_match` for THIS run's copy, so it says nothing
+        about bytes an earlier run archived.
+
+        CORRECTED 2026-09-05. This bullet used to call A2 "A1's only exit".
+        It is not: `A1 -> AX -> F3` exists, `AX` being
+        SUPPLEMENT_ARCHIVE_PERMANENTLY_FAILED, and the transition planner
+        maps A1's "permanent" outcome to it. A reviewing seat found the
+        error; the successor table had been printed correctly in the same
+        documents that then contradicted it. What survives is narrower:
+        A2 cannot DISCHARGE this defect, not that A1 has nowhere to go.
 
     So the parameter is gone and the case refuses by name again, upstream in
     `supplement_chain`. Naming the terminal now needs either a ruling among

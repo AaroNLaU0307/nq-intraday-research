@@ -58,10 +58,13 @@ ARCHIVED_BYTES_DELETED_HAS_NO_RULED_TERMINAL = (
     "the local seal survived but previously archived bytes did not, and no "
     "ratified terminal covers that. P3's successors are P4, A1, F2 and CR1; "
     "Policy A forbids P4; an A1 row requires an `archive_code` and this is "
-    "not one of the five; and A2, A1's only exit, asserts only that THIS "
-    "run's copy matches. Naming a terminal needs a ruling among four "
-    "successors or an amendment to a ratified closed enum, and neither is "
-    "a builder's to make.")
+    "not one of the five. A1 has TWO exits, not one -- A2 (recovered) and "
+    "AX (permanently failed, then F3) -- so it is not the trap an earlier "
+    "version of this text called it; that sentence was corrected on "
+    "2026-09-05 after a reviewing seat found it, and after the same table "
+    "had been printed correctly two sections above it. Naming a terminal "
+    "still needs a ruling among four successors or an amendment to a "
+    "ratified closed enum, and neither is a builder's to make.")
 
 #: `local_seal_absent` and `local_seal_mutated` need no ruling: they say the
 #: local seal did not survive, which is exactly `local_seal_ok=False`, and
@@ -211,9 +214,9 @@ def run_supplement_chain(base_ctx, *, planned, authority, prepared, universe,
             # elimination the reviewing seat refuted and that reproduces:
             # P3's ratified successors are P4, A1, F2 AND CR1, so the space
             # was never closed; an A1 row requires an `archive_code` and
-            # this is not one of the five; and A2, A1's only exit, asserts
-            # things about THIS run's copy, so it could not discharge the
-            # defect even if the row could be written.
+            # this is not one of the five. (An earlier version of this
+            # comment also said A2 was A1's only exit. It is not: A1 -> AX
+            # -> F3 exists. Corrected 2026-09-05.)
             #
             # Refusing by name again. Naming the terminal now needs a ruling
             # among four successors or an amendment to a ratified closed
