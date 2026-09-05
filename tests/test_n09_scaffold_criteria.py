@@ -94,24 +94,59 @@ class TestCriterion1NoRegistryWritePath(unittest.TestCase):
     and would be proving nothing.
     """
 
-    def test_the_boundary_module_performs_no_write(self):
-        actions = _write_actions_in(_module("mc/registry_boundary.py"))
-        self.assertEqual([], actions,
-                         "registry_boundary performs write actions %r; it is "
-                         "the only module that may spell the registry path, "
-                         "so a write there is a write to the registry"
-                         % sorted(set(actions)))
+    def test_the_only_write_action_is_inside_the_p3_seam(self):
+        """AMENDED 2026-09-05 (Aaron's ruling). This asserted the boundary
+        performed NO write. That was true and is deliberately no longer:
+        `SUPPLEMENT_RUN_STARTED` is the ratified pre-start/post-start
+        boundary and §D.3.2 gives it to the runner, but nothing could append
+        it, so the first real N09 would have written supplement bytes with
+        no P3 -- a state the failure vocabulary cannot describe (F2 requires
+        P3; F1 would claim "nothing consumed").
 
-    def test_the_boundary_exposes_only_readers(self):
-        """A writer defined but unexported would still be one import away."""
+        What replaces "no write" is "one write, and it is that one". The
+        criterion the module still has to meet is that every write action in
+        it belongs to `append_run_started` -- a second writer, or a write
+        anywhere else in the module, fails here.
+        """
+        import ast
+        import inspect
+
+        from itsf.mc import registry_boundary as rb
+        tree = _module("mc/registry_boundary.py")
+        seam = next(n for n in ast.walk(tree)
+                    if isinstance(n, ast.FunctionDef)
+                    and n.name == "append_run_started")
+        everywhere = _write_actions_in(tree)
+        inside = _write_actions_in(seam)
+        self.assertTrue(inside, "the seam performs no write at all")
+        self.assertEqual(sorted(everywhere), sorted(inside),
+                         "registry_boundary writes outside `append_run_started`"
+                         ": %r" % sorted(set(everywhere) - set(inside)))
+        del rb, inspect
+
+    def test_the_seam_is_the_only_exported_writer_and_writes_one_token(self):
+        """A writer defined but unexported would still be one import away,
+        and a writer that took the token as a PARAMETER would be a general
+        registry writer wearing a narrow name."""
+        import inspect
+
         from itsf.mc import registry_boundary as rb
         public = [n for n in dir(rb) if not n.startswith("_")]
         suspect = [n for n in public
                    if any(w in n.lower() for w in ("write", "append", "save",
-                                                   "commit", "put", "emit"))]
-        self.assertEqual([], suspect,
-                         "registry_boundary exposes %r, whose names promise a "
-                         "write" % suspect)
+                                                   "commit", "put", "emit"))
+                   # an exception TYPE named for a refusal is not a writer;
+                   # `AppendRefused` is how this seam says no.
+                   and not (isinstance(getattr(rb, n), type)
+                            and issubclass(getattr(rb, n), BaseException))]
+        self.assertEqual(["append_run_started"], suspect,
+                         "registry_boundary exposes %r; exactly one writer is "
+                         "authorised" % suspect)
+        params = inspect.signature(rb.append_run_started).parameters
+        for forbidden in ("event", "token", "event_type", "note", "row"):
+            self.assertNotIn(forbidden, params,
+                             "the token must not be a caller-supplied value")
+        self.assertEqual("SUPPLEMENT_RUN_STARTED", rb.RUN_STARTED_TOKEN)
 
     def test_the_other_half_of_the_proof_still_exists(self):
         """Half (a) lives in another file. If it is ever deleted, this file

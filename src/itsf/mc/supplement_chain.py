@@ -277,13 +277,15 @@ def run_supplement_gate_first(base_ctx, *, planned, prepared, universe,
                               vol_method, flag_by_date,
                               event_na_mapping: str, incident_id: str,
                               archive_before, archive_after_reader,
-                              make_run_directory):
-    """A_PRECHECK, then B_DERIVE, then the run directory, then the chain.
+                              make_run_directory, append_run_started):
+    """A_PRECHECK, B_DERIVE, P3, the run directory, then the chain.
 
-    Every stop is a `ChainRefusal` naming the stage and gate. `prepared` and
-    `make_run_directory` are required with no defaults, for the reason every
-    layer below states: a default would let a caller omit one and leave this
-    to find it."""
+    Every stop is a `ChainRefusal` naming the stage and gate. `prepared`,
+    `make_run_directory` and `append_run_started` are required with no
+    defaults, for the reason every layer below states: a default would let a
+    caller omit one and leave this to find it. `append_run_started` takes no
+    arguments and raises on refusal -- see its call site for why it is
+    placed exactly where it is."""
     from . import supplement_authority as _sa
 
     for name in _sc.GATE_TABLE["A_PRECHECK"]:
@@ -306,6 +308,27 @@ def run_supplement_gate_first(base_ctx, *, planned, prepared, universe,
         except _sr.SupplementRunnerError as exc:
             raise ChainRefusal("B_DERIVE", getattr(exc, "code", name),
                                str(exc)) from exc
+
+    # P3 GOES HERE, and the position is the whole point.
+    #
+    # `SUPPLEMENT_RUN_STARTED` is the ratified pre-start/post-start boundary,
+    # so it must be in the ledger before this run's FIRST real side effect.
+    # Measured: `make_run_directory` IS that first side effect -- there is
+    # nothing between the B_DERIVE loop above and this line, and moment 1
+    # (`run_c_build`) writes nothing and runs later.
+    #
+    # AFTER A_PRECHECK, NEVER BEFORE. Appending P3 ahead of the run does not
+    # work: `_walk_chain` marks the P2 `consumed_by_p3`, so a P3 already in
+    # the ledger takes the live authorization to zero and five A_PRECHECK
+    # gates refuse. One P2 authorizes one start and P3 spends it. Every gate
+    # that reads the live P2 is in A_PRECHECK -- measured, none in B_DERIVE
+    # or C_BUILD -- so spending it here costs the rest of the path nothing.
+    #
+    # FAIL-CLOSED BY ORDER. `append_run_started` raises on refusal, so a
+    # failure here means `make_run_directory` is never reached: no directory,
+    # no supplement byte. That is why the call sits on this line and not one
+    # line later.
+    append_run_started()
 
     make_run_directory(planned.runs_target)
     target = Path(planned.runs_target)

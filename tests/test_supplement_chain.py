@@ -358,6 +358,19 @@ def test_it_creates_no_directory_of_its_own(prod, authority, tmp_path):
 # The gate-first composition (H2)
 # ===========================================================================
 
+def _p3_tripwire():
+    """P3 must not be appended when the run never got past A_PRECHECK.
+    A stub that quietly did nothing would let a future reordering append
+    the boundary row for a run that was refused."""
+    raise AssertionError("append_run_started was reached before the gates "
+                         "passed")
+
+
+def _p3_noop():
+    """P3 'succeeded'. Used where the test is about a LATER step."""
+    return "| + | ... | SUPPLEMENT_RUN_STARTED | ... |"
+
+
 class TestTheGateFirstPath(unittest.TestCase):
     """H2, from the 2026-09-02 engineering-safety HOLD: components existed
     and a path did not, so P4 was reachable with none of the 18 A_PRECHECK
@@ -373,7 +386,8 @@ class TestTheGateFirstPath(unittest.TestCase):
                 universe=object(), vol_method=object(), flag_by_date={},
                 event_na_mapping="none", incident_id=fx.INC,
                 archive_before=(), archive_after_reader=tuple,
-                make_run_directory=chain.refuse_to_create_run_directory)
+                make_run_directory=chain.refuse_to_create_run_directory,
+                append_run_started=_p3_tripwire)
         self.assertEqual("A_PRECHECK", caught.exception.moment)
 
     def test_it_asks_the_gates_in_the_contracts_order(self):
@@ -426,7 +440,8 @@ class TestTheGateFirstPath(unittest.TestCase):
                     vol_method=object(), flag_by_date={},
                     event_na_mapping="none", incident_id=fx.INC,
                     archive_before=(), archive_after_reader=tuple,
-                    make_run_directory=lambda target: None)
+                    make_run_directory=lambda target: None,
+                    append_run_started=_p3_noop)
         self.assertEqual("RUN_DIRECTORY", caught.exception.moment)
         self.assertEqual("run_directory_absent", caught.exception.code)
 

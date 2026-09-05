@@ -125,6 +125,9 @@ _KNOWN_TEST_CONSTRUCTIONS = {
     "tests/test_mc_supplement_registry.py": 1,
     "tests/test_mc_supplement_runner.py": 2,
     "tests/test_nd1_profile_revision_chain.py": 1,
+    # The P3 seam's tests copy the real ledger to a temp file and write
+    # only to the copy; the construction is the READ of the original.
+    "tests/test_p3_append_seam.py": 1,
     "tests/test_registry_absence_refuses.py": 7,
     "tests/test_registry_boundary.py": 2,
     "tests/test_registry_path_single_construction.py": 2,

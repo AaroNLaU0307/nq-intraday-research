@@ -1137,6 +1137,16 @@ def _default_resolver(registry_text: str, supplement_id: str):
         f"{RESOLVER_SEAM} exposes no chain resolver — refusing")
 
 
+def _registry_utc_now() -> str:
+    """The registry's UTC cell shape, taken at the moment of the
+    append. Not the DIRECTORY stamp (`YYYYMMDDTHHMMSSZ`) -- the two
+    are different formats for different places, and `planned` already
+    carries the directory one."""
+    import datetime as _dt
+    return _dt.datetime.now(_dt.timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%S+00:00")
+
+
 def _refuse_to_create_run_directory():
     """`supplement_chain` imports THIS module, so its refusing default is
     fetched at call time rather than imported at module level."""
@@ -1268,4 +1278,11 @@ def run_supplement_production(supplement_id: str = sc.FIRST_SUPPLEMENT_ID,
         archive_before=before,
         archive_after_reader=lambda: supplement_bytes_snapshot(archive_root),
         make_run_directory=(make_run_directory
-                            or _refuse_to_create_run_directory()))
+                            or _refuse_to_create_run_directory()),
+        # The P3-only seam, bound to THIS run: this id, this tree's commit,
+        # this timestamp. Aaron authorized a `SUPPLEMENT_RUN_STARTED` append
+        # and nothing else, so there is no event-type parameter to pass --
+        # `append_run_started` writes one token and refuses everything else.
+        append_run_started=lambda: _rb.append_run_started(
+            supplement_id, head_commit=ctx.head_commit,
+            utc_stamp=_registry_utc_now()))

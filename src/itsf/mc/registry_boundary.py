@@ -36,13 +36,15 @@ from __future__ import annotations
 
 import dataclasses as _dc
 import hashlib
+import re
 from pathlib import Path
 from types import MappingProxyType
 
 __all__ = ["RegistrySnapshot", "MediatedResolution", "BoundaryError",
            "REGISTRY_PATH", "REGISTRY_REPO_ROOT", "BOUNDARY_RULING",
            "read_snapshot", "mediate",
-           "resolve_registry", "supplement_chain", "resolve_for_supplement"]
+           "resolve_registry", "supplement_chain", "resolve_for_supplement",
+           "RUN_STARTED_TOKEN", "AppendRefused", "append_run_started"]
 
 BOUNDARY_RULING = "MC_REG_COLLISION_001_C2_AS_MODIFIED_2026-08-25"
 BOUNDARY_RULING_DELEGATED = True
@@ -289,3 +291,148 @@ def resolve_for_supplement(supplement_id: str,
     """`(snapshot, ChainResolution)` from ONE read. The runner's entry."""
     resolution = resolve_registry(path)
     return (resolution.snapshot, supplement_chain(resolution, supplement_id))
+
+
+# ---------------------------------------------------------------------------
+# The ONE write: P3, and nothing else
+# ---------------------------------------------------------------------------
+#
+# WHY A WRITE EXISTS HERE AT ALL. `SUPPLEMENT_RUN_STARTED` is the ratified
+# pre-start/post-start boundary, and §D.3.2 gives it to the RUNNER
+# (`ACTOR=main agent (mc_ds_runner)`). Until now no production code could
+# append anything, so the first real N09 would have written supplement bytes
+# with no P3 in the ledger -- and the failure vocabulary cannot describe
+# that: F2 requires P3 as its predecessor, and the only reachable event, F1,
+# asserts "nothing consumed" about a run that had consumed everything.
+#
+# APPENDING P3 BY HAND BEFORE THE RUN DOES NOT WORK, measured 2026-09-05:
+# `_walk_chain` marks the P2 `consumed_by_p3`, so a P3 already in the ledger
+# takes the live authorization to ZERO and five A_PRECHECK gates refuse. One
+# P2 authorizes one start, and P3 spends it. That is coherent -- it just
+# means P3 has to be appended DURING the run, after A_PRECHECK has read the
+# live P2 and before the first side effect.
+#
+# THE SEAM IS DELIBERATELY NARROW. Aaron authorized a P3-only append, not a
+# registry writer. Everything below is a refusal except one exact shape:
+# this token, an id with a live P2, the running tree's own commit, the
+# ratified note fields, and once. There is no parameter for the event type,
+# because a parameter is how "P3-only" becomes "whatever the caller passes".
+
+#: The only token this module will ever write.
+RUN_STARTED_TOKEN = "SUPPLEMENT_RUN_STARTED"
+
+#: The UTC cell shape every supplement row in the real ledger uses.
+#: NOT `supplement_runner.UTC_STAMP_RE` -- that one is the DIRECTORY
+#: stamp (`YYYYMMDDTHHMMSSZ`) and the two are different formats for
+#: different places. Reusing it here would refuse every legal row.
+#: The parser itself does not validate this cell, so the seam does.
+_REGISTRY_UTC_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00\Z")
+
+
+class AppendRefused(BoundaryError):
+    """A P3 append that was refused. Carries a machine-readable `code`."""
+
+    def __init__(self, code: str, detail: str = "") -> None:
+        self.code = code
+        super().__init__("%s: %s" % (code, detail) if detail else code)
+
+
+def _p3_note(supplement_id: str) -> str:
+    """The ratified §D.3.2 P3 note, in the FIELD form the parser requires.
+
+    §D.3.2's `NOTE_SHAPE` renders as prose ("atomic start; structural access
+    begins") and that is a description of meaning, not the literal bytes:
+    §D.3.5 requires machine-readable `key: value` segments so an unknown,
+    duplicate or missing field is detectable. Copying the prose verbatim is
+    exactly how the first P1 attempt was refused with
+    `note_segment_not_field`, and it is written out here so the next reader
+    does not have to rediscover it.
+    """
+    return ("[%s] supplement_id: %s; atomic_start_marker: YES"
+            % (supplement_id, supplement_id))
+
+
+def append_run_started(supplement_id: str, *, head_commit: str,
+                       utc_stamp: str, path=None) -> str:
+    """Append THIS run's P3 row. Returns the line appended.
+
+    Refuses, fail-closed, unless every one of these holds:
+
+      * the id is a legal supplement id and its chain resolves cleanly;
+      * that chain carries EXACTLY ONE live P2 -- the same authorization
+        A_PRECHECK read -- so a run whose authorization is spent, absent or
+        doubled cannot start;
+      * the live P2's `authorized_commit` equals `head_commit`, the running
+        tree's own commit, so P3 cannot be filed against a different build;
+      * the chain carries NO P3 yet (exactly-once);
+      * the row this function builds re-parses, lands on the id it names,
+        and moves the chain to `started=True` with the P2 consumed.
+
+    The last one is the load-bearing check: the file is re-read and
+    re-resolved AFTER the write, so a row that would poison the chain is
+    caught here rather than by the next reader. Nothing is written twice --
+    on a post-write refusal the caller must stop, because the row IS in the
+    ledger and only a person may decide what follows.
+
+    RAISES rather than returning a status, and the caller places the call
+    immediately before its first side effect: a refusal must leave no
+    directory and no supplement byte behind.
+    """
+    from . import supplement_contract as _sc
+    from . import supplement_registry as _sr
+
+    if not _sc.SUPPLEMENT_ID_PATTERN.match(supplement_id or ""):
+        raise AppendRefused("p3_supplement_id_pattern", repr(supplement_id))
+    if not _sc.HEX40_RE.match(head_commit or ""):
+        raise AppendRefused("p3_head_commit_not_40hex", repr(head_commit))
+    if not _REGISTRY_UTC_RE.match(utc_stamp or ""):
+        raise AppendRefused("p3_utc_stamp_malformed", repr(utc_stamp))
+
+    target = (Path(path) if path is not None
+              else REGISTRY_REPO_ROOT / REGISTRY_PATH)
+    text = _read_text(target)
+    chain = _sr.resolve_supplement_chain(text, supplement_id)
+    problem = getattr(chain, "problem", "")
+    if problem:
+        raise AppendRefused("p3_chain_does_not_resolve", problem)
+    if "P3" in tuple(getattr(chain, "short_ids", ())):
+        raise AppendRefused(
+            "p3_already_present",
+            "%s already carries a %s row; one P2 authorizes one start"
+            % (supplement_id, RUN_STARTED_TOKEN))
+    live = getattr(chain, "live_authorizations", ())
+    if len(live) != 1:
+        raise AppendRefused(
+            "p3_without_exactly_one_live_p2",
+            "%d live %s row(s)" % (len(live), _sc.EVENTS["P2"].token))
+    authorized = getattr(live[0], "authorized_commit", "") or ""
+    if authorized != head_commit:
+        raise AppendRefused(
+            "p3_commit_is_not_the_authorized_one",
+            "authorized %s != running tree %s"
+            % (authorized[:12], head_commit[:12]))
+
+    row = ("| %s | %s | %s | %s | %s | %s |"
+           % (_sc.UNNUMBERED_SEQ_TOKEN, utc_stamp, RUN_STARTED_TOKEN,
+              head_commit[:_sc.COMMIT_WIDTH[_sc.UNNUMBERED]],
+              _sc.ACTOR_RUNNER, _p3_note(supplement_id)))
+
+    before = target.read_bytes()
+    if not before.endswith(b"\n"):
+        raise AppendRefused("p3_registry_tail_is_not_a_line",
+                            "the registry does not end in a newline")
+    target.write_bytes(before + (row + "\n").encode("utf-8"))
+
+    after = _read_text(target)
+    verified = _sr.resolve_supplement_chain(after, supplement_id)
+    trouble = getattr(verified, "problem", "")
+    if trouble:
+        raise AppendRefused("p3_written_but_chain_now_refuses", trouble)
+    if not getattr(verified, "started", False):
+        raise AppendRefused("p3_written_but_not_started",
+                            "the row landed and `started` is still False")
+    if "P3" not in tuple(getattr(verified, "short_ids", ())):
+        raise AppendRefused("p3_written_but_absent_from_the_chain",
+                            str(getattr(verified, "short_ids", ())))
+    return row
