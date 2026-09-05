@@ -1093,9 +1093,19 @@ def _default_resolver(registry_text: str, supplement_id: str):
         f"{RESOLVER_SEAM} exposes no chain resolver — refusing")
 
 
+def _refuse_to_create_run_directory():
+    """`supplement_chain` imports THIS module, so its refusing default is
+    fetched at call time rather than imported at module level."""
+    from .supplement_chain import refuse_to_create_run_directory
+    return refuse_to_create_run_directory
+
+
 def run_supplement_production(supplement_id: str = sc.FIRST_SUPPLEMENT_ID,
-                              *, resolver: Callable | None = None,
-                              **_ignored) -> NoReturn:
+                              *, incident_id: str = "",
+                              make_run_directory=None,
+                              resolver: Callable | None = None,
+                              utc_stamp: str = "",
+                              **_ignored):
     """PRODUCTION entry. Gate-first, exactly like
     `real_input.prepare_real_mc_input` and
     `day_strata_supplement.run_supplement_production`.
@@ -1144,26 +1154,68 @@ def run_supplement_production(supplement_id: str = sc.FIRST_SUPPLEMENT_ID,
             "binding the supplement id, the full 40-hex commit and the "
             "output root (ratified profile: "
             "ND1_SUPPLEMENT_EXECUTION_AUTHORIZED=NO)")
-    # WAS "this build carries no execution path". That stopped being true on
-    # 2026-09-02, when `supplement_chain.run_supplement_chain` composed the
-    # three C_BUILD moments end to end and drove them to P4 over a real seal.
-    # Leaving the old sentence would have been the exact defect this file has
-    # been correcting all week: a refusal reason that was true when written
-    # and false when read.
+    # Past every refusal above there is a live P2, so this is the run.
     #
-    # What is actually missing is one step EARLIER than the chain. The chain
-    # RECEIVES `universe`, `vol_method` and `flag_by_date`; building them
-    # means loading the S0 dataset, which is a Development-data read and is
-    # gated by `assert_real_run_allowed` at the top of this function. So the
-    # remaining gap is data acquisition behind a gate that already refuses --
-    # not a missing path, and not something to open from here.
-    raise SupplementRunNotAuthorized(
-        f"{supplement_id}: a live authorization row exists and a GATE-FIRST "
-        "execution path now exists "
-        "(supplement_chain.run_supplement_gate_first: A_PRECHECK, then "
-        "B_DERIVE, then an owned run-directory step, then the three C_BUILD "
-        "moments). What this entry still cannot supply is the chain's "
-        "dataset-side inputs (universe, vol_method, flag_by_date), because "
-        "building them is a Development-data read and no job_dir is "
-        "configured anywhere. N04 still ships DEFAULT-REFUSE: the "
-        "ratification authorizes grammar, not execution")
+    # WIRED 2026-09-05. Until then the entry raised here, and the reason it
+    # gave -- that the dataset-side inputs could not be supplied -- was true:
+    # nothing called `load_real`, nothing built a SessionSchedule or an
+    # EventCalendar, and `roll_intervals` defaulted to `()`, which silently
+    # made vol20 count contract rolls as returns. `production_inputs` now
+    # acquires all four from the directory Aaron authorized.
+    #
+    # THE ORDERING IS THE POINT. Everything above refuses before a single
+    # Development byte is opened: the real-run gate, the registry read, the
+    # chain resolution, and the live-P2 count. Acquisition happens only after
+    # all four pass, and `make_run_directory` still refuses by default, so
+    # reaching here is not the same as being allowed to write.
+    from . import production_inputs as _pi
+    from . import supplement_precheck as _pre
+    from .real_input import prepare_real_mc_input
+    from .supplement_chain import run_supplement_gate_first
+    from .supplement_inputs import assemble_chain_inputs
+
+    ctx, gaps = _pre.assemble_precheck_context(supplement_id,
+                                               utc_stamp=utc_stamp)
+    if gaps:
+        raise SupplementRunNotAuthorized(
+            f"{supplement_id}: the precheck context could not be measured "
+            f"({'; '.join(gaps)}) — a gate reading an unmeasured field would "
+            "fail closed on this session's defect rather than on the run")
+
+    # Validated HERE, not in the signature. Every refusal above happens
+    # before a Development byte is opened, and a caller probing that
+    # ordering must not have to invent an incident id to see it. Making it
+    # a required argument moved a run parameter in front of the
+    # authorization, which is the wrong way round.
+    if not sc.INCIDENT_RE.match(incident_id or ""):
+        raise SupplementRunNotAuthorized(
+            f"{supplement_id}: incident_id {incident_id!r} is not "
+            "INC-<12 hex>; a run that cannot name its incident cannot file "
+            "a failure event either")
+
+    prepared = prepare_real_mc_input()
+    authority = sa.derive_supplement_authority(prepared,
+                                               supplement_id=supplement_id)
+    bars, schedule, events, rolls, _qa = _pi.acquire_production_inputs()
+    inputs = assemble_chain_inputs(
+        bars_by_date=bars, schedule=schedule, events=events,
+        expected_day_set=authority.expected_day_set, roll_intervals=rolls)
+
+    planned = plan_supplement_paths(
+        runs_root=ctx.runs_root, archive_root=ctx.archive_root,
+        supplement_id=supplement_id, utc_stamp=ctx.utc_stamp)
+    # The archive inventory either side of the attempt. Taken here because
+    # taking it IS part of running, and `supplement_bytes_snapshot` reads
+    # only supplement bytes and returns () for a root that does not exist.
+    from .day_strata_pipeline import supplement_bytes_snapshot
+
+    archive_root = planned.archive_parent
+    before = supplement_bytes_snapshot(archive_root)
+    return run_supplement_gate_first(
+        ctx, planned=planned, prepared=prepared, universe=inputs.universe,
+        vol_method=inputs.vol_method, flag_by_date=inputs.flag_by_date,
+        event_na_mapping=inputs.event_na_mapping, incident_id=incident_id,
+        archive_before=before,
+        archive_after_reader=lambda: supplement_bytes_snapshot(archive_root),
+        make_run_directory=(make_run_directory
+                            or _refuse_to_create_run_directory()))
