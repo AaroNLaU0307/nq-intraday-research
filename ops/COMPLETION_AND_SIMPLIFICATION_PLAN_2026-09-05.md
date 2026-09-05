@@ -150,6 +150,13 @@ C3  ARCHIVE-CODE-6 修订                见 §1，第一次运行不可达
 C4  R1（第 8 轮后的修复未独立复审）     已经被你亲自审过一轮（H1/M1 就是那轮出的）
 C5  P2 契约字段名与解析器不一致         已按解析器为准，记录在案
 C6  S8 跨卷备份                        同 C1
+C7  authorized_commit_matches_head      **不在早期拒绝块里**（早期只查 live 计数）。
+    提前到早期拒绝块                    所以一条过期授权会先读完 3.8M 根 Development
+                                        数据、再读封存的 S0 bundle，然后才在
+                                        A_PRECHECK 拒。**不影响正确性**——门照拒，
+                                        什么都没写。只是白烧一次全量读取。
+                                        Aaron 2026-09-05：进 backlog，本轮不为性能
+                                        动 gate ordering
 ```
 
 ---
