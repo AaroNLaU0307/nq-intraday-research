@@ -7,9 +7,9 @@
 
 ```
 UPDATED   = 2026-09-02
-REVIEW_ID = DECISION-ARCHIVED-BYTES-DELETED-001
-PACKET    = ops/DECISION_PACKET_ARCHIVED_BYTES_DELETED_2026-09-02.md
-SEAT      = fresh 独立席位 —— **分析并建议，不裁定**（裁定归 Aaron）
+REVIEW_ID = AMEND-ARCHIVE-CODE-6-REVIEW-001
+PACKET    = ops/REVIEW_PACKET_ARCHIVE_CODE_6_2026-09-05.md
+SEAT      = Fable，fresh session —— **对抗性审查，给建议，不裁定**
 DISPATCH  = 由 Aaron 派发。builder 不得自行调用任何审阅席位
 ```
 
@@ -100,15 +100,16 @@ seat 轴 ops/REVIEWER_EXPOSURE_LOG.md  记录哪个审阅席位被烧掉
 
 一句话：
 
-> **`archived_bytes_deleted` 在已批状态机里的合法处理方式。**
-> 本地 seal 活着，而更早已归档的字节没了 —— 四个已批后继哪个成立。
+> **一份待批准的修订提案**：给已批准的封闭枚举 `ARCHIVE_CODES`
+> 增加第六个成员，并 widen 它的自述不变量。
 
-**你给分析与建议，Aaron 裁。** 理由：席位可顾问不可代签；
-且其中一个选项要改**已批的封闭枚举**（R4 级）。
+**你给建议，Aaron 裁，且不得代签。**
 
-**上一轮工程安全复审（ENG-SAFETY-PRE-REAL-DATA-001）已 HOLD 并闭合**，
-四条发现全部由 builder 复现并修了三条；剩下的就是本题。
-记录见 `ops/REVIEW_RESULT_ENG_SAFETY_2026-09-02.md`（outcome-clean，可读）。
+**builder 在这道题上已经错了两次**（BD-5 的排除法、决策包的「A1 唯一出口」），
+包的 §2 逐条列出。**请把那当成基准怀疑度。**
+
+上一轮（DECISION-ARCHIVED-BYTES-DELETED-001）的席位结果见
+`ops/SEAT_RESULT_ARCHIVED_BYTES_DELETED_2026-09-05.md`（outcome-clean，可读）。
 
 ## 3. 明确不在范围内
 
