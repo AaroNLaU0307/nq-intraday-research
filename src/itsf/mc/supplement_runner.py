@@ -1170,7 +1170,7 @@ def run_supplement_production(supplement_id: str = sc.FIRST_SUPPLEMENT_ID,
     # reaching here is not the same as being allowed to write.
     from . import production_inputs as _pi
     from . import supplement_precheck as _pre
-    from .real_input import prepare_real_mc_input
+    from .real_input import prepare_supplement_mc_input
     from .supplement_chain import run_supplement_gate_first
     from .supplement_inputs import assemble_chain_inputs
 
@@ -1193,7 +1193,13 @@ def run_supplement_production(supplement_id: str = sc.FIRST_SUPPLEMENT_ID,
             "INC-<12 hex>; a run that cannot name its incident cannot file "
             "a failure event either")
 
-    prepared = prepare_real_mc_input()
+    # AARON'S RULING, 2026-09-05. Not `prepare_real_mc_input`: that entry
+    # carries the MC-RUN gate, and the real MC is DOWNSTREAM of this
+    # supplement (N09 -> N10 -> N11 -> N13), so requiring it here inverted
+    # the approved order and closed a cycle -- the supplement waiting on an
+    # MC that waits on the supplement's own sealed output. The real-data
+    # guards are unchanged and still run inside the call below.
+    prepared = prepare_supplement_mc_input()
     authority = sa.derive_supplement_authority(prepared,
                                                supplement_id=supplement_id)
     bars, schedule, events, rolls, _qa = _pi.acquire_production_inputs()
