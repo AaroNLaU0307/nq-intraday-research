@@ -1,0 +1,232 @@
+{
+ "actor": {
+  "actor_form": "UNCLASSIFIED: actor_form_unrecognised",
+  "parser": "ACCEPT",
+  "precedent_rows_7_10_actor_form": {
+   "main agent": "governance",
+   "main agent（Aaron 批复 DECISION_PACKET_RUNTIME_SELFBLOCK §三）": "UNCLASSIFIED: actor_form_unrecognised"
+  },
+  "value": "main agent（Aaron 批复 OWNER_DECISIONS_2026-09-06.md OD-1）"
+ },
+ "candidate_row": "| 23 | 2026-09-05T18:27:59+00:00 | SUPPLEMENT_SUPERSEDED | 6ae0cfd3991300ea1d39a2070439c23e8add4304 | main agent（Aaron 批复 OWNER_DECISIONS_2026-09-06.md OD-1） | [MC-DS-S001] supersedes_event_sequence: 22; superseded_supplement_id: MC-DS-S001; superseded_commit: 3df1656f105b9314235bd28957336a7dec4bde05; reason_code: POST_START_FAILURE; incident_id: INC-96578a2997e9; successor_supplement_id: MC-DS-S002 |",
+ "checks": {
+  "F3_is_terminal_and_chain_closed": {
+   "detail": null,
+   "ok": true
+  },
+  "actor_accepted_by_parser": {
+   "detail": null,
+   "ok": true
+  },
+  "approval_doc_exists_committed_in_head_worktree_clean": {
+   "detail": {
+    "doc": "C:\\Users\\Aaron\\OneDrive\\Desktop\\Quant trade\\Intraday Trend Strategy Framework\\ops\\OWNER_DECISIONS_2026-09-06.md",
+    "doc_sha256": "c02e05a51f33c78fae10eb5e1cd9f101739a0b50d985b4107fce3660aec7bbb7",
+    "head": "6ae0cfd3991300ea1d39a2070439c23e8add4304",
+    "in_head": true
+   },
+   "ok": true
+  },
+  "archive_unchanged": {
+   "detail": null,
+   "ok": true
+  },
+  "attestation_unchanged": {
+   "detail": null,
+   "ok": true
+  },
+  "chain_ends_F2v_awaiting_retirement": {
+   "detail": [
+    "P1",
+    "P2",
+    "P2S",
+    "P2",
+    "P2S",
+    "P2",
+    "P2S",
+    "P2",
+    "P3",
+    "P4",
+    "F2v"
+   ],
+   "ok": true
+  },
+  "chain_problem_empty": {
+   "detail": "",
+   "ok": true
+  },
+  "commit_cell_is_40hex_head_not_the_old_one": {
+   "detail": "6ae0cfd3991300ea1d39a2070439c23e8add4304",
+   "ok": true
+  },
+  "f3_row_parses": {
+   "detail": null,
+   "ok": true
+  },
+  "id_permanently_unusable_after_F3": {
+   "detail": {
+    "P1_after_F3": "retired_supplement_id_reused [MC-DS-S001, row #24]: SUPPLEMENT_SUPERSEDED already closed this chain; SUPPLEMENT_PROPOSED may not follow",
+    "P2_after_F3": "retired_supplement_id_reused [MC-DS-S001, row #24]: SUPPLEMENT_SUPERSEDED already closed this chain; SUPPLEMENT_EXECUTION_AUTHORIZED may not follow"
+   },
+   "ok": true
+  },
+  "incident_id_mint_inputs_exclude_successor_field": {
+   "detail": {
+    "recomputed": "INC-96578a2997e9"
+   },
+   "ok": true
+  },
+  "incident_id_well_formed_and_new": {
+   "detail": {
+    "existing": [
+     "INC-79851de94465",
+     "INC-a98043f6c000",
+     "INC-d1422039e184",
+     "INC-e6fe49ec63de",
+     "INC-fa9234e0e541"
+    ],
+    "incident_id": "INC-96578a2997e9",
+    "parts": [
+     "MC-DS-S001",
+     "F3",
+     "SUPPLEMENT_SUPERSEDED",
+     "supersedes_event_sequence=22",
+     "SUPPLEMENT_VERIFICATION_FAILED",
+     "headline_replay_mismatch",
+     "registry_sha256_after_f2v=0a52352c1c2bb0978e0f5107630274c7617457b3a7efb5810883a5cce6598ffb"
+    ]
+   },
+   "ok": true
+  },
+  "lineage_T1_S002_accepted_fresh_P1_and_other_ids_refused": {
+   "detail": {
+    "T1_S002_pred_S001": "ACCEPT",
+    "T1_S002_pred_S003": "REFUSE t1_predecessor_not_superseded_by_f3",
+    "T1_S003_pred_S001": "REFUSE t1_predecessor_f3_names_other_successor",
+    "fresh_P1_S002": "REFUSE f3_successor_not_registered_by_t1"
+   },
+   "ok": true
+  },
+  "next_global_sequence_is_23": {
+   "detail": 22,
+   "ok": true
+  },
+  "no_T1_created": {
+   "detail": null,
+   "ok": true
+  },
+  "no_live_authorization_after_F3": {
+   "detail": "NOT AUTHORIZED — MC-DS-S001 was retired",
+   "ok": true
+  },
+  "planner_F2v_retire_is_F3": {
+   "detail": null,
+   "ok": true
+  },
+  "predecessor_exactly_F2v_seq22": {
+   "detail": [
+    "P1",
+    "P2",
+    "P2S",
+    "P2",
+    "P2S",
+    "P2",
+    "P2S",
+    "P2",
+    "P3",
+    "P4",
+    "F2v",
+    "F3"
+   ],
+   "ok": true
+  },
+  "registry_is_the_F2v_witnessed_state": {
+   "detail": {
+    "bytes": 11031,
+    "sha256": "0a52352c1c2bb0978e0f5107630274c7617457b3a7efb5810883a5cce6598ffb"
+   },
+   "ok": true
+  },
+  "registry_unchanged": {
+   "detail": null,
+   "ok": true
+  },
+  "row_has_six_cells_and_no_pipe_in_actor": {
+   "detail": null,
+   "ok": true
+  },
+  "runner_assert_chain_closed": {
+   "detail": true,
+   "ok": true
+  },
+  "sealed_unchanged": {
+   "detail": null,
+   "ok": true
+  },
+  "started_true_live_p2_zero_retired_true": {
+   "detail": null,
+   "ok": true
+  },
+  "state_CLOSED_USE_A_NEW_ID": {
+   "detail": null,
+   "ok": true
+  },
+  "supplement_id_pinned_in_code_needs_change_for_new_id": {
+   "detail": null,
+   "ok": true
+  },
+  "target_seq_22_is_the_F2v_row_with_ruled_commit": {
+   "detail": {
+    "commit": "3df1656f105b9314235bd28957336a7dec4bde05",
+    "seq": "22"
+   },
+   "ok": true
+  }
+ },
+ "framework_head": "6ae0cfd3991300ea1d39a2070439c23e8add4304",
+ "incident_id": "INC-96578a2997e9",
+ "incident_parts": [
+  "MC-DS-S001",
+  "F3",
+  "SUPPLEMENT_SUPERSEDED",
+  "supersedes_event_sequence=22",
+  "SUPPLEMENT_VERIFICATION_FAILED",
+  "headline_replay_mismatch",
+  "registry_sha256_after_f2v=0a52352c1c2bb0978e0f5107630274c7617457b3a7efb5810883a5cce6598ffb"
+ ],
+ "lineage_probes": {
+  "T1_S002_pred_S001": "ACCEPT",
+  "T1_S002_pred_S003": "REFUSE t1_predecessor_not_superseded_by_f3",
+  "T1_S003_pred_S001": "REFUSE t1_predecessor_f3_names_other_successor",
+  "fresh_P1_S002": "REFUSE f3_successor_not_registered_by_t1"
+ },
+ "memory_chain": {
+  "closed": true,
+  "live_p2": 0,
+  "retired": true,
+  "reuse_probes": {
+   "P1_after_F3": "retired_supplement_id_reused [MC-DS-S001, row #24]: SUPPLEMENT_SUPERSEDED already closed this chain; SUPPLEMENT_PROPOSED may not follow",
+   "P2_after_F3": "retired_supplement_id_reused [MC-DS-S001, row #24]: SUPPLEMENT_SUPERSEDED already closed this chain; SUPPLEMENT_EXECUTION_AUTHORIZED may not follow"
+  },
+  "short_ids": [
+   "P1",
+   "P2",
+   "P2S",
+   "P2",
+   "P2S",
+   "P2",
+   "P2S",
+   "P2",
+   "P3",
+   "P4",
+   "F2v",
+   "F3"
+  ],
+  "started": true,
+  "state": "CLOSED_USE_A_NEW_ID",
+  "terminal": "F3"
+ },
+ "problems": [],
+ "problems_total": 0,
+ "utc": "2026-09-05T18:27:59Z"
+}

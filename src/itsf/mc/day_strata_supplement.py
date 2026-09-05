@@ -45,6 +45,8 @@ import re
 from pathlib import Path
 from typing import Iterable, Mapping, NoReturn, Sequence
 
+from . import supplement_contract as _sc
+
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 SUPPLEMENT_ID = "MC-DS-S001"
@@ -270,7 +272,9 @@ def _validate_row(row, i: int) -> dict:
 
 def build_day_strata_supplement_test_only(day_rows: Sequence[Mapping], *,
                                           expected_day_set: frozenset,
-                                          binding: Mapping) -> dict:
+                                          binding: Mapping,
+                                          supplement_id: str = SUPPLEMENT_ID
+                                          ) -> dict:
     """TEST_ONLY hermetic supplement builder (no I/O; deterministic).
 
     RENAMED at the N06 repair. This function takes the two arguments
@@ -317,9 +321,14 @@ def build_day_strata_supplement_test_only(day_rows: Sequence[Mapping], *,
             f"{len(extra)} day(s) outside the sealed universe: "
             f"{extra[:3]}")
     ordered = tuple(rows[d] for d in sorted(rows))
+    # Before this function took the id it could only ever stamp the module
+    # constant. Accepting an arbitrary string would be a widening, not a
+    # repair -- a malformed id must not reach a sealed artifact.
+    if not _sc.SUPPLEMENT_ID_PATTERN.match(supplement_id or ""):
+        raise SupplementError("supplement_id_pattern", repr(supplement_id))
     return {
         "schema": SUPPLEMENT_SCHEMA,
-        "supplement_id": SUPPLEMENT_ID,
+        "supplement_id": supplement_id,
         "binding": bound,
         "rows": ordered,
         "n_rows": len(ordered),
@@ -335,7 +344,9 @@ _SUPPLEMENT_FIELDS = ("schema", "supplement_id", "binding", "rows",
                       "n_rows", "rows_digest")
 
 
-def _validate_supplement_object(supplement: Mapping) -> None:
+def _validate_supplement_object(
+        supplement: Mapping, *,
+        expected_supplement_id: str = SUPPLEMENT_ID) -> None:
     """Seal-side re-validation: the object must be a well-formed
     supplement whose declared digest matches its own rows (a declared
     statistic never travels unverified — consumer R2.2 PHASE C
@@ -347,7 +358,7 @@ def _validate_supplement_object(supplement: Mapping) -> None:
                               "not a mapping with the exact supplement "
                               f"field set {_SUPPLEMENT_FIELDS}")
     if supplement["schema"] != SUPPLEMENT_SCHEMA or \
-            supplement["supplement_id"] != SUPPLEMENT_ID:
+            supplement["supplement_id"] != expected_supplement_id:
         raise SupplementError(
             "supplement_object_schema",
             f"schema={supplement['schema']!r} "
@@ -392,7 +403,14 @@ def seal_supplement_test_only(supplement: Mapping, out_dir: Path) -> str:
     execution time the sealed directory is mirrored by the existing
     `itsf.s0.runinfra.archive_sealed_run` machinery (L-5 ruling), which
     already owns inventory equality + per-file recheck."""
-    _validate_supplement_object(supplement)
+    # Validated against the payload's OWN id: this entry seals whatever
+    # object it was handed, and binding that id to the authority is
+    # `production_supplement_id_divergence`'s job upstream. Comparing to
+    # the module constant here would re-impose "everything is
+    # MC-DS-S001" at the last step.
+    _validate_supplement_object(
+        supplement,
+        expected_supplement_id=str(supplement.get("supplement_id", "")))
     intended = canonical_supplement_bytes(supplement)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)

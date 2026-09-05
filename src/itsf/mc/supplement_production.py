@@ -279,7 +279,8 @@ def build_supplement_from_authority(authority, prepared, day_rows: Sequence,
     # Normalise on the way IN, so both ends enforce one rule.
     rows = _freeze_value(list(day_rows))
     payload = _ds.build_day_strata_supplement_test_only(
-        rows, expected_day_set=expected_day_set, binding=binding)
+        rows, expected_day_set=expected_day_set, binding=binding,
+        supplement_id=sid)
     # F6 (adversarial battery, Medium). The hermetic core stamps the
     # module-level `SUPPLEMENT_ID`, which need not be the id the authority
     # was minted for: an authority for MC-DS-S002 produced a payload
@@ -319,7 +320,8 @@ def _rebuild_from_rows(authority, prepared, rows, *,
         authority, prepared, supplement_id=supplement_id)
     try:
         rebuilt = _ds.build_day_strata_supplement_test_only(
-            rows, expected_day_set=expected_day_set, binding=binding)
+            rows, expected_day_set=expected_day_set, binding=binding,
+            supplement_id=supplement_id)
     except _ds.SupplementError as exc:
         raise SupplementProductionError(
             "production_rebuild_refused", f"{exc.code}: {exc}") from exc
@@ -456,7 +458,8 @@ def seal_supplement_production(product, out_dir: Path, *, authority,
             "the declared payload is not what the authority and these "
             "rows rebuild to")
     try:
-        _ds._validate_supplement_object(rebuilt)
+        _ds._validate_supplement_object(
+            rebuilt, expected_supplement_id=receipt.supplement_id)
     except _ds.SupplementError as exc:
         raise SupplementProductionError(
             "production_supplement_object_invalid",

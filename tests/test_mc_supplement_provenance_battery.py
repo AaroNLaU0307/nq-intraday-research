@@ -1490,7 +1490,7 @@ def test_x_production_forbidden_row_field_is_reachable_and_named(
     src = Path(sp.__file__).read_text(encoding="utf-8")
     body = src[src.index("def seal_supplement_production"):]
     assert body.index(chr(34) + "production_forbidden_row_field" + chr(34)) < \
-        body.index("_ds._validate_supplement_object(rebuilt)"), (
+        body.index("_ds._validate_supplement_object("), (
         "the specific blind-guarantee check must run FIRST or it is dead")
 
     out = tmp_path / "seal"
@@ -1655,18 +1655,27 @@ def test_y_a_subclass_instance_is_refused_by_the_typed_gate(prod,
 
 def test_y_an_authority_for_another_id_is_refused_at_build(prod, authority,
                                                            tmp_path):
-    """F6, REPAIRED AND NOW PINNED.
+    """F6, and the property survived a repair that changed the answer.
 
-    The hermetic core hardcodes `supplement_id = MC-DS-S001`, which need
-    not be the id the authority was minted for. An authority for
-    `MC-DS-S002` therefore USED TO produce a product whose PAYLOAD said
-    S001 while its RECEIPT said S002 - and `verify_production_receipt`
-    ACCEPTED it; only the seal noticed. One object may not carry two
-    identities, and the builder now refuses to mint one.
+    The hermetic core USED TO hardcode `supplement_id = MC-DS-S001`
+    whatever the authority said, so an authority for `MC-DS-S002` produced
+    a product whose PAYLOAD said S001 while its RECEIPT said S002 - and
+    `verify_production_receipt` ACCEPTED it; only the seal noticed. One
+    object may not carry two identities.
 
-    The seal's backstop is kept under test below, through a forged
-    receipt, because a defence that is only ever exercised by the bug it
-    was written for is not exercised at all."""
+    THE FIRST FIX MADE THE BUILDER REFUSE, which held the property by
+    making a second supplement unbuildable. When MC-DS-S001 was retired
+    and MC-DS-S002 became the real successor, that turned from a guard
+    into a ceiling: the real run would have consumed its P2, appended P3,
+    read the Development data and only then refused. The builder now takes
+    the id, so the payload and the receipt agree because they come from the
+    same place -- which is the property, stated positively.
+
+    `production_supplement_id_divergence` is NOT relaxed: it still fires
+    whenever they disagree, exercised below and in
+    `tests/test_production_supplement_identity.py`. The seal's backstop is
+    kept under test through a forged receipt, because a defence only ever
+    exercised by the bug it was written for is not exercised at all."""
     auth2 = sa.derive_supplement_authority(prod, supplement_id=OTHER_SID)
     assert auth2.supplement_id == OTHER_SID
     assert sa.verify_supplement_authority(
@@ -1674,11 +1683,13 @@ def test_y_an_authority_for_another_id_is_refused_at_build(prod, authority,
     assert sp.build_supplement_from_authority(
         authority, prod, _rows(authority.expected_day_set)) is not None
 
-    with pytest.raises(sp.SupplementProductionError) as ei:
-        sp.build_supplement_from_authority(
-            auth2, prod, _rows(auth2.expected_day_set))
-    assert ei.value.code == "production_supplement_id_divergence"
-    assert repr(SID) in str(ei.value) and repr(OTHER_SID) in str(ei.value)
+    # An authority for another id now BUILDS -- stamped with THAT id.
+    other = sp.build_supplement_from_authority(
+        auth2, prod, _rows(auth2.expected_day_set))
+    assert other.payload["supplement_id"] == OTHER_SID
+    assert other.receipt.supplement_id == OTHER_SID
+    assert other.payload["supplement_id"] == other.receipt.supplement_id, (
+        "the two identities are back")
 
     # --- the seal is still the backstop, reached with a forged receipt --
     out = tmp_path / "seal"
