@@ -182,13 +182,44 @@ class TestTheReportCoversEveryGate(unittest.TestCase):
         self.assertEqual(report.passed, not refusing)
 
     def test_the_report_is_not_vacuously_green(self):
-        """Today it MUST refuse somewhere: there is no live P2. A report
-        that came back clean would mean the gates were not consulted."""
-        report = pc.run_precheck()
-        names = {n for n, d in report.results if d is not None}
-        self.assertIn("live_authorization_unique", names,
-                      "no live authorization exists, so this gate must "
-                      "refuse; if it passed, the context is not the real one")
+        """REWRITTEN 2026-09-05. It used to require
+        `live_authorization_unique` to be among the refusals, reasoning that
+        there was no live P2 so a clean report would prove the gates were
+        never consulted. Aaron signed the P2 at row 15, that gate now passes
+        for the right reason, and the test went red while the property it is
+        named for still held.
+
+        NON-VACUITY WITHOUT PINNING A GATE. The property is "every verdict
+        came from running the gate", not "something refused". Once the chain
+        is in order the report may legitimately come back all-green, and a
+        test forbidding that would have to be deleted on the day a run
+        becomes possible — precisely when it is most wanted.
+
+        So it is proved directly: replace all thirteen gates with a raiser
+        and every entry must carry that sentinel. A `run_precheck` that
+        fabricated verdicts from a table instead of calling the gates would
+        return none of them. Order and the real HEAD are covered by
+        `test_it_reports_all_thirteen_in_the_contracts_order` and
+        `test_the_head_it_reports_is_the_head_git_reports`.
+        """
+        from itsf.mc import supplement_runner as sr
+
+        sentinel = "NOT_A_REAL_REFUSAL_ONLY_THIS_TEST_RAISES_IT"
+
+        def _raise(_ctx):
+            raise RuntimeError(sentinel)
+
+        real = sr.GATES
+        try:
+            sr.GATES = dict(real, **{name: _raise
+                                     for name in sc.GATE_TABLE["A_PRECHECK"]})
+            report = pc.run_precheck()
+        finally:
+            sr.GATES = real
+        carried = [n for n, d in report.results if d and sentinel in d]
+        self.assertEqual(list(sc.GATE_TABLE["A_PRECHECK"]), carried,
+                         "an entry did not come from running its gate")
+        self.assertFalse(report.passed)
 
 
 if __name__ == "__main__":

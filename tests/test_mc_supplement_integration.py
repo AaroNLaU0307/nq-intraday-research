@@ -29,6 +29,7 @@ import pytest
 
 from itsf.mc import registry_boundary as _rb
 from itsf.mc import supplement_contract as sc
+from itsf.mc import supplement_registry as sreg
 from itsf.mc import supplement_runner as runner
 
 REPO = Path(__file__).resolve().parents[1]
@@ -394,6 +395,10 @@ AUTHORISED_SUPPLEMENT_ROWS = {
     ("SUPPLEMENT_PROPOSED", "MC-DS-S001"):
         "Aaron, 2026-08-31, 「追加 P1」; recorded in "
         "ops/P1_APPENDED_MC_DS_S001_2026-08-31.md; registry commit e53234e",
+    ("SUPPLEMENT_EXECUTION_AUTHORIZED", "MC-DS-S001"):
+        "Aaron, 2026-09-05, verbatim signing block; recorded in "
+        "ops/P2_APPENDED_MC_DS_S001_2026-09-05.md; registry commit a875740; "
+        "witness WITNESS_P2_APPENDED_2026-09-05.json",
 }
 
 
@@ -589,20 +594,56 @@ def test_the_runner_discovers_the_registry_resolver_through_its_seam():
     assert sr.resolve_supplement_chain is not None
 
 
-def test_the_real_registry_resolves_cleanly_to_zero_authorizations():
-    """Not "it refused" — it must resolve WITHOUT DEFECT and find nothing.
-    A parser that refused the real registry outright would produce the
-    same "not authorized" outcome for the wrong reason."""
+def test_the_real_registry_resolves_cleanly_and_authorizes_at_most_once():
+    """Not "it refused" — it must resolve WITHOUT DEFECT. A parser that
+    refused the real registry outright would produce the same "not
+    authorized" outcome for the wrong reason.
+
+    REWRITTEN 2026-09-05. This used to also require `live == 0`, which
+    stopped being true the moment Aaron signed the P2 at row 15. "Zero
+    today" was never the property — it was the state of the ledger on the
+    day the test was written. What the ledger must satisfy at every moment
+    is what stands here now:
+
+      * it parses without defect;
+      * it never carries more than ONE live authorization — two make
+        `live_authorization_unique` refuse, which wedges the chain; and
+      * a live authorization is Aaron's and names a 40-hex commit.
+
+    The row itself is recorded in
+    `ops/P2_APPENDED_MC_DS_S001_2026-09-05.md`.
+    """
     text = (_rb.REGISTRY_REPO_ROOT / _rb.REGISTRY_PATH).read_bytes().decode("utf-8")
     chain = runner._default_resolver(text, sc.FIRST_SUPPLEMENT_ID)
     assert chain.problem == "", chain.problem
-    assert len(chain.live_authorizations) == 0
+    live = chain.live_authorizations
+    assert len(live) <= 1, (
+        "%d live authorizations; more than one is illegal and the runner "
+        "refuses on it" % len(live))
+    for row in live:
+        assert sc.ACTOR_AARON in (getattr(row, "actor", "") or ""), row
+        assert sc.HEX40_RE.match(getattr(row, "authorized_commit", "") or ""), \
+            row
     assert chain.retired is False
 
 
-def test_the_production_entry_refuses_for_the_authorization_reason():
+def test_the_production_entry_refuses_when_nothing_authorises_it():
+    """REWRITTEN 2026-09-05. This drove the refusal off the REAL registry,
+    so Aaron signing a P2 turned a property test into a snapshot test — it
+    went red for a correct reason in the wrong place, and the property it
+    is named for never stopped holding.
+
+    The property is "no live authorization means no run". It is driven
+    through the resolver seam `run_supplement_production` documents for
+    exactly this, so it holds whatever today's ledger happens to contain.
+    The seam swaps the RESOLVER only; the boundary's single read still
+    happens.
+    """
+    def _nothing_authorises(_text, supplement_id):
+        return sreg.resolve_supplement_chain("", supplement_id)
+
     with pytest.raises(runner.SupplementRunNotAuthorized) as ei:
-        runner.run_supplement_production()
+        runner.run_supplement_production(resolver=_nothing_authorises)
     msg = str(ei.value)
     assert "0 live" in msg
     assert sc.EVENTS["P2"].token in msg

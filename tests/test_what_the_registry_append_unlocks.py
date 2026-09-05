@@ -171,11 +171,23 @@ class TestEvenWithBothRowsItStillCannotRun(unittest.TestCase):
                              stage="C_BUILD")
         self.assertEqual({"REFUSE"}, set(verdicts.values()))
 
-    def test_the_production_entry_refuses_on_the_REAL_registry(self):
-        """The synthetic rows above live in a string. The real ledger has
-        no live authorization, and the entry says so."""
+    def test_the_production_entry_refuses_when_nothing_authorises_it(self):
+        """REWRITTEN 2026-09-05. It used to drive this off the REAL ledger
+        and assert the ledger had no live authorization. Aaron signed the
+        P2 at row 15 and the assertion became false — while the property,
+        "no live authorization means no run", never stopped holding.
+
+        Everything else in this module resolves from a string built in
+        memory, exactly so the measurement does not depend on what the real
+        ledger says this week. This test was the one exception and it is no
+        longer one: the refusal is driven through the resolver seam
+        `run_supplement_production` documents for this purpose.
+        """
+        def _nothing_authorises(_text, supplement_id):
+            return sreg.resolve_supplement_chain("", supplement_id)
+
         with self.assertRaises(Exception) as caught:
-            sr.run_supplement_production()
+            sr.run_supplement_production(resolver=_nothing_authorises)
         self.assertIn("0 live SUPPLEMENT_EXECUTION_AUTHORIZED",
                       str(caught.exception))
 
