@@ -1,0 +1,206 @@
+{
+ "attestation_path": "C:\\Users\\Aaron\\OneDrive\\Desktop\\Quant trade\\Intraday Trend Strategy Framework\\ops\\P5_VERIFIER_ATTESTATION_MC_DS_S001_2026-09-06.md",
+ "attestation_sha256": "cc733337ed4fb39c994e11f188f49f20e2239870bbb0d82e645bc974d1c8053a",
+ "blind_results_sha256": "1e4e45cfe9d4ad222d2c87a470a3cec18d4fe888171aef7bcd2170d77299a052",
+ "candidate_row": "| 22 | 2026-09-05T18:00:16+00:00 | SUPPLEMENT_VERIFICATION_FAILED | 3df1656f105b9314235bd28957336a7dec4bde05 | fresh fable verifier | [MC-DS-S001] supplement_id: MC-DS-S001; failure_code: headline_replay_mismatch; detail: 8 of 2842 days carry a stratum label different from the one the S0-T001 run stratified on (vol T2 vs T3 on 2012-11-26 2012-11-27 2013-05-06 2014-10-20 2015-12-10 and event FOMC vs none on 2019-10-11 2020-03-03 2020-03-23), headline draw reproduced in 0 of 1008 cells as sealed and in 1008 of 1008 with those eight labels restored, verifier attestation ops/P5_VERIFIER_ATTESTATION_MC_DS_S001_2026-09-06.md sha256 cc733337ed4fb39c994e11f188f49f20e2239870bbb0d82e645bc974d1c8053a; sealed_artifact_deleted: NO; supersession_required: YES |",
+ "candidate_seq": 22,
+ "candidate_short_id": "F2v",
+ "checks": {
+  "actor_form_is_governance_and_permitted": {
+   "detail": "fresh fable verifier",
+   "ok": true
+  },
+  "all_p4_claims_reproduced": {
+   "detail": {
+    "archive": true,
+    "day_universe_digest": true,
+    "method_version": true,
+    "n_rows": true,
+    "rows_digest": true,
+    "sealed_sha256": true,
+    "source_input_sha256": true
+   },
+   "ok": true
+  },
+  "archive_bytes_unchanged": {
+   "detail": null,
+   "ok": true
+  },
+  "attestation_exists_nonempty": {
+   "detail": {
+    "bytes": 13207,
+    "sha256": "cc733337ed4fb39c994e11f188f49f20e2239870bbb0d82e645bc974d1c8053a"
+   },
+   "ok": true
+  },
+  "candidate_consumes_next_global_sequence": {
+   "detail": {
+    "highest_before": 21,
+    "seq": 22
+   },
+   "ok": true
+  },
+  "candidate_row_parses_row_level": {
+   "detail": null,
+   "ok": true
+  },
+  "chain_ends_at_P4": {
+   "detail": [
+    "P1",
+    "P2",
+    "P2S",
+    "P2",
+    "P2S",
+    "P2",
+    "P2S",
+    "P2",
+    "P3",
+    "P4"
+   ],
+   "ok": true
+  },
+  "chain_started_no_live_p2_not_retired": {
+   "detail": null,
+   "ok": true
+  },
+  "memory_chain_F2v_not_terminal_next_is_F3": {
+   "detail": null,
+   "ok": true
+  },
+  "memory_chain_no_new_live_p2": {
+   "detail": null,
+   "ok": true
+  },
+  "memory_chain_not_retired": {
+   "detail": null,
+   "ok": true
+  },
+  "memory_chain_predecessor_is_P4_then_candidate": {
+   "detail": [
+    "P1",
+    "P2",
+    "P2S",
+    "P2",
+    "P2S",
+    "P2",
+    "P2S",
+    "P2",
+    "P3",
+    "P4",
+    "F2v"
+   ],
+   "ok": true
+  },
+  "memory_chain_problem_empty": {
+   "detail": "",
+   "ok": true
+  },
+  "memory_chain_started_still_true": {
+   "detail": null,
+   "ok": true
+  },
+  "planner_routes_P4_to_contract_path": {
+   "detail": "F2v",
+   "ok": true
+  },
+  "registry_bytes_unchanged": {
+   "detail": null,
+   "ok": true
+  },
+  "registry_resolves_without_problem": {
+   "detail": "",
+   "ok": true
+  },
+  "sealed_bytes_unchanged": {
+   "detail": null,
+   "ok": true
+  }
+ },
+ "diag_results_sha256": "507c7ffdf62d55f1f937d380fd976aca4ed46acd786b9bf52ac271d23cf6b74f",
+ "headline_replay_identity": "FAIL",
+ "memory_chain": {
+  "candidate_is_terminal": false,
+  "closed": false,
+  "live": 0,
+  "retired": false,
+  "short_ids": [
+   "P1",
+   "P2",
+   "P2S",
+   "P2",
+   "P2S",
+   "P2",
+   "P2S",
+   "P2",
+   "P3",
+   "P4",
+   "F2v"
+  ],
+  "started": true,
+  "state_after": "AWAITING_RETIREMENT",
+  "successors_of_candidate": [
+   "F3"
+  ],
+  "terminal": ""
+ },
+ "n_cells": 0,
+ "p4_claims": {
+  "archive": "archive_ok",
+  "day_universe_digest": "5ddff4fb029df6527daaf17b29bdcffe08241fa93ffe7b8e4aec2c9401f98230",
+  "method_version": "mc-freeze-v1",
+  "n_rows": "2842",
+  "rows_digest": "12ceea50a5ad7224acde517a432eac8f7fc6636c69a2898055cf6a5725ec08a5",
+  "sealed_sha256": "f2ecbb9c77d3f2d7d2b555f50cadb6bcafdc979bdcfa4ac5a985e3cf33b9a911",
+  "source_input_sha256": "2fac9000dbf3806c7743a8207b79373d8c5ba7cad3796052803b0e272516184d",
+  "supplement_id": "MC-DS-S001"
+ },
+ "p4_comparison": {
+  "archive": {
+   "claimed": "archive_ok",
+   "match": true,
+   "recomputed": "archive_ok"
+  },
+  "day_universe_digest": {
+   "claimed": "5ddff4fb029df6527daaf17b29bdcffe08241fa93ffe7b8e4aec2c9401f98230",
+   "match": true,
+   "recomputed": "5ddff4fb029df6527daaf17b29bdcffe08241fa93ffe7b8e4aec2c9401f98230"
+  },
+  "method_version": {
+   "claimed": "mc-freeze-v1",
+   "match": true,
+   "recomputed": "mc-freeze-v1"
+  },
+  "n_rows": {
+   "claimed": 2842,
+   "match": true,
+   "recomputed": 2842
+  },
+  "rows_digest": {
+   "claimed": "12ceea50a5ad7224acde517a432eac8f7fc6636c69a2898055cf6a5725ec08a5",
+   "match": true,
+   "recomputed": "12ceea50a5ad7224acde517a432eac8f7fc6636c69a2898055cf6a5725ec08a5"
+  },
+  "sealed_sha256": {
+   "claimed": "f2ecbb9c77d3f2d7d2b555f50cadb6bcafdc979bdcfa4ac5a985e3cf33b9a911",
+   "match": true,
+   "recomputed": "f2ecbb9c77d3f2d7d2b555f50cadb6bcafdc979bdcfa4ac5a985e3cf33b9a911"
+  },
+  "source_input_sha256": {
+   "claimed": "2fac9000dbf3806c7743a8207b79373d8c5ba7cad3796052803b0e272516184d",
+   "match": true,
+   "recomputed": "2fac9000dbf3806c7743a8207b79373d8c5ba7cad3796052803b0e272516184d"
+  }
+ },
+ "p5_pass_conditions_met": false,
+ "phase": "REGISTRY",
+ "planned_next_short_id": "F2v",
+ "problems": [],
+ "problems_total": 0,
+ "rederivation_reproduced": "YES",
+ "registry": {
+  "bytes": 10273,
+  "path": "C:\\Users\\Aaron\\quant-data\\itsf-registry\\ops\\TRIAL_REGISTRY.md",
+  "sha256": "a56d15ab171b3c7c4c10f60caffa687a205b83ec0e6039191dd9243aa0754f9e"
+ },
+ "utc": "2026-09-05T18:00:16Z"
+}
