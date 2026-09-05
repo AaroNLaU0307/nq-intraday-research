@@ -22,6 +22,7 @@ remembers to run the script.
 """
 
 import hashlib
+import os
 import re
 import unittest
 from pathlib import Path
@@ -156,7 +157,14 @@ class TestTheArchiveCode6ProposalStatesItsOwnHash(unittest.TestCase):
         # `splitlines()`, not `split("\n")`: the escape did not survive the
         # layers of quoting that wrote this file, and an unterminated string
         # is the loudest possible version of that. It also needs no escape.
-        out = subprocess.run([sys.executable, str(script)],
+        # The child's stdout encoding, not just the parent's decode. The
+        # block contains a section sign, this machine's console default is
+        # cp1252, and decoding that strictly as UTF-8 left stdout None --
+        # so this test failed in the DEFAULT environment and passed only
+        # under PYTHONUTF8=1. Found by a reviewing seat, reproduced here.
+        # A test that needs an env var to pass is not reproducible.
+        env = dict(os.environ, PYTHONIOENCODING="utf-8")
+        out = subprocess.run([sys.executable, str(script)], env=env,
                              capture_output=True, text=True,
                              encoding="utf-8").stdout.splitlines()
         built = out[out.index("BEGIN_" + self.MARKER) + 1:

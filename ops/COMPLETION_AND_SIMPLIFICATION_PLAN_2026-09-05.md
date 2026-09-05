@@ -77,7 +77,40 @@ A2  把 dataset 侧输入接进 run_supplement_production    -> builder，约一
 A3  ③ live P2，绑定 A2 完成后的稳定 HEAD              -> Aaron
 ```
 
-**没有别的。** H1/M1 已修;gate-first 路径已建;链路已从合成 bars 跑到 P4。
+**H1/M1 已修;gate-first 路径已建;链路已从合成 bars 跑到 P4。**
+
+### A2 的实测范围 —— **比我先前说的「一段接线」大,并且第四项是 blocker**
+
+```
+① bars_by_date        139 个 DBN 经 load_real            直接，databento 0.81 已装
+② EventCalendar       gate1/f10_event_calendar/f10_events.csv
+                      冻结、在仓内、列名与 EventCalendar 精确对应   直接
+③ SessionSchedule     pandas_market_calendars CME_Equity
+                      （生产先例 consumer.py:811）
+                      vendor_degraded_dates 可来自 job 目录的 condition.json   要建
+④ roll_intervals      **仓内无任何来源，job 目录内无 symbology 文件**
+                      -> **研究正确性 blocker，见下**
+```
+
+**为什么 ④ 是 blocker 而不是 residual:**
+
+```
+_straddles_roll(older, newer, roll_transition_dates)
+    return any(older < t <= newer for t in roll_transition_dates)
+若为空 -> 永远 False -> r1_drop_and_extend 永不丢弃任何 return
+-> vol20 跨合约换月计算，把价格跳空当成真实收益
+-> 污染 terciles -> 污染 vol 分层 -> 污染补充的每一行
+NQ.v.0 是连续前月序列，12 年约 48 次换月
+```
+
+**它命中 Aaron 的过滤条件第一条(影响研究正确性),所以它阻塞 N09。**
+
+**候选来源(未验证,需要一个决定):** DBN store 自带 symbology,
+`_postprocess_static` 已经在读 `df["symbol"]`,所以换月点**可能可从 bars 自身导出**
+(symbol 变化处)。`RollInterval` 的 docstring 称其为「官方 symbology 映射的一行
+(IR-16, verify/disclose only)」——**若 DBN 内的 symbology 就是那份官方映射,导出是正确的;
+若「官方」另有所指,那就要另找来源。这一条我不自己判。**
+
 
 ---
 
