@@ -756,22 +756,26 @@ def test_n5_supplement_id_drift_refuses_at_custody_authority_binding(
     assert "supplement_authority_supplement_id_mismatch" in msg
 
 
-def test_n5_commit_drift_vs_p2_and_vs_head_are_separate_refusals(
-        prod, authority):
-    """Both land on `custody_authority_binding`; the DETAIL has to say
-    which comparison moved, or an operator cannot triage it."""
-    assert run.GATES["custody_authority_binding"](
-        _ctx(authority=authority, prepared=prod)) is None    # near-miss
+def test_n5_the_execution_commit_is_not_this_gates_business(prod, authority):
+    """REWRITTEN 2026-09-05 (Aaron's ruling). This used to assert that a P2
+    commit or a HEAD differing from the AUTHORITY's commit each produced
+    their own refusal here. That encoded a confusion: the authority carries
+    the SOURCE commit -- the one that sealed the bundle -- and demanding it
+    equal the execution commit is unsatisfiable, because the supplement
+    always runs at a later commit than the trial it consumes. The first run
+    ever to reach B_DERIVE died on it.
 
-    vs_p2 = _ctx(authority=authority, prepared=prod,
-                 chain=FakeChain(live_authorizations=(
-                     FakeP2(authorized_commit=OTHER_COMMIT),)))
-    _, msg = _gate_refusal("custody_authority_binding", vs_p2)
-    assert "!= authorized" in msg and "!= HEAD" not in msg
-
-    vs_head = _ctx(authority=authority, prepared=prod, head_commit="c" * 40)
-    _, msg = _gate_refusal("custody_authority_binding", vs_head)
-    assert "!= HEAD" in msg
+    Both of those are now legal at this gate, and the SOURCE binding it
+    exists for is untouched -- `test_n5_a_prepared_input_whose_commit_moved`
+    below still refuses a bundle whose commit does not match the authority.
+    The execution side is asserted in section S.
+    """
+    exec_ctx = _ctx(authority=authority, prepared=prod,
+                    head_commit="c" * 40,
+                    chain=FakeChain(live_authorizations=(
+                        FakeP2(authorized_commit="c" * 40),)))
+    assert run.GATES["custody_authority_binding"](exec_ctx) is None
+    assert authority.authorized_commit != "c" * 40
 
 
 def test_n5_a_prepared_input_whose_commit_moved_is_refused(prod, authority):
@@ -2174,3 +2178,92 @@ def test_r4_a_day_universe_digest_must_describe_its_own_universe(
         sa.verify_supplement_authority(forged, prod)
     assert ei.value.code in ("supplement_authority_day_universe_mismatch",
                              "supplement_authority_day_universe_digest_unbacked")
+
+
+# ===========================================================================
+# S — the two commits are DIFFERENT things (Aaron's ruling, 2026-09-05)
+# ===========================================================================
+#
+# SOURCE / CUSTODY commit     the commit that produced and sealed the S0
+#                             bundle this supplement consumes
+# SUPPLEMENT EXECUTION commit the framework HEAD the live P2 authorizes
+#                             this run at
+#
+# They are allowed and EXPECTED to differ: the supplement necessarily runs
+# at a later commit than the trial whose output it reads, and the N09 path
+# did not exist at the S0 commit at all. `custody_authority_binding` used to
+# require `authority.authorized_commit == live_P2.authorized_commit == HEAD`
+# and the first run ever to reach B_DERIVE refused on it -- measured,
+# 876c1b74131b (S0-T001) vs af297eaa0987 (that day's HEAD).
+#
+# EVERY FIXTURE ABOVE USES ONE COMMIT FOR BOTH, which is why none of them
+# could witness the confusion. These use two.
+
+EXEC_COMMIT = "e" * 40                      # NOT the bundle's COMMIT
+
+
+def test_s1_source_and_execution_commits_may_differ(prod, authority):
+    """Case 1: each side correct, the two commits different -> PASS."""
+    assert authority.authorized_commit == COMMIT          # source
+    assert EXEC_COMMIT != COMMIT                          # execution
+    ctx = _ctx(authority=authority, prepared=prod,
+               head_commit=EXEC_COMMIT,
+               chain=FakeChain(live_authorizations=(
+                   FakeP2(authorized_commit=EXEC_COMMIT),)))
+    run.GATES["custody_authority_binding"](ctx)           # must not raise
+
+
+def test_s2_the_whole_B_DERIVE_stage_passes_with_two_commits(prod, authority):
+    """Not just the one gate: the stage the gate belongs to."""
+    ctx = _ctx(authority=authority, prepared=prod,
+               head_commit=EXEC_COMMIT,
+               chain=FakeChain(live_authorizations=(
+                   FakeP2(authorized_commit=EXEC_COMMIT),)))
+    run.run_stage_gates("B_DERIVE", ctx)                  # must not raise
+
+
+def test_s3_a_source_commit_that_is_not_the_bundles_still_refuses(
+        prod, authority):
+    """Case 2, and the one that proves the repair is a re-aim rather than a
+    removal: with the EXECUTION commit correct on both sides, a SOURCE
+    commit that does not match the sealed bundle still refuses."""
+    forged = _forged_prepared(prod, authorized_commit=OTHER_COMMIT)
+    _, msg = _gate_refusal(
+        "custody_authority_binding",
+        _ctx(authority=authority, prepared=forged,
+             head_commit=EXEC_COMMIT,
+             chain=FakeChain(live_authorizations=(
+                 FakeP2(authorized_commit=EXEC_COMMIT),))))
+    assert "supplement_authority_commit_mismatch" in msg
+
+
+def test_s4_the_execution_side_is_still_guarded_by_A_PRECHECK(prod, authority):
+    """Case 3. Moving the check off B_DERIVE did not leave the execution
+    commit unbound -- A_PRECHECK owns it, and still refuses."""
+    ctx = _ctx(authority=authority, prepared=prod,
+               head_commit=EXEC_COMMIT,
+               chain=FakeChain(live_authorizations=(
+                   FakeP2(authorized_commit=COMMIT),)))   # P2 != HEAD
+    _, msg = _gate_refusal("authorized_commit_matches_head", ctx)
+    assert "HEAD" in msg
+
+
+def test_s5_it_cannot_go_green_by_dropping_the_custody_check(prod, authority):
+    """Case 4. The repair moved WHICH commit is compared; it did not delete
+    the custody binding. Asserted two ways, because the structural half
+    alone would pass over a call that had been neutered."""
+    import inspect
+    body = inspect.getsource(run._g_custody_authority_binding)
+    assert "verify_supplement_authority" in body
+    assert "_require_real_authority" in body
+    # and behaviourally: a type-mirror of a real authority is still refused
+    mirror = dataclasses.make_dataclass(
+        "MirrorAuthority",
+        [(f.name, object) for f in dataclasses.fields(authority)],
+        frozen=True)(**{f.name: getattr(authority, f.name)
+                        for f in dataclasses.fields(authority)})
+    _gate_refusal("custody_authority_binding",
+                  _ctx(authority=mirror, prepared=prod,
+                       head_commit=EXEC_COMMIT,
+                       chain=FakeChain(live_authorizations=(
+                           FakeP2(authorized_commit=EXEC_COMMIT),))))

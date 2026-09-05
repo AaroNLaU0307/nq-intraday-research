@@ -464,8 +464,47 @@ def _g_custody_authority_production(ctx: GateContext) -> None:
 
 
 def _g_custody_authority_binding(ctx: GateContext) -> None:
-    """Re-verify the authority against the prepared input it claims, and
-    tie both to the authorization row and the running tree."""
+    """SOURCE-side binding: the authority must describe the sealed bundle it
+    was minted from, and belong to this supplement.
+
+    TWO COMMITS, DELIBERATELY DIFFERENT (Aaron's ruling, 2026-09-05):
+
+      source / custody commit   the commit that produced and sealed the
+                                S0-T001 bundle N09 consumes -- frozen in
+                                that bundle forever
+      supplement execution      the framework HEAD this run is authorized
+      commit                    at by the live P2
+
+    They are ALLOWED and EXPECTED to differ, and requiring them equal is
+    unsatisfiable: the supplement necessarily runs at a later commit than
+    the trial whose output it reads, and the N09 path did not exist at the
+    S0 commit at all. This gate used to demand
+    `auth.authorized_commit == live_P2.authorized_commit == HEAD`, and the
+    first run to reach B_DERIVE refused on it -- measured, `876c1b74131b`
+    (S0-T001's commit) vs `af297eaa0987` (today's HEAD).
+
+    `SupplementAuthority.authorized_commit` is the SOURCE commit at its only
+    construction site (`_mint_authority`: `str(prepared.authorized_commit)`)
+    and in every other production consumer -- `verify_supplement_authority`
+    compares it to `prepared` alongside trial_id, method_digest and the two
+    source-artifact fields, and `supplement_production` stamps it into the
+    receipt beside trial_id. Those two comparisons were the only sites
+    reading it as an execution commit, so the fix is here rather than a
+    second field.
+
+    NOT WEAKENED, and this is the half that matters. Everything the source
+    side has to prove is still proved, by the call below:
+    `verify_supplement_authority` binds trial_id, the SOURCE commit against
+    the bundle's own custody snapshot, method_version, method_digest,
+    source_artifact_id/sha256 and the bundle table digest. Deleting the
+    custody check to get a green light would be a different act; what
+    changed is WHICH commit it is compared against.
+
+    THE EXECUTION SIDE IS NOT UNGUARDED: A_PRECHECK already owns it, and
+    already ran before this gate -- `live_authorization_unique`,
+    `authorization_actor` and `authorized_commit_matches_head` bind the live
+    P2 to the running tree.
+    """
     _require_real_authority("custody_authority_binding", ctx)
     auth, prepared = ctx.authority, ctx.prepared
     try:
@@ -474,16 +513,14 @@ def _g_custody_authority_binding(ctx: GateContext) -> None:
     except Exception as exc:                                  # noqa: BLE001
         _fail("B_DERIVE", "custody_authority_binding",
               type(exc).__name__, str(getattr(exc, "code", exc))[:80])
-    row = _live_p2(ctx.chain)
-    want = getattr(row, "authorized_commit", None)
-    if want and auth.authorized_commit != want:
+    if auth.trial_id != getattr(prepared, "trial_id", None):
         _fail("B_DERIVE", "custody_authority_binding", "SupplementRunnerError",
-              f"authority commit {auth.authorized_commit[:12]} != authorized "
-              f"{str(want)[:12]}")
-    if auth.authorized_commit != ctx.head_commit:
+              f"authority trial {auth.trial_id} != sealed bundle "
+              f"{getattr(prepared, 'trial_id', None)}")
+    if auth.authorized_commit != getattr(prepared, "authorized_commit", None):
         _fail("B_DERIVE", "custody_authority_binding", "SupplementRunnerError",
-              f"authority commit {auth.authorized_commit[:12]} != HEAD "
-              f"{ctx.head_commit[:12]}")
+              f"authority source commit {auth.authorized_commit[:12]} != "
+              "the sealed bundle's custody snapshot")
     if auth.supplement_id != ctx.supplement_id:
         _fail("B_DERIVE", "custody_authority_binding", "SupplementRunnerError",
               "authority supplement id differs from the run's")
