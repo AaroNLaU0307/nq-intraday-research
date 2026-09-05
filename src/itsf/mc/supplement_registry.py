@@ -989,7 +989,59 @@ def _check_archive_field(value: str, bad) -> Refusal | None:
 # Stage 3 — chains
 # ===========================================================================
 
-def _edge_code(prev: str, cur: str) -> str | None:
+#: The ONE `reason_code` that opens the pre-start `P2 -> P2S` edge.
+#: Aaron's 2026-09-05 amendment names it, so a supersede claiming any other
+#: reason still needs its F1.
+PRESTART_COMMIT_CHANGE = "PRESTART_COMMIT_CHANGE"
+
+
+def _is_prestart_reauthorization(prev: str, event, started: bool) -> bool:
+    """Aaron's 2026-09-05 §D.3.2 amendment, and ONLY it.
+
+    THE GAP IT CLOSES. §D.3.2 wrote re-authorization as `F1 -> P2S -> P2`
+    because it assumed a stale commit is discovered by an attempt that
+    fails. It can also go stale with no attempt at all: the authorization
+    is signed, a necessary fix lands, HEAD moves, and nothing has run.
+    `F1` cannot describe that without inventing a `stage`, a `gate_name`
+    and an `attempts_dir` for an attempt that never happened -- and the S0
+    precedent this rule says it mirrors (real ledger rows 6->7 and 9->10)
+    took the edge DIRECTLY, with no failure row between.
+
+    THE SIX RULED CONDITIONS, and where each is enforced:
+
+      1. no P3 under this id            `started` -- checked here
+      2. nothing consumed               ALSO `started`: consumption happens
+                                        at P3 (`SUPPLEMENT_RUN_STARTED`
+                                        is the row that takes the slot), so
+                                        this is not a second check, it is
+                                        the same fact. Said plainly rather
+                                        than implied by a field that does
+                                        not exist.
+      3. same_id_reauthorization=YES    checked here (and the parser
+                                        already forces YES on the field)
+      4. superseded != successor        existing `p2s_successor_equals_
+                                        superseded`
+      5. reason_code=PRESTART_...       checked here
+      6. supersedes_event_sequence
+         points at the old P2           existing `p2s_no_target_p2`,
+                                        `p2s_target_not_live`,
+                                        `p2s_commit_mismatch`,
+                                        `p2s_supplement_id_mismatch`
+
+    Four of the six were already enforced; `_resolve_supersedes` runs
+    BEFORE this walk, so they hold whatever the predecessor is. Only 1/2
+    and 5 are new, and both are read off the row and the walk -- nothing
+    here trusts a caller's word for them.
+    """
+    if prev != "P2" or started:
+        return False
+    fields = getattr(event, "fields", None) or {}
+    return (fields.get("reason_code") == PRESTART_COMMIT_CHANGE
+            and fields.get("same_id_reauthorization") == "YES")
+
+
+def _edge_code(prev: str, cur: str, *, event=None,
+               started: bool = False) -> str | None:
     """The refusal code for one chain edge, or None when legal.
 
     Specific named codes win over the generic ones so that the packet's
@@ -999,9 +1051,11 @@ def _edge_code(prev: str, cur: str) -> str | None:
     if cur == "P2S":
         if prev == "P3":
             return "p2s_after_p3"
-        if prev != "F1":
-            return "p2s_without_preceding_f1"
-        return None
+        if prev == "F1":
+            return None
+        if _is_prestart_reauthorization(prev, event, started):
+            return None
+        return "p2s_without_preceding_f1"
     if cur == "P5" and prev not in ("P4", "A2"):
         if prev == "A1":
             return "p5_after_a1_without_a2"
@@ -1297,7 +1351,7 @@ def _walk_chain(sid: str, chain_events, state: _SupersedeState):
                                   f"the T1 successor registration), not "
                                   f"{short}"))
         else:
-            code = _edge_code(prev, short)
+            code = _edge_code(prev, short, event=ev, started=started)
             if code:
                 return (None, bad(ev, code,
                                   f"{prev} -> {short} is not a legal "
@@ -1339,7 +1393,10 @@ def _walk_chain(sid: str, chain_events, state: _SupersedeState):
                                   f"authorization's commit "
                                   f"{p2.authorized_commit[:12]}… — a "
                                   "pre-start commit change must go "
-                                  "F1 -> P2S -> P2(new commit) -> P3"))
+                                  "F1 -> P2S -> P2(new commit) -> P3, or "
+                                  "P2 -> P2S -> P2(new commit) -> P3 when "
+                                  "no attempt was made (2026-09-05 "
+                                  "amendment)"))
             consumed_by_p3.add(p2.pos)
             started = True
 

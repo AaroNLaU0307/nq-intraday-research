@@ -790,7 +790,14 @@ def plan_next_short_id(from_short_id: str, *, outcome: str,
     elif from_short_id == "P2S":
         nxt = "P2" if outcome == "reauthorize" else ""
     elif from_short_id == "P2":
+        # `prestart_reauthorize` is the 2026-09-05 amendment
+        # (`ops/AMENDMENT_P2_TO_P2S_PRESTART_2026-09-05.md`): the commit
+        # went stale before any attempt, so there is no F1 to route
+        # through. It is a DISTINCT outcome from `pre_start_failure` on
+        # purpose — one says an attempt failed, the other says none was
+        # made, and collapsing them is how a manufactured F1 gets in.
         nxt = {"start": "P3", "pre_start_failure": "F1",
+               "prestart_reauthorize": "P2S",
                "abandon": "F3"}.get(outcome, "")
     else:
         nxt = ""

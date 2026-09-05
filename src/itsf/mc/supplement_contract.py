@@ -207,16 +207,24 @@ _SPECS = (
     # already covers a successor registration. `T1` appears here only
     # because THIS module splits one token into two short ids to keep the
     # successor-registration fields distinguishable.
+    #
+    # AMENDED 2026-09-05 (`ops/AMENDMENT_P2_TO_P2S_PRESTART_2026-09-05.md`,
+    # approved by Aaron the same day): `P2S` joins P2's successors, so a
+    # pre-start authorization whose commit went stale can be superseded
+    # WITHOUT manufacturing an attempt failure first. The edge is not open:
+    # `supplement_registry._edge_code` admits it only under the six ruled
+    # conditions, and `p2s_without_preceding_f1` still refuses every other
+    # P2 -> P2S. See that module for why the gap existed.
     EventSpec("P2", "SUPPLEMENT_EXECUTION_AUTHORIZED", NUMBERED, ACTOR_AARON,
               ("supplement_id", "authorized_commit_40hex", "output_root",
                "verbatim_authorization_sentence"),
-              ("P1", "P2S", "T1"), ("P3", "F1", "F3"), False),
+              ("P1", "P2S", "T1"), ("P3", "F1", "P2S", "F3"), False),
     EventSpec("P2S", "SUPPLEMENT_EXECUTION_AUTHORIZATION_SUPERSEDED",
               NUMBERED, ACTOR_AARON_OR_MAIN_AGENT,
               ("supplement_id", "supersedes_event_sequence",
                "superseded_authorized_commit", "reason_code", "incident_id",
                "successor_authorized_commit", "same_id_reauthorization"),
-              ("F1",), ("P2",), False, incident_required=True),
+              ("F1", "P2"), ("P2",), False, incident_required=True),
     # RECONCILED, DISCLOSED — TWO omissions on this one event, same class.
     #
     # (a) SUCCESSORS. §D.3.2 P3 lists `PERMITTED_SUCCESSOR=P4 | F2`,
