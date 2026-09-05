@@ -517,14 +517,26 @@ def test_real_registry_authorizes_nothing_and_is_only_read():
     # REWRITTEN 2026-08-31. This asserted `chains == {}` -- an empty registry
     # standing in for "authorizes nothing". Aaron authorised the real P1 for
     # MC-DS-S001 that day, so a chain now exists and the proxy stopped being
-    # true while the PROPERTY the test is named for still held. The property
-    # is checked directly now: whatever chains exist, none of them authorises
-    # anything, because authorisation is a live P2 and there is none.
+    # true while the PROPERTY the test is named for still held.
+    #
+    # REWRITTEN AGAIN 2026-09-05, same cause, one level up: Aaron signed the
+    # P2 at row 15 and `live == 0` went false. Measured before changing it --
+    # this battery reaches NO execution or write path at all. It names no
+    # runner, prepare, seal, archive or loader entry; the real registry is
+    # opened read-only once at import, only to learn the highest sequence;
+    # every write here is under `tmp_path`; and two independent guards hold
+    # that (`_plan`'s before/after snapshots, including on refusing calls,
+    # and `conftest._suite_guard_real_ruled_roots` suite-wide). So `live == 0`
+    # was a CANARY over the real ledger's state, not the barrier that keeps
+    # this file away from production -- and a live authorization is now the
+    # intended state. The lasting property is that at most one authorization
+    # is ever live, which is what the runner itself enforces
+    # (`_g_live_authorization_unique`: "at most one is legal").
     for sid, chain in sorted(chains.items()):
         live = getattr(chain, "live_authorizations", ())
-        assert len(live) == 0, (
-            "%s carries %d live authorization(s); this battery may not run "
-            "against a registry that authorises anything" % (sid, len(live)))
+        assert len(live) <= 1, (
+            "%s carries %d live authorization(s); more than one is illegal "
+            "and the runner refuses on it" % (sid, len(live)))
         assert not getattr(chain, "problem", ""), (sid, chain.problem)
     assert real_highest_sequence() >= 13, (
         "the registry is append-only, so its highest sequence can only "
