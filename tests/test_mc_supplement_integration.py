@@ -406,7 +406,36 @@ AUTHORISED_SUPPLEMENT_ROWS = {
         "Aaron, 2026-09-05, pre-start supersede of the seq-15 authorization "
         "under the same-day P2 -> P2S amendment; recorded in "
         "ops/P2S_AND_REAUTH_MC_DS_S001_2026-09-05.md; registry commit "
-        "ba8c244; witness WITNESS_P2S_APPENDED_2026-09-05.json",
+        "ba8c244; witness WITNESS_P2S_APPENDED_2026-09-05.json. Twice more "
+        "the same day at seq 18 and seq 20 (registry 6258f07, a99840b) as "
+        "each repair moved HEAD; witnesses WITNESS_P2S_2/3_APPENDED",
+    # --- the first real N09 run, and how it ended ------------------------
+    # Added 2026-09-06, AFTER each event actually happened. Nothing here is
+    # pre-registered: an entry exists only because the row is already in the
+    # ledger with a witness behind it.
+    ("SUPPLEMENT_RUN_STARTED", "MC-DS-S001"):
+        "the runner, 2026-09-05, through the P3-only append seam during the "
+        "first real N09 execution; registry commit a4f0386; witness "
+        "WITNESS_P3_APPENDED_2026-09-05.json. The first row this project's "
+        "code ever wrote",
+    ("SUPPLEMENT_SEALED", "MC-DS-S001"):
+        "the runner, 2026-09-05; verdict P4, archive_ok, 2842 rows. Signed "
+        "off by Aaron field by field after every digest was recomputed from "
+        "the sealed artifact; registry commit 7e92be6; witness "
+        "WITNESS_P4_APPENDED_2026-09-05.json",
+    ("SUPPLEMENT_VERIFICATION_FAILED", "MC-DS-S001"):
+        "a fresh independent verifier seat, 2026-09-05: "
+        "headline_replay_mismatch, 8 of 2842 days carrying a stratum label "
+        "different from the one S0-T001 stratified on; attestation "
+        "ops/P5_VERIFIER_ATTESTATION_MC_DS_S001_2026-09-06.md; registry "
+        "commit 78a2586",
+    ("SUPPLEMENT_SUPERSEDED", "MC-DS-S001"):
+        "Aaron, ops/OWNER_DECISIONS_2026-09-06.md OD-1, retiring the id "
+        "after the failed verification; registry commit c2a8ac9",
+    ("SUPPLEMENT_PROPOSED", "MC-DS-S002"):
+        "Aaron, 2026-09-05, T1 successor registration for the retired "
+        "MC-DS-S001; registry commit 3fec004; witness "
+        "WITNESS_T1_APPENDED_2026-09-05.json. NOT an authorization",
 }
 
 
@@ -632,7 +661,14 @@ def test_the_real_registry_resolves_cleanly_and_authorizes_at_most_once():
         assert sc.ACTOR_AARON in (getattr(row, "actor", "") or ""), row
         assert sc.HEX40_RE.match(getattr(row, "authorized_commit", "") or ""), \
             row
-    assert chain.retired is False
+    # `retired is False` used to be asserted here. MC-DS-S001 was retired on
+    # 2026-09-05 after its independent verification failed, so that was a
+    # snapshot too. The durable property is the RELATIONSHIP: a retired chain
+    # authorizes nothing.
+    if chain.retired:
+        assert len(live) == 0, (
+            "%s is retired and still carries %d live authorization(s)"
+            % (sc.FIRST_SUPPLEMENT_ID, len(live)))
 
 
 def test_the_production_entry_refuses_when_nothing_authorises_it():

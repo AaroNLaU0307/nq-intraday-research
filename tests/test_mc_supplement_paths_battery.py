@@ -310,6 +310,14 @@ def row_accepted(line: str) -> sr.SupplementEvent:
 # namespace. A test reading the wrong file and passing is worse than one
 # that fails, and only the assert on "no numbered rows" caught it.
 REAL_REGISTRY_PATH = _rb.REGISTRY_REPO_ROOT / _rb.REGISTRY_PATH
+
+#: The governed subtrees AS THEY ARE when this file is imported. Every
+#: assertion about them below is a comparison against this, never
+#: against a fixed expected value: an authorized run legitimately puts
+#: artifacts there, and a battery still may not touch them.
+import _governed_subtrees as _gs                      # noqa: E402
+_SUBTREES_AT_IMPORT = _gs.snapshot()
+
 REAL_REGISTRY_TEXT = REAL_REGISTRY_PATH.read_text(encoding="utf-8")
 assert _rb.REGISTRY_TOMBSTONE_MARKER not in REAL_REGISTRY_TEXT, (
     "the path this battery calls the real registry is a tombstone; "
@@ -326,13 +334,44 @@ def real_highest_sequence() -> int:
     return max(values)
 
 
-#: The probe uses a DIFFERENT supplement id from the live one. REPOINTED
-#: 2026-08-31: Aaron authorised the real P1 for MC-DS-S001, so the live
-#: registry now carries one, and a synthetic P1 for that same id is
-#: `P1 -> P1` -- an illegal transition. These tests are about the GLOBAL
-#: SEQUENCE namespace, which a second id exercises just as well: the
-#: collision was with the chain, not with the numbering.
-PROBE_SID = SID2
+#: TEST-ONLY probe ids, and the third choice of them.
+#:
+#: They started as the live id, were repointed to MC-DS-S002 on 2026-08-31
+#: when Aaron authorised the real P1 for MC-DS-S001, and collided AGAIN on
+#: 2026-09-05 when MC-DS-S001 was retired and MC-DS-S002 registered as its
+#: real successor -- a synthetic P1 for an id that now really carries a T1
+#: is `T1 -> P1`, an illegal transition.
+#:
+#: Chasing the allocation upward is what failed twice, so these come from
+#: the TOP of the id space instead. Production allocates from S001 upward;
+#: nothing reaches these without 900-odd supplements first, and the guard
+#: below refuses at import if one ever does. These tests are about the
+#: GLOBAL SEQUENCE namespace, and any id with no chain of its own
+#: exercises that just as well.
+PROBE_SID = "MC-DS-S999"
+PROBE_SID_2 = "MC-DS-S998"
+
+#: Whatever chains the ledger really carries today. Derived, never listed:
+#: a hand-written expectation is what made three tests fail when the real
+#: MC-DS-S002 appeared.
+_REAL_CHAIN_IDS = frozenset(sr.resolve_supplement_chains(REAL_REGISTRY_TEXT)[0])
+
+
+def _assert_probe_ids_are_unused() -> None:
+    """The probe ids must name NO chain in the ledger being appended to.
+
+    Asserted rather than assumed, because assuming it is what broke twice:
+    the id was fine on the day it was chosen and became a real chain later,
+    and the failure surfaced as a confusing `illegal_transition` deep in a
+    sequence test rather than as "your probe id is taken"."""
+    for probe in (PROBE_SID, PROBE_SID_2):
+        assert probe not in _REAL_CHAIN_IDS, (
+            "%s is now a REAL supplement chain, so it can no longer be a "
+            "probe id. Pick another unused one -- do not repoint it to the "
+            "next production number, which is how this broke twice." % probe)
+
+
+_assert_probe_ids_are_unused()
 
 
 def seq_outcome(value) -> str:
@@ -342,7 +381,7 @@ def seq_outcome(value) -> str:
             + row("P1", sid=PROBE_SID, seq=str(value)) + "\n")
     chains, refusal = sr.resolve_supplement_chains(text)
     if refusal is None:
-        assert sorted(chains) == sorted({SID, PROBE_SID}), sorted(chains)
+        assert sorted(chains) == sorted(_REAL_CHAIN_IDS | {PROBE_SID}),             sorted(chains)
         return "OK"
     assert chains == {}, "a refused resolution must yield NO chains"
     assert refusal.code in sr.REFUSAL_CODES, refusal.code
@@ -422,12 +461,18 @@ def test_governed_supplement_subtrees_exist_by_grant_and_are_empty():
     `ops/DIRECTORY_CREATION_GRANTS.md` §4. Absence would now be the defect.
 
     The property this test actually protected -- that no code path creates
-    or writes into them -- is asserted in the stronger form that survives:
-    they exist, a USED grant records why, and they hold nothing.
-    `not exists()` would have passed from here on while a test quietly
-    wrote files into them; emptiness catches exactly that."""
-    from _governed_subtrees import assert_governed_subtrees_are_empty
-    assert_governed_subtrees_are_empty(Path(__file__).resolve().parents[1])
+    or writes into them -- is asserted in the form that survives: they
+    exist, a USED grant records why, and (in the trailing test of this
+    file) nothing THIS BATTERY did changed their contents.
+
+    Emptiness was the previous form and it stopped working on 2026-09-05,
+    when the first authorized N09 run legitimately sealed a supplement into
+    both trees. Same lesson as `not exists()` in August: a snapshot proxy
+    for "no test wrote here" fails the moment something else writes."""
+    from _governed_subtrees import (
+        assert_governed_subtrees_exist_under_the_grant)
+    assert_governed_subtrees_exist_under_the_grant(
+        Path(__file__).resolve().parents[1])
 
 
 def test_platform_precondition_posix_root_is_not_absolute():
@@ -1133,13 +1178,14 @@ def test_zero_and_negative_sequence_cells_are_refused():
 
 def test_two_appended_rows_must_be_consecutive():
     highest = real_highest_sequence()
-    # Two DISTINCT probe ids, neither of them the live chain's -- see PROBE_SID.
+    # Two DISTINCT probe ids, neither of them a real chain -- see PROBE_SID.
     good = (REAL_REGISTRY_TEXT + "\n"
-            + row("P1", sid="MC-DS-S002", seq=str(highest + 1)) + "\n"
-            + row("P1", sid="MC-DS-S003", seq=str(highest + 2)) + "\n")
+            + row("P1", sid=PROBE_SID, seq=str(highest + 1)) + "\n"
+            + row("P1", sid=PROBE_SID_2, seq=str(highest + 2)) + "\n")
     chains, refusal = sr.resolve_supplement_chains(good)
     assert refusal is None, f"unexpected refusal: {refusal}"
-    assert sorted(chains) == [SID, "MC-DS-S002", "MC-DS-S003"]
+    assert sorted(chains) == sorted(
+        _REAL_CHAIN_IDS | {PROBE_SID, PROBE_SID_2})
 
     gapped = (REAL_REGISTRY_TEXT + "\n"
               + row("P1", sid="MC-DS-S002", seq=str(highest + 1)) + "\n"
@@ -1435,7 +1481,9 @@ def test_every_planner_entry_point_in_this_file_is_lease_guarded(tmp_path):
     assert calls.count(runs) == 2 and calls.count(arch) == 2, calls
 
 
-def test_governed_subtrees_still_empty_after_the_battery():
-    """The battery plans hundreds of paths. None may leave a byte behind."""
-    from _governed_subtrees import assert_governed_subtrees_are_empty
-    assert_governed_subtrees_are_empty(Path(__file__).resolve().parents[1])
+def test_governed_subtrees_unchanged_by_the_battery():
+    """The battery plans hundreds of paths. None may leave a byte behind --
+    or take one away. Compared against the snapshot taken at import, so an
+    authorized run's own artifacts are irrelevant and a test's are not."""
+    from _governed_subtrees import assert_governed_subtrees_untouched
+    assert_governed_subtrees_untouched(_SUBTREES_AT_IMPORT, "this battery")

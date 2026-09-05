@@ -369,15 +369,23 @@ class TestItVerifiesItsOwnClaim(unittest.TestCase):
 
     def test_the_real_snapshot_sees_the_real_subtrees(self):
         """The probe above is a stand-in. If the real one looked at
-        nothing, the test above it would be proving nothing."""
+        nothing, the test above it would be proving nothing.
+
+        REWRITTEN 2026-09-06. "Looked" used to be evidenced by "and found
+        nothing", which stopped being true when the first authorized N09 run
+        legitimately sealed a supplement into both trees. Emptiness was
+        never the property here anyway -- the property is that the snapshot
+        READS the two governed paths -- so it is asserted directly: two
+        entries, both named for a governed subtree, neither reporting `None`
+        (which is this helper's way of saying "I could not look")."""
         snap = dry._snapshot_governed()
         self.assertEqual(2, len(snap))
         for key, value in snap.items():
             with self.subTest(subtree=key):
                 self.assertTrue(key.endswith("supplements"))
-                self.assertEqual((), value,
-                                 "the governed subtree is not empty: %s"
-                                 % (value,))
+                self.assertIsNotNone(
+                    value, "the snapshot could not read %s, so a before/after "
+                           "comparison over it would compare nothing" % key)
 
 
 if __name__ == "__main__":

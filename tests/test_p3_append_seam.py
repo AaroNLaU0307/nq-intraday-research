@@ -23,32 +23,61 @@ that happens before any write.
 """
 
 import shutil
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from itsf.mc import registry_boundary as rb
-from itsf.mc import supplement_contract as sc
-from itsf.mc import supplement_registry as sreg
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "tests"))
+
+import test_mc_supplement_registry as T           # noqa: E402
+from itsf import contracts                        # noqa: E402
+from itsf.mc import registry_boundary as rb       # noqa: E402
+from itsf.mc import supplement_contract as sc     # noqa: E402
+from itsf.mc import supplement_registry as sreg   # noqa: E402
 
 REAL = rb.REGISTRY_REPO_ROOT / rb.REGISTRY_PATH
-SID = "MC-DS-S001"
+SID = T.SID                                       # 'MC-DS-S001'
 UTC = "2026-09-05T17:00:00+00:00"
+COMMIT = "c" * 40
 
 
-def _live_commit(text):
-    chain = sreg.resolve_supplement_chain(text, SID)
-    return chain.live_authorizations[0].authorized_commit
+def _ledger(*rows, commit=COMMIT):
+    """A CONTROLLED synthetic ledger, built one ratified row at a time.
+
+    NOT a copy of the real one. The first version of this file took its
+    commit from `resolve_supplement_chain(REAL).live_authorizations[0]`,
+    which worked for exactly as long as the real ledger happened to carry a
+    live P2. On 2026-09-05 MC-DS-S001 was sealed, refused by an independent
+    verifier and retired, the live count went to zero, and every test here
+    died on an IndexError -- a unit test of the seam brought down by the
+    state of production.
+
+    What the seam needs is a chain with exactly one live P2 at a known
+    commit. That is constructed here, so it is true by definition rather
+    than by luck.
+    """
+    T.ROOT = str(contracts.RULED_RUNS_ROOT)
+    reg = T.Reg()
+    reg.commit[SID] = commit
+    for short in rows:
+        reg.add(short, sid=SID)
+    return reg.text()
 
 
 class _Copy:
-    """A throwaway copy of the real ledger. Every write lands here."""
+    """A temp ledger the seam may write to. Nothing here touches the real
+    one; `REAL` is read only by the single test that says so."""
+
+    def __init__(self, text=None, commit=COMMIT):
+        self._text = _ledger("P1", "P2") if text is None else text
+        self.commit = commit
 
     def __enter__(self):
         self.dir = Path(tempfile.mkdtemp())
         self.path = self.dir / "TRIAL_REGISTRY.md"
-        self.path.write_bytes(REAL.read_bytes())
-        self.commit = _live_commit(self.path.read_text(encoding="utf-8"))
+        self.path.write_bytes(self._text.encode("utf-8"))
         return self
 
     def __exit__(self, *exc):
@@ -244,14 +273,21 @@ class TestFailClosedLeavesNothingBehind(unittest.TestCase):
         self.assertEqual([], made, "a directory was created despite the "
                                    "P3 append refusing")
 
-    def test_the_real_registry_refuses_a_wrong_commit_without_writing(self):
-        """One case against the REAL ledger, chosen because it refuses
-        before the write. Nothing is appended."""
+    def test_the_real_registry_is_refused_without_writing(self):
+        """The one case against the REAL ledger, and the property is the
+        BYTES, not the code.
+
+        It used to pin `p3_commit_is_not_the_authorized_one`. Today the real
+        MC-DS-S001 already carries a P3 -- the first authorized run appended
+        one -- so the refusal now arrives as `p3_already_present`, from an
+        earlier check. Both are pre-write refusals and both are correct; the
+        specific one depends on ledger state, which is exactly why it is not
+        pinned here. What is pinned is that the real file did not move."""
         frozen = REAL.read_bytes()
         with self.assertRaises(rb.AppendRefused) as caught:
             rb.append_run_started(SID, head_commit="0" * 40, utc_stamp=UTC)
-        self.assertEqual("p3_commit_is_not_the_authorized_one",
-                         caught.exception.code)
+        self.assertTrue(caught.exception.code.startswith("p3_"),
+                        caught.exception.code)
         self.assertEqual(frozen, REAL.read_bytes())
 
 

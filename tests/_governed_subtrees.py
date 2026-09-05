@@ -16,14 +16,23 @@ directories. `not exists()` was a proxy for that, and it was a proxy that
 STOPS WORKING the moment the directories legitimately exist: after that it
 would pass while a test quietly wrote files into them.
 
-So the replacement is strictly stronger, not weaker:
+AND ON 2026-09-05 THE SAME THING HAPPENED AGAIN, one level up. Aaron
+authorized the run directory for the first real N09, the run executed, and
+`itsf-runs/supplements/MC-DS-S001_<UTC>/DAY_STRATA_SUPPLEMENT.json` is now
+legitimately on disk in both trees. So EMPTINESS has stopped working for
+exactly the reason ABSENCE did: it was a proxy for "no test wrote here",
+and the proxy is now false for a reason that has nothing to do with tests.
+
+The property has never changed, and it is what is asserted now:
 
     they exist  (tied to the recorded grant, not to nothing)
-    they are EMPTY
-    and nothing a test touched changed their contents
+    and NOTHING A TEST DID changed their contents
 
-`emptiness` catches what `absence` could not: a write into an existing
-directory.
+That is a before/after comparison, which is the only form that keeps
+working no matter what an authorized run legitimately puts there. It is
+also strictly narrower than "an authorization exists, so anything goes": a
+test that writes into a subtree still fails, and so does one that deletes
+from it.
 """
 
 from pathlib import Path
@@ -65,22 +74,24 @@ def assert_governed_subtrees_untouched(before: dict, what: str) -> None:
         % (what, before, after))
 
 
-def assert_governed_subtrees_are_empty(repo_root: Path) -> None:
-    """They exist because of a recorded grant, and hold nothing.
+def assert_governed_subtrees_exist_under_the_grant(repo_root: Path) -> None:
+    """They exist, and a USED grant row records why.
 
-    Both halves matter. Existence WITHOUT the grant row would mean
-    something created them unauthorized; a non-empty subtree would mean
-    something wrote into them, which no authorization has ever covered."""
+    RENAMED AND NARROWED 2026-09-05. This used to also assert they were
+    EMPTY. The first authorized N09 run wrote a sealed supplement into both
+    trees, so emptiness became false for a reason that says nothing about
+    tests -- the same way `not exists()` became false in August.
+
+    What survives is the half that never depended on a snapshot: existence
+    WITHOUT the grant row would mean something created them outside any
+    authorization. "Nothing a test wrote" is now
+    `assert_governed_subtrees_untouched`, which compares before to after and
+    therefore cannot rot."""
     record = (repo_root / GRANT_RECORD).read_text(encoding="utf-8")
     assert GRANT_MARK in record, (
         "the governed subtrees exist but %s records no used grant -- so "
         "something created them outside any authorization" % GRANT_RECORD)
     for subtree in GOVERNED_SUBTREES:
-        held = contents(subtree)
-        assert held is not None, (
+        assert contents(subtree) is not None, (
             "%s is gone. It was created under the 2026-08-29 grant and its "
             "removal is not something any code path may do." % subtree)
-        assert held == (), (
-            "%s holds %s. The grant covered CREATING the empty parent and "
-            "nothing else; writing into it needs the execution authorization, "
-            "which has not been given." % (subtree, list(held)))

@@ -22,7 +22,7 @@ import _governed_subtrees as gs
 REPO = Path(__file__).resolve().parents[1]
 
 
-class TestTheEmptinessCheckFires(unittest.TestCase):
+class TestTheExistenceAndComparisonChecksFire(unittest.TestCase):
 
     def setUp(self):
         self._real = gs.GOVERNED_SUBTREES
@@ -37,23 +37,27 @@ class TestTheEmptinessCheckFires(unittest.TestCase):
         gs.GOVERNED_SUBTREES = self._real
         self._tmp.cleanup()
 
-    def test_two_empty_subtrees_plus_a_used_grant_pass(self):
-        gs.assert_governed_subtrees_are_empty(REPO)
+    def test_two_subtrees_plus_a_used_grant_pass(self):
+        gs.assert_governed_subtrees_exist_under_the_grant(REPO)
 
-    def test_a_FILE_in_a_subtree_fails(self):
-        """The case the old `not exists()` form could never have caught."""
+    def test_a_FILE_in_a_subtree_is_CAUGHT_BY_THE_COMPARISON(self):
+        """REWRITTEN 2026-09-06. The emptiness check used to catch this, and
+        emptiness stopped being true when the first authorized N09 run
+        legitimately sealed a supplement into both trees. The leak is still
+        caught -- by comparing before to after, which is the form that does
+        not depend on what an authorized run left there."""
+        before = gs.snapshot()
         (self.a / "leaked.json").write_bytes(b"{}")
         with self.assertRaises(AssertionError) as caught:
-            gs.assert_governed_subtrees_are_empty(REPO)
+            gs.assert_governed_subtrees_untouched(before, "the thing I ran")
         self.assertIn("leaked.json", str(caught.exception))
-        self.assertIn("needs the execution authorization",
-                      str(caught.exception))
 
-    def test_a_nested_DIRECTORY_in_a_subtree_fails(self):
-        """A run directory appearing without the runtime grant."""
+    def test_a_nested_DIRECTORY_in_a_subtree_is_caught(self):
+        """A run directory appearing where the test did not authorize one."""
+        before = gs.snapshot()
         (self.b / "MC-DS-S001_20260829T000000Z").mkdir()
         with self.assertRaises(AssertionError) as caught:
-            gs.assert_governed_subtrees_are_empty(REPO)
+            gs.assert_governed_subtrees_untouched(before, "the thing I ran")
         self.assertIn("MC-DS-S001", str(caught.exception))
 
     def test_a_VANISHED_subtree_fails_differently(self):
@@ -61,7 +65,7 @@ class TestTheEmptinessCheckFires(unittest.TestCase):
         a different defect from a leak -- so it says so."""
         self.a.rmdir()
         with self.assertRaises(AssertionError) as caught:
-            gs.assert_governed_subtrees_are_empty(REPO)
+            gs.assert_governed_subtrees_exist_under_the_grant(REPO)
         self.assertIn("is gone", str(caught.exception))
 
     def test_existence_without_a_recorded_grant_fails(self):
@@ -73,8 +77,20 @@ class TestTheEmptinessCheckFires(unittest.TestCase):
             (ops / "DIRECTORY_CREATION_GRANTS.md").write_text(
                 "no grant here", encoding="utf-8")
             with self.assertRaises(AssertionError) as caught:
-                gs.assert_governed_subtrees_are_empty(Path(fake_repo))
+                gs.assert_governed_subtrees_exist_under_the_grant(
+                    Path(fake_repo))
         self.assertIn("outside any authorization", str(caught.exception))
+
+    def test_a_DELETION_from_a_populated_subtree_is_caught(self):
+        """The case that only exists now that the subtrees hold something:
+        a test that REMOVES an authorized run's artifact. Emptiness could
+        never have caught this -- it would have called it a pass."""
+        (self.a / "sealed.json").write_bytes(b"{}")
+        before = gs.snapshot()
+        (self.a / "sealed.json").unlink()
+        with self.assertRaises(AssertionError) as caught:
+            gs.assert_governed_subtrees_untouched(before, "the thing I ran")
+        self.assertIn("sealed.json", str(caught.exception))
 
 
 class TestTheUntouchedCheckFires(unittest.TestCase):

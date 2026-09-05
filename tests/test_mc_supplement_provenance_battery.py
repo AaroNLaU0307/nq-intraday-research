@@ -118,6 +118,13 @@ from itsf.mc import supplement_runner as run
 from itsf.mc.orchestrator import TemplateDay
 from itsf.s0.report import record_to_formal_dict
 
+#: The governed subtrees AS THEY ARE when this file is imported. Every
+#: assertion about them below is a comparison against this, never
+#: against a fixed expected value: an authorized run legitimately puts
+#: artifacts there, and a battery still may not touch them.
+import _governed_subtrees as _gs                      # noqa: E402
+_SUBTREES_AT_IMPORT = _gs.snapshot()
+
 TRIAL = "S0-T001"
 COMMIT = "876c1b74131b4ab1a89dce433ecce646ba481f8c"
 OTHER_COMMIT = "b" * 40
@@ -1728,13 +1735,21 @@ def test_z_nothing_here_authorizes_anything():
         dss.authorize_supplement("")
 
 
-def test_z_nothing_in_this_battery_wrote_into_a_governed_subtree():
-    """The subtrees exist by Aaron's verbatim 2026-08-29 grant, so their
-    ABSENCE is no longer the property. What no battery may do is put a byte
-    in one -- and that is a check the old `not exists()` form could not
-    have made once they legitimately existed."""
-    from _governed_subtrees import assert_governed_subtrees_are_empty
-    assert_governed_subtrees_are_empty(Path(__file__).resolve().parents[1])
+def test_z_nothing_in_this_battery_touched_a_governed_subtree():
+    """The subtrees exist by Aaron's verbatim 2026-08-29 grant, and since
+    2026-09-05 they hold a sealed supplement from the first authorized N09
+    run. So neither ABSENCE nor EMPTINESS is the property any more -- both
+    were proxies for "no battery wrote here", and both stopped being true
+    for reasons that have nothing to do with this battery.
+
+    The property compared against the snapshot taken at import survives
+    whatever an authorized run legitimately leaves behind."""
+    from _governed_subtrees import (
+        assert_governed_subtrees_exist_under_the_grant,
+        assert_governed_subtrees_untouched)
+    assert_governed_subtrees_exist_under_the_grant(
+        Path(__file__).resolve().parents[1])
+    assert_governed_subtrees_untouched(_SUBTREES_AT_IMPORT, "this battery")
 
 
 # ===========================================================================
