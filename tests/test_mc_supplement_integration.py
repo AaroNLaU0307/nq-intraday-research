@@ -436,6 +436,38 @@ AUTHORISED_SUPPLEMENT_ROWS = {
         "Aaron, 2026-09-05, T1 successor registration for the retired "
         "MC-DS-S001; registry commit 3fec004; witness "
         "WITNESS_T1_APPENDED_2026-09-05.json. NOT an authorization",
+    # --- the N09 v2 run, and how it ended --------------------------------
+    # Added 2026-09-06 under Aaron's explicit approval, AFTER each of these
+    # three rows was already in the ledger with a registry commit and a
+    # witness behind it. TIME MATTERS IN THIS PROSE: OD-2 was written after
+    # the F2 landed, so nothing here may read as if OD-2 authorised the P2,
+    # the P3 or the F2 in advance -- it documents them. The fourth row this
+    # run will produce, ("SUPPLEMENT_SUPERSEDED", "MC-DS-S002"), is
+    # deliberately ABSENT: that F3 has not happened yet, and pre-registering
+    # it is the one thing this table must never do.
+    ("SUPPLEMENT_EXECUTION_AUTHORIZED", "MC-DS-S002"):
+        "Aaron, 2026-09-06, seq 25, signed field by field after a "
+        "memory-only re-verification at the actual signing UTC; the N09 v2 "
+        "authorization at framework HEAD f49a6770, the first tree on which "
+        "the production supplement-id repair existed; registry commit "
+        "ee25019; witness WITNESS_P2_S002_APPENDED_2026-09-06.json. "
+        "Subsequently documented in ops/OWNER_DECISIONS_2026-09-06.md OD-2, "
+        "which was written after this row and after the F2 below",
+    ("SUPPLEMENT_RUN_STARTED", "MC-DS-S002"):
+        "the runner, 2026-09-06, through the P3-only append seam during the "
+        "N09 v2 execution: appended after B_DERIVE and before the first side "
+        "effect, which SPENT the seq 25 authorization. The attempt then "
+        "refused at C_BUILD_1, so this row records a start that never "
+        "reached a seal; registry commit 9c9d8ae; witness "
+        "WITNESS_P3_S002_APPENDED_2026-09-06.json",
+    ("SUPPLEMENT_FAILED", "MC-DS-S002"):
+        "the runner's own post-start, pre-seal failure -- C_BUILD_1 / "
+        "c_build_1_not_empty, no supplement byte written and no archive "
+        "attempt -- appended by hand because the run had already exited; "
+        "residue preserved at MC-DS-S002_20260905T205325Z, verified present "
+        "and empty at the moment of the append; registry commit ec1b9c3; "
+        "witness WITNESS_F2_S002_APPENDED_2026-09-06.json. Subsequently "
+        "documented in ops/OWNER_DECISIONS_2026-09-06.md OD-2",
 }
 
 
