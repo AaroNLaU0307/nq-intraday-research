@@ -126,5 +126,53 @@ class TestTheUNCHANGEDFieldsReallyAre(unittest.TestCase):
         self.assertEqual(len(v2), len(block(V2_DOC, "ND1_CR1_GRAMMAR_R4")))
 
 
+class TestTheArchiveCode6ProposalStatesItsOwnHash(unittest.TestCase):
+    """The same guard for the ARCHIVE-CODE-6 amendment (2026-09-05).
+
+    Added with the proposal rather than after it, because the value of a
+    stated hash is exactly that somebody recomputes it, and "somebody will
+    remember" is what this file exists to replace."""
+
+    DOC = OPS / "AMENDMENT_ARCHIVE_CODE_6_2026-09-05.md"
+    MARKER = "ARCHIVE_CODE_6_CANONICAL_BLOCK"
+
+    def test_the_stated_hash_is_the_hash_of_the_block_beside_it(self):
+        text = self.DOC.read_text(encoding="utf-8")
+        stated = re.findall(r"CANONICAL_SHA256=([0-9a-f]{64})", text)
+        self.assertTrue(stated, "the proposal states no canonical hash")
+        self.assertEqual(1, len(set(stated)),
+                         "the proposal states more than one hash: %s"
+                         % sorted(set(stated)))
+        self.assertEqual(canonical_sha256(block(self.DOC, self.MARKER)),
+                         stated[0])
+
+    def test_the_builder_reproduces_the_document_block_exactly(self):
+        """A block copied by hand drifts from its builder. R4 v1 was HOLD'd
+        for reciting instead of generating; this asserts the two agree."""
+        import subprocess
+        import sys
+
+        script = OPS.parent / "scripts" / "archive_code_6_block_builder.py"
+        # `splitlines()`, not `split("\n")`: the escape did not survive the
+        # layers of quoting that wrote this file, and an unterminated string
+        # is the loudest possible version of that. It also needs no escape.
+        out = subprocess.run([sys.executable, str(script)],
+                             capture_output=True, text=True,
+                             encoding="utf-8").stdout.splitlines()
+        built = out[out.index("BEGIN_" + self.MARKER) + 1:
+                    out.index("END_" + self.MARKER)]
+        self.assertEqual(built, block(self.DOC, self.MARKER))
+
+    def test_the_proposal_implements_nothing(self):
+        """PROPOSED means proposed. If the enum has already grown, the
+        document and the code disagree about what has been decided."""
+        from itsf.mc import supplement_contract as sc
+
+        self.assertIn("STATUS=PROPOSED",
+                      self.DOC.read_text(encoding="utf-8"))
+        self.assertEqual(5, len(sc.ARCHIVE_CODES))
+        self.assertNotIn("archived_bytes_deleted", sc.ARCHIVE_CODES)
+
+
 if __name__ == "__main__":
     unittest.main()
