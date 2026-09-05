@@ -88,8 +88,14 @@ A3  ③ live P2，绑定 A2 完成后的稳定 HEAD              -> Aaron
 ③ SessionSchedule     pandas_market_calendars CME_Equity
                       （生产先例 consumer.py:811）
                       vendor_degraded_dates 可来自 job 目录的 condition.json   要建
-④ roll_intervals      **仓内无任何来源，job 目录内无 symbology 文件**
-                      -> **研究正确性 blocker，见下**
+④ roll_intervals      **已解决 2026-09-05**（首次真实 Development 读取，Aaron 授权内）
+                      来源：DBN metadata 的官方 continuous->instrument_id 映射
+                      139 文件 -> 186 个逐文件区间 -> 合并 48 -> **47 个换月点**
+                      零缺口/重叠；按月 3:11 6:12 9:12 12:12（完美季度）
+                      **未用任何价格推断**；`df["symbol"]` 实测恒为 'NQ.v.0'
+                      （连续符号，跨换月也不变），所以符号推导本就不可行
+                      实现 src/itsf/data/symbology.py（纯函数与 I/O 分开）
+                      测试 tests/test_symbology_rolls.py（10 条，**不读真实数据**）
 ```
 
 **为什么 ④ 是 blocker 而不是 residual:**
@@ -103,7 +109,7 @@ _straddles_roll(older, newer, roll_transition_dates)
 NQ.v.0 是连续前月序列，12 年约 48 次换月
 ```
 
-**它命中 Aaron 的过滤条件第一条(影响研究正确性),所以它阻塞 N09。**
+**它命中过滤条件第一条(影响研究正确性),所以它曾阻塞 N09 —— 现已解除。**
 
 **候选来源(未验证,需要一个决定):** DBN store 自带 symbology,
 `_postprocess_static` 已经在读 `df["symbol"]`,所以换月点**可能可从 bars 自身导出**
