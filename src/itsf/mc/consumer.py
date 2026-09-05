@@ -133,6 +133,37 @@ BUNDLE_EXACT_SET = frozenset(
        "SEED_MANIFEST.json", "REGISTRY_AFTER_RUN_STARTED.json",
        "manifest.jsonl"])
 
+#: S0's `infrastructure_files`: written by the RUN INFRASTRUCTURE, not by the
+#: renderer. `s0/output_proof.py` says they "must not appear in
+#: `sealed_files`", and the real run declares exactly these two
+#: (`scripts/s0_real_run.py`, the `prove_governance(...)` call site).
+#:
+#: WHY THIS EXISTS, measured 2026-09-05 on the first real N09 attempt. The
+#: coverage loop below used to exempt only `manifest.jsonl`, so it demanded a
+#: sealed-manifest digest for a file S0 had deliberately kept out of that
+#: manifest -- two ratified classifications contradicting each other over one
+#: file, and the real bundle refused with `bundle_manifest_coverage`. It had
+#: never surfaced because every synthetic bundle in the suite builds its
+#: manifest over ALL non-manifest files, which is MORE complete than what S0
+#: actually seals.
+#:
+#: THE EXEMPTION IS NARROW, and none of the protection is lost:
+#:   present    -- still required, by `BUNDLE_EXACT_SET` above and by the
+#:                 external key-set check (`custody_authority_keyset_violation`)
+#:   authentic  -- still digest-checked, by the EXTERNAL custody attestation,
+#:                 whose key set must EQUAL `BUNDLE_EXACT_SET`; a missing,
+#:                 extra, malformed or mismatched entry all refuse. That source
+#:                 lives outside the bundle under review, so it is the stronger
+#:                 of the two, and it is already the ONLY digest source for
+#:                 `manifest.jsonl` today.
+#:   well-formed-- still parsed and cross-checked below: valid JSON, and its
+#:                 `snapshot_before` must agree with the authorization
+#:                 snapshot, the custody authority, and `S0_REPORT.json`.
+#: What is dropped is one redundant digest from a source that was never going
+#: to carry it.
+S0_INFRASTRUCTURE_FILES = frozenset({"manifest.jsonl",
+                                     "REGISTRY_AFTER_RUN_STARTED.json"})
+
 _RECORD_FIELDS = tuple(TradePathRecord.__dataclass_fields__)  # 19 fields
 _HEX64_RE = re.compile(r"^[0-9a-f]{64}\Z")
 RECORDS_DIGEST_SCHEMA = "mc_records_custody.v1"
@@ -1046,7 +1077,11 @@ def _prepare_mc_input_impl(bundle: Mapping[str, bytes], *,
         if rec.get("record_type") == "file" and "relative_path" in rec:
             declared[rec["relative_path"]] = rec.get("file_sha256")
     hex64 = re.compile(r"^[0-9a-f]{64}\Z")
-    for n in sorted(names - {"manifest.jsonl"}):
+    # RENDERER-produced files only. S0's infrastructure files are exempt
+    # BECAUSE S0 deliberately keeps them out of this manifest; they are still
+    # required present and still digest-checked externally. See
+    # `S0_INFRASTRUCTURE_FILES`.
+    for n in sorted(names - S0_INFRASTRUCTURE_FILES):
         want = declared.get(n)
         if not isinstance(want, str) or not hex64.match(want):
             raise MCInputError("bundle_manifest_coverage",

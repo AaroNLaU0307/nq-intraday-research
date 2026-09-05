@@ -398,7 +398,15 @@ AUTHORISED_SUPPLEMENT_ROWS = {
     ("SUPPLEMENT_EXECUTION_AUTHORIZED", "MC-DS-S001"):
         "Aaron, 2026-09-05, verbatim signing block; recorded in "
         "ops/P2_APPENDED_MC_DS_S001_2026-09-05.md; registry commit a875740; "
-        "witness WITNESS_P2_APPENDED_2026-09-05.json",
+        "witness WITNESS_P2_APPENDED_2026-09-05.json. RE-AUTHORIZED the same "
+        "day at seq 17 after the commit went stale; recorded in "
+        "ops/P2S_AND_REAUTH_MC_DS_S001_2026-09-05.md; registry commit "
+        "ffb15ae; witness WITNESS_P2_REAUTHORIZED_2026-09-05.json",
+    ("SUPPLEMENT_EXECUTION_AUTHORIZATION_SUPERSEDED", "MC-DS-S001"):
+        "Aaron, 2026-09-05, pre-start supersede of the seq-15 authorization "
+        "under the same-day P2 -> P2S amendment; recorded in "
+        "ops/P2S_AND_REAUTH_MC_DS_S001_2026-09-05.md; registry commit "
+        "ba8c244; witness WITNESS_P2S_APPENDED_2026-09-05.json",
 }
 
 
