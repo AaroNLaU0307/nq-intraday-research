@@ -53,6 +53,10 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 # belongs, inside `itsf.mc.bootstrap`'s PCG64 world construction.
 
 from itsf.contracts import RESEARCH_BOOTSTRAP_SEEDS, TradePathRecord
+# The PUBLISHED §10.1 record contract. Imported rather than restated: S0
+# owns what a sealed handoff line is called, and this module reads those
+# lines. Names only -- no S0 computation is reached from here.
+from itsf.s0.report import FORMAL_RECORD_FIELDS, _TS_RENAME
 from itsf.mc import atoms as mc_atoms
 from itsf.mc import bootstrap as mc_bootstrap
 from itsf.mc import cold_reducer as mc_cold
@@ -165,6 +169,19 @@ S0_INFRASTRUCTURE_FILES = frozenset({"manifest.jsonl",
                                      "REGISTRY_AFTER_RUN_STARTED.json"})
 
 _RECORD_FIELDS = tuple(TradePathRecord.__dataclass_fields__)  # 19 fields
+
+#: The two spellings of one record, and which side of the seal each lives on.
+#: INTERNAL (`_RECORD_FIELDS`, the dataclass) is what this module carries in
+#: `FrozenTradePath`, in `_record_canonical_row` and in the records custody
+#: digest. PUBLISHED (`FORMAL_RECORD_FIELDS`, from `s0.report`) is what a
+#: sealed `MC_HANDOFF_*` line actually holds. They differ in exactly two
+#: names; `record_to_formal_dict` states that "every other field keeps its
+#: internal name", and 17 of 19 are verbatim identical -- measured, not
+#: assumed.
+#:
+#: TAKEN FROM S0, NOT RESTATED. A second hand-written map is a second thing
+#: to keep in agreement, and this repository has paid for that shape before.
+_PUBLISHED_TO_INTERNAL = {v: k for k, v in _TS_RENAME.items()}
 _HEX64_RE = re.compile(r"^[0-9a-f]{64}\Z")
 RECORDS_DIGEST_SCHEMA = "mc_records_custody.v1"
 
@@ -975,12 +992,36 @@ def load_custody_authority_from_attestation(
 
 
 def _parse_record(row: dict, name: str, i: int) -> FrozenTradePath:
-    if not isinstance(row, dict) or set(row) != set(_RECORD_FIELDS):
-        raise MCInputError("record_schema_violation",
-                           f"{name}:{i} field set != TradePathRecord(19)")
+    """One sealed `MC_HANDOFF_*` line -> `FrozenTradePath`.
+
+    THE BOUNDARY IS A RENAME, and it is S0's, not ours. `record_to_formal_dict`
+    publishes the §10.1 record under `FORMAL_RECORD_FIELDS`, where the only
+    difference from the internal dataclass is `entry_ts`/`exit_ts` ->
+    `entry_timestamp`/`exit_timestamp` -- "every other field keeps its
+    internal name". S0 goes further and treats the internal names appearing
+    on a sealed line as a LEAK ("never silently accepted as a synonym"), so
+    the published names are not one of two accepted spellings; they are the
+    only legal one.
+
+    This function used to validate against the INTERNAL dataclass, which is
+    the wrong side of that boundary: it demanded names S0 guarantees will
+    never be there. Measured on the sealed S0-T001 bundle -- 8 files, 22736
+    lines -- every line matches `FORMAL_RECORD_FIELDS` and
+    `_SEALED_RECORD_FIELD_TYPES` exactly, with zero internal-name leaks. The
+    values were never in question: the rename does not touch them.
+
+    NOTHING DOWNSTREAM MOVES. `FrozenTradePath`, `_record_canonical_row` and
+    the records custody digest all keep the internal names, so no custody
+    digest changes. The adapter is exactly the inverse of S0's own map, taken
+    FROM S0 rather than written out again here.
+    """
+    if not isinstance(row, dict) or set(row) != set(FORMAL_RECORD_FIELDS):
+        raise MCInputError(
+            "record_schema_violation",
+            f"{name}:{i} field set != FORMAL_RECORD_FIELDS(19)")
     if not isinstance(row["ambiguous_stop_vs_floor"], bool):
         raise MCInputError("record_ambiguous_flag_not_bool", f"{name}:{i}")
-    row = dict(row)
+    row = {_PUBLISHED_TO_INTERNAL.get(k, k): v for k, v in row.items()}
     row["mtm_close_pnl_1m"] = tuple(row["mtm_close_pnl_1m"])
     row["mtm_adverse_pnl_1m"] = tuple(row["mtm_adverse_pnl_1m"])
     return FrozenTradePath(**row)

@@ -37,6 +37,7 @@ from itsf.mc import atoms as A
 from itsf.mc import consumer as mcc
 from itsf.mc import orchestrator as orch
 from itsf.mc.orchestrator import TemplateDay
+from itsf.s0.report import record_to_formal_dict
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 TRIAL = "S0-T001"
@@ -53,7 +54,12 @@ SECONDARY = mcc.SECONDARY_THETA_CHANNEL
 def _record_row(date, engine, scn, pnl):
     rec = make_trade_path([pnl / 2, pnl], date=date, engine=engine,
                           final=pnl)
-    row = dataclasses.asdict(rec)
+    # S0's OWN publisher, not `asdict`: a sealed line carries the
+    # PUBLISHED §10.1 names (entry_timestamp/exit_timestamp), and a
+    # fixture that emits the internal ones is producing something S0
+    # would never seal. Measured 2026-09-05 -- that gap is exactly
+    # what let `record_schema_violation` reach the first real run.
+    row = record_to_formal_dict(rec)
     row["cost_scenario"] = scn
     return row
 
