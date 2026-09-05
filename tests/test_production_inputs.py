@@ -90,10 +90,21 @@ class TestTheReadersAreGateFirst(unittest.TestCase):
         return {getattr(n.func, "attr", None) or getattr(n.func, "id", None)
                 for n in ast.walk(fn) if isinstance(n, ast.Call)}
 
-    def test_both_readers_verify_the_authorization_first(self):
-        for name in ("load_bars_by_date", "build_roll_intervals"):
+    def test_every_job_dir_reader_verifies_the_authorization_first(self):
+        """UPDATED 2026-09-06 with the provenance repair: the set of
+        functions that read the job dir changed. `build_roll_intervals` no
+        longer does (it reads the FROZEN symbology CSV S0-T001 used), and
+        `build_session_schedule` now does (vendor `condition.json`)."""
+        for name in ("load_bars_by_date", "build_session_schedule"):
             with self.subTest(function=name):
                 self.assertIn("verify_authorized_job_dir", self._calls(name))
+
+    def test_the_roll_reader_no_longer_reads_the_job_dir_at_all(self):
+        """The other half: it must not have kept a second, live source."""
+        calls = self._calls("build_roll_intervals")
+        for forbidden in ("read_vendor_intervals", "coalesce", "load_real",
+                          "from_file"):
+            self.assertNotIn(forbidden, calls, forbidden)
 
     def test_bars_go_through_the_gate_first_loader(self):
         """`load_real` runs `assert_real_run_allowed`, the data-role check
@@ -120,46 +131,78 @@ class TestTheEventCalendar(unittest.TestCase):
         self.assertGreater(len(events.fomc_statement_dates), 90)
         self.assertLess(len(events.fomc_statement_dates), 110)
 
-    def test_the_two_fields_with_no_column_are_left_empty(self):
-        """`unscheduled_fomc_dates` is IR-13's enumerated list and
-        `raw_multi_event_dates` is IR-12's sidecar. Neither is a column in
-        the frozen table, and inferring them would put a derived set where
-        the source has none."""
+    def test_the_other_two_fields_are_supplied_as_S0_supplied_them(self):
+        """REWRITTEN 2026-09-06. This used to assert both were EMPTY, on the
+        reasoning that neither is a column in the frozen table so filling
+        them would be inference. Both halves were wrong:
+        `unscheduled_fomc_dates` is IR-13's enumerated CONSTANT, which
+        S0-T001 passes verbatim, and `raw_multi_event_dates` is read off the
+        `event_type` column of this same table. Leaving them empty is what
+        made the supplement's event strata differ from the run it
+        reconstructs."""
         events = pi.build_event_calendar()
-        self.assertEqual(frozenset(), events.unscheduled_fomc_dates)
-        self.assertEqual(frozenset(), events.raw_multi_event_dates)
+        self.assertEqual(frozenset(pi.UNSCHEDULED_FOMC),
+                         events.unscheduled_fomc_dates)
+        self.assertTrue(events.raw_multi_event_dates,
+                        "raw_multi is derived from the event_type column and "
+                        "the frozen table does carry multi-kind dates")
+        # and it really is derived from the column, not a second constant
+        import csv
+        kinds = {}
+        with open(pi.F10_EVENTS_CSV, newline="", encoding="utf-8") as fh:
+            for row in csv.DictReader(fh):
+                kinds.setdefault(row["date_et"], set()).add(row["event_type"])
+        self.assertEqual(frozenset(d for d, k in kinds.items() if len(k) > 1),
+                         events.raw_multi_event_dates)
 
 
 class TestTheSessionSchedule(unittest.TestCase):
-    """The exchange calendar is not Development data, so this runs for real."""
+    """REWRITTEN 2026-09-06 with the provenance repair. Every assertion here
+    used to pin a semantic the supplement had invented for itself; each is
+    now the semantic S0-T001 actually used."""
 
-    def test_a_full_session_closes_at_960_not_the_futures_close(self):
-        """The calendar reports 17:00 for the futures session; RTH closes at
-        16:00, and a `close_minute` below 960 is what marks a frozen L44
-        excluded day."""
+    def test_the_close_minute_is_the_exchanges_own_uncapped(self):
+        """It used to be capped at 960 ("RTH closes at 16:00"). S0-T001 does
+        no capping -- it writes the calendar's `market_close` minute -- so
+        the cap made the supplement's session table differ from the one it
+        reconstructs. A cap that can only mark MORE days early is still a
+        different input."""
         schedule = pi.build_session_schedule("2021-11-29", "2021-12-01")
-        self.assertEqual({960}, set(schedule.close_minute.values()))
+        self.assertEqual({1020}, set(schedule.close_minute.values()))
 
-    def test_a_half_day_keeps_its_early_close(self):
+    def test_a_half_day_still_carries_its_real_early_close(self):
         schedule = pi.build_session_schedule("2021-11-24", "2021-11-27")
         self.assertEqual(780, schedule.close_minute["2021-11-26"])
-        self.assertEqual(960, schedule.close_minute["2021-11-24"])
+        self.assertEqual(1020, schedule.close_minute["2021-11-24"])
 
-    def test_degraded_dates_are_scheduled_sessions_with_no_bars_at_all(self):
-        """Partially missing sessions are excluded by the funnel's missing
-        fraction; this covers the case IR-19 needs -- a session that happened
-        and about which nothing is held."""
-        schedule = pi.build_session_schedule(
+    def test_degraded_comes_from_the_vendors_condition_file(self):
+        """It used to be re-derived as "scheduled sessions carrying no bars",
+        which is a different set with a different meaning: one is what the
+        VENDOR says about a day, the other is what our file inventory
+        happens to hold."""
+        import json
+        schedule = pi.build_session_schedule("2010-06-06", "2021-12-31")
+        condition = json.loads(
+            (pi.AUTHORIZED_JOB_DIR / pi.CONDITION_JSON_NAME
+             ).read_text(encoding="utf-8"))
+        self.assertEqual(
+            frozenset(r["date"] for r in condition
+                      if r["condition"] != "available"),
+            schedule.vendor_degraded_dates)
+        self.assertTrue(schedule.vendor_degraded_dates,
+                        "the vendor does report degraded days; an empty set "
+                        "would mean the file was not consulted")
+
+    def test_the_bars_argument_no_longer_decides_the_degraded_set(self):
+        """It stays in the signature because callers pass it. A live-looking
+        parameter that silently stopped deciding anything is worse than one
+        that is asserted not to."""
+        with_bars = pi.build_session_schedule(
             "2021-11-29", "2021-12-01",
-            bars_by_date={"2021-11-29": object(), "2021-12-01": object()})
-        self.assertEqual(frozenset({"2021-11-30"}),
-                         schedule.vendor_degraded_dates)
-
-    def test_no_bars_argument_means_no_degraded_claim(self):
-        """Absence of the argument must not be read as 'nothing is
-        degraded' about days nobody looked at."""
-        schedule = pi.build_session_schedule("2021-11-29", "2021-12-01")
-        self.assertEqual(frozenset(), schedule.vendor_degraded_dates)
+            bars_by_date={"2021-11-29": object()})
+        without = pi.build_session_schedule("2021-11-29", "2021-12-01")
+        self.assertEqual(without.vendor_degraded_dates,
+                         with_bars.vendor_degraded_dates)
 
 
 if __name__ == "__main__":

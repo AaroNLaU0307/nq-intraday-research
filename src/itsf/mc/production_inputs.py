@@ -44,13 +44,27 @@ AUTHORIZED_MANIFEST_SHA256 = (
 F10_EVENTS_CSV = (Path(__file__).resolve().parents[3]
                   / "gate1" / "f10_event_calendar" / "f10_events.csv")
 
-#: `SessionSchedule.close_minute` wants the OFFICIAL RTH close minute; the
-#: exchange calendar reports the futures close (17:00 == 1020). Capping at
-#: 16:00 gives 960 on a full session and the real early close on a half day
-#: (13:00 == 780), which is what a frozen L44 excluded day is keyed on. The
-#: cap can only ever mark MORE days early, never fewer, so it cannot include
-#: a day that should have been excluded.
-RTH_CLOSE_MINUTE = 960
+#: The frozen symbology mapping S0-T001 ITSELF used (`load_real_roll_intervals`
+#: reads exactly this file). NOT the live DBN metadata: the supplement is a
+#: RECONSTRUCTION of the table S0-T001 stratified on, so its inputs have to be
+#: S0-T001's inputs. Deriving them again from the vendor -- however correctly --
+#: makes a second authority, and a second authority is how eight days ended up
+#: with a different stratum than the run being reconstructed.
+SYMBOLOGY_CSV = (Path(__file__).resolve().parents[3]
+                 / "gate1" / "symbology" / "nq_v0_mapping.csv")
+
+#: IR-13's enumerated unscheduled-FOMC dates, mirroring the constant
+#: `scripts/s0_real_run.py` passes into `EventCalendar`. Duplicated here
+#: DELIBERATELY and under protest: `src/` may not import `scripts/`, and the
+#: formal extraction of the shared loaders is N09-v2 work. The duplication is
+#: pinned by an AST drift test that reads the constant out of that script, so
+#: the two cannot part company silently.
+UNSCHEDULED_FOMC = ("2019-10-11", "2020-03-03", "2020-03-15", "2020-03-23")
+
+#: Vendor per-day condition, in the authorized job dir. S0-T001 took its
+#: `vendor_degraded_dates` from here; the supplement used to re-derive them as
+#: "scheduled sessions with no bars", which is a DIFFERENT set.
+CONDITION_JSON_NAME = "condition.json"
 
 
 def verify_authorized_job_dir(job_dir=AUTHORIZED_JOB_DIR) -> Path:
@@ -110,19 +124,27 @@ def load_bars_by_date(job_dir=AUTHORIZED_JOB_DIR, *, source_format="dbn"):
 
 
 def build_event_calendar(csv_path=F10_EVENTS_CSV):
-    """`EventCalendar` from the frozen F10 table.
+    """`EventCalendar` exactly as S0-T001 built it.
 
-    The three release flags map straight onto the three date sets. The other
-    two fields are left EMPTY and that is deliberate: `unscheduled_fomc_dates`
-    is IR-13's enumerated list and `raw_multi_event_dates` is IR-12's sidecar,
-    and neither is a column in this table. Filling them by inference would put
-    a derived set where the frozen source has none.
+    ALL FIVE FIELDS, and the last two are the repair. They used to be left
+    empty on the reasoning that "neither is a column in this table, and
+    filling them by inference would put a derived set where the frozen source
+    has none". That reasoning was wrong twice over: `unscheduled_fomc_dates`
+    is not inferred at all -- it is IR-13's enumerated constant, which S0-T001
+    passes verbatim -- and `raw_multi_event_dates` is not inferred either, it
+    is read off the `event_type` column of this same frozen table.
+
+    Leaving them empty is what made three unscheduled-FOMC days
+    (independently found, not assumed here) carry a different event stratum
+    than the run being reconstructed. The fix is to supply what S0 supplied,
+    not to touch those days.
     """
     import csv
 
     from ..s0.context import EventCalendar
 
     cpi, nfp, fomc = set(), set(), set()
+    kinds: dict = {}
     with open(csv_path, newline="", encoding="utf-8") as handle:
         for row in csv.DictReader(handle):
             date = row["date_et"]
@@ -132,19 +154,37 @@ def build_event_calendar(csv_path=F10_EVENTS_CSV):
                 nfp.add(date)
             if row["is_fomc_statement_day"] == "true":
                 fomc.add(date)
-    return EventCalendar(cpi_dates=frozenset(cpi), nfp_dates=frozenset(nfp),
-                         fomc_statement_dates=frozenset(fomc))
+            kinds.setdefault(date, set()).add(row["event_type"])
+    raw_multi = {d for d, k in kinds.items() if len(k) > 1}
+    return EventCalendar(frozenset(cpi), frozenset(nfp), frozenset(fomc),
+                         frozenset(UNSCHEDULED_FOMC), frozenset(raw_multi))
 
 
-def build_session_schedule(start: str, end: str, *, bars_by_date=None):
-    """`SessionSchedule` from the official CME_Equity calendar.
+def build_session_schedule(start: str, end: str, *, bars_by_date=None,
+                           job_dir=AUTHORIZED_JOB_DIR):
+    """`SessionSchedule` exactly as S0-T001 built it. TWO repairs here.
 
-    `vendor_degraded_dates` is the set of scheduled sessions for which the
-    authorized files carry NO bars at all. Partially missing sessions are
-    already handled elsewhere -- the funnel excludes a day missing more than
-    `MAX_MISSING_FRACTION` -- so this covers the case IR-19 actually needs:
-    a session that happened and about which we hold nothing.
+    CLOSE MINUTE IS THE EXCHANGE'S, UNCAPPED. This used to cap at
+    `RTH_CLOSE_MINUTE = 960` on the reasoning that a frozen L44 excluded day
+    is keyed on the RTH close. S0-T001 does no such capping -- it writes the
+    calendar's own `market_close` minute -- so the cap made the supplement's
+    session table differ from the one being reconstructed. A cap that "can
+    only ever mark MORE days early" is still a different input, and the
+    supplement's job is to match, not to improve.
+
+    DEGRADED COMES FROM THE VENDOR, NOT FROM ABSENT BARS. S0-T001 reads
+    `condition.json` and takes every date whose `condition` is not
+    "available". The supplement used to re-derive the set as "scheduled
+    sessions carrying no bars at all", which is a different set with a
+    different meaning: one is what the vendor SAYS about a day, the other is
+    what our own file inventory happens to contain.
+
+    `bars_by_date` is kept in the signature -- callers pass it -- but is no
+    longer consulted for the degraded set, and the docstring says so rather
+    than letting a live-looking parameter imply it still decides something.
     """
+    import json
+
     import pandas_market_calendars as mcal
 
     from ..data.calendar import ET
@@ -157,30 +197,47 @@ def build_session_schedule(start: str, end: str, *, bars_by_date=None):
     close_minute = {}
     for day, row in schedule.iterrows():
         close = row["market_close"].tz_convert(ET)
-        close_minute[day.strftime("%Y-%m-%d")] = min(
-            close.hour * 60 + close.minute, RTH_CLOSE_MINUTE)
-    degraded = frozenset()
-    if bars_by_date is not None:
-        degraded = frozenset(d for d in close_minute if d not in bars_by_date)
+        close_minute[day.strftime("%Y-%m-%d")] = close.hour * 60 + close.minute
+
+    root = verify_authorized_job_dir(job_dir)
+    condition = json.loads(
+        (root / CONDITION_JSON_NAME).read_text(encoding="utf-8"))
+    degraded = frozenset(r["date"] for r in condition
+                         if r["condition"] != "available")
     return SessionSchedule(close_minute=close_minute,
                            vendor_degraded_dates=degraded)
 
 
 def build_roll_intervals(job_dir=AUTHORIZED_JOB_DIR):
-    """`RollInterval`s from the vendor's official symbology mapping.
+    """`RollInterval`s from the FROZEN symbology mapping S0-T001 used.
 
-    Never from prices and never from the `symbol` column -- that column is
-    the continuous symbol on every row of every file, including across a
-    roll. See `itsf.data.symbology`.
+    NOT re-derived from the vendor. The previous version read the DBN
+    metadata live and `coalesce`d it, which is a defensible way to obtain
+    roll intervals and the wrong thing to do here: the supplement
+    reconstructs the table S0-T001 stratified on, and S0-T001 read
+    `gate1/symbology/nq_v0_mapping.csv`. Two independently-correct
+    derivations of "the rolls" are still two authorities, and roll
+    transitions move vol20, which moves the tercile boundaries, which moves
+    the label of any day sitting near one.
+
+    `itsf.data.symbology` is untouched and still correct for its own purpose;
+    it is simply not the supplement's source of truth.
+
+    `job_dir` is kept in the signature because it is public API, and is no
+    longer read -- the frozen CSV is a repository file.
     """
-    from ..data import symbology
+    import csv
+
     from ..s0.context import RollInterval
 
-    root = verify_authorized_job_dir(job_dir)
-    merged = symbology.coalesce(symbology.read_vendor_intervals(root))
-    return tuple(RollInterval(start_date_utc=start, end_date_utc_excl=end,
-                              instrument_id=int(instrument))
-                 for start, end, instrument in merged)
+    with open(SYMBOLOGY_CSV, newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows:
+        raise ValueError("the frozen symbology mapping %s is empty"
+                         % SYMBOLOGY_CSV)
+    return tuple(RollInterval(r["start_date_utc"], r["end_date_utc_excl"],
+                              r["raw_symbol"], int(r["instrument_id"]))
+                 for r in rows)
 
 
 def acquire_production_inputs(job_dir=AUTHORIZED_JOB_DIR, *,
