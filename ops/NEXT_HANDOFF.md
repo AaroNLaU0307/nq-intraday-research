@@ -6,9 +6,9 @@
 
 ```
 UPDATED   = 2026-09-02
-REVIEW_ID = ENG-SAFETY-PRE-REAL-DATA-001
-PACKET    = ops/REVIEW_PACKET_PRE_REAL_DATA_2026-09-02.md
-SEAT      = Fable（对抗性工程安全席位）
+REVIEW_ID = DECISION-ARCHIVED-BYTES-DELETED-001
+PACKET    = ops/DECISION_PACKET_ARCHIVED_BYTES_DELETED_2026-09-02.md
+SEAT      = fresh 独立席位 —— **分析并建议，不裁定**（裁定归 Aaron）
 DISPATCH  = 由 Aaron 派发。builder 不得自行调用任何审阅席位
 ```
 
@@ -79,21 +79,17 @@ seat 轴 ops/REVIEWER_EXPOSURE_LOG.md  记录哪个审阅席位被烧掉
 
 ## 2. 本次要审什么
 
-包里有完整版。一句话：
+一句话：
 
-> **真实 Development 数据之前的最后一次工程安全复审。**
-> 只审工程安全、边界、fail-closed 行为与现存 residual。
+> **`archived_bytes_deleted` 在已批状态机里的合法处理方式。**
+> 本地 seal 活着，而更早已归档的字节没了 —— 四个已批后继哪个成立。
 
-四块，按承重：
+**你给分析与建议，Aaron 裁。** 理由：席位可顾问不可代签；
+且其中一个选项要改**已批的封闭枚举**（R4 级）。
 
-```
-R1  resolve_partial 第 8 轮后的修复 —— 从未被独立席位看过，承重刚增加两层
-R2  编排层 supplement_chain.py
-R3  输入装配层 supplement_inputs.py
-R4  loader 边界 —— builder 自称的一条安全属性被证明是错的
-```
-
-**并请攻击 builder 自报的四条弱点**（包 §3）——那是自述证据，不是复现事实。
+**上一轮工程安全复审（ENG-SAFETY-PRE-REAL-DATA-001）已 HOLD 并闭合**，
+四条发现全部由 builder 复现并修了三条；剩下的就是本题。
+记录见 `ops/REVIEW_RESULT_ENG_SAFETY_2026-09-02.md`（outcome-clean，可读）。
 
 ## 3. 明确不在范围内
 
@@ -106,21 +102,20 @@ R4  loader 边界 —— builder 自称的一条安全属性被证明是错的
 
 **本次 PASS 不等于 ① 被批准。** ①（何时读真实 Development 数据）只有 Aaron 能批。
 
-## 4. Fable 预算（Aaron 的规矩）
+## 4. 席位预算（Aaron 的规矩）
 
 ```
-第一波最多 3 个 workflow，且范围必须互不重叠
-建议切法   W1 = R1        W2 = R2 + R3        W3 = R4
-等一波跑完，主会话去重与综合，再决定是否开第二波
+本题范围小且单一，**一波、一个 workflow 足够**，不需要切分
 默认总预算 3，硬上限 6（超出需 Aaron 明批）
-子 workflow 不得再生 workflow；并行前先声明文件租约
+子 workflow 不得再生 workflow
+只读起步：发现即报告，不修复
 ```
 
 ## 5. 回来时请给
 
 ```
-verdict           PASS / HOLD
+建议与理由        **不要给裁定** —— 裁定归 Aaron
 Critical/High     放最前
-区分              「复现的事实」 vs 「builder 自述的证据」
-必答四问          见包 §5（其中 Q3：是否存在阻断 ① 的工程发现）
+区分              「你复现的事实」 vs 「本包自述的内容」
+必答五问          见包 §5（Q5：裁定落地前维持 fail-closed 是否安全）
 ```

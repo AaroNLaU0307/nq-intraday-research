@@ -3,7 +3,7 @@
 ```ini
 PACKET_TYPE=DECISION_ANALYSIS（outcome-clean；不含任何揭盲结果、绩效值或曝光计数）
 REVIEW_ID=DECISION-ARCHIVED-BYTES-DELETED-001
-DELIVERY_STATUS=PREPARED_NOT_ISSUED
+DELIVERY_STATUS=ISSUED
 COMPANION=ops/NEXT_HANDOFF.md（禁读清单载体，必须同行）
 PREPARED_BY=Opus 5，builder seat
 FOR=fresh 独立席位 —— **分析并建议**
@@ -11,6 +11,20 @@ DECIDED_BY=Aaron
 ```
 
 ---
+
+## 0. 受审集 —— **先逐字节核对，再开工**
+
+对下表每一行重算 sha256 并比对。**不符即 STOP 并报告。**
+聊天里贴过来的字节永远不是真相来源；请从磁盘读。
+
+| sha256 | bytes | 路径 | 角色 |
+|---|---|---|---|
+| `284af0a8baa995b895a2d631fd1dd046e997bf1873e3f7466a753cd84ee0b14e` | `15728` | `src/itsf/mc/supplement_chain.py` | reference |
+| `bda85429e1aab979ce033d4aafae04241b935514452e58d49e4b534c2a519e54` | `33867` | `src/itsf/mc/supplement_contract.py` | reference |
+| `43b09701513930263e44378259f389662525eb44f79ded66921468bd7d99dd76` | `55502` | `src/itsf/mc/supplement_runner.py` | reference |
+
+本包自身的 sha256 记录在 `ops/ARTIFACTS_UNDER_REVIEW.json`
+（一份文档无法钉住自己的哈希）。
 
 ## 0. 席位做什么，不做什么
 
