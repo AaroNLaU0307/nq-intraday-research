@@ -68,19 +68,24 @@ worktree 字节与 `f461f09` 处的 blob 字节逐一相同(14/14),你应独立�
 - **隔离登记册**:`ops/OUTCOME_CARRYING_ARTIFACTS.json`。其上列出的任何路径都不得读取。
 - **盲席位不得检索仓库**:`BLIND_SEAT_MAY_NOT_SEARCH_THE_REPOSITORY`。本次是定向复审而非盲审,但检索仍限于 §0 表内路径及其直接依赖;不得漫游 `ops/`。
 - **允许的 outcome-clean 入口点**:`ops/RECOVERY_ANCHOR.md`。
-- 逐名点出的隔离锚点(不得读取):
-  `EXPOSURE_LEDGER.md` ·
-  `ops/EXPOSURE_LEDGER.md` ·
-  `ops/outcome_quarantine/DECISION_PACKET_ND2_ND3.md` ·
-  `ops/outcome_quarantine/MC_DR5_BUILD_PACKET.md` ·
-  `ops/outcome_quarantine/MC_FACTORY_BOUNDARY_STAGE_I.md` ·
-  `ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md` ·
-  `ops/outcome_quarantine/ND2_ND3_FABLE_DECISION_PROMPT.md` ·
-  `ops/outcome_quarantine/ND2_ND3_RULING_REVIEW_FINDINGS.md` ·
-  `ops/outcome_quarantine/RULING_FABLE_FOUR_OPEN_2026-08-26.md` ·
-  `ops/outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md` ·
-  `ops/outcome_quarantine/S0_T001_RESULT_DECISION_ADDENDUM.md` ·
-  `ops/outcome_quarantine/S0_T001_RESULT_REVEAL_ATTESTATION.md`
+- 逐名点出的隔离锚点。【OFF-LIMITS】—— 下列每一条都是 outcome-carrying,**不得读取**:
+
+【OFF-LIMITS】以下 12 条全部禁读(outcome-carrying)
+
+```
+EXPOSURE_LEDGER.md
+ops/EXPOSURE_LEDGER.md
+ops/outcome_quarantine/DECISION_PACKET_ND2_ND3.md
+ops/outcome_quarantine/MC_DR5_BUILD_PACKET.md
+ops/outcome_quarantine/MC_FACTORY_BOUNDARY_STAGE_I.md
+ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md
+ops/outcome_quarantine/ND2_ND3_FABLE_DECISION_PROMPT.md
+ops/outcome_quarantine/ND2_ND3_RULING_REVIEW_FINDINGS.md
+ops/outcome_quarantine/RULING_FABLE_FOUR_OPEN_2026-08-26.md
+ops/outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md
+ops/outcome_quarantine/S0_T001_RESULT_DECISION_ADDENDUM.md
+ops/outcome_quarantine/S0_T001_RESULT_REVEAL_ATTESTATION.md
+```
 
 这些文件携带 S0-T001 的**结果**。本次复审只关心执行安全与数据身份,不需要任何
 结果数字;读到它们会烧掉一个可用于未来独立验证的席位。
