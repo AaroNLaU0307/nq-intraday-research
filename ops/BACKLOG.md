@@ -33,7 +33,7 @@ Candidates examined at P1 and **not admitted**, with the reason (so the table is
 | id | item | class | source | disposition | notes |
 |---|---|---|---|---|---|
 | B-01 | Tier-C test retirement by behaviour (subject archived / property moved / replacement proven), one at a time | governance | converged §6 (F12), Aaron boundary "no bulk retirement" | post-roadmap, owner window | list in proposal v1 §6.3 is a starting inventory, not a verdict |
-| B-02 | Physical test-directory moves (`tests/validity`, `tests/safety`, `tests/governance`) | governance | converged RM6 | post-roadmap | markers carry the tiers until then (the tier map `tiers.py` under `tests/`, landing at P4) |
+| B-02 | Physical test-directory moves (`tests/validity`, `tests/safety`, `tests/governance`) | governance | converged RM6 | post-roadmap | markers carry the tiers until then (`tests/tiers.py`; populated at P4) |
 | B-03 | `ops/` archive with a generated index, delete nothing | governance | converged RM7 | post-roadmap | freeze on new instances of retired kinds is in force now (DEC-0006 I7) |
 | B-04 | ARCHIVE-CODE-6 amendment (`archived_bytes_deleted`) — decide or drop | guard-of-a-guard | `AMENDMENT_ARCHIVE_CODE_6_2026-09-05.md` (STATUS=PROPOSED), `SEAT_RESULT_ARCHIVE_CODE_6_FABLE_2026-09-05.md` | owner decision when convenient; fail-closed meanwhile | first-run unreachable; S002–S004 ran with a non-empty archive without needing it |
 | B-05 | Second physical volume / offline bundle for the registry and sealed evidence (charter invariant 10; former WAITING_ON_AARON A4, plan C1/C6) | T4 (disk loss) | `WAITING_ON_AARON.md` A4 | when a second volume exists | registry in git + witnesses; archive mirror; data re-purchasable |

@@ -34,7 +34,7 @@ Rounds: HOLD → builder fixes → ONE re-review covering the fix plus a builder
 | Change to a tier-B authorization gate or leakage-sensitive code | fresh Sol | claim-blind | 1 round |
 | Promotion, `falsified`, public release, other QROS §7 triggers | Fable | as needed | 1 wave ≤ 3 workflows; +1 only for unresolved Critical/High |
 
-Not dispatched by default: maintenance commits, ledger appends, refactors, document edits, enum questions, wording, a review of a review absent contamination. Every review outside the three L6-recognised ones is a one-page brief (template `VERIFICATION_BRIEF_TEMPLATE.md` under `ops/templates/`, landing at P3), not a packet.
+Not dispatched by default: maintenance commits, ledger appends, refactors, document edits, enum questions, wording, a review of a review absent contamination. Every review outside the three L6-recognised ones is a one-page brief (`ops/templates/VERIFICATION_BRIEF_TEMPLATE.md`), not a packet.
 
 ## 3. Two verification obligations, never confused
 
@@ -45,9 +45,9 @@ One dispatch may satisfy both when its brief covers both and its level is outcom
 
 ## 4. Contamination protocol (DEC-0007)
 
-1. The dispatcher builds a clean external evidence directory with the verifier-directory builder script (`build_verifier_dir.py` under `scripts/`, landing at P3) from an explicit spec: pre-freeze files first; post-freeze comparands only after the verifier has written `FREEZE_MARKER.json`. Nothing else: no registry, no `ops/`, no `tests/`, no prior verifier directories, no memory files.
+1. The dispatcher builds a clean external evidence directory with `scripts/build_verifier_dir.py` from an explicit spec: pre-freeze files first; post-freeze comparands only after the verifier has written `FREEZE_MARKER.json`. Nothing else: no registry, no `ops/`, no `tests/`, no prior verifier directories, no memory files.
 2. The verifier works only inside that directory. Before freeze: no git, no repository listing, no search, no reads outside the pre-freeze set. Executing an allowlisted module may import its dependencies; that is execution, not inspection, and is recorded in the attestation.
-3. Phase order is fixed: custody → blind recomputation → FREEZE (result written, hashed, marker written) → post-freeze comparands delivered → compare → attestation with the header template (`ATTESTATION_HEADER_TEMPLATE.md` under `ops/templates/`, landing at P3).
+3. Phase order is fixed: custody → blind recomputation → FREEZE (result written, hashed, marker written) → post-freeze comparands delivered → compare → attestation with the header in `ops/templates/ATTESTATION_HEADER_TEMPLATE.md`; the dispatch itself follows `ops/templates/DISPATCH_TEMPLATE.md`.
 4. Exposure before freeze (anything outside the pre-freeze set): STOP, row on the seat axis (`ops/REVIEWER_EXPOSURE_LOG.md`), discard the post-exposure outputs. The builder may dispatch **exactly one** fresh retry with a rebuilt directory without asking Aaron. A second contamination on the same verification target goes to Aaron (checkpoint 6).
 5. The result enters the registry as the family's verified/failed row citing the attestation hash and the frozen-result hash. The verifier commits nothing to the framework repository.
 
