@@ -733,9 +733,13 @@ class PlannedEvent:
         object.__setattr__(self, "fields", MappingProxyType(dict(self.fields)))
 
 
-def _check_stage_and_gate(stage: str, gate_name: str) -> None:
+def _check_stage(stage: str) -> None:
     if stage not in sc.STAGE_ENUM:
         raise SupplementRunnerError("stage_outside_closed_enum", stage)
+
+
+def _check_stage_and_gate(stage: str, gate_name: str) -> None:
+    _check_stage(stage)
     if gate_name not in sc.GATE_NAME_ENUM:
         # §D.3.2 F1: "GATE_NAME_ENUM=CLOSED … 未定义即不得发射".
         raise SupplementRunnerError("gate_outside_closed_enum", gate_name)
@@ -749,8 +753,23 @@ def plan_failure_event(failure: GateFailure, *, supplement_id: str,
                        attempts_dir: str = "", residue_path: str = ""
                        ) -> PlannedEvent:
     """F1 vs F2 is decided by the P3 BOUNDARY, never by the stage name
-    (§D.3.2 P3: `BOUNDARY=P3 是 pre-start / post-start 的唯一分界`)."""
-    _check_stage_and_gate(failure.stage, failure.gate_name)
+    (§D.3.2 P3: `BOUNDARY=P3 是 pre-start / post-start 的唯一分界`).
+
+    THE GATE NAME IS CHECKED ON THE F1 SIDE ONLY, and that is a repair, not
+    a relaxation. `GATE_NAME_ENUM` is closed and stays closed for F1, whose
+    ratified fields INCLUDE `gate_name`. F2's do not: a post-start failure
+    records stage, error class, incident and residue, and no gate.
+    Demanding a gate name from both meant a real post-start failure that
+    did not come from a gate could not be planned at all -- measured on
+    2026-09-06, when the N09 v2 run failed at C_BUILD_1 with
+    `c_build_1_not_empty` (a checkpoint side-effect code, not a gate) and
+    this function refused with `gate_outside_closed_enum`. The F2 row had
+    to be written by hand. The fix is to stop asking F2 for a field it does
+    not carry -- NOT to admit `c_build_1_not_empty` into the gate enum,
+    which would make a checkpoint assertion masquerade as a gate. The stage
+    enum still binds both sides.
+    """
+    _check_stage(failure.stage)
     if not sc.SUPPLEMENT_ID_PATTERN.match(supplement_id):
         raise SupplementRunnerError("supplement_id_pattern", supplement_id)
     if has_p3:
@@ -763,6 +782,8 @@ def plan_failure_event(failure: GateFailure, *, supplement_id: str,
             {"supplement_id": supplement_id, "stage": failure.stage,
              "error_class": failure.error_class, "incident_id": incident_id,
              "residue_path": residue_path, "residue_preserved": "YES"})
+    # F1 CARRIES `gate_name`, so F1 is where the closed enum binds.
+    _check_stage_and_gate(failure.stage, failure.gate_name)
     if not attempts_dir:
         raise SupplementRunnerError("pre_start_attempts_dir_required",
                                     "F1 must name the attempts directory")

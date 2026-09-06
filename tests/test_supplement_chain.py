@@ -435,7 +435,16 @@ class TestTheGateFirstPath(unittest.TestCase):
             with self.assertRaises(chain.ChainRefusal) as caught:
                 chain.run_supplement_gate_first(
                     _base_ctx(), planned=mock.Mock(
-                        runs_target=Path("no-such-directory-anywhere")),
+                        runs_target=Path("no-such-directory-anywhere"),
+                        # The chain reads this before the P3 append now:
+                        # the pre-P3 residue check snapshots both of this
+                        # run's planned leaves. A bare Mock made the
+                        # stand-in kinder than production and the test died
+                        # in `Path()` rather than at the refusal it names.
+                        # Both paths are absent, so the check passes and
+                        # the run-directory refusal is still what is under
+                        # test.
+                        archive_target=Path("no-such-archive-anywhere")),
                     prepared=object(), universe=object(),
                     vol_method=object(), flag_by_date={},
                     event_na_mapping="none", incident_id=fx.INC,

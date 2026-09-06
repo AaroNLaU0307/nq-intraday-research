@@ -169,7 +169,19 @@ def run_supplement_chain(base_ctx, *, planned, authority, prepared, universe,
             vol_method=vol_method, flag_by_date=flag_by_date,
             event_na_mapping=event_na_mapping,
             expected_day_set=authority.expected_day_set,
-            runs_root=out_dir, archive_root=planned.archive_parent)
+            # `archive_target`, NOT `archive_parent`. C_BUILD_1 asks
+            # whether THIS RUN's namespaces are clear before the first
+            # write, and the runs side has always been the run's own leaf.
+            # The archive side was the whole governed tree, which is empty
+            # exactly once -- for the first supplement ever archived. The
+            # N09 v2 run measured the consequence: MC-DS-S001's permanent
+            # sealed artifact refused MC-DS-S002 at C_BUILD_1, after the P3
+            # had already been spent. A historical sibling leaf is not this
+            # run's residue. `archive_parent` is still what the ARCHIVE
+            # STEP is passed at moment 3, and what the moment-3
+            # before/after comparison watches -- that one protects siblings
+            # from deletion and genuinely wants the parent.
+            runs_root=out_dir, archive_root=planned.archive_target)
     except Exception as exc:                       # noqa: BLE001
         code = getattr(exc, "code", None)
         if code is None:
@@ -328,6 +340,32 @@ def run_supplement_gate_first(base_ctx, *, planned, prepared, universe,
     # failure here means `make_run_directory` is never reached: no directory,
     # no supplement byte. That is why the call sits on this line and not one
     # line later.
+    # PRE-P3 RESIDUE CHECK, and it is the last thing that can still cost
+    # nothing. A PURE READ of this run's own two planned namespaces, using
+    # the SAME predicate C_BUILD_1 uses -- one snapshot function, one
+    # emptiness refusal, one code -- so the early check and the late one
+    # cannot drift into disagreeing.
+    #
+    # WHY IT SITS HERE. The N09 v2 run appended P3, created its directory,
+    # and only then met `c_build_1_not_empty` -- a filesystem fact that was
+    # readable before any of it. One P2 authorizes one start; discovering
+    # this after P3 burns it. Refusing here writes no registry row, creates
+    # no directory, and produces no supplement byte.
+    #
+    # IT DOES NOT REPLACE C_BUILD_1. The late assertion still runs and
+    # still refuses, and it carries the before/after half this cannot: a
+    # pure read before the run says nothing about bytes appearing DURING
+    # it.
+    try:
+        _dsp.assert_current_run_namespaces_are_clear(
+            runs_leaf=planned.runs_target,
+            archive_leaf=planned.archive_target)
+    except Exception as exc:                       # noqa: BLE001
+        code = getattr(exc, "code", None)
+        if code is None:
+            raise
+        raise ChainRefusal("C_BUILD_1", code, str(exc)) from exc
+
     append_run_started()
 
     make_run_directory(planned.runs_target)

@@ -263,7 +263,17 @@ class TestFailClosedLeavesNothingBehind(unittest.TestCase):
                                   return_value=object()):
             with self.assertRaises(rb.AppendRefused):
                 ch.run_supplement_gate_first(
-                    ctx, planned=mock.Mock(runs_target=Path("no-such-dir")),
+                    ctx, planned=mock.Mock(
+                        runs_target=Path("no-such-dir"),
+                        # Named because the chain now READS it before the
+                        # P3 append: the pre-P3 residue check snapshots
+                        # this run's two planned leaves. A `Mock` here made
+                        # the stand-in kinder than production and the test
+                        # died in `Path()` instead of at the refusal it is
+                        # about. Both paths are absent, which snapshots as
+                        # empty -- so the check passes and the refusal
+                        # under test is still the P3 append's.
+                        archive_target=Path("no-such-archive-dir")),
                     prepared=object(), universe=object(),
                     vol_method=object(), flag_by_date={},
                     event_na_mapping="none", incident_id="INC-0123456789ab",

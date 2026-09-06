@@ -116,6 +116,16 @@ def run_c_build(*, authority, prepared, universe, vol_method: str,
                 archive_root: Path | None = None) -> CBuildOutcome:
     """Derive the rows, build the product, and hold C_BUILD_1's assertion.
 
+    BOTH ROOTS ARE THIS RUN'S OWN NAMESPACES, not the governed roots they
+    sit under. `archive_root` used to be handed `planned.archive_parent`
+    while `runs_root` got `planned.runs_target`, so the archive half asked
+    whether the WHOLE archive tree was empty. It is empty exactly once, for
+    the first supplement ever archived; MC-DS-S001's sealed artifact then
+    made C_BUILD_1 unsatisfiable for every successor, and the N09 v2 run
+    proved it after spending its P3. The caller now passes
+    `planned.archive_target`.
+
+
     Returns an outcome rather than raising FOR A CLASSIFIED REFUSAL,
     because a GATE reports it and the gate needs to know which one it is.
     Raising there would make every C_BUILD failure arrive as whatever
@@ -228,6 +238,41 @@ def _declared_digest(product) -> str:
         "product_carries_no_rows_digest", type(product).__name__)
 
 
+def _refuse_if_not_empty(snapshot: tuple, label: str) -> None:
+    """C_BUILD_1's emptiness half, in ONE place.
+
+    Split out so the pre-P3 check and C_BUILD_1 cannot drift apart: they
+    raise the same code with the same message because they call the same
+    function, not because two implementations happen to agree today."""
+    if snapshot:
+        raise dsr.DayStrataRowsError(
+            "c_build_1_not_empty",
+            f"{label}: {len(snapshot)} supplement file(s) present before the "
+            "first write; C_BUILD_1 requires the set to be empty")
+
+
+def assert_current_run_namespaces_are_clear(*, runs_leaf, archive_leaf) -> None:
+    """PURE READ: neither of THIS RUN's two namespaces already holds
+    supplement bytes. Creates nothing, writes nothing, appends nothing.
+
+    WHY IT EXISTS, and it is not a second copy of C_BUILD_1. The N09 v2 run
+    on 2026-09-06 spent its P3 and only then discovered a filesystem
+    condition that was readable all along -- one authorization burned on a
+    fact nobody had looked at. This is the half of C_BUILD_1 that a pure
+    read can decide, hoisted to before the P3 append so the same refusal
+    arrives while nothing has been consumed. C_BUILD_1 still runs later and
+    still refuses: this is an early detector, not a replacement, and the
+    two share `supplement_bytes_snapshot` and `_refuse_if_not_empty` so
+    there is no second algorithm to drift.
+
+    BOTH ARGUMENTS ARE THIS RUN'S OWN LEAVES. Passing an archive PARENT
+    here would reintroduce the very bug this repair closes.
+    """
+    for label, root in (("runs_leaf", runs_leaf),
+                        ("archive_leaf", archive_leaf)):
+        _refuse_if_not_empty(supplement_bytes_snapshot(root), label)
+
+
 def _assert_c_build_1(before: tuple, after: tuple, label: str) -> None:
     """R3 §1's C_BUILD_1: byte-identical across the gates, AND empty.
 
@@ -239,11 +284,7 @@ def _assert_c_build_1(before: tuple, after: tuple, label: str) -> None:
             "c_build_1_bytes_moved",
             f"{label}: the supplement byte set changed during C_BUILD_1 "
             f"(before {len(before)} file(s), after {len(after)})")
-    if after:
-        raise dsr.DayStrataRowsError(
-            "c_build_1_not_empty",
-            f"{label}: {len(after)} supplement file(s) present before the "
-            "first write; C_BUILD_1 requires the set to be empty")
+    _refuse_if_not_empty(after, label)
 
 
 # ===========================================================================
