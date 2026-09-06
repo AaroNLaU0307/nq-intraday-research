@@ -4,7 +4,7 @@
 RECORD_TYPE     = RESEARCH_STATE (QROS-CF v2 §2.2; one page; rewritten in place, history in git)
 OUTCOME_CLEAN   = YES — never quarantined; restates no verdict, exposure count or revealed value
 STAGE_AUTHORITY = this page (ITSF-only, DEC-0003). `qros check` validates seal / freshness / packet integrity and is not the stage authority
-UPDATED         = 2026-09-07 (P1 of the QROS-CF implementation window)
+UPDATED         = 2026-09-07 (P5 of the QROS-CF implementation window)
 ```
 
 ## 0. Who is reading this
@@ -20,9 +20,9 @@ UPDATED         = 2026-09-07 (P1 of the QROS-CF implementation window)
 | QROS-CF stage | **S4 RUN** for the MC pipeline (QROS alias C/E): sealed preregistration, build complete through N09, real-data runs in progress |
 | Preregistration | `STUDY_0_PREREGISTRATION.md`, sealed (`qros check` SEAL=VERIFIED at the revision named in `qros-state.yaml`) |
 | Last completed unit | N09 — MC-DS-S004 terminal at P5 (registry seq 33, strict-blind headline replay PASS, 16/16 cells), framework HEAD `7a5570f` |
-| Next unit | N10 (run family to be determined at P5 of the current window; definition recovered from the master plan under DEC-0005) |
+| Next unit | **N10 is not a run.** Its master-plan definition (DEC-0005 bounded read, P5): "独立验证＋attestation＋pin（两 commit 序列）", depends on N09, kind 工程＋Codex, structural. The independent verification and the attestation exist (registry seq 33, strict-blind P5 PASS, attestation `0b5d9382…`); the "pin" — formerly a two-commit registration of the rows into the framework — is now carried by the I3 binding (`registry_integrity.current_dependency_check`, verified live at P4). **Whether N10 is thereby closed is Aaron's call (P6 item).** N11 = GRID/K wiring (GridReplayAuthority + KReplayEvidence), depends on N07 and N10, structural, no run. N13 = the full MC runner, depends on N11, N-D3, N12; its MC_RUN_* events are the deferred ND-3 tokens — the first family that needs the QROS-CF run grammar, to be built inside N13's S3 with T-F02/T-F11 fixtures before its PROPOSED row |
 | Roadmap | N10 → N11 → N13 full MC → reveal / decision (owner checkpoint 3) → candidate strategy build → validation → final conclusion |
-| Governance | QROS-CF implementation window OPEN (DEC-0006), scope I1–I7, closes at the first N10 AUTHORIZED row |
+| Governance | QROS-CF implementation window: I1–I7 implemented (P0–P5 committed); DEC-0006 closes it "at the first N10 AUTHORIZED row" — N10 has no AUTHORIZED row because it is not a run, so the closing event is Aaron's to name at P6 (recommendation: the first AUTHORIZED row of the first run after N10, i.e. N13's, or an explicit closing row in DECISIONS.md) |
 
 ## 2. What exact research question are we answering
 
@@ -44,7 +44,7 @@ Only rows in `ops/BACKLOG.md` §1 `CURRENT_BLOCKERS`. A row is admitted only if 
 
 ## 5. What evidence is required to finish this stage
 
-- Each of N10, N11, N13: `PROPOSED` → Aaron's `AUTHORIZED` (binding the governed-execution identity and the output root) → `STARTED` → `SEALED` with a byte-identical archive copy → independent run-identity verification per declared scope (`ops/REVIEWER_CONTRACT.md` §3), recorded in the registry.
+- N10 (verification + attestation + pin): closed by registry seq 33 and the I3 binding if Aaron so decides (B-21). N11 (GRID/K wiring): tier A+B green at the governed-execution identity, synthetic end-to-end. N13 (the full MC runner): `PROPOSED` → Aaron's `AUTHORIZED` (binding the governed-execution identity and the output root) → `STARTED` → `SEALED` with a byte-identical archive copy → independent run-identity verification per declared scope (`ops/REVIEWER_CONTRACT.md` §3), recorded in the registry under the run grammar built inside N13's S3.
 - Every consequential artifact recomputed inside some VERIFIED scope before the reveal reads it.
 - The final Checkpoint-0 statistic: outcome-blind Stage I verification with the sealed preregistration's Lineage and the A2 record in the verifier's pre-freeze set, frozen recomputation before the sealed output is opened.
 
@@ -58,7 +58,7 @@ Project-finishing rule (QROS-CF v2 §8, verbatim): if the current research quest
 
 - Engineering decisions: the builder (Aaron's delegation of 2026-08-29), recorded as rows, never approved.
 - Owner checkpoints (QROS-CF v2 §7.4 + §2.3): (1) seal a FULL preregistration; (2) `AUTHORIZED` row for each real-data run; (3) reveal; (4) retire / re-research after a consequential negative or a third post-start failure for one purpose; (5) promote / falsify / not-promote, and any change to cost model, primary metric, or sample split; (6) verifier re-dispatch beyond the one retry, or any review beyond budget; (7) open a governance window. Owner hold / revocation rows: Aaron writes them himself in the registry.
-- **Next owner act:** checkpoint 2 for N10 — after this window presents its implementation result (P6 stops before that row).
+- **Next owner act (P6):** review the window's implementation report; decide whether N10 is closed by seq 33 + the I3 binding; name the window's closing event; dispatch the pending P2 gate-change review (DEC-0011). No AUTHORIZED row is due for N10; the next real-data authorization is N13's.
 
 ## 8. When is an independent seat genuinely required
 

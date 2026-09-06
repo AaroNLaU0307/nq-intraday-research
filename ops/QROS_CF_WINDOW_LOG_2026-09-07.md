@@ -141,6 +141,24 @@ supplement gate    no in-gate pytest exists for the supplement family (B-12); th
 
 T-F15 (selection): a governance file selects 0 tests under `-m "not governance"` and > 0 without; a validity file and an unmapped file select the same count with and without; the S0 gate carries exactly that deselection (`tests/test_tier_selection.py`).
 
-## P5 — N10 run family (pending)
+## P5 — the N10 determination (DEC-0005 bounded read)
+
+Read mechanically by a scratchpad extractor: only DAG table rows whose node id is N10/N11/N13 and sections headed by one of them; every extracted line scanned against the six outcome patterns of `tests/test_review_artifacts_are_outcome_clean.py` before display. Result: 3 table rows, 0 headed sections, 0 lines redacted. Research-axis row appended to `ops/EXPOSURE_LEDGER.md` (NO_OUTCOME, 数量=0); the root ledger untouched (OD-CF-4); `qros-state.yaml` exposure_record hash refreshed; `tests/test_exposure_ledger_migration.py` converted to prefix-identity / forward-only / monotone invariants (B-19 closed).
+
+```
+N10 | depends N09       | 独立验证＋attestation＋pin（两 commit 序列） | 工程＋Codex | structural
+N11 | depends N07, N10  | GRID/K 接线（GridReplayAuthority＋KReplayEvidence） | 工程 | structural
+N13 | depends N11, N-D3, N12 | 完整 MC runner | 工程 | none
+```
+
+**Exact N10 family: none — N10 is not a run.** It is the independent verification of N09's sealed supplement, its attestation, and the "pin" of both into the framework by a two-commit sequence (the after-the-fact registration pattern QROS-CF retired). The verification and attestation exist (registry seq 33, strict-blind P5 PASS, attestation sha256 `0b5d9382…`, witness `WITNESS_P5_S004_APPENDED_2026-09-06.json`); the pin is now the I3 binding, verified live at P4. Whether that closes N10 is Aaron's decision (B-21).
+
+**Whether a new grammar is required: not for N10 (no events), not for N11 (wiring, no run). Required for N13**, whose MC_RUN_* events are the deferred ND-3 tokens refused by name today; per DEC-0010 P5 it is built inside N13's S3 with T-F02/T-F11 fixtures before N13's PROPOSED row, and not in this window. The existing supplement grammar stays frozen.
+
+Consequence for DEC-0006's closing event ("the first N10 AUTHORIZED row"): it cannot occur; the window's close needs Aaron's naming at P6.
+
+## P6 — STOP before any AUTHORIZED row
+
+No registry row of any kind was appended by this window. No N10, N11 or N13 work was started. The implementation report is presented to Aaron.
 
 ## P6 — STOP before the first N10 AUTHORIZED row (pending)

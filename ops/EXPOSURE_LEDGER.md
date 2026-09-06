@@ -12,7 +12,7 @@ CREATED=2026-08-24，依 Aaron 逐字指示「直接按你建议的做吧，能�
 「rows never edited or reordered」。**重写它会违反它自己的纪律**，所以没有重写。
 
 本件是**合规承载件**：逐行转录历史台账，权威仍在历史台账。两者行数与计数必须
-恒等，由 `tests/test_exposure_ledger_migration.py` 机械守着。
+恒等**至历史前缀（首七行）**；自 2026-09-07（OD-CF-4，DEC-0004）起仓根台账冻结为历史，研究轴新行只追加于本件。前缀恒等与只增不减由 `tests/test_exposure_ledger_migration.py` 机械守着。
 
 **本件的 `note` 只放指针，不复述被指向内容。** 历史台账的某些行内嵌揭盲后
 摘要（故两者均在 `ops/OUTCOME_CARRYING_ARTIFACTS.json` 隔离名单上）；转录时
@@ -46,5 +46,6 @@ REVEALED_TARGET_METRIC   -> TARGET_METRIC 看了预注册判定统计量或其�
 | 2026-08-14 | HISTORICAL_CUMULATIVE | NO_OUTCOME | completion marker for the same reveal | EXPOSURE_LEDGER.md row 5 | legacy 数量=0；与 REVEAL_STARTED 配对，不重复计数 |
 | 2026-08-14 | HISTORICAL_CUMULATIVE | REVEALED_AGGREGATE | six interpretive corrections over the same already-revealed results | EXPOSURE_LEDGER.md row 6 · ops/S0_T001_RESULT_DECISION_ADDENDUM.md | legacy 数量=0；零新候选关系。内容见指针，不在此复述 |
 | 2026-08-24 | HISTORICAL_CUMULATIVE | REVEALED_AGGREGATE | builder read the addendum summary embedded in the legacy ledger | EXPOSURE_LEDGER.md row 7 · ops/INCIDENT_HANDOFF_ARTIFACTS_CARRY_OUTCOME_20260824.md | legacy 数量=0；outcome_seen=YES，builder 自此非 outcome-blind。内容见指针 |
+| 2026-09-07 | HISTORICAL_CUMULATIVE | NO_OUTCOME | builder read 3 DAG table rows (N10, N11, N13) extracted mechanically; 0 headed sections matched; 0 lines redacted by the six outcome patterns | ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md (OFF-LIMITS) §N10/N11/N13 rows and headed sections only; extract scanned with the six outcome patterns before reading; ops/DECISIONS.md DEC-0005 | 数量=0；DEC-0005（OD-CF-5 甲）授权的有界读取；未见 verdict、累计计数或任何揭盲值；builder 自 2026-08-24 起本已非 outcome-blind（row 7） |
 累计 researcher_exposure_count：1575，全部来自 2026-08-14 那一行
 （其余各行贡献 0）。此数与历史台账逐字一致。
