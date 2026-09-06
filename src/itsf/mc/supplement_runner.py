@@ -116,6 +116,19 @@ class GateContext:
     # A `day_strata_pipeline.CBuildOutcome`, or None. None is refused by
     # those gates rather than passed: see `_classify_c_build_1`.
     c_build_outcome: object | None = None
+    # QROS-CF I1 (DEC-0006, Condition A). Measured by the precheck assembler
+    # and the single-read context builder; both gates below read them.
+    #   execution_identity  an `itsf.execution_identity.IdentityComparison`
+    #                       when the authorized commit differs from HEAD;
+    #                       None when they are equal (nothing to compare)
+    #                       or when no single live authorization exists.
+    #   environment_pinned  True only when the interpreter version, every
+    #                       locked package version and the override
+    #                       variables were MEASURED to match the pins.
+    #                       None means unmeasured, and the gate refuses it.
+    execution_identity: object | None = None
+    environment_pinned: bool | None = None
+    environment_detail: str = ""
 
 
 @_dc.dataclass(frozen=True, slots=True)
@@ -301,6 +314,13 @@ def _live_p2(chain) -> object | None:
 
 
 def _g_live_authorization_unique(ctx: GateContext) -> None:
+    """Exactly one live P2, AND no owner hold in force (QROS-CF I2).
+
+    The hold check lives in this gate rather than a fourteenth one because
+    the thirteen A_PRECHECK names are the ratified enum; "is there exactly
+    one authorization Aaron has not suspended" is one question."""
+    from . import owner_control as _oc
+
     live = getattr(ctx.chain, "live_authorizations", ())
     if len(live) == 0:
         _fail("A_PRECHECK", "live_authorization_unique",
@@ -309,6 +329,18 @@ def _g_live_authorization_unique(ctx: GateContext) -> None:
     if len(live) > 1:
         _fail("A_PRECHECK", "live_authorization_unique", "SupplementRunnerError",
               f"{len(live)} live authorizations — at most one is legal")
+    try:
+        holds = _oc.active_holds(ctx.registry_text or "", ctx.supplement_id)
+    except _oc.OwnerControlRefusal as exc:
+        # An owner row nobody can read must never read as "no hold".
+        _fail("A_PRECHECK", "live_authorization_unique", "SupplementRunnerError",
+              f"owner-control row unreadable, refusing: {exc.code}: {exc.detail}")
+    if holds:
+        last = holds[-1]
+        _fail("A_PRECHECK", "live_authorization_unique",
+              "SupplementRunNotAuthorized",
+              f"{_oc.OWNER_HOLD} in force (seq {last.seq}, scope "
+              f"[{last.scope}], {last.utc}): {last.reason}")
 
 
 def _g_authorization_actor(ctx: GateContext) -> None:
@@ -320,15 +352,41 @@ def _g_authorization_actor(ctx: GateContext) -> None:
 
 
 def _g_authorized_commit_matches_head(ctx: GateContext) -> None:
+    """The authorized EXECUTION matches the current one (QROS-CF I1).
+
+    Until 2026-09-07 this compared the 40-hex commits and nothing else, so
+    a README commit voided a live authorization (MC-DS-S001: three P2S rows,
+    four owner signatures for one run). The name is kept -- it is the
+    ratified gate enum -- and the comparison is now the governed-execution
+    identity of `itsf.execution_identity`: the blob OIDs of src/, scripts/,
+    gate1/, the lockfile, .python-version and every tier A/B test file, at
+    the authorized commit versus HEAD. Equal commits are the fast path;
+    unequal commits pass ONLY on a measured, equal identity. The same gate
+    also requires the environment pin (lockfile, interpreter, override
+    variables) to have been MEASURED true: None is refused, not passed."""
     row = _live_p2(ctx.chain)
     commit = (getattr(row, "authorized_commit", "") or "")
     if not sc.HEX40_RE.match(commit):
         _fail("A_PRECHECK", "authorized_commit_matches_head",
               "SupplementRunnerError", "authorized commit is not 40-hex")
     if commit != ctx.head_commit:
+        ident = ctx.execution_identity
+        if ident is None:
+            _fail("A_PRECHECK", "authorized_commit_matches_head",
+                  "SupplementRunnerError",
+                  f"authorized {commit[:12]} != HEAD {ctx.head_commit[:12]} "
+                  "and no governed-execution identity comparison was "
+                  "measured (unmeasured is refused, not assumed equal)")
+        if not getattr(ident, "matches", False):
+            _fail("A_PRECHECK", "authorized_commit_matches_head",
+                  "SupplementRunnerError",
+                  f"authorized {commit[:12]} != HEAD {ctx.head_commit[:12]}; "
+                  f"{getattr(ident, 'detail', 'identity differs')}")
+    if ctx.environment_pinned is not True:
         _fail("A_PRECHECK", "authorized_commit_matches_head",
               "SupplementRunnerError",
-              f"authorized {commit[:12]} != HEAD {ctx.head_commit[:12]}")
+              "execution environment not pinned: "
+              + (ctx.environment_detail or "environment_pinned was not measured"))
 
 
 def _g_output_root_declared(ctx: GateContext) -> None:
@@ -1304,6 +1362,29 @@ def run_supplement_production(supplement_id: str = sc.FIRST_SUPPLEMENT_ID,
         # this timestamp. Aaron authorized a `SUPPLEMENT_RUN_STARTED` append
         # and nothing else, so there is no event-type parameter to pass --
         # `append_run_started` writes one token and refuses everything else.
-        append_run_started=lambda: _rb.append_run_started(
-            supplement_id, head_commit=ctx.head_commit,
-            utc_stamp=_registry_utc_now()))
+        append_run_started=lambda: _append_run_started_after_seam_recheck(
+            supplement_id, ctx))
+
+
+def _append_run_started_after_seam_recheck(supplement_id: str,
+                                           ctx: GateContext) -> str:
+    """The first-write seam, re-verified (QROS-CF I1, Condition A).
+
+    A_PRECHECK measured HEAD, the governed tree and the environment; the
+    Development read that follows takes minutes. This re-checks all three
+    immediately before the ONE write that starts the run, so a commit, an
+    edit to a governed file, or an environment change in between refuses
+    here -- with no directory and no supplement byte behind it. The owner
+    hold is re-read by `append_run_started` itself on the fresh registry
+    snapshot it takes."""
+    from itsf import execution_identity as _ei
+    from . import registry_boundary as _rb
+
+    try:
+        _ei.seam_recheck(ctx.head_commit)
+    except _ei.SeamRefused as exc:
+        raise SupplementRunNotAuthorized(
+            f"{supplement_id}: refused at the first-write seam: "
+            f"{exc.code}: {exc.detail}") from exc
+    return _rb.append_run_started(supplement_id, head_commit=ctx.head_commit,
+                                  utc_stamp=_registry_utc_now())

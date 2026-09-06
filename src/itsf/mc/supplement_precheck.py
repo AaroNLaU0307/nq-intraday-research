@@ -111,6 +111,12 @@ def assemble_precheck_context(supplement_id: str = sc.FIRST_SUPPLEMENT_ID,
         gaps.append("frozen_hashes_ok could not be measured: %s: %s"
                     % (type(exc).__name__, exc))
 
+    # QROS-CF I1: the governed-execution identity (only when the authorized
+    # commit differs from HEAD) and the environment pin, MEASURED here so
+    # the gate reads an answer and never a default.
+    from itsf import execution_identity as _ei
+    identity, environment = _ei.measure_for_context(head, chain)
+
     ctx = sr.GateContext(
         supplement_id=supplement_id,
         head_commit=head,
@@ -122,6 +128,9 @@ def assemble_precheck_context(supplement_id: str = sc.FIRST_SUPPLEMENT_ID,
         second_copy_flag=_guards.SECOND_COPY_FLAG,
         frozen_hashes_ok=frozen_ok,
         chain=chain,
+        execution_identity=identity,
+        environment_pinned=environment.pinned,
+        environment_detail=environment.detail,
         # The stamp a run would use. `supplement_subtree_absent`
         # plans `<supplement_id>_<UTC>` and refuses without it --
         # correctly, since it cannot check a directory whose name it

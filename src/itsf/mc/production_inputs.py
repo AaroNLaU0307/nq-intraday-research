@@ -200,6 +200,13 @@ def build_session_schedule(start: str, end: str, *, bars_by_date=None,
         close_minute[day.strftime("%Y-%m-%d")] = close.hour * 60 + close.minute
 
     root = verify_authorized_job_dir(job_dir)
+    # QROS-CF I1 (Condition A): condition.json decides the vendor-degraded
+    # set, it is listed in the AUTHORIZED manifest with a sha256, and until
+    # 2026-09-07 nothing compared the two. Verified before it is read, the
+    # same way every .dbn.zst file is.
+    from ..data import manifests as _manifests
+    _manifests.verify_file_against_manifest(
+        root / CONDITION_JSON_NAME, _manifests.load_manifest(root))
     condition = json.loads(
         (root / CONDITION_JSON_NAME).read_text(encoding="utf-8"))
     degraded = frozenset(r["date"] for r in condition

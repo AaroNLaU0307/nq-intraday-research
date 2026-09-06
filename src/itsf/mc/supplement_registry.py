@@ -875,8 +875,15 @@ def _check_field_values(row, short_id, sid, fields) -> Refusal | None:
             return bad("digest_field_not_64hex",
                        f"{key}={value!r} is not a 64-hex digest")
         if key in _HEX40_FIELDS and not sc.HEX40_RE.match(value):
-            return bad("commit_field_not_40hex",
-                       f"{key}={value!r} is not a full 40-hex commit")
+            # QROS-CF I2: an owner revocation names no successor commit.
+            # Only that exact pair is admitted; NONE anywhere else is the
+            # same refusal it always was.
+            revocation = (key == "successor_authorized_commit"
+                          and value == REVOCATION_NO_SUCCESSOR
+                          and fields.get("reason_code") == OWNER_REVOCATION)
+            if not revocation:
+                return bad("commit_field_not_40hex",
+                           f"{key}={value!r} is not a full 40-hex commit")
         if key in _INT_FIELDS:
             if not re.fullmatch(r"-?[0-9]+", value):
                 return bad("integer_field_not_integer", f"{key}={value!r}")
@@ -994,6 +1001,15 @@ def _check_archive_field(value: str, bad) -> Refusal | None:
 #: reason still needs its F1.
 PRESTART_COMMIT_CHANGE = "PRESTART_COMMIT_CHANGE"
 
+#: QROS-CF I2 (DEC-0009 Condition B), 2026-09-07. Aaron's REVOCATION of a
+#: live pre-start authorization, as a P2S he writes himself: reason_code
+#: OWNER_REVOCATION, successor_authorized_commit NONE (there is no
+#: successor -- that is the point), actor exactly `Aaron`. The chain state
+#: after it is AWAITING_REAUTHORIZATION, which refuses every start until
+#: Aaron signs a new P2 (of any commit). A main-agent P2S may not carry it.
+OWNER_REVOCATION = "OWNER_REVOCATION"
+REVOCATION_NO_SUCCESSOR = "NONE"
+
 
 def _is_prestart_reauthorization(prev: str, event, started: bool) -> bool:
     """Aaron's 2026-09-05 §D.3.2 amendment, and ONLY it.
@@ -1040,6 +1056,23 @@ def _is_prestart_reauthorization(prev: str, event, started: bool) -> bool:
             and fields.get("same_id_reauthorization") == "YES")
 
 
+def _is_owner_revocation(prev: str, event, started: bool) -> bool:
+    """QROS-CF I2: `P2 -> P2S` written BY AARON to revoke, pre-start.
+
+    Four conditions, all read off the row: predecessor is a live P2 and
+    nothing has started; reason_code is OWNER_REVOCATION; the successor
+    commit is the literal NONE; the actor cell is exactly `Aaron`. A
+    main-agent row carrying OWNER_REVOCATION fails the fourth and falls
+    through to `p2s_without_preceding_f1`."""
+    if prev != "P2" or started or event is None:
+        return False
+    fields = getattr(event, "fields", None) or {}
+    actor = (getattr(getattr(event, "row", None), "actor", "") or "").strip()
+    return (fields.get("reason_code") == OWNER_REVOCATION
+            and fields.get("successor_authorized_commit") == REVOCATION_NO_SUCCESSOR
+            and actor == sc.ACTOR_AARON)
+
+
 def _edge_code(prev: str, cur: str, *, event=None,
                started: bool = False) -> str | None:
     """The refusal code for one chain edge, or None when legal.
@@ -1054,6 +1087,8 @@ def _edge_code(prev: str, cur: str, *, event=None,
         if prev == "F1":
             return None
         if _is_prestart_reauthorization(prev, event, started):
+            return None
+        if _is_owner_revocation(prev, event, started):
             return None
         return "p2s_without_preceding_f1"
     if cur == "P5" and prev not in ("P4", "A2"):
@@ -1360,7 +1395,9 @@ def _walk_chain(sid: str, chain_events, state: _SupersedeState):
         if short == "P2":
             if prev == "P2S":
                 want = prev_event.fields["successor_authorized_commit"]
-                if ev.commit != want:
+                # After an owner revocation there is no declared successor:
+                # Aaron re-authorizes whatever tree he names.
+                if want != REVOCATION_NO_SUCCESSOR and ev.commit != want:
                     return (None, bad(ev, "p2s_successor_commit_mismatch",
                                       f"the re-authorization must carry the "
                                       f"successor_authorized_commit declared "

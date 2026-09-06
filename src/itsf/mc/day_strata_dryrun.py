@@ -179,13 +179,21 @@ def rehearse(*, authority, prepared, universe, vol_method: str,
     supplement_id = getattr(authority, "supplement_id", "MC-DS-S001")
     chain = rb.supplement_chain(resolution, supplement_id)
 
+    # QROS-CF I1: a rehearsal measures the REAL environment pin (it is cheap
+    # and it is real) and carries no identity comparison -- the synthetic
+    # registry authorizes `head_commit` itself, so the commits are equal.
+    from .. import execution_identity as _ei
+    environment = _ei.measure_environment()
+
     ctx = sr.GateContext(
         supplement_id=supplement_id, head_commit=head_commit, registry_text=snapshot.text,
         runs_root=runs_root, archive_root=archive_root,
         repo_dirty_paths=(), g9_flag=Path(guards.G9_FLAG),
         second_copy_flag=Path(guards.SECOND_COPY_FLAG),
         frozen_hashes_ok=True, chain=chain,
-        authority=authority, prepared=prepared, utc_stamp=utc_stamp)
+        authority=authority, prepared=prepared, utc_stamp=utc_stamp,
+        environment_pinned=environment.pinned,
+        environment_detail=environment.detail)
 
     stages = [_run_gates("A_PRECHECK", ctx), _run_gates("B_DERIVE", ctx)]
     reached = stages[0].all_passed and stages[1].all_passed

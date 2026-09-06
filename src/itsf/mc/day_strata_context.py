@@ -41,7 +41,13 @@ _RUNNER = Path(__file__).resolve().parent / "supplement_runner.py"
 #: Fields whose legitimate value can be falsy, so "missing" must mean
 #: `is None` and never "is falsy". `repo_dirty_paths=()` is a CLEAN
 #: repository, which is the value the gate most wants to see.
-_FALSY_IS_VALID = frozenset({"repo_dirty_paths", "frozen_hashes_ok"})
+_FALSY_IS_VALID = frozenset({"repo_dirty_paths", "frozen_hashes_ok",
+                             # QROS-CF I1: None is legitimate for the
+                             # identity (equal commits: nothing to compare)
+                             # and is REFUSED by the gate for the pin --
+                             # the same shape as frozen_hashes_ok.
+                             "execution_identity", "environment_pinned",
+                             "environment_detail"})
 
 
 class ContextError(Exception):
@@ -162,9 +168,16 @@ def build_precheck_context(*, supplement_id: str, utc_stamp: str,
     except Exception:                                          # noqa: BLE001
         frozen_ok = False
 
+    from .. import execution_identity as _ei
+    head = _git(root, "rev-parse", "HEAD")
+    identity, environment = _ei.measure_for_context(head, chain, root)
+
     return GateContext(
         supplement_id=supplement_id,
-        head_commit=_git(root, "rev-parse", "HEAD"),
+        head_commit=head,
+        execution_identity=identity,
+        environment_pinned=environment.pinned,
+        environment_detail=environment.detail,
         registry_text=snapshot.text,
         runs_root=Path(contracts.RULED_RUNS_ROOT),
         archive_root=Path(contracts.RULED_ARCHIVE_ROOT),

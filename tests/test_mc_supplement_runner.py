@@ -87,7 +87,10 @@ def _ctx(**over) -> r.GateContext:
                 runs_root=None, archive_root=None, repo_dirty_paths=(),
                 g9_flag=None, second_copy_flag=None, frozen_hashes_ok=True,
                 chain=FakeChain(live_authorizations=(FakeP2(),)),
-                authority=FakeAuthority())
+                authority=FakeAuthority(),
+                # QROS-CF I1: the gate refuses an UNMEASURED pin; a
+                # hand-built context supplies the measured answer.
+                environment_pinned=True, environment_detail="test context")
     base.update(over)
     return r.GateContext(**base)
 

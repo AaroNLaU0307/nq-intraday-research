@@ -406,6 +406,16 @@ def append_run_started(supplement_id: str, *, head_commit: str,
         raise AppendRefused(
             "p3_without_exactly_one_live_p2",
             "%d live %s row(s)" % (len(live), _sc.EVENTS["P2"].token))
+    # QROS-CF I2: an owner hold appended after A_PRECHECK read its snapshot
+    # is seen HERE, on the fresh read this append takes, before the write.
+    from . import owner_control as _oc
+    try:
+        _oc.assert_no_owner_hold(text, supplement_id)
+    except _oc.OwnerControlRefusal as exc:
+        raise AppendRefused("p3_owner_hold_in_force"
+                            if exc.code == "owner_hold_in_force"
+                            else "p3_owner_control_row_unreadable",
+                            "%s: %s" % (exc.code, exc.detail)) from exc
     authorized = getattr(live[0], "authorized_commit", "") or ""
     if authorized != head_commit:
         raise AppendRefused(

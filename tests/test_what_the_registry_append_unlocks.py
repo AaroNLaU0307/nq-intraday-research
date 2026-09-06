@@ -45,7 +45,9 @@ def _ctx(text, chain, head):
         archive_root=Path(contracts.RULED_ARCHIVE_ROOT),
         repo_dirty_paths=(), g9_flag=Path(guards.G9_FLAG),
         second_copy_flag=Path(guards.SECOND_COPY_FLAG),
-        frozen_hashes_ok=True, chain=chain, utc_stamp="20260829T000000Z")
+        frozen_hashes_ok=True, chain=chain, utc_stamp="20260829T000000Z",
+        # QROS-CF I1: the identity gate refuses an unmeasured pin
+        environment_pinned=True, environment_detail="test context")
 
 
 def _verdicts(text, head, stage="A_PRECHECK"):
