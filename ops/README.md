@@ -14,6 +14,7 @@
 |---|---|
 | [`RESEARCH_STATE.md`](RESEARCH_STATE.md) | **ITSF 阶段权威**（OD-CF-3）：十个问题一页答完；outcome-clean，永不隔离 |
 | [`BACKLOG.md`](BACKLOG.md) | **唯一的 blocker 集（§1）＋非阻断 backlog（§2）＋已关闭项（§3）**；其余旧待办清单只剩指针横幅 |
+| `tests/tiers.py`（仓内） | **测试分层图**：GOVERNANCE_FILES（C 层，不进运行门）、VALIDITY_FILES（A 层）；未列出的默认 B 层进门；本文件本身在受管执行身份内 |
 | [`REVIEWER_CONTRACT.md`](REVIEWER_CONTRACT.md) | 复审契约：PASS / PASS_WITH_BACKLOG / HOLD，两轮预算，两种验证义务，污染协议（OD-CF-7） |
 | [`VERIFICATION_BRIEF_TEMPLATE.md`](templates/VERIFICATION_BRIEF_TEMPLATE.md) | 验证简报模板（一页；匹配规则在派发前写死；pre-freeze / post-freeze 两集） |
 | [`ATTESTATION_HEADER_TEMPLATE.md`](templates/ATTESTATION_HEADER_TEMPLATE.md) | 验证者 attestation 头部模板（独立性按维度陈述；冻结结果哈希） |

@@ -1004,11 +1004,27 @@ def test_parse_pytest_collected(output, expected):
     assert mod.parse_pytest_collected(output) == expected
 
 
-def test_pytest_gate_floor_is_the_audit_baseline():
-    """SA-10 N3: the floor tracks the CURRENT suite, closing the
-    silent-collection-drop headroom."""
+def test_pytest_gate_floor_is_derived_from_the_tree_not_typed(tmp_path):
+    """QROS-CF I4 (2026-09-07). SA-10 N3 wanted the floor to track the
+    CURRENT suite; a typed 4081 tracked it only when someone re-typed it.
+    The floor is now the number of test functions the tree defines, so a
+    muted collection is caught against today's suite, not a remembered one."""
     mod = real_run_module()
-    assert mod.MIN_COLLECTED_TESTS == 4081
+    assert not hasattr(mod, "MIN_COLLECTED_TESTS")
+    real = mod.collection_floor()
+    assert real > 3000, "premise: the real suite defines thousands of tests"
+    (tmp_path / "test_a.py").write_text(
+        "def test_one():\n    pass\n\ndef test_two():\n    pass\n", encoding="utf-8")
+    (tmp_path / "test_b.py").write_text("def helper():\n    pass\n", encoding="utf-8")
+    assert mod.collection_floor(tmp_path) == 2
+    (tmp_path / "test_a.py").write_text("def helper():\n    pass\n", encoding="utf-8")
+    with pytest.raises(RuntimeError):
+        mod.collection_floor(tmp_path)
+
+
+def test_pytest_gate_deselects_governance_and_nothing_else():
+    mod = real_run_module()
+    assert mod.PYTEST_GATE_DESELECT == "not governance"
 
 
 # ===========================================================================

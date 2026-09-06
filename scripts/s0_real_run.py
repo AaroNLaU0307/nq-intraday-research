@@ -60,7 +60,32 @@ ATTEMPTS_ROOT = GOVERNED_RUNS_ROOT / "attempts"
 # Baseline collected-test count at the SA-6 audit commit. The pytest gate
 # requires the suite to still COLLECT at least this many tests, so a muted
 # or filtered run cannot satisfy the gate with a handful of tests (F-09).
-MIN_COLLECTED_TESTS = 4081                  # N06 round-3 seal redesign: floor = current suite
+#: QROS-CF I4 (DEC-0006), 2026-09-07. The collection floor used to be a
+#: typed snapshot of the suite size (4081) that had to be re-typed as the
+#: suite grew. It is now DERIVED from the tree at gate time: the number of
+#: test functions defined under tests/, counted by AST. A suite that
+#: collects fewer than it defines has muted something; parametrization only
+#: adds. Governance tests are deselected from the gate run but still
+#: counted by `parse_pytest_collected` (it sums `deselected`), so the
+#: floor is unaffected by tiering.
+PYTEST_GATE_DESELECT = "not governance"
+
+
+def collection_floor(tests_dir=None) -> int:
+    """Test functions defined under tests/ (AST), the derived floor."""
+    import ast as _ast
+
+    tests_dir = Path(tests_dir) if tests_dir else REPO / "tests"
+    count = 0
+    for path in sorted(tests_dir.glob("test_*.py")):
+        tree = _ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in _ast.walk(tree):
+            if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)) \
+                    and node.name.startswith("test"):
+                count += 1
+    if count == 0:
+        raise RuntimeError("no test functions found under %s" % tests_dir)
+    return count
 
 # External read-only tooling (packet §9 gate 4). Invoked as a subprocess;
 # the tool itself only reads repository files.
@@ -521,9 +546,11 @@ def build_gates(*, repo: Path = REPO, registry: Path = REGISTRY,
                 f"directory/ies" if prior else "no prior run directory")
 
     def g_tests():
+        # QROS-CF I4: tiers A+B run inside the gate; tier C (governance) is
+        # deselected -- a red README-index guard must not hold a run.
         proc = subprocess.run(
             [sys.executable, "-m", "pytest", "tests", "-q",
-             "-p", "no:cacheprovider"],
+             "-p", "no:cacheprovider", "-m", PYTEST_GATE_DESELECT],
             capture_output=True, text=True, cwd=str(repo), env=clean_env())
         out = proc.stdout or ""
         collected = parse_pytest_collected(out)
@@ -531,10 +558,13 @@ def build_gates(*, repo: Path = REPO, registry: Path = REGISTRY,
             return (False, f"pytest exit={proc.returncode}")
         if collected is None:
             return (False, "pytest summary line could not be parsed")
-        if collected < MIN_COLLECTED_TESTS:
+        floor = collection_floor(repo / "tests")
+        if collected < floor:
             return (False, f"pytest collected {collected} tests, below the "
-                           f"{MIN_COLLECTED_TESTS} baseline (suite muted?)")
-        return (True, f"pytest passed, {collected} tests collected")
+                           f"derived floor of {floor} defined under tests/ "
+                           "(suite muted?)")
+        return (True, f"pytest passed, {collected} tests collected "
+                      f"(derived floor {floor})")
 
     def g_parent_env_clean():
         # SA-10 N4 / F-09(b): the runner's OWN interpreter must not carry

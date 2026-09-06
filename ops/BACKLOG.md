@@ -51,6 +51,7 @@ Candidates examined at P1 and **not admitted**, with the reason (so the table is
 | B-17 | L6 runtime re-tabling to five stages; GRAD-* pilots | runtime product | converged RM1/RM2 | out of research backlogs; owner window only | |
 | B-18 | Historical per-event ops documents (prompts, packets, rulings, seat results, findings, corrections, checkpoints, prep items, off-limits companions, incident documents) | archive | converged §4 | post-roadmap with B-03 | no new instances (I7) |
 | B-19 | `test_exposure_ledger_migration` row-identity and "exactly one reveal" assertions become prefix-identity and non-decreasing invariants when the first forward row lands | test conversion | DEC-0004 | P5 of this window | |
+| B-20 | Witness filing defect found by the new history-health check (P4): `WITNESS_T1_APPENDED_2026-09-05.json` names `WITNESS_P4_APPENDED_2026-09-05.json` as its predecessor while its `previous_sha256` is the post-F3 registry hash certified by `WITNESS_F3_APPENDED_2026-09-05.json`. Hash chain intact (every `previous_sha256` resolves to a witness); only the name pointer is wrong | T3 note, no integrity gap | `tests/test_registry_integrity.py` (strict xfail on the exact condition) | a correcting witness appended by the registry owner when convenient; then the xfail marker is removed | witnesses are append-only evidence; the builder does not edit them |
 
 ## 3. Closed since the last pending lists (evidence)
 

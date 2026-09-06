@@ -106,7 +106,40 @@ post_freeze absent (as designed until a marker exists)
 
 Exit criterion of P3 (converged §6: "rebuilding the S004 directory reproduces its custody hashes") met.
 
-## P4 — I3 registry invariant split, I4 marker selection (pending)
+## P4 — I3 registry invariant split, I4 marker selection
+
+### I3 — `src/itsf/mc/registry_integrity.py` (new), `tests/test_registry_integrity.py` (new), the registration table removed from `tests/test_mc_supplement_integration.py`
+
+```
+current_dependency_check(text, run_id)   tier B   chain resolves through the same resolver the gate uses; no owner hold; the chain's
+                                                  P5/F2v rows are BOUND: a witness with the same last_line seq AND attestation sha256;
+                                                  the attestation file exists and hashes to it, names the id, restates the sealed sha256
+                                                  of the P4 it verified; the witness names the same id and sealed sha256
+history_health(text)                     tier C   every chain's bindings + the witness hash chain (previous_sha256 must be the sha256
+                                                  of SOME witness; a wrong previous_witness NAME is a filing defect, not an integrity gap)
+```
+
+T-F13 (forged-but-legal rows, fixtures): attestation of another run → `attestation_supplement_id_mismatch` + `witness_supplement_id_mismatch`; attestation never restating the sealed sha → `attestation_sealed_sha_mismatch`; no witness → `verification_witness_missing`; witness for another row → missing; attestation bytes changed → `attestation_file_missing_or_sha_mismatch`; attestation found by hash when the witness records no path (the S001 shape) → bound; stale F3 reference → `chain_unresolvable: f3_no_target_row`; P3 after an owner revocation → `p2s_to_p3_without_new_p2`; OWNER_HOLD → `owner_hold_in_force`.
+
+T-F15 (history vs current, fixtures): an old chain with no witness is reported by `history_health` while the current chain's check passes; the witness chain classifier distinguishes `witness_chain_mismatch` (uncertified append) from `witness_previous_name_mismatch` (filing) from `witness_chain_gap`.
+
+Live registry (read through the boundary, nothing written): **tier B — MC-DS-S004's P5 is bound** (witness `WITNESS_P5_S004_APPENDED_2026-09-06.json`, attestation `P5_ATTESTATION_MC-DS-S004.md` sha `0b5d9382…`, names the id, restates `f59a0092…`). **Tier C — every P5/F2v in the history binds (S001 F2v via `ops/P5_VERIFIER_ATTESTATION_MC_DS_S001_2026-09-06.md`, S003 F2v via the strict-blind directory, S004 P5) and the hash chain is intact; one finding: the S001 T1 witness's `previous_witness` name is wrong (B-20)** — recorded as a strict xfail, not silenced.
+
+### I4 — `tests/tiers.py` populated, `tests/conftest.py` markers, the S0 gate deselects tier C, the derived collection floor
+
+```
+GOVERNANCE_FILES   28 files whose subject is a document, an index, a packet, a prompt, a seat ledger, a review register, a ratification
+                   record or source formatting; none imports the research core or a gate (asserted by tests/test_tier_selection.py)
+VALIDITY_FILES     the 2026-09-05 PUBLIC_KEEP set (informational marker; the gate runs every non-governance file regardless)
+default            any unmapped file is tier B: in the gate, fail-closed
+conftest           pytest_configure registers validity/safety/governance; pytest_collection_modifyitems applies them by file name;
+                   an explicit per-test `governance` marker wins
+S0 gate            `pytest tests -q -p no:cacheprovider -m "not governance"`; the typed MIN_COLLECTED_TESTS=4081 is gone;
+                   the floor is collection_floor() = test functions defined under tests/ (AST) at gate time
+supplement gate    no in-gate pytest exists for the supplement family (B-12); the identity covers tier A/B test files instead
+```
+
+T-F15 (selection): a governance file selects 0 tests under `-m "not governance"` and > 0 without; a validity file and an unmapped file select the same count with and without; the S0 gate carries exactly that deselection (`tests/test_tier_selection.py`).
 
 ## P5 — N10 run family (pending)
 

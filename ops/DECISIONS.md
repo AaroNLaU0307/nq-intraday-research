@@ -114,3 +114,16 @@ Aaron's order: P0 record decisions → P1 I6 documents + T-F17 estimate → P2 I
 Boundaries before N10, verbatim: do NOT move the test directory tree merely for organisation; retire tier-C tests in bulk; archive ops/; build the public export; write governance-summary.md unless mechanically required by I1–I7; re-table L6; work on GRAD-*; modify the supplement grammar; reverify S004; redesign the research question; add trial-accounting rules; resolve second-volume backup; perform open-ended governance cleanup.
 
 Routing note recorded by the builder: this window is implemented by the Fable session that authored the design, acting as builder by Aaron's explicit instruction (default routing would have used Opus). The P2 gate-change review is dispatched to a fresh Sol/Astra seat precisely because the producer may not certify it.
+
+### DEC-0011 · 2026-09-07 · builder (prepared) / Aaron (dispatches) · REVIEW_DISPATCH · P2 gate-change review, claim-blind, one round — PENDING_DISPATCH
+
+| field | value |
+|---|---|
+| scope | the P2 commit `bb7e69e` (governed-execution identity, owner control, condition.json manifest check) against its parent `7f78c47` |
+| seat | fresh Sol/Astra session (`ops/REVIEWER_CONTRACT.md` §2, row "Change to a tier-B authorization gate"); MUST_NOT_BE the builder session or a subagent |
+| blindness | CLAIM_BLIND |
+| budget | one round; a HOLD is fixed once with a declared impact scope and re-reviewed once; then Aaron |
+| brief | `C:\Users\Aaron\quant-data\review\itsf-qros-cf-p2-gate-review-2026-09-07\BRIEF.md` sha256 `fe7b76b8f9fbc9707bea6f47a65f744c685406b5f57f01fb6926c6e6886c0411` |
+| dispatch | by Aaron, using `ops/templates/DISPATCH_TEMPLATE.md`; the builder may not dispatch a review of its own gate change |
+| status | PENDING_DISPATCH — P3/P4/P5 do not depend on its result; the verdict lands as a REVIEW_VERDICT row citing the attestation's sha256 |
+

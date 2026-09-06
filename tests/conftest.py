@@ -19,6 +19,32 @@ import pytest  # noqa: E402
 ET = ZoneInfo("America/New_York")
 
 
+# ---------------------------------------------------------------------------
+# QROS-CF tiers (DEC-0006 I4). Markers, not directories: the tier map in
+# tests/tiers.py decides, the run gate selects `-m "not governance"`, and
+# an unmapped file is tier B by default (in the gate, fail-closed).
+# ---------------------------------------------------------------------------
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "validity: tier A research-validity test (in the run gate)")
+    config.addinivalue_line(
+        "markers", "safety: tier B execution-safety test (in the run gate)")
+    config.addinivalue_line(
+        "markers", "governance: tier C document/index/packet guard "
+                   "(runs in CI; NEVER in the run gate; a red one is backlog)")
+
+
+def pytest_collection_modifyitems(config, items):
+    import tiers as _tiers
+
+    for item in items:
+        name = Path(str(item.fspath)).name
+        if item.get_closest_marker("governance") is not None:
+            continue                       # an explicit per-test marker wins
+        item.add_marker(getattr(pytest.mark, _tiers.tier_of(name)))
+
+
 @pytest.fixture(autouse=True)
 def _suite_guard_real_ruled_roots():
     """SUITE-WIDE (conformance F4.1): no test anywhere may add/remove
