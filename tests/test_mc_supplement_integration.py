@@ -478,6 +478,18 @@ AUTHORISED_SUPPLEMENT_ROWS = {
         "WITNESS_F3_S002_APPENDED_2026-09-06.json. Its `superseded_commit` "
         "points at seq 25 rather than at the F2, because F2 and P3 are "
         "UNNUMBERED and the F3 reference field can only name numbered rows",
+    # Added only AFTER the T1 was appended, witnessed and committed. NOTHING
+    # for MC-DS-S003 beyond this row is registered here: its P2, P3, P4, P5,
+    # F2 and F3 have not happened, and this table is not where a future
+    # event gets permission in advance.
+    ("SUPPLEMENT_PROPOSED", "MC-DS-S003"):
+        "main agent, 2026-09-06, seq 27, T1 successor registration for the "
+        "retired MC-DS-S002, appended from framework HEAD c44d36e2 -- the "
+        "tree carrying the C_BUILD_1 archive-scope repair and the pre-P3 "
+        "residue check, which are the two defects that cost MC-DS-S002 its "
+        "authorization; registry commit ed6259b; witness "
+        "WITNESS_T1_S003_APPENDED_2026-09-06.json. NOT an authorization: "
+        "MC-DS-S003 has zero live P2 and started=False",
 }
 
 
