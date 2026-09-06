@@ -534,6 +534,16 @@ AUTHORISED_SUPPLEMENT_ROWS = {
         "headline_replay_identity alone: the report's re-derivation claim "
         "was left out because the contract keeps that a separate condition "
         "and no code defines its operation",
+    # Added only AFTER the F3 was appended, witnessed and committed -- the
+    # entry deliberately withheld from the four above while the row did not
+    # exist. Nothing for MC-DS-S004 is registered: it has no rows at all.
+    ("SUPPLEMENT_SUPERSEDED", "MC-DS-S003"):
+        "Aaron, ops/OWNER_DECISIONS_2026-09-06.md OD-3, seq 30, retiring the "
+        "id after the strict-blind verification failed and naming "
+        "MC-DS-S004 as successor; registry commit 2421460; witness "
+        "WITNESS_F3_S003_APPENDED_2026-09-06.json. Unlike MC-DS-S002's F3 "
+        "this one supersedes the FAILURE EVENT itself -- the F2v is numbered "
+        "at seq 29 -- so there is no reference ambiguity to record",
 }
 
 
