@@ -490,6 +490,50 @@ AUTHORISED_SUPPLEMENT_ROWS = {
         "authorization; registry commit ed6259b; witness "
         "WITNESS_T1_S003_APPENDED_2026-09-06.json. NOT an authorization: "
         "MC-DS-S003 has zero live P2 and started=False",
+    # --- the N09 v3 run, and how it ended --------------------------------
+    # Added 2026-09-06 under Aaron's explicit approval, AFTER each of these
+    # four rows was in the ledger with a registry commit and a witness. The
+    # fifth row this lineage will produce, ("SUPPLEMENT_SUPERSEDED",
+    # "MC-DS-S003"), is ABSENT: that F3 has not happened yet. Nothing for
+    # MC-DS-S004 appears here either.
+    ("SUPPLEMENT_EXECUTION_AUTHORIZED", "MC-DS-S003"):
+        "Aaron, 2026-09-06, seq 28, the N09 v3 authorization, signed at "
+        "framework HEAD c0420ffc -- the first tree carrying the C_BUILD_1 "
+        "archive-scope repair and the pre-P3 residue check, without which a "
+        "run under any fresh id would have failed the way MC-DS-S002's did; "
+        "registry commit 7101f02; witness "
+        "WITNESS_P2_S003_APPENDED_2026-09-06.json. No framework commit "
+        "accompanied it, so `authorized_commit_matches_head` held for the "
+        "life of the authorization",
+    ("SUPPLEMENT_RUN_STARTED", "MC-DS-S003"):
+        "the runner, 2026-09-06, through the P3-only append seam during the "
+        "N09 v3 execution: after B_DERIVE and the pre-P3 residue check, "
+        "before the first side effect, spending the seq 28 authorization; "
+        "registry commit e4cba11; witness "
+        "WITNESS_P3_S003_APPENDED_2026-09-06.json",
+    ("SUPPLEMENT_SEALED", "MC-DS-S003"):
+        "the runner, 2026-09-06; verdict P4, archive_ok, 2842 rows, local "
+        "seal 3d966a46. Signed off by Aaron field by field after every "
+        "digest was RECOMPUTED from the sealed bytes and the archive copy "
+        "re-read as byte-identical; registry commit 336be7e; witness "
+        "WITNESS_P4_S003_APPENDED_2026-09-06.json. A seal is a fact about "
+        "the run, not about correctness -- see the F2v below",
+    ("SUPPLEMENT_VERIFICATION_FAILED", "MC-DS-S003"):
+        "a fresh STRICT-BLIND independent verifier seat, 2026-09-06, seq 29: "
+        "headline_replay_mismatch, with the blind artifact frozen and hashed "
+        "before P4 was opened. Evidence under "
+        "quant-data/review/itsf-mc-ds-s003-strict-blind-verifier-2026-09-06 "
+        "-- blind artifact MC-DS-S003_STRICT_BLIND_PHASE3_FROZEN.json "
+        "sha256 372cc6ce6b622cc5cb620a07573a6e6632c823f64d7298cf0100aed53e9fc30e "
+        "and attestation "
+        "MC-DS-S003_STRICT_BLIND_P5_VERIFIER_ATTESTATION.md sha256 "
+        "1df1e04996169dedc7873645bab13708c4c71ba4e8087da6db958eada896695d, "
+        "both re-hashed and matched before the row was appended; registry "
+        "commit cae0d9c; witness "
+        "WITNESS_F2V_S003_APPENDED_2026-09-06.json. Grounded in "
+        "headline_replay_identity alone: the report's re-derivation claim "
+        "was left out because the contract keeps that a separate condition "
+        "and no code defines its operation",
 }
 
 
