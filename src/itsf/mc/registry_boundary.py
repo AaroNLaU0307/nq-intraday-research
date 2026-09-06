@@ -44,7 +44,8 @@ __all__ = ["RegistrySnapshot", "MediatedResolution", "BoundaryError",
            "REGISTRY_PATH", "REGISTRY_REPO_ROOT", "BOUNDARY_RULING",
            "read_snapshot", "mediate",
            "resolve_registry", "supplement_chain", "resolve_for_supplement",
-           "RUN_STARTED_TOKEN", "AppendRefused", "append_run_started"]
+           "RUN_STARTED_TOKEN", "AppendRefused", "append_run_started",
+           "append_owner_hold", "append_owner_release"]
 
 BOUNDARY_RULING = "MC_REG_COLLISION_001_C2_AS_MODIFIED_2026-08-25"
 BOUNDARY_RULING_DELEGATED = True
@@ -434,6 +435,191 @@ def _compare_and_append(target: Path, decided: bytes, addition: bytes) -> None:
                 % (len(decided), hashlib.sha256(decided).hexdigest()[:12],
                    len(now), hashlib.sha256(now).hexdigest()[:12]))
         target.write_bytes(decided + addition)
+
+
+def _next_global_sequence(rows) -> int:
+    """The next value of the GLOBAL registry sequence.
+
+    `SEQUENCE_NAMESPACE=GLOBAL` and
+    `supplement_registry._check_global_sequence` already enforce "the NEXT
+    value, not merely a larger one" -- a supplement row landing at 99 after a
+    highest of 13 leaves 85 phantom slots and is refused. This derives the
+    same number from the same rows rather than letting a caller pass one in:
+    an owner filing a hold under pressure is the last person who should be
+    hand-typing a sequence number, and a hand-typed one that is merely larger
+    would wedge the sequence for every later row.
+    """
+    highest = None
+    for row in rows:
+        if not getattr(row, "numbered", False):
+            continue
+        seq = (getattr(row, "seq", "") or "").strip()
+        if not re.fullmatch(r"[0-9]+", seq):
+            continue
+        value = int(seq)
+        highest = value if highest is None else max(highest, value)
+    return 1 if highest is None else highest + 1
+
+
+def _append_owner_row(token: str, *, scope: str, reason: str,
+                      head_commit: str, utc_stamp: str,
+                      releases_event_sequence: int | None = None,
+                      path=None) -> str:
+    """Append Aaron's OWNER_HOLD / OWNER_RELEASE row. Returns the line.
+
+    PRIVATE, AND THE TWO PUBLIC ENTRIES BELOW ARE WHY.
+    `test_n09_scaffold_criteria` requires that no exported registry writer
+    take its event as a caller-supplied value -- "a writer that took the token
+    as a PARAMETER would be a general registry writer wearing a narrow name".
+    That guard is right, and it caught this function's first shape. The fix was
+    to match it rather than to relax it, so `token` never crosses the public
+    surface and each exported entry names exactly one event.
+
+    QROS-CF F06, SECOND ROUND. The first repair put the P3 append behind a
+    sidecar lock and a compare-and-swap, and the re-review named exactly what
+    that leaves standing: a lock protects a file only if every writer takes
+    it, and there was NO SANCTIONED APPEND PATH FOR OWNER CONTROL AT ALL.
+    Measured on the repaired tree: `owner_control` exposes no append function
+    and writes nothing -- it is handed text and returns rows -- so the only
+    way to file a hold was to edit the file by hand or by ad hoc script,
+    which takes no lock and reads no `decided` snapshot. The serialization
+    was one-sided: P3 was serialized against other P3s and against nothing
+    else, which is the same as saying it was not serialized.
+
+    So this is the missing half, and it is deliberately the SAME primitive
+    rather than a second one. Both writers now take `_AppendLock` and both
+    compare against the bytes their own checks were decided on, which is what
+    leaves only the two legal orders:
+
+      * the hold lands first -> P3's compare-and-swap sees changed bytes and
+        refuses, so no start is written under a live hold;
+      * P3 lands first       -> this append sees changed bytes and refuses;
+        the owner re-reads and re-files against the state that now includes
+        the start, so a hold is never applied to a stale snapshot.
+
+    NOT A NEW GOVERNANCE LAYER, and no new artifact kind: the row shape,
+    actor, scope grammar and field order are `owner_control`'s existing
+    contract, the sequence rule is `supplement_registry`'s, and the
+    post-write check asks `owner_control` itself whether the row it just
+    wrote does what it claims. This function adds serialization and nothing
+    else.
+    """
+    from . import owner_control as _oc
+    from . import supplement_contract as _sc
+    from . import supplement_registry as _sr
+
+    if token not in _oc.OWNER_TOKENS:
+        raise AppendRefused("owner_append_token_unknown", repr(token))
+    if scope != _oc.GLOBAL_SCOPE and _oc.canonical_run_id_family(scope) is None:
+        raise AppendRefused(
+            "owner_append_scope_unrecognized",
+            "%r is neither %s nor a run id of any authoritative family"
+            % (scope, _oc.GLOBAL_SCOPE))
+    if not _sc.HEX40_RE.match(head_commit or ""):
+        raise AppendRefused("owner_append_commit_not_40hex", repr(head_commit))
+    if not _REGISTRY_UTC_RE.match(utc_stamp or ""):
+        raise AppendRefused("owner_append_utc_malformed", repr(utc_stamp))
+    reason = (reason or "").strip()
+    if not reason:
+        raise AppendRefused("owner_append_reason_empty",
+                            "an owner row carries a reason")
+    # The note is a single six-cell field list. A `|` would forge a cell
+    # boundary and a `;` a field boundary, so neither may ride inside the
+    # reason text -- refused here rather than discovered by the parser after
+    # the bytes are already in the ledger.
+    for bad in ("|", ";", "\n", "\r"):
+        if bad in reason:
+            raise AppendRefused(
+                "owner_append_reason_breaks_the_row",
+                "reason may not contain %r; it would forge a cell or field "
+                "boundary" % bad)
+    if token == _oc.OWNER_RELEASE and releases_event_sequence is None:
+        raise AppendRefused("owner_append_release_names_no_hold",
+                            "OWNER_RELEASE must name releases_event_sequence")
+    if token == _oc.OWNER_HOLD and releases_event_sequence is not None:
+        raise AppendRefused("owner_append_hold_names_a_release",
+                            "OWNER_HOLD releases nothing")
+
+    target = (Path(path) if path is not None
+              else REGISTRY_REPO_ROOT / REGISTRY_PATH)
+    # ONE READ DECIDES, AND THAT READ IS WHAT GETS APPENDED TO -- the same
+    # discipline as `append_run_started`, for the same reason.
+    decided = target.read_bytes()
+    text = _read_text(target, _bytes=decided)
+    rows, refusal = _sr.parse_registry_rows(text)
+    if refusal is not None:
+        raise AppendRefused(
+            "owner_append_registry_unparseable",
+            "%s: %s" % (refusal.code, getattr(refusal, "detail", "")))
+    # Every existing owner row must already be legal. Appending a release
+    # onto a ledger whose holds cannot be read would decide nothing.
+    try:
+        _oc.parse_owner_rows(text)
+    except _oc.OwnerControlRefusal as exc:
+        raise AppendRefused("owner_append_existing_rows_unreadable",
+                            "%s: %s" % (exc.code, exc.detail)) from exc
+    seq = _next_global_sequence(rows)
+    note = "[%s] " % scope
+    if token == _oc.OWNER_RELEASE:
+        note += "releases_event_sequence: %d; " % int(releases_event_sequence)
+    note += "reason: %s" % reason
+    row = ("| %d | %s | %s | %s | %s | %s |"
+           % (seq, utc_stamp, token,
+              head_commit[:_sc.COMMIT_WIDTH[_sc.NUMBERED]],
+              _oc.OWNER_ACTOR, note))
+
+    if not decided.endswith(b"\n"):
+        raise AppendRefused("owner_append_registry_tail_is_not_a_line",
+                            "the registry does not end in a newline")
+    _compare_and_append(target, decided, (row + "\n").encode("utf-8"))
+
+    # THE ROW MUST DO WHAT IT CLAIMS, asked of `owner_control` itself rather
+    # than assumed -- the same post-write discipline `append_run_started`
+    # uses, and the reason a malformed hold cannot land silently.
+    after = _read_text(target)
+    try:
+        written = _oc.parse_owner_rows(after)
+    except _oc.OwnerControlRefusal as exc:
+        raise AppendRefused("owner_append_written_but_unreadable",
+                            "%s: %s" % (exc.code, exc.detail)) from exc
+    if not any(r.seq == seq and r.token == token for r in written):
+        raise AppendRefused("owner_append_written_but_absent",
+                            "seq %d is not an owner row of the ledger" % seq)
+    probe = scope if scope != _oc.GLOBAL_SCOPE else _sc.FIRST_SUPPLEMENT_ID
+    if token == _oc.OWNER_HOLD:
+        if not any(h.seq == seq for h in _oc.active_holds(after, probe)):
+            raise AppendRefused(
+                "owner_append_hold_written_but_not_in_force",
+                "OWNER_HOLD %d landed and is not an active hold for %s"
+                % (seq, probe))
+    else:
+        released = int(releases_event_sequence)
+        if any(h.seq == released for h in _oc.active_holds(after, probe)):
+            raise AppendRefused(
+                "owner_append_release_written_but_hold_still_active",
+                "OWNER_RELEASE %d landed and hold %d is still in force"
+                % (seq, released))
+    return row
+
+
+def append_owner_hold(*, scope: str, reason: str, head_commit: str,
+                      utc_stamp: str, path=None) -> str:
+    """File Aaron's OWNER_HOLD. One event, never a caller-supplied token."""
+    from . import owner_control as _oc
+    return _append_owner_row(_oc.OWNER_HOLD, scope=scope, reason=reason,
+                             head_commit=head_commit, utc_stamp=utc_stamp,
+                             path=path)
+
+
+def append_owner_release(*, scope: str, reason: str, head_commit: str,
+                         utc_stamp: str, releases_event_sequence: int,
+                         path=None) -> str:
+    """Release the OWNER_HOLD at `releases_event_sequence`. One event."""
+    from . import owner_control as _oc
+    return _append_owner_row(
+        _oc.OWNER_RELEASE, scope=scope, reason=reason,
+        head_commit=head_commit, utc_stamp=utc_stamp,
+        releases_event_sequence=releases_event_sequence, path=path)
 
 
 def append_run_started(supplement_id: str, *, head_commit: str,

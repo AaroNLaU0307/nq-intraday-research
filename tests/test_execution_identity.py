@@ -362,11 +362,19 @@ def _fake_git(head, porcelain, tiers_source='GOVERNANCE_FILES = ("test_ops_index
 #: `test_qros_cf_astra_repairs.py`.
 _OK_BC = ei.BytecodeReport(True, "injected clean")
 _OK_ST = ei.StartupReport(True, "injected clean")
+#: ROUND TWO (QROS-CF F01). The seam now also requires the launch attestation
+#: taken before the governed imports. These tests are about the seam's OTHER
+#: checks, and a real attestation cannot be taken inside pytest -- this process
+#: is not launched with -B -- so it is injected exactly like the two reports
+#: above. `test_qros_cf_astra_round2.py` pins the attestation's own behaviour
+#: and the fact that the seam refuses without one.
+_OK_LA = ei.LaunchAttestation("/injected-private-prefix", 0, "injected clean")
 
 
 def _seam(head, environment=None, **kw):
     kw.setdefault("bytecode", _OK_BC)
     kw.setdefault("startup", _OK_ST)
+    kw.setdefault("launch", _OK_LA)
     return ei.seam_recheck(
         head, environment=environment or ei.EnvironmentReport(True, "ok"), **kw)
 

@@ -30,29 +30,57 @@ def sha256_file(path: Path, chunk: int = 1 << 20) -> str:
 def load_manifest(job_dir: Path) -> dict:
     """Load per-file hashes, normalized to {"files": {name: {"sha256": ...}}}.
 
-    Two accepted sources, in priority order:
-      1. _local_manifest.json with a "files" mapping (fabricated fixtures /
-         future pipelines);
-      2. the official Databento manifest.json ({"job_id", "files": [
-         {"filename", "hash": "sha256:..."}]}) — the canonical archive format.
+    Two accepted sources, and they are MUTUALLY EXCLUSIVE:
+      1. the official Databento manifest.json ({"job_id", "files": [
+         {"filename", "hash": "sha256:..."}]}) — the canonical archive
+         format, and the ONLY authority wherever it exists;
+      2. _local_manifest.json with a "files" mapping — fabricated fixtures,
+         usable only in a directory that has no official manifest.
+
+    QROS-CF F03, SECOND ROUND. The first repair added
+    `load_authorized_manifest` and routed `condition.json` through it, which
+    fixed one caller and left manifest AUTHORITY a per-caller choice
+    everywhere else. Measured 2026-09-07 on the repaired tree: four
+    production call sites still read their digests through this entry —
+    `production_inputs._manifest_data_files`, `dbn_loader.load_real` and
+    three in `cost_calibration_loader` — so a `_local_manifest.json` planted
+    beside an unchanged authorized manifest was still the authority for all
+    of them. Reproduced: the official manifest listed `official.dbn.zst`
+    alone and the production file selector returned `replacement.dbn.zst`.
+
+    AUTHORITY IS NOW DECIDED BY THE DIRECTORY, NOT BY THE CALLER. That is
+    what makes one change close every call site at once, including any
+    future one, instead of asking each caller to remember which entry is the
+    safe one — the property the first repair lacked.
+
+    A LOCAL MANIFEST BESIDE AN OFFICIAL ONE IS A REFUSAL, NOT A SILENT
+    IGNORE. Preferring the official manifest would already stop the
+    substitution, but it would leave the planted file sitting undetected
+    next to governed data, and an unexplained second manifest there is
+    exactly the anomaly that should stop a run rather than be tidied away.
+    This is a data-identity gate, so it fails closed.
+
+    MEASURED BEFORE THE CHANGE, so the blast radius is a fact and not a
+    hope: zero `_local_manifest.json` files exist anywhere on this machine,
+    every real job directory is official-only, and no test writes both
+    manifests into one directory. Production behaviour is unchanged and the
+    fixture directories that fabricate a local manifest alone keep working.
     """
     local = job_dir / "_local_manifest.json"
+    official = job_dir / "manifest.json"
+    if local.exists() and official.exists():
+        raise ManifestError(
+            f"both manifest.json and _local_manifest.json exist in {job_dir}; "
+            "the official manifest is the only authority where it exists, and "
+            "a local manifest beside it is never an override (QROS-CF F03)")
+    if official.exists():
+        # One parser for the official shape, so the authorized entry and this
+        # one cannot drift apart into two readings of the same bytes.
+        return load_authorized_manifest(job_dir)
     if local.exists():
         data = json.loads(local.read_text(encoding="utf-8"))
         if isinstance(data.get("files"), dict):
             return data
-    official = job_dir / "manifest.json"
-    if official.exists():
-        data = json.loads(official.read_text(encoding="utf-8"))
-        entries = data.get("files")
-        if isinstance(entries, list):
-            files = {}
-            for e in entries:
-                h = str(e.get("hash", ""))
-                if e.get("filename") and h.startswith("sha256:"):
-                    files[e["filename"]] = {"sha256": h.split(":", 1)[1]}
-            if files:
-                return {"files": files, "source": "databento_manifest_json"}
     raise ManifestError(
         f"no usable manifest in {job_dir} (need _local_manifest.json with a "
         "'files' mapping or official Databento manifest.json)")

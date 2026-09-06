@@ -88,9 +88,21 @@ def verify_authorized_job_dir(job_dir=AUTHORIZED_JOB_DIR) -> Path:
 
 
 def _manifest_data_files(job_dir: Path) -> list:
+    """The `.dbn.zst` files the AUTHORIZED manifest lists — that entry by
+    name, so `load_bars_by_date`'s claim is true by construction.
+
+    QROS-CF F03. This read `load_manifest`, whose local-manifest preference
+    made the file SELECTOR overridable: `load_bars_by_date` documented "only
+    files the AUTHORIZED manifest lists are read" while a planted
+    `_local_manifest.json` could add one. `load_manifest` now refuses that
+    directory outright, so this line is no longer the only thing standing
+    between a planted manifest and the loader; it names the authorized entry
+    anyway, because a docstring guarantee should not depend on a second
+    module continuing to be strict.
+    """
     from ..data import manifests
 
-    listed = manifests.load_manifest(job_dir)["files"]
+    listed = manifests.load_authorized_manifest(job_dir)["files"]
     return sorted(n for n in listed if n.endswith(".dbn.zst"))
 
 

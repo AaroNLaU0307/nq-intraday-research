@@ -38,12 +38,15 @@ from __future__ import annotations
 import dataclasses as _dc
 import re
 
+from . import mc_contract as _mcc
+from . import supplement_contract as _sc
 from . import supplement_registry as _sr
 
 __all__ = ["OWNER_HOLD", "OWNER_RELEASE", "OWNER_TOKENS", "OWNER_ACTOR",
            "GLOBAL_SCOPE", "OwnerControlRefusal", "OwnerRow",
            "parse_owner_rows", "active_holds", "assert_no_owner_hold",
-           "owner_intent_lines"]
+           "owner_intent_lines", "RUN_ID_FAMILIES",
+           "canonical_run_id_family"]
 
 OWNER_HOLD = "OWNER_HOLD"
 OWNER_RELEASE = "OWNER_RELEASE"
@@ -51,7 +54,42 @@ OWNER_TOKENS = (OWNER_HOLD, OWNER_RELEASE)
 OWNER_ACTOR = "Aaron"
 GLOBAL_SCOPE = "GLOBAL"
 
-_SCOPE_RE = re.compile(r"^\[(GLOBAL|[A-Z][A-Z0-9-]*)\]\s*(.*)\Z", re.S)
+#: THE AUTHORITATIVE RUN-ID FAMILIES, taken from the modules that own their
+#: grammars. Nothing here re-spells a pattern, which is the whole point:
+#: `_SCOPE_RE` used to carry `[A-Z][A-Z0-9-]*` — a third, laxer grammar for
+#: ids two other modules already define exactly.
+RUN_ID_FAMILIES = (("supplement", _sc.SUPPLEMENT_ID_PATTERN),
+                   ("mc", _mcc.RUN_ID_RE))
+
+
+def canonical_run_id_family(run_id: str) -> str | None:
+    """Which authoritative family recognizes `run_id`, or None.
+
+    QROS-CF F05, SECOND ROUND. The first repair made an owner line that the
+    shared parser cannot READ into a refusal. It did not touch the id
+    grammar, so a line that parsed perfectly could still carry a scope no
+    canonical family recognizes, and such a scope was then silently
+    non-applicable. Reproduced 2026-09-07 on the repaired tree: `MC-DS-S004-`
+    (trailing hyphen), `MC-DS-S00` (truncated), `MC-DS-S004X` (extra suffix)
+    and `XX-DS-S004` (illegal prefix) each parsed as one owner row and each
+    yielded ZERO applicable holds against `MC-DS-S004` with no refusal —
+    Aaron writes a hold, the parser accepts it, and the run starts anyway.
+
+    Both families are routed, not just the supplement one: `active_holds` is
+    called with an `MC-R###` id from `registry_integrity` and with a
+    `MC-DS-S###` id from `supplement_runner` and the P3 boundary. A validator
+    that knew only one family would refuse legitimate holds in the other.
+    """
+    for name, pattern in RUN_ID_FAMILIES:
+        if pattern.match(run_id or ""):
+            return name
+    return None
+
+
+#: Bracket content is captured, NOT graded. What counts as a legal scope is
+#: decided by `canonical_run_id_family` above, so there is exactly one
+#: definition of a run id in play and this regex cannot disagree with it.
+_SCOPE_RE = re.compile(r"^\[([^\]]*)\]\s*(.*)\Z", re.S)
 _FIELD_RE = re.compile(r"^([a-z_]+):\s*(.+)\Z", re.S)
 
 
@@ -172,6 +210,17 @@ def parse_owner_rows(text: str) -> tuple:
                 f"{token} note must start with [GLOBAL] or [<run id>]",
                 row.line_no)
         scope, remainder = m.group(1), m.group(2).strip()
+        # QROS-CF F05: an unrecognized scope is a REFUSAL, never a hold that
+        # quietly applies to nothing. This is the check whose absence let a
+        # legally-parsed `[MC-DS-S004-]` hold be ignored.
+        if scope != GLOBAL_SCOPE and canonical_run_id_family(scope) is None:
+            raise OwnerControlRefusal(
+                "owner_control_scope_unrecognized",
+                f"{token} scope [{scope}] is neither {GLOBAL_SCOPE} nor a run "
+                "id of any authoritative family "
+                f"({', '.join(n for n, _ in RUN_ID_FAMILIES)}); an owner row "
+                "whose scope applies to nothing is never read as no hold",
+                row.line_no)
         fields = _fields(remainder, row.line_no)
         reason = fields.get("reason", "").strip()
         if not reason:
@@ -215,7 +264,21 @@ def parse_owner_rows(text: str) -> tuple:
 
 
 def active_holds(text: str, run_id: str) -> tuple:
-    """Unreleased holds whose scope is GLOBAL or exactly `run_id`."""
+    """Unreleased holds whose scope is GLOBAL or exactly `run_id`.
+
+    THE QUERY SIDE IS THE SAME DEFECT (swept, not just the reported
+    instance — `supplement_contract`'s own comment records why: fixing an
+    instance does not sweep the class). A malformed scope in the ROW and a
+    malformed id in the QUERY both end as "no applicable hold": asking about
+    `MC-DS-S004-` would miss a real `[MC-DS-S004]` hold just as surely. So
+    the id being asked about is routed through the same families.
+    """
+    if canonical_run_id_family(run_id) is None:
+        raise OwnerControlRefusal(
+            "owner_control_query_run_id_unrecognized",
+            f"{run_id!r} is not a run id of any authoritative family "
+            f"({', '.join(n for n, _ in RUN_ID_FAMILIES)}); a hold cannot be "
+            "checked against an id no family recognizes")
     rows = parse_owner_rows(text)
     released = {r.releases for r in rows if r.token == OWNER_RELEASE}
     return tuple(r for r in rows

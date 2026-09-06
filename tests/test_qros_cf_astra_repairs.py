@@ -204,7 +204,9 @@ def test_F02_the_required_packages_are_preserved():
     assert ei.EXPECTED_EXECUTABLE_PTH
     live = ei.startup_report()
     assert live.pinned is True, live.detail
-    assert set(live.executable_pth) <= ei.EXPECTED_EXECUTABLE_PTH
+    # ROUND TWO: the pin became a MAPPING name -> sha256, because a filename
+    # allowlist accepted an allowed name carrying attacker content (F02).
+    assert set(live.executable_pth) <= set(ei.EXPECTED_EXECUTABLE_PTH)
 
 
 # ===========================================================================
@@ -221,17 +223,42 @@ def _job_dir(tmp_path, condition_bytes, official_sha):
     return d
 
 
-def test_F03_the_legacy_loader_still_prefers_local_for_fixtures(tmp_path):
-    """The reproduction, and the reason the old entry is KEPT: fabricated
-    fixtures depend on it. It simply may not be the production authority."""
+def test_F03_the_shared_loader_refuses_a_local_manifest_beside_an_official_one(
+        tmp_path):
+    """REWRITTEN IN ROUND TWO, because this test PINNED THE DEFECT.
+
+    It used to assert that `load_manifest` prefers `_local_manifest.json`
+    whenever both exist -- "the reason the old entry is KEPT" -- and called
+    that a fixture requirement. Astra's remaining F03 counterexample is
+    exactly that preference: four production call sites read digests through
+    this entry, so the preference this test protected was the substitution
+    channel. A test that encodes the pre-repair behaviour as an invariant is
+    the recurring defect class in this repository, and it caught one here.
+
+    The legitimate half of the concern is kept and asserted below: fixture
+    directories that fabricate a LOCAL MANIFEST ALONE still work. What is no
+    longer true -- and must not be -- is a local manifest outranking an
+    official one that sits beside it.
+    """
     replacement = b'[{"date": "2020-03-16", "condition": "degraded"}]'
     d = _job_dir(tmp_path, replacement, "a" * 64)
     (d / "_local_manifest.json").write_text(json.dumps({"files": {
         "condition.json": {"sha256": hashlib.sha256(replacement).hexdigest()}}}),
         encoding="utf-8")
-    man = M.load_manifest(d)
-    assert "source" not in man, "the local manifest no longer wins"
-    M.verify_file_against_manifest(d / "condition.json", man)   # passes
+    with pytest.raises(M.ManifestError) as caught:
+        M.load_manifest(d)
+    assert "never an override" in str(caught.value)
+
+    # THE FIXTURE PATH THAT WAS ACTUALLY LOAD-BEARING, still working.
+    fixture = tmp_path / "fixture"
+    fixture.mkdir()
+    (fixture / "condition.json").write_bytes(replacement)
+    (fixture / "_local_manifest.json").write_text(json.dumps({"files": {
+        "condition.json": {"sha256": hashlib.sha256(replacement).hexdigest()}}}),
+        encoding="utf-8")
+    man = M.load_manifest(fixture)
+    assert "source" not in man, "the local manifest is still read for fixtures"
+    M.verify_file_against_manifest(fixture / "condition.json", man)   # passes
 
 
 def test_F03_the_authorized_loader_ignores_the_local_manifest(tmp_path):

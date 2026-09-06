@@ -128,7 +128,21 @@ class TestCriterion1NoRegistryWritePath(unittest.TestCase):
         # the sharper assertion below is what pins that distinction: exactly
         # one registry-byte write exists in the module and it is the
         # compare-and-swap's.
-        SEAM = ("append_run_started", "_compare_and_append")
+        # WIDENED AGAIN 2026-09-07 for QROS-CF F06 ROUND TWO, and the
+        # property is STILL unchanged. Astra's remaining finding was that a
+        # sidecar lock protects the file only if every competing writer takes
+        # it, and owner control had no sanctioned append at all -- so a hold
+        # was filed by ad hoc mutation, taking no lock and reading no decided
+        # snapshot. P3 was serialized against other P3s and nothing else.
+        #
+        # `_append_owner_row` is the missing half, and it is deliberately the
+        # SAME primitive: it appears here as a member of the seam rather than
+        # as an exception to it, and the caller assertion below still pins
+        # that `_compare_and_append` has no callers outside the seam. Two
+        # appenders, one serialized write. That is what changed; "every write
+        # in this module belongs to the seam" did not.
+        SEAM = ("append_run_started", "_append_owner_row",
+                "_compare_and_append")
         LOCK = "_AppendLock"
         funcs = {n.name: n for n in ast.walk(tree)
                  if isinstance(n, ast.FunctionDef)}
@@ -147,10 +161,11 @@ class TestCriterion1NoRegistryWritePath(unittest.TestCase):
         self.assertEqual(
             ["write_bytes"], _write_actions_in(funcs["_compare_and_append"]),
             "the compare-and-swap is the one place registry bytes are written")
-        self.assertEqual(
-            [], _write_actions_in(funcs["append_run_started"]),
-            "`append_run_started` writes registry bytes directly again, "
-            "bypassing the compare-and-swap")
+        for appender in ("append_run_started", "_append_owner_row"):
+            self.assertEqual(
+                [], _write_actions_in(funcs[appender]),
+                "`%s` writes registry bytes directly again, bypassing the "
+                "compare-and-swap" % appender)
         self.assertNotIn(
             "write_bytes", _write_actions_in(classes[LOCK]),
             "the append lock writes registry bytes")
@@ -160,9 +175,10 @@ class TestCriterion1NoRegistryWritePath(unittest.TestCase):
             if isinstance(c, ast.Call)
             and getattr(c.func, "id", getattr(c.func, "attr", None))
             == "_compare_and_append")
-        self.assertEqual(["append_run_started"], callers,
-                         "the compare-and-swap has callers other than the P3 "
-                         "seam, which would make it a general registry writer")
+        self.assertEqual(["_append_owner_row", "append_run_started"], callers,
+                         "the compare-and-swap has callers other than the two "
+                         "authorized appenders, which would make it a general "
+                         "registry writer")
         del rb, inspect
 
     def test_the_seam_is_the_only_exported_writer_and_writes_one_token(self):
@@ -180,13 +196,22 @@ class TestCriterion1NoRegistryWritePath(unittest.TestCase):
                    # `AppendRefused` is how this seam says no.
                    and not (isinstance(getattr(rb, n), type)
                             and issubclass(getattr(rb, n), BaseException))]
-        self.assertEqual(["append_run_started"], suspect,
-                         "registry_boundary exposes %r; exactly one writer is "
-                         "authorised" % suspect)
-        params = inspect.signature(rb.append_run_started).parameters
-        for forbidden in ("event", "token", "event_type", "note", "row"):
-            self.assertNotIn(forbidden, params,
-                             "the token must not be a caller-supplied value")
+        # QROS-CF F06 ROUND TWO: three exported writers, each naming ONE
+        # event. The owner append's first shape took `token` as a parameter --
+        # precisely the "general registry writer wearing a narrow name" this
+        # test forbids -- so it was split into two narrow entries over a
+        # private `_append_owner_row`. The rule below is unchanged and is now
+        # applied to every exported writer rather than to one.
+        self.assertEqual(["append_owner_hold", "append_owner_release",
+                          "append_run_started"], suspect,
+                         "registry_boundary exposes %r; only the three narrow "
+                         "writers are authorised" % suspect)
+        for name in suspect:
+            params = inspect.signature(getattr(rb, name)).parameters
+            for forbidden in ("event", "token", "event_type", "note", "row"):
+                self.assertNotIn(forbidden, params,
+                                 "%s takes the event as a caller-supplied "
+                                 "value" % name)
         self.assertEqual("SUPPLEMENT_RUN_STARTED", rb.RUN_STARTED_TOKEN)
 
     def test_the_other_half_of_the_proof_still_exists(self):

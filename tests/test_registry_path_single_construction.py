@@ -133,6 +133,17 @@ _KNOWN_TEST_CONSTRUCTIONS = {
     # intent scan, plus the final assertion that this file wrote nothing to
     # it. Every append case writes to a tmp_path copy.
     "tests/test_qros_cf_astra_repairs.py": 6,
+    # QROS-CF ROUND TWO settling tests. Eleven constructions, every one the
+    # NAME of a tmp_path copy the append cases write to -- the F05 and F06
+    # cases each build their own ledger under `tmp_path`. This file takes NO
+    # read of the live ledger: it reuses round one's `LIVE_REGISTRY`, and its
+    # last test asserts the real file is byte-identical to that snapshot when
+    # the module finishes.
+    #
+    # MEASURED, not typed -- the walk says 11. The table above already carries
+    # one comment about a hand-typed count coming out wrong; no reason to add
+    # a second.
+    "tests/test_qros_cf_astra_round2.py": 11,
     "tests/test_registry_absence_refuses.py": 7,
     "tests/test_registry_boundary.py": 2,
     "tests/test_registry_path_single_construction.py": 2,

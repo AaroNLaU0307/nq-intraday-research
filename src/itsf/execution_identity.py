@@ -54,6 +54,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from types import MappingProxyType
 
 __all__ = [
     "REPO", "STATIC_GOVERNED", "GOVERNED_TEST_FILES_ALWAYS",
@@ -66,6 +67,8 @@ __all__ = [
     "governed_dirty_paths", "seam_recheck",
     "BytecodeReport", "bytecode_report",
     "StartupReport", "startup_report", "EXPECTED_EXECUTABLE_PTH",
+    "LaunchAttestation", "assert_governed_launch", "launch_attestation",
+    "BOOTSTRAP_IMPORT_CLOSURE", "LAUNCH_FLAGS_REQUIRED",
 ]
 
 REPO = Path(__file__).resolve().parents[2]
@@ -447,11 +450,43 @@ def governed_dirty_paths(repo: Path = REPO, head_commit: str | None = None) -> t
 
 #: The `.pth` files in this machine's site directories that carry an
 #: executable `import` line, censused 2026-09-07 and required by installed
-#: packages the lockfile pins. Anything else executing at interpreter startup
-#: is refused: `.pth` `import` lines, `sitecustomize` and `usercustomize` run
-#: BEFORE any gate and are invisible to the lockfile, because they change
-#: behaviour without changing a version.
-EXPECTED_EXECUTABLE_PTH = frozenset({"a1_coverage.pth", "pip_system_certs.pth"})
+#: packages the lockfile pins -- MAPPED TO THE SHA256 OF THEIR BYTES.
+#:
+#: QROS-CF F02, SECOND ROUND. The first repair censused these by FILENAME,
+#: and the re-review named the hole precisely: a filename allowlist accepts
+#: arbitrary content under an allowed name. Reproduced 2026-09-07 on the
+#: repaired tree -- `a1_coverage.pth` rewritten to `import hook_payload`
+#: executed an attacker's module at startup while `startup_report` still
+#: answered `pinned=True`. A `.pth` is executable code; its identity is its
+#: bytes, and only its bytes.
+#:
+#: WHY BYTES AND NOT SUPPRESSION. Launching with `-S` stops `.pth`
+#: processing outright and would close this finding by construction. It was
+#: measured first and it is not available: under `-S` (and under `-I`, which
+#: implies it) `import pandas` fails outright, so suppression trades a
+#: startup surface for the pinned environment itself. Content pinning is the
+#: mechanism that survives the measurement.
+#:
+#: WHAT EACH ONE IS, so the pin is reviewable rather than two magic digests:
+#:   * `pip_system_certs.pth` imports `pip_system_certs.bootstrap`, and that
+#:     package IS version-pinned in the lockfile (`pip_system_certs==5.3`),
+#:     so the entry point is pinned here and the code it reaches is pinned
+#:     there.
+#:   * `a1_coverage.pth` executes coverage's subprocess startup ONLY when
+#:     `COVERAGE_PROCESS_START` or `COVERAGE_PROCESS_CONFIG` is set, and
+#:     swallows an absent `coverage`. Its bytes are pinned here; the env
+#:     gate is reported by `startup_report` rather than refused, because
+#:     `coverage` measures this project's own test suite and refusing the
+#:     variable would break the measurement rather than the threat.
+#:
+#: A pinned file that is ABSENT is not a problem -- nothing executes. A
+#: pinned name whose bytes differ, or any unlisted executable `.pth`, is.
+EXPECTED_EXECUTABLE_PTH = MappingProxyType({
+    "a1_coverage.pth":
+        "f1498191b7f52180654ccdb6195233612805e26344100c093058343ea04afd36",
+    "pip_system_certs.pth":
+        "da91bb35c03c2131243d09401f1351a12716d54fbbce0347b5749b822d5493ef",
+})
 
 #: Modules the interpreter imports automatically at startup if they are
 #: importable. Neither exists on this machine and neither may appear.
@@ -473,6 +508,12 @@ def startup_report(*, sitedirs=None, find_spec=None) -> StartupReport:
     runtime behaviour before a single gate runs -- while every one of the 49
     locked package versions still matches and `measure_environment` reports
     `pinned=True`. Version metadata is not a control over executable code.
+
+    TRUST IS BY BYTES, NOT BY FILENAME (F02, second round). The first
+    repair allowed two `.pth` names; the re-review reproduced an allowed
+    name carrying arbitrary executable content. Every executable `.pth` is
+    now hashed and matched against `EXPECTED_EXECUTABLE_PTH`, so an allowed
+    name with changed bytes refuses exactly like an unlisted one.
 
     DELIBERATELY NOT A MACHINE HASH. Only the surfaces that actually execute
     in this process at startup are constrained: `.pth` files carrying an
@@ -509,9 +550,18 @@ def startup_report(*, sitedirs=None, find_spec=None) -> StartupReport:
             if any(ln.strip().startswith(("import ", "import\t"))
                    for ln in lines):
                 executable.append(pth.name)
-    unexpected = sorted(set(executable) - EXPECTED_EXECUTABLE_PTH)
-    if unexpected:
-        problems.append("unexpected executable .pth: %s" % unexpected)
+                # F02: the name is not the identity. Hash what will execute.
+                got = hashlib.sha256(pth.read_bytes()).hexdigest()
+                want = EXPECTED_EXECUTABLE_PTH.get(pth.name)
+                if want is None:
+                    problems.append(
+                        "unexpected executable .pth: %s (sha %s)"
+                        % (pth.name, got[:12]))
+                elif got != want:
+                    problems.append(
+                        "executable .pth %s has changed content: pinned %s..., "
+                        "found %s... -- an allowed NAME is not an allowed FILE"
+                        % (pth.name, want[:12], got[:12]))
     for name in FORBIDDEN_STARTUP_MODULES:
         try:
             if find_spec(name) is not None:
@@ -597,9 +647,140 @@ def bytecode_report(repo: Path = REPO, *, dont_write=None, prefix=None,
               "%s, 0 cache files for governed sources" % prefix, 0)
 
 
+#: The only modules that are necessarily already imported when the launch
+#: attestation is taken, because the attestation function lives in one of
+#: them. Measured, not assumed: `src/itsf/__init__.py` is 0 bytes, so
+#: importing this module pulls in exactly these two.
+BOOTSTRAP_IMPORT_CLOSURE = frozenset({"itsf", "itsf.execution_identity"})
+
+#: The MINIMUM COMPATIBLE launch semantics, measured 2026-09-07 rather than
+#: copied from a hardening guide:
+#:
+#:   -B                     -> sys.flags.dont_write_bytecode == 1, READ-ONLY
+#:   PYTHONPYCACHEPREFIX=D  -> every cache lookup leaves the repo tree
+#:
+#: and explicitly NOT these, each of which was tried and rejected on
+#: measurement:
+#:   -S  `import pandas` fails    (it would also close F02, and cannot be used)
+#:   -I  implies -s -E, same failure
+#:   -E  ignores PYTHONPYCACHEPREFIX, so the prefix silently goes unset and
+#:       the repository's own __pycache__ becomes readable again
+LAUNCH_FLAGS_REQUIRED = ("-B", "PYTHONPYCACHEPREFIX")
+
+
+@_dc.dataclass(frozen=True)
+class LaunchAttestation:
+    """Proof, taken BEFORE the governed imports, that no pre-existing
+    bytecode cache can have supplied this process's semantics."""
+    pycache_prefix: str
+    caches_under_prefix: int
+    detail: str
+
+
+_LAUNCH_ATTESTATION: "LaunchAttestation | None" = None
+
+
+def launch_attestation() -> "LaunchAttestation | None":
+    """The attestation this process took, or None if it never took one."""
+    return _LAUNCH_ATTESTATION
+
+
+def assert_governed_launch(*, flags=None, prefix=None,
+                           modules=None) -> LaunchAttestation:
+    """Establish, before any governed import, that this process cannot have
+    executed a pre-existing governed bytecode cache. Raises `SeamRefused`.
+
+    QROS-CF F01, SECOND ROUND. The first repair took a CENSUS at the seam --
+    are there cache files under the active prefix right now -- and the
+    re-review broke it in one move: the attacker deletes the forged cache
+    after it has executed and before the census runs. Reproduced 2026-09-07
+    on the repaired tree: a tampered cache returned 1 where the source says
+    960, the file was removed, and `bytecode_report` then answered
+    `from_source=True`. A current-state census cannot prove a historical
+    negative, and no amount of strengthening the census fixes that.
+
+    SO THE PROOF MOVED EARLIER INSTEAD OF GETTING STRONGER. Three facts,
+    taken together and taken BEFORE the governed modules are imported:
+
+      1. `sys.flags.dont_write_bytecode` is set. This is the LAUNCH flag on
+         the read-only `sys.flags` structseq -- measured: assigning to it
+         raises AttributeError. The first repair read `sys.dont_write_bytecode`,
+         the plain writable mirror, which in-process code can set at will.
+         So: this process writes no cache, and cannot pretend to.
+      2. `sys.pycache_prefix` names an existing directory holding zero
+         `.pyc` files. Every cache lookup for a governed source therefore
+         resolves under a tree that contains nothing to read.
+      3. No governed `itsf.*` module beyond `BOOTSTRAP_IMPORT_CLOSURE` is in
+         `sys.modules` yet. This is the fact that makes 1 and 2 a PROOF
+         rather than an observation: at this instant no governed module has
+         been imported, so there is no earlier window whose evidence could
+         have been deleted. Every governed import happens after this line,
+         under a process that cannot write caches into a tree that has none.
+
+    WHAT REMAINS, STATED RATHER THAN HIDDEN. A pre-planted file cannot be
+    read, because the launcher creates the prefix fresh per run at a path
+    nobody can predict. What is left is an adversary WRITING into that
+    private directory concurrently with the governed process -- active
+    concurrent code, not the on-disk tamper F01 is about -- and
+    `sys.pycache_prefix` being reassigned mid-run, which
+    `tests/test_qros_cf_astra_repairs.py` forbids by AST across all of
+    `src/` and `scripts/`. Neither is a one-shot local tamper, which is the
+    threat class that made F01 blocking.
+
+    NOT A GUARD OF A GUARD. This function proves nothing about ITSELF and
+    does not try to: facts 1 and 2 cover its own two modules by exactly the
+    same argument they cover every later one -- nothing was written, and
+    there was nothing to read.
+    """
+    flags = sys.flags if flags is None else flags
+    prefix = sys.pycache_prefix if prefix is None else prefix
+    modules = sys.modules if modules is None else modules
+
+    if not getattr(flags, "dont_write_bytecode", 0):
+        raise SeamRefused(
+            "launch_bytecode_writing_enabled",
+            "sys.flags.dont_write_bytecode is not set; launch with -B "
+            "(the read-only launch flag, not the writable sys mirror)")
+    if not prefix:
+        raise SeamRefused(
+            "launch_pycache_prefix_unset",
+            "sys.pycache_prefix is unset; launch with PYTHONPYCACHEPREFIX "
+            "pointing at a private directory created for this run")
+    root = Path(prefix)
+    if not root.is_dir():
+        raise SeamRefused(
+            "launch_pycache_prefix_absent",
+            "sys.pycache_prefix %s is not a directory" % prefix)
+    caches = sorted(q.name for q in root.rglob("*.pyc"))
+    if caches:
+        raise SeamRefused(
+            "launch_pycache_prefix_not_empty",
+            "%d cache file(s) already under the active prefix %s (%s); a "
+            "cache that exists can be read" % (len(caches), prefix,
+                                               ", ".join(caches[:3])))
+    premature = sorted(name for name in list(modules)
+                       if (name == "itsf" or name.startswith("itsf."))
+                       and name not in BOOTSTRAP_IMPORT_CLOSURE)
+    if premature:
+        raise SeamRefused(
+            "launch_governed_modules_already_imported",
+            "%d governed module(s) were imported before the launch was "
+            "attested (%s); the attestation must precede every governed "
+            "import or it proves nothing about them"
+            % (len(premature), ", ".join(premature[:5])))
+
+    global _LAUNCH_ATTESTATION
+    _LAUNCH_ATTESTATION = LaunchAttestation(
+        str(prefix), 0,
+        "attested before any governed import: -B set (read-only launch "
+        "flag), pycache_prefix %s holds 0 caches, only %s imported"
+        % (prefix, sorted(BOOTSTRAP_IMPORT_CLOSURE)))
+    return _LAUNCH_ATTESTATION
+
+
 def seam_recheck(expected_head: str, repo: Path = REPO, *,
                  environment=None, bytecode=None,
-                 startup=None) -> None:
+                 startup=None, launch=None) -> None:
     """Re-verify at the first-write seam what A_PRECHECK verified earlier.
 
     Closes the check-then-replace race Condition A names: between the
@@ -629,3 +810,17 @@ def seam_recheck(expected_head: str, repo: Path = REPO, *,
     st = startup_report() if startup is None else startup
     if not st.pinned:
         raise SeamRefused("seam_startup_surface_unpinned", st.detail)
+    # F01: the census above is a useful current-state check and it is NOT the
+    # proof. The proof is the attestation taken before the governed imports,
+    # and requiring it HERE is what makes the launch boundary mechanically
+    # enforced rather than merely available -- this is the one production
+    # call site, so a run that skipped the launcher stops before its first
+    # side effect instead of producing evidence nobody can vouch for.
+    la = _LAUNCH_ATTESTATION if launch is None else launch
+    if la is None:
+        raise SeamRefused(
+            "seam_launch_not_attested",
+            "no launch attestation: this process never called "
+            "assert_governed_launch() before importing the governed modules, "
+            "so a pre-existing bytecode cache cannot be ruled out. Launch "
+            "through scripts/run_governed.py.")
