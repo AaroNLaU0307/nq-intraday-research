@@ -12,6 +12,10 @@
 
 | 文件 | 是什么 |
 |---|---|
+| [`RESEARCH_STATE.md`](RESEARCH_STATE.md) | **ITSF 阶段权威**（OD-CF-3）：十个问题一页答完；outcome-clean，永不隔离 |
+| [`BACKLOG.md`](BACKLOG.md) | **唯一的 blocker 集（§1）＋非阻断 backlog（§2）＋已关闭项（§3）**；其余旧待办清单只剩指针横幅 |
+| [`REVIEWER_CONTRACT.md`](REVIEWER_CONTRACT.md) | 复审契约：PASS / PASS_WITH_BACKLOG / HOLD，两轮预算，两种验证义务，污染协议（OD-CF-7） |
+| [`QROS_CF_WINDOW_LOG_2026-09-07.md`](QROS_CF_WINDOW_LOG_2026-09-07.md) | 实施窗口（DEC-0006，I1–I7）的**唯一运行日志**：T-F17 估算、OD-CF-4 证明、各阶段结果 |
 | [`DECISIONS.md`](DECISIONS.md) | **owner 决定与复审裁决的 append-only 台账**（QROS-CF v2 §10.1）。OD-CF-1..7 逐字转录在此；此后不再新建 OWNER_DECISIONS_* / RULING_* / SEAT_RESULT_* 文种 |
 
 ## 1. 现势入口（从这里开始）

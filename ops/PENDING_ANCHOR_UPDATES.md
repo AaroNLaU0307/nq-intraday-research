@@ -1,3 +1,5 @@
+> **2026-09-07 · QROS-CF (DEC-0001):** this list is no longer a source of blockers or pending items. Everything in it was triaged into `ops/BACKLOG.md` (blocker set §1, backlog §2, closed items §3); the current stage is `ops/RESEARCH_STATE.md`. Kept unchanged below as history.
+
 > **已并入，2026-08-25。** 下列五项已全部写进
 > `MC_TO_STRATEGY_MASTER_PLAN.md`（已隔离，见 ops/OUTCOME_CARRYING_ARTIFACTS.json；不得打开） §15.1。本文件保留为历史记录，
 > **不要再并入一次**；解冻条件（登记表清空）当时已满足。

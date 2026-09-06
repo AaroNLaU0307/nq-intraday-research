@@ -1,3 +1,5 @@
+> **2026-09-07 · QROS-CF (DEC-0001):** this list is no longer a source of blockers or pending items. Everything in it was triaged into `ops/BACKLOG.md` (blocker set §1, backlog §2, closed items §3); the current stage is `ops/RESEARCH_STATE.md`. Kept unchanged below as history.
+
 ＃ QUANT PROJECT COMPLETION / SIMPLIFICATION PLAN
 
 ```ini

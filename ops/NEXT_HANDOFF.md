@@ -1,3 +1,5 @@
+> **2026-09-07 · QROS-CF (DEC-0001):** this list is no longer a source of blockers or pending items. Everything in it was triaged into `ops/BACKLOG.md` (blocker set §1, backlog §2, closed items §3); the current stage is `ops/RESEARCH_STATE.md`. Kept unchanged below as history.
+
 # 下一份要交出去的东西 —— 固定入口
 
 > **这个文件名永远不变。** Aaron 说「把这个给审阅席位」时，指的就是它。

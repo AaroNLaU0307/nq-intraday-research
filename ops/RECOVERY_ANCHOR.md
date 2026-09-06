@@ -57,6 +57,7 @@ OFF-LIMITS   注册表列出的其余全部路径
 |---|---|---|
 | 1 | **本文件** | outcome-clean |
 | 2 | `ops/NEXT_HANDOFF.md` —— 下一份要交出去的东西，固定文件名 | outcome-clean |
+| 2a | `ops/RESEARCH_STATE.md`（ITSF 阶段权威，OD-CF-3）与 `ops/BACKLOG.md`（唯一 blocker 集）—— builder／owner 的现势入口；blind 席位仍只读本文件 | outcome-clean |
 | 3 | `qros status` / `qros check`（机械状态：lane、stage、seal、freshness） | outcome-clean |
 | 4 | `ops/README.md` —— `ops/` 全量索引，标注了哪些隔离 | outcome-clean |
 | 5 | `ops/TRIAL_REGISTRY.md` 尾部 —— 事件真相源，append-only | 未隔离 |
