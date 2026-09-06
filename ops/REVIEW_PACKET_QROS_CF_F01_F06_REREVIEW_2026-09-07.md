@@ -4,7 +4,7 @@
 PACKET_TYPE=TARGETED_RE_REVIEW_OF_A_REPAIR（不是 A2，不是 Stage I，不解开任何 QROS 门）
 REVIEW_ID=QROS-CF-F01-F06-REREVIEW-001
 DELIVERY_STATUS=ISSUED
-COMPANION=ops/NEXT_HANDOFF.md（禁读清单载体，必须同行）
+COMPANION=ops/NEXT_HANDOFF.md（禁读清单载体，**必须同行**;已登记在 §0.3 与 ARTIFACTS_UNDER_REVIEW.json,强制件必须被钉住）
 PREPARED_BY=Claude Opus 5，repair-builder seat —— **本席位写了被审的修复,不得自审通过**
 FOR=GPT-6 Astra，fresh session —— 定向复审，仅 F01–F06
 DECIDED_BY=Aaron —— **席位不裁定,也不代签**
@@ -55,6 +55,7 @@ worktree 字节与 `f461f09` 处的 blob 字节逐一相同(14/14),你应独立�
 | `7a0fd26969f68e1a4ac2de6167b03ebbb6c83368e1f6998dec93422485ab187a` | `11381` | `ops/BACKLOG.md` | F07/F08 作为 **B-22 / B-23** 的落点;唯一 blocker 集合 |
 | `5c9af31df771eb9c36ff8100b881b5efd17f4e69a2e80e5a42e76cec1961540d` | `6084` | `ops/RECOVERY_ANCHOR.md` | **允许的 outcome-clean 入口点** |
 | `a61c125b4e2e551955ce59816c9ccbc6a449a91d7f7701095eeb586e5c155f4b` | `2563` | `ops/OUTCOME_CARRYING_ARTIFACTS.json` | **隔离登记册**（quarantine register） |
+| `8bd3668c887f812de07a9763ffb37cc5cbee92c0a5d14d4911e98748f8965598` | `5770` | `ops/NEXT_HANDOFF.md` | **强制同行件**（本包 `COMPANION`,禁读清单载体）。第一版声明它"必须同行"却没有把它登记进在审集——**Astra 据此正确 STOP**:强制件未被钉住,与缺失同罪。现已登记 |
 
 转录件的 sha256 未写在本包正文内,原因与本包自身相同:它与本包在同一批提交中
 落盘,把它的 hash 写进正文再提交会改变本包 hash。它由
