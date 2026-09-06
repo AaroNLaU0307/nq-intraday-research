@@ -3,7 +3,9 @@
 ```ini
 PACKET_TYPE=TARGETED_RE_REVIEW_OF_A_REPAIR（不是 A2，不是 Stage I，不解开任何 QROS 门）
 REVIEW_ID=QROS-CF-F01-F06-REREVIEW-001
-DELIVERY_STATUS=ISSUED
+DELIVERY_STATUS=RETURNED
+RETURNED_VERDICT=HOLD —— F04 CLOSED;F01/F02/F03/F05/F06 STILL_BLOCKING（GPT-6 Astra，fresh session，2026-09-07）
+RETURNED_NOTE=本轮复审已归还,故按 test_artifacts_under_review_are_frozen 的指示从 ARTIFACTS_UNDER_REVIEW.json 撤销登记。第二轮修复见 tests/test_qros_cf_astra_round2.py。**归还不是通过**;最终认证由 Aaron 派发
 COMPANION=ops/NEXT_HANDOFF.md（禁读清单载体，**必须同行**;已登记在 §0.3 与 ARTIFACTS_UNDER_REVIEW.json,强制件必须被钉住）
 PREPARED_BY=Claude Opus 5，repair-builder seat —— **本席位写了被审的修复,不得自审通过**
 FOR=GPT-6 Astra，fresh session —— 定向复审，仅 F01–F06
