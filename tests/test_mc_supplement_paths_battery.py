@@ -1159,12 +1159,95 @@ def test_next_value_is_accepted_and_nothing_else_is():
     assert seq_outcome(10 ** 6) == "supplement_seq_not_next_value"
 
 
+def sequence_conflict_refusal_codes() -> frozenset:
+    """Every code a DUPLICATED global sequence may legally fail closed
+    with, read off the resolver's own source instead of typed here.
+
+    THERE ARE THREE, and which one fires is decided by PASS ORDER, not by
+    severity: `_resolve_supersedes` runs before `_check_global_sequence`,
+    so when a P2S or an F3 points at the duplicated sequence its own
+    ambiguity code wins, and otherwise the duplicate code does. The
+    resolver says so in its own comment ("Both are refusals; only the name
+    differs").
+
+    DERIVED STRUCTURALLY, because typing the three names is what broke
+    this test. It pinned `supplement_seq_duplicate` while no supersede row
+    happened to point at any sampled sequence; on 2026-09-06 seq 25 became
+    an F3 target and the assertion failed over a code change, not over a
+    weakened invariant. The two ambiguity codes are located by their
+    `len(candidates) > 1` guard and the duplicate one by its `value in
+    seen` guard, so a rename in the resolver carries into this set instead
+    of turning it red.
+
+    The three exact codes are each pinned separately by CONTROLLED
+    fixtures in `test_mc_supplement_registry.py`
+    (`test_supplement_row_may_not_duplicate_an_existing_sequence`,
+    `test_p2s_target_ambiguous`, `test_f3_target_ambiguous`). This battery
+    deliberately asserts only membership: it runs against the REAL ledger,
+    whose supersede targets move, and pinning one name here is coupling to
+    a snapshot rather than to the invariant.
+    """
+    import ast
+    import inspect
+
+    tree = ast.parse(inspect.getsource(sr))
+    fns = {n.name: n for n in ast.walk(tree)
+           if isinstance(n, ast.FunctionDef)}
+    codes = set()
+
+    def emitted_code(node):
+        """The refusal code this branch raises. Position varies -- the
+        supersede resolver's local helper is `bad(ev, code, detail)` and
+        the sequence check builds `Refusal(code, detail)` directly -- so
+        the code is identified by BEING one, against the module's own
+        declared set, rather than by argument index."""
+        for call in ast.walk(node):
+            if not isinstance(call, ast.Call):
+                continue
+            for a in call.args:
+                if (isinstance(a, ast.Constant)
+                        and isinstance(a.value, str)
+                        and a.value in sr.REFUSAL_CODES):
+                    return a.value
+        return None
+
+    def guard_src(node):
+        return ast.unparse(node.test)
+
+    for branch in ast.walk(fns["_resolve_supersedes"]):
+        if isinstance(branch, ast.If) and "len(candidates) > 1" in guard_src(branch):
+            code = emitted_code(branch)
+            if code:
+                codes.add(code)
+    for branch in ast.walk(fns["_check_global_sequence"]):
+        if isinstance(branch, ast.If) and "value in seen" in guard_src(branch):
+            code = emitted_code(branch)
+            if code:
+                codes.add(code)
+
+    # A derivation that silently found nothing would make the assertion
+    # below vacuous, which is the failure mode this whole file exists to
+    # catch. Fail loudly instead.
+    assert len(codes) == 3, (
+        "expected exactly three sequence-conflict codes (one duplicate, two "
+        "ambiguity); the resolver's structure moved: %s" % sorted(codes))
+    unknown = codes - sr.REFUSAL_CODES
+    assert not unknown, unknown
+    return frozenset(codes)
+
+
 def test_reusing_or_undercutting_an_existing_sequence_is_refused():
+    """The invariant: reusing or undercutting an existing numbered
+    sequence FAILS CLOSED. Not which of the three refusals says so."""
+    allowed = sequence_conflict_refusal_codes()
     highest = real_highest_sequence()
-    # every value at or below the highest is already occupied by a real
-    # row, so the duplicate code — not the next-value code — is correct.
+    # Every value at or below the highest is already occupied by a real
+    # row, so a duplicate is what the resolver sees. `seq_outcome` returns
+    # "OK" only when the resolution SUCCEEDED, and "OK" is not a refusal
+    # code, so an accidental pass cannot satisfy this.
     for value in (highest, highest - 1, 1, 5):
-        assert seq_outcome(value) == "supplement_seq_duplicate", value
+        outcome = seq_outcome(value)
+        assert outcome in allowed, (value, outcome, sorted(allowed))
 
 
 def test_zero_and_negative_sequence_cells_are_refused():

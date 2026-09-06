@@ -468,6 +468,16 @@ AUTHORISED_SUPPLEMENT_ROWS = {
         "and empty at the moment of the append; registry commit ec1b9c3; "
         "witness WITNESS_F2_S002_APPENDED_2026-09-06.json. Subsequently "
         "documented in ops/OWNER_DECISIONS_2026-09-06.md OD-2",
+    # Added only AFTER the F3 was appended, witnessed and committed -- the
+    # entry that was deliberately withheld from the three above while the
+    # row did not yet exist.
+    ("SUPPLEMENT_SUPERSEDED", "MC-DS-S002"):
+        "Aaron, ops/OWNER_DECISIONS_2026-09-06.md OD-2, seq 26, retiring the "
+        "id after the post-start C_BUILD_1 failure and naming MC-DS-S003 as "
+        "successor; registry commit cc520c5; witness "
+        "WITNESS_F3_S002_APPENDED_2026-09-06.json. Its `superseded_commit` "
+        "points at seq 25 rather than at the F2, because F2 and P3 are "
+        "UNNUMBERED and the F3 reference field can only name numbered rows",
 }
 
 
