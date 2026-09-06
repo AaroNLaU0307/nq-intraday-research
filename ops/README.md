@@ -20,6 +20,8 @@
 | [`ATTESTATION_HEADER_TEMPLATE.md`](templates/ATTESTATION_HEADER_TEMPLATE.md) | 验证者 attestation 头部模板（独立性按维度陈述；冻结结果哈希） |
 | [`DISPATCH_TEMPLATE.md`](templates/DISPATCH_TEMPLATE.md) | 派发模板（路由头＋目录／简报／规格哈希＋读规则） |
 | [`QROS_CF_WINDOW_LOG_2026-09-07.md`](QROS_CF_WINDOW_LOG_2026-09-07.md) | 实施窗口（DEC-0006，I1–I7）的**唯一运行日志**：T-F17 估算、OD-CF-4 证明、各阶段结果 |
+| [`ASTRA_P2_GATE_REVIEW_HOLD_F01_F06_2026-09-07_TRANSCRIPTION.md`](ASTRA_P2_GATE_REVIEW_HOLD_F01_F06_2026-09-07_TRANSCRIPTION.md) | **GPT-6 Astra P2 门禁复审 HOLD 的持久转录**（六条 BLOCKING F01–F06 + 两条非阻断 F07/F08）。原报告仅经聊天传递、从未落盘，故本文件即 F01–F06 的权威定义；与 `qros-cf-redesign/ASTRA_CHALLENGE_REPORT_2026-09-07_TRANSCRIPTION.md`（提案 v1 复审，编号无关）**不是同一份** |
+| [`REVIEW_PACKET_QROS_CF_F01_F06_REREVIEW_2026-09-07.md`](REVIEW_PACKET_QROS_CF_F01_F06_REREVIEW_2026-09-07.md) | F01–F06 定向复审送审包（delivery）：受审集逐字节 sha256、修复提交 `f461f09`、退出判据；包自身的 sha256 由 `ARTIFACTS_UNDER_REVIEW.json` 承载（送审文档不能自钉） |
 | [`DECISIONS.md`](DECISIONS.md) | **owner 决定与复审裁决的 append-only 台账**（QROS-CF v2 §10.1）。OD-CF-1..7 逐字转录在此；此后不再新建 OWNER_DECISIONS_* / RULING_* / SEAT_RESULT_* 文种 |
 
 ## 1. 现势入口（从这里开始）
