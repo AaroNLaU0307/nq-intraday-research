@@ -8,6 +8,12 @@
 
 ---
 
+## 0. QROS-CF 现势文件（2026-09-07 起；Aaron OD-CF-1 采纳，ITSF 专用）
+
+| 文件 | 是什么 |
+|---|---|
+| [`DECISIONS.md`](DECISIONS.md) | **owner 决定与复审裁决的 append-only 台账**（QROS-CF v2 §10.1）。OD-CF-1..7 逐字转录在此；此后不再新建 OWNER_DECISIONS_* / RULING_* / SEAT_RESULT_* 文种 |
+
 ## 1. 现势入口（从这里开始）
 
 | 文件 | 是什么 |
