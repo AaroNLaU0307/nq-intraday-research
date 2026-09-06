@@ -9,7 +9,9 @@ supplement's structural-only boundary:
 
     itsf.data.dbn_loader : DevelopmentSignalLoader.load_real -> bars_by_date
     itsf.s0.context      : build_universe(...)               -> S0Universe
-    itsf.s0.dataset      : build_vol20_regime_mapping_from_universe(...)
+    itsf.s0.dataset      : build_vol20_regime_mapping_from_universe(
+                             universe, method)   # eligible population,
+                             then projected onto the sealed day set
     itsf.s0.dataset      : build_event_stratum_map(...)
     => row = ROW_FIELDS = ("trade_date", "year", "vol_stratum",
                            "event_stratum")
@@ -87,11 +89,20 @@ def derive_day_strata_rows(*, universe, vol_method: str,
     """One row per day of the SEALED day universe, in R3 §4's call graph.
 
     `expected_day_set` is the already-sealed universe carried over from the
-    S0 authority. The comparison against it is EXACT and day-by-day — R3 §4:
+    S0 authority, and it is the OUTPUT row population: one row per day of
+    it, no more and no fewer.
+
+    THE EVENT MAPPING is compared against it EXACTLY and day-by-day — R3 §4:
     "对 `authority.expected_day_set` 做逐日精确相等对拍（不是覆盖，不是包含）".
-    A missing day and an invented day are separate refusals, because they
-    are different defects: the first means the producer lost a day, the
+    A missing day and an invented day are separate refusals there, because
+    they are different defects: the first means the producer lost a day, the
     second means it invented one.
+
+    THE VOL MAPPING is compared by COVERAGE, not equality, and that is the
+    2026-09-06 repair rather than a relaxation: its population is now the
+    structurally eligible sample S0-T001 cut its terciles over, which is a
+    deliberate superset of the sealed set. Only a sealed day the population
+    fails to cover is still a defect. See the call site below.
 
     Rows come back sorted by `trade_date` so the digest is independent of
     the order the mappings happened to iterate in.
@@ -114,12 +125,36 @@ def derive_day_strata_rows(*, universe, vol_method: str,
 
     days = sorted(expected_day_set)
 
-    vol = _s0.build_vol20_regime_mapping_from_universe(universe, vol_method,
-                                                       days)
+    # THE VOL THRESHOLD POPULATION IS NOT THE OUTPUT ROW POPULATION, and
+    # conflating them is the defect the strict-blind MC-DS-S003 verification
+    # proved. `build_vol20_regime_mapping` computes the two tercile cut
+    # points ONCE over exactly the `days` it is handed -- its own docstring
+    # says "the FULL Development sample day set to label (every structurally
+    # eligible day)" and `tercile_reference` ruled that population. This
+    # producer used to hand it `sorted(expected_day_set)`: the SEALED OUTPUT
+    # set. A narrower sample moves the quantiles, so days sitting near a cut
+    # got a different tercile than the run being reconstructed had given
+    # them -- a silent relabelling, invisible to every conservation check
+    # because the labels were internally consistent either way.
+    #
+    # The repair is to call the primitive the way S0-T001 itself calls it
+    # (`scripts/s0_real_run.py`: the mapping is built from the universe with
+    # NO `days` argument, so it defaults to the structurally eligible
+    # population) and then PROJECT the resulting labels onto the sealed
+    # output set. Omitting the argument rather than naming the population
+    # again is deliberate: one expression of "which population", in the
+    # ruled function, shared by both callers.
+    vol = _s0.build_vol20_regime_mapping_from_universe(universe, vol_method)
     events = _s0.build_event_stratum_map(flag_by_date, event_na_mapping)
 
-    label_of = getattr(vol, "label_of", None)
-    if not isinstance(label_of, Mapping):
+    # BOTH MAPPINGS' SHAPES FIRST, then their contents. Grouping them is
+    # not cosmetic: a malformed event mapping and an incomplete vol
+    # population are independent defects, and whichever check runs first
+    # decides which one gets NAMED. Shape before content means a mapping
+    # that is not a mapping is always reported as that, never as a
+    # consequence of the other axis being examined first.
+    population = getattr(vol, "label_of", None)
+    if not isinstance(population, Mapping):
         raise DayStrataRowsError(
             "vol_mapping_shape",
             "the ruled vol mapping exposes no `label_of` mapping")
@@ -129,7 +164,25 @@ def derive_day_strata_rows(*, universe, vol_method: str,
             "event_mapping_shape",
             "the ruled event map exposes no `stratum_of` mapping")
 
-    _assert_day_by_day(expected_day_set, frozenset(label_of), "vol")
+    # COVERAGE, not exact equality -- and the difference matters. The
+    # threshold population is a SUPERSET of the sealed output set by design
+    # now, so a day in the population that is not in the sealed set is no
+    # longer a defect on this axis: that is what widening the population
+    # MEANS. Only the missing direction can still be one, and it is checked
+    # HERE rather than after the projection, because a projection onto the
+    # sealed set has that set as its key set BY CONSTRUCTION -- an exact-set
+    # assertion after it could never fail, which is the vacuous-guard shape
+    # this project keeps finding. The code is unchanged (`vol_day_missing`)
+    # because the defect it names is unchanged: the vol mapping does not
+    # cover a day the seal requires.
+    missing = sorted(expected_day_set - frozenset(population))
+    if missing:
+        raise DayStrataRowsError(
+            "vol_day_missing",
+            f"{len(missing)} sealed day(s) absent from the vol population, "
+            f"first {missing[:3]}")
+    label_of = {day: population[day] for day in days}
+
     _assert_day_by_day(expected_day_set, frozenset(stratum_of), "event")
 
     rows = []

@@ -150,13 +150,39 @@ class TestTheDayUniverseIsExact(unittest.TestCase):
             _derive(short, {d: "none" for d in DAYS})
         self.assertEqual("vol_day_missing", caught.exception.code)
 
-    def test_an_invented_day_refuses_with_a_DIFFERENT_code(self):
-        """Separate refusals, because they are separate defects: one means
-        the producer lost a day, the other means it invented one."""
-        extra = dict({d: "T1" for d in DAYS}, **{"2024-01-05": "T1"})
+    def test_a_WIDER_vol_population_is_accepted_and_projected(self):
+        """THE 2026-09-06 REPAIR, and this test used to assert its opposite.
+
+        It pinned `vol_day_invented` for a vol mapping carrying a day outside
+        the sealed set. That was right while the producer handed the sealed
+        set to the tercile constructor -- and it was also the defect: the
+        thresholds were then cut over the sealed sample instead of the
+        structurally eligible one S0-T001 cut them over, which moved labels
+        for days near a cut. A strict-blind verification proved it.
+
+        The population is now DELIBERATELY a superset, so "invented" is no
+        longer a defect on this axis. What must hold instead is that the
+        extra day changes nothing about the OUTPUT: the rows are still
+        exactly the sealed set, and each label is still the population's own
+        value for that day, transcribed.
+
+        The `vol_day_invented` code is not gone -- the event axis still
+        raises it, and `test_the_event_mapping_is_checked_the_same_way`'s
+        sibling below covers that direction."""
+        extra = dict({d: "T1" for d in DAYS}, **{"2024-01-05": "T3"})
+        rows = _derive(extra, {d: "none" for d in DAYS})
+        self.assertEqual(sorted(DAYS), [r["trade_date"] for r in rows])
+        self.assertNotIn("2024-01-05", [r["trade_date"] for r in rows])
+        self.assertEqual(["T1"] * len(DAYS),
+                         [r["vol_stratum"] for r in rows])
+
+    def test_an_invented_day_on_the_EVENT_axis_still_refuses(self):
+        """The direction that did NOT change. The event mapping is still
+        compared to the sealed set by exact equality in both directions."""
+        extra = dict({d: "none" for d in DAYS}, **{"2024-01-05": "none"})
         with self.assertRaises(dsr.DayStrataRowsError) as caught:
-            _derive(extra, {d: "none" for d in DAYS})
-        self.assertEqual("vol_day_invented", caught.exception.code)
+            _derive({d: "T1" for d in DAYS}, extra)
+        self.assertEqual("event_day_invented", caught.exception.code)
 
     def test_the_event_mapping_is_checked_the_same_way(self):
         with self.assertRaises(dsr.DayStrataRowsError) as caught:

@@ -51,6 +51,13 @@ class ClassificationError(Exception):
 #: `expected_day_set_*` belong to `day_set_exact`: a universe that is not a
 #: frozenset, or is empty, is a defect in the day universe the caller
 #: supplied, not in any row.
+#:
+#: `vol_day_invented` is reachable on the EVENT axis only. Since the vol
+#: threshold population became a deliberate SUPERSET of the sealed output set
+#: (`day_strata_rows`), a vol day outside that set is no longer a defect, so
+#: the vol side checks COVERAGE and raises `vol_day_missing` alone. The entry
+#: stays because `_assert_day_by_day` still builds the code from a shared
+#: f-string and the derivation test reads it from the source.
 GATE_OF_PRODUCER_CODE = {
     "trade_date_malformed": "row_schema_blind",
     "vol_stratum_outside_vocabulary": "row_schema_blind",
