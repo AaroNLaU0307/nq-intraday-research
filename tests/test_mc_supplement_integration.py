@@ -544,6 +544,21 @@ AUTHORISED_SUPPLEMENT_ROWS = {
         "WITNESS_F3_S003_APPENDED_2026-09-06.json. Unlike MC-DS-S002's F3 "
         "this one supersedes the FAILURE EVENT itself -- the F2v is numbered "
         "at seq 29 -- so there is no reference ambiguity to record",
+    # Added only AFTER the T1 was appended, witnessed and committed. NOTHING
+    # else for MC-DS-S004 is listed: it has one row, and its P2, P3, P4, P5,
+    # F2, F2v and F3 have not happened. This table is not where a future
+    # event gets permission in advance.
+    ("SUPPLEMENT_PROPOSED", "MC-DS-S004"):
+        "main agent, 2026-09-06, seq 31, T1 successor registration for the "
+        "retired MC-DS-S003, with superseded_at_event and reason_code read "
+        "off that F3 row rather than typed; appended from framework HEAD "
+        "84f55721 -- the first tree in which the supplement cuts its vol "
+        "terciles over the same structurally eligible population S0-T001 cut "
+        "them over; registry commit 64a8249; witness "
+        "WITNESS_T1_S004_APPENDED_2026-09-06.json. NOT an authorization: it "
+        "is a successor registration, live P2 = 0 and started = False, and "
+        "the vol repair behind that HEAD is structural evidence, not a "
+        "verification verdict",
 }
 
 
