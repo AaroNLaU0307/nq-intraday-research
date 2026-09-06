@@ -559,6 +559,53 @@ AUTHORISED_SUPPLEMENT_ROWS = {
         "is a successor registration, live P2 = 0 and started = False, and "
         "the vol repair behind that HEAD is structural evidence, not a "
         "verification verdict",
+    # --- the N09 run that COMPLETED, and its independent verification ----
+    # Added 2026-09-06 under Aaron's explicit approval, AFTER each of these
+    # four rows was in the ledger with a registry commit and a witness. They
+    # were DEFERRED on purpose: the P2 bound framework HEAD ac16c399, and any
+    # framework commit before the terminal outcome would have moved HEAD and
+    # broken `authorized_commit_matches_head` while the authorization was
+    # live. `git_clean` reads the worktree, not this suite, so the deferral
+    # cost the run nothing. T1 is already registered above (at H8). Nothing
+    # for MC-DS-S005 appears anywhere: it has no rows.
+    ("SUPPLEMENT_EXECUTION_AUTHORIZED", "MC-DS-S004"):
+        "Aaron, 2026-09-06, seq 32, the N09 authorization, signed at "
+        "framework HEAD ac16c399 -- the first tree whose producer cuts its "
+        "vol terciles over the structurally eligible population S0-T001 cut "
+        "them over; registry commit 4bb1e48; witness "
+        "WITNESS_P2_S004_APPENDED_2026-09-06.json. The framework tree then "
+        "stayed frozen at that HEAD from signature to consumption, so "
+        "`authorized_commit_matches_head` held for the whole life of the "
+        "authorization",
+    ("SUPPLEMENT_RUN_STARTED", "MC-DS-S004"):
+        "the runner, 2026-09-06, through the P3-only append seam during the "
+        "N09 execution: after B_DERIVE and the pre-P3 residue check, before "
+        "the first side effect, spending the seq 32 authorization; registry "
+        "commit 5579cd4; witness WITNESS_P3_S004_APPENDED_2026-09-06.json",
+    ("SUPPLEMENT_SEALED", "MC-DS-S004"):
+        "the runner, 2026-09-06; verdict P4, archive_ok, 2842 rows, local "
+        "seal f59a0092. Signed off by Aaron field by field after every digest "
+        "was RECOMPUTED from the sealed bytes and the archive copy re-read as "
+        "byte-identical; registry commit 336be7e is MC-DS-S003's -- this one "
+        "is 95b9c99; witness WITNESS_P4_S004_APPENDED_2026-09-06.json. A seal "
+        "is a fact about the run, not about correctness -- see the P5 below",
+    ("SUPPLEMENT_INDEPENDENTLY_VERIFIED", "MC-DS-S004"):
+        "a fresh STRICT-BLIND independent verifier seat, 2026-09-06, seq 33: "
+        "headline_replay_identity PASS with 16/16 headline cells, 1008/1008 "
+        "grid points, 3024/3024 seed rows and 604800/604800 repeat digests, "
+        "and mismatch_count 0 against independently reconstructed S0-T001 "
+        "strata. Evidence under "
+        "quant-data/review/itsf-mc-ds-s004-strict-blind-verifier-2026-09-06 "
+        "-- blind artifact phase3_blind_result.json sha256 "
+        "2029773d47fac470e333114cc99c73430c2b54aa79924a6f34414576e7eb501e "
+        "and attestation P5_ATTESTATION_MC-DS-S004.md sha256 "
+        "0b5d9382c2d547309578a2d5e8f1ff4b345c4d45feaf2c9f367c322f158cb8b7, "
+        "both re-hashed and matched before the row was appended; registry "
+        "commit 729daa8; witness "
+        "WITNESS_P5_S004_APPENDED_2026-09-06.json. `rederivation_reproduced` "
+        "was asserted on its OWN evidence, not inferred from the headline "
+        "result -- the same separation that kept the claim out of "
+        "MC-DS-S003's F2v. THE FIRST P5 IN THIS PROJECT: N09 is complete",
 }
 
 
