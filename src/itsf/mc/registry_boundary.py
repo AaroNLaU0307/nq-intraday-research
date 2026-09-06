@@ -157,7 +157,7 @@ def _assert_not_a_tombstone(path: Path, text: str) -> None:
             "empty or unauthorised one." % (path, first.strip()[:160]))
 
 
-def _read_text(path: Path) -> str:
+def _read_text(path: Path, *, _bytes: bytes | None = None) -> str:
     """THE production read of the governed registry path.
 
     Deliberately one tiny function: the no-bypass test asserts that no
@@ -191,7 +191,13 @@ def _read_text(path: Path) -> str:
             "an empty registry: an append-only file does not become empty, "
             "so absence means the path is wrong or the file was lost - "
             "never that nothing has been authorised yet." % path)
-    text = path.read_text(encoding="utf-8")
+    # `_bytes` lets ONE caller -- `append_run_started`'s compare-and-swap --
+    # decode the exact bytes it will append to, instead of taking a second
+    # read of a file that can change between them (QROS-CF F06). It is not a
+    # second read path: absence still refuses above, the tombstone check
+    # still runs, and every other caller reads the file here as before.
+    text = (path.read_text(encoding="utf-8") if _bytes is None
+            else _bytes.decode("utf-8"))
     _assert_not_a_tombstone(path, text)
     return text
 
@@ -353,6 +359,83 @@ def _p3_note(supplement_id: str) -> str:
             % (supplement_id, supplement_id))
 
 
+#: The lock file that serializes the compare-and-swap. Beside the registry,
+#: never inside it. `O_CREAT | O_EXCL` is the primitive: on both platforms
+#: this project runs on, exactly one creator wins.
+LOCK_SUFFIX = ".append.lock"
+
+#: How long a waiter will try before refusing. A start that cannot take the
+#: lock REFUSES -- it never proceeds unserialized.
+LOCK_TIMEOUT_SECONDS = 10.0
+
+
+class _AppendLock:
+    """Minimum serialization for one append. Refuses rather than waiting
+    forever, and refuses rather than proceeding unlocked."""
+
+    def __init__(self, target: Path) -> None:
+        self.path = target.with_name(target.name + LOCK_SUFFIX)
+        self._fd = None
+
+    def __enter__(self):
+        import os
+        import time
+        deadline = time.monotonic() + LOCK_TIMEOUT_SECONDS
+        while True:
+            try:
+                self._fd = os.open(str(self.path),
+                                   os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                return self
+            except FileExistsError:
+                if time.monotonic() >= deadline:
+                    raise AppendRefused(
+                        "p3_append_lock_unavailable",
+                        "another append holds %s; this start refuses rather "
+                        "than writing unserialized" % self.path) from None
+                time.sleep(0.02)
+
+    def __exit__(self, *exc):
+        import os
+        if self._fd is not None:
+            os.close(self._fd)
+            try:
+                os.unlink(str(self.path))
+            except OSError:                                    # pragma: no cover
+                pass
+        return False
+
+
+def _compare_and_append(target: Path, decided: bytes, addition: bytes) -> None:
+    """Append `addition` ONLY IF the file is still byte-identical to the
+    version every check was decided on (QROS-CF F06).
+
+    THE CHECK AND THE WRITE MUST SHARE A VERSION. Re-reading and appending to
+    whatever is there now is what let an OWNER_HOLD land between the hold
+    check and the write: the hold was preserved by the second read and the P3
+    went on top of it, so the committed order was HOLD then STARTED while the
+    start had been authorized against pre-hold state. Comparing to `decided`
+    makes that impossible -- any intervening commit, hold or otherwise,
+    changes the bytes and this refuses.
+
+    The two legal serialized orders both survive:
+      * a hold commits first  -> bytes differ -> refuse, no P3 written;
+      * this append wins      -> P3 committed, a later hold is ordered after
+                                 it and does not retroactively unauthorize a
+                                 start that was already legal.
+    """
+    with _AppendLock(target):
+        now = target.read_bytes()
+        if now != decided:
+            raise AppendRefused(
+                "p3_registry_changed_under_decision",
+                "the registry moved between the read every check was decided "
+                "on (%d bytes, sha %s) and this append (%d bytes, sha %s); a "
+                "start decided on stale state is never written"
+                % (len(decided), hashlib.sha256(decided).hexdigest()[:12],
+                   len(now), hashlib.sha256(now).hexdigest()[:12]))
+        target.write_bytes(decided + addition)
+
+
 def append_run_started(supplement_id: str, *, head_commit: str,
                        utc_stamp: str, path=None) -> str:
     """Append THIS run's P3 row. Returns the line appended.
@@ -391,7 +474,16 @@ def append_run_started(supplement_id: str, *, head_commit: str,
 
     target = (Path(path) if path is not None
               else REGISTRY_REPO_ROOT / REGISTRY_PATH)
-    text = _read_text(target)
+    # ONE READ DECIDES, AND THAT READ IS WHAT GETS APPENDED TO (QROS-CF F06).
+    # This function used to read the file twice: `text` for every check, then
+    # a separate `before = target.read_bytes()` for the write. An OWNER_HOLD
+    # committed between the two was invisible to the hold check AND present in
+    # `before`, so the P3 was appended AFTER the hold using pre-hold state --
+    # exactly the ordering the owner path must never produce. Reproduced
+    # 2026-09-07 at that boundary. `decided` is now the single version: every
+    # check below reads it, and the append is a compare-and-swap against it.
+    decided = target.read_bytes()
+    text = _read_text(target, _bytes=decided)
     chain = _sr.resolve_supplement_chain(text, supplement_id)
     problem = getattr(chain, "problem", "")
     if problem:
@@ -428,11 +520,10 @@ def append_run_started(supplement_id: str, *, head_commit: str,
               head_commit[:_sc.COMMIT_WIDTH[_sc.UNNUMBERED]],
               _sc.ACTOR_RUNNER, _p3_note(supplement_id)))
 
-    before = target.read_bytes()
-    if not before.endswith(b"\n"):
+    if not decided.endswith(b"\n"):
         raise AppendRefused("p3_registry_tail_is_not_a_line",
                             "the registry does not end in a newline")
-    target.write_bytes(before + (row + "\n").encode("utf-8"))
+    _compare_and_append(target, decided, (row + "\n").encode("utf-8"))
 
     after = _read_text(target)
     verified = _sr.resolve_supplement_chain(after, supplement_id)

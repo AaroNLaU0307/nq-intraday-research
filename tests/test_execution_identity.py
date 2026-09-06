@@ -354,20 +354,37 @@ def _fake_git(head, porcelain, tiers_source='GOVERNANCE_FILES = ("test_ops_index
     return fake
 
 
+#: The two QROS-CF F01/F02 seam reports, injected CLEAN so each seam test
+#: below still refuses for the reason it names. Under pytest the real reports
+#: are legitimately unpinned -- the suite does not run with -B and a private
+#: pycache prefix -- and a test that refused on that would be measuring the
+#: harness instead of the property. The reports' own behaviour is pinned by
+#: `test_qros_cf_astra_repairs.py`.
+_OK_BC = ei.BytecodeReport(True, "injected clean")
+_OK_ST = ei.StartupReport(True, "injected clean")
+
+
+def _seam(head, environment=None, **kw):
+    kw.setdefault("bytecode", _OK_BC)
+    kw.setdefault("startup", _OK_ST)
+    return ei.seam_recheck(
+        head, environment=environment or ei.EnvironmentReport(True, "ok"), **kw)
+
+
 def test_seam_refuses_when_head_moved(monkeypatch):
     monkeypatch.setattr(ei, "_git", _fake_git(OTHER40, ""))
     with pytest.raises(ei.SeamRefused) as caught:
-        ei.seam_recheck(HEAD40, environment=ei.EnvironmentReport(True, "ok"))
+        _seam(HEAD40)
     assert caught.value.code == "seam_head_moved"
 
 
 def test_seam_refuses_a_dirty_governed_path_and_ignores_ops(monkeypatch):
     monkeypatch.setattr(ei, "_git", _fake_git(HEAD40, " M ops/README.md\n"))
-    ei.seam_recheck(HEAD40, environment=ei.EnvironmentReport(True, "ok"))
+    _seam(HEAD40)
     monkeypatch.setattr(ei, "_git",
                         _fake_git(HEAD40, " M ops/README.md\n M src/itsf/s0/labels.py\n"))
     with pytest.raises(ei.SeamRefused) as caught:
-        ei.seam_recheck(HEAD40, environment=ei.EnvironmentReport(True, "ok"))
+        _seam(HEAD40)
     assert caught.value.code == "seam_governed_tree_dirty"
     assert "src/itsf/s0/labels.py" in caught.value.detail
 
@@ -375,16 +392,16 @@ def test_seam_refuses_a_dirty_governed_path_and_ignores_ops(monkeypatch):
 def test_seam_ignores_a_dirty_tier_c_test_but_not_a_tier_a_test(monkeypatch):
     monkeypatch.setattr(ei, "_git",
                         _fake_git(HEAD40, " M tests/test_ops_index_is_complete.py\n"))
-    ei.seam_recheck(HEAD40, environment=ei.EnvironmentReport(True, "ok"))
+    _seam(HEAD40)
     monkeypatch.setattr(ei, "_git", _fake_git(HEAD40, " M tests/test_labels.py\n"))
     with pytest.raises(ei.SeamRefused):
-        ei.seam_recheck(HEAD40, environment=ei.EnvironmentReport(True, "ok"))
+        _seam(HEAD40)
 
 
 def test_seam_refuses_an_unpinned_environment(monkeypatch):
     monkeypatch.setattr(ei, "_git", _fake_git(HEAD40, ""))
     with pytest.raises(ei.SeamRefused) as caught:
-        ei.seam_recheck(HEAD40, environment=ei.EnvironmentReport(False, "PYTHONPATH set"))
+        _seam(HEAD40, environment=ei.EnvironmentReport(False, "PYTHONPATH set"))
     assert caught.value.code == "seam_environment_unpinned"
 
 

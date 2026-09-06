@@ -64,6 +64,8 @@ __all__ = [
     "governance_files_at", "governed_entries", "identity_at", "compare",
     "measure_environment", "measure_for_context", "covering_mechanism",
     "governed_dirty_paths", "seam_recheck",
+    "BytecodeReport", "bytecode_report",
+    "StartupReport", "startup_report", "EXPECTED_EXECUTABLE_PTH",
 ]
 
 REPO = Path(__file__).resolve().parents[2]
@@ -443,8 +445,161 @@ def governed_dirty_paths(repo: Path = REPO, head_commit: str | None = None) -> t
     return tuple(sorted(dirty))
 
 
+#: The `.pth` files in this machine's site directories that carry an
+#: executable `import` line, censused 2026-09-07 and required by installed
+#: packages the lockfile pins. Anything else executing at interpreter startup
+#: is refused: `.pth` `import` lines, `sitecustomize` and `usercustomize` run
+#: BEFORE any gate and are invisible to the lockfile, because they change
+#: behaviour without changing a version.
+EXPECTED_EXECUTABLE_PTH = frozenset({"a1_coverage.pth", "pip_system_certs.pth"})
+
+#: Modules the interpreter imports automatically at startup if they are
+#: importable. Neither exists on this machine and neither may appear.
+FORBIDDEN_STARTUP_MODULES = ("sitecustomize", "usercustomize")
+
+
+@_dc.dataclass(frozen=True)
+class StartupReport:
+    pinned: bool
+    detail: str
+    executable_pth: tuple = ()
+
+
+def startup_report(*, sitedirs=None, find_spec=None) -> StartupReport:
+    """Constrain the startup/import surfaces that can change semantics.
+
+    QROS-CF F02. Reproduced 2026-09-07: a `.pth` file whose line begins
+    `import ` executes at interpreter startup, so it can rebind calendar or
+    runtime behaviour before a single gate runs -- while every one of the 49
+    locked package versions still matches and `measure_environment` reports
+    `pinned=True`. Version metadata is not a control over executable code.
+
+    DELIBERATELY NOT A MACHINE HASH. Only the surfaces that actually execute
+    in this process at startup are constrained: `.pth` files carrying an
+    `import` line, and the two automatic startup modules. Data-only `.pth`
+    files (bare path lines) add import PATHS, which `HOSTILE_ENV_VARS`
+    already covers for the variable case and which cannot execute on their
+    own, so they are listed but not refused.
+
+    Required packages are preserved: the pin is the census of what is
+    genuinely installed and needed, not an empty set.
+    """
+    import importlib.util
+    import site
+    if sitedirs is None:
+        cand = list(site.getsitepackages())
+        if site.ENABLE_USER_SITE:
+            try:
+                cand.append(site.getusersitepackages())
+            except Exception:                                 # noqa: BLE001
+                pass
+        sitedirs = [p for p in dict.fromkeys(cand) if Path(p).is_dir()]
+    find_spec = importlib.util.find_spec if find_spec is None else find_spec
+
+    problems = []
+    executable = []
+    for sd in sitedirs:
+        for pth in sorted(Path(sd).glob("*.pth")):
+            try:
+                lines = pth.read_text(encoding="utf-8",
+                                      errors="replace").splitlines()
+            except Exception as exc:                          # noqa: BLE001
+                problems.append(f"{pth.name} unreadable: {exc}")
+                continue
+            if any(ln.strip().startswith(("import ", "import\t"))
+                   for ln in lines):
+                executable.append(pth.name)
+    unexpected = sorted(set(executable) - EXPECTED_EXECUTABLE_PTH)
+    if unexpected:
+        problems.append("unexpected executable .pth: %s" % unexpected)
+    for name in FORBIDDEN_STARTUP_MODULES:
+        try:
+            if find_spec(name) is not None:
+                problems.append(f"{name} is importable and runs at startup")
+        except Exception:                                     # noqa: BLE001
+            problems.append(f"{name} probe failed")
+    if problems:
+        return StartupReport(False, "; ".join(problems), tuple(sorted(executable)))
+    return StartupReport(
+        True, "startup surface pinned: executable .pth %s; no sitecustomize "
+              "or usercustomize" % sorted(set(executable)),
+        tuple(sorted(executable)))
+
+
+@_dc.dataclass(frozen=True)
+class BytecodeReport:
+    """Whether this process could have executed a pre-existing governed
+    bytecode cache."""
+    from_source: bool
+    detail: str
+    caches_found: int = 0
+
+
+def bytecode_report(repo: Path = REPO, *, dont_write=None, prefix=None,
+                    governed_sources=None) -> BytecodeReport:
+    """Can a pre-existing `.pyc` have supplied this process's semantics?
+
+    QROS-CF F01. The governed identity is built from git-tracked blobs and
+    `__pycache__/` is `.gitignore` line 1, so no cache file is in the
+    identity, `git status` never reports one, and `seam_recheck`'s dirty-path
+    check cannot see one. Reproduced 2026-09-07: a `.pyc` whose 16-byte
+    header still matched its untouched source, carrying different bytecode,
+    executed -- `rth_close_minute()` returned 1 where the authorized source
+    says 960, with source bytes, identity and dirty paths all clean.
+
+    WHY THIS CHECKS THE LAUNCH CONDITIONS AND NOT THE CACHE CONTENT. The
+    other acceptable direction -- validate each cache against a fresh
+    compilation -- was implemented and measured first, and it does not hold:
+    `marshal.dumps` of an equal code object is not byte-stable (interning
+    order), a structural digest needs `co_lnotab`, which is deprecated, and
+    both produced mismatches on files nobody had touched (3 and 7 of 68).
+    A gate that false-refuses is worse than none, so the mechanism is the
+    one that is decidable: run so that no pre-existing cache CAN be read.
+
+    THE THREE FACTS, together sufficient. `-B` (`sys.dont_write_bytecode`)
+    means this process writes no cache; `sys.pycache_prefix` moves every
+    lookup away from the repository's `__pycache__` directories; and if no
+    cache file exists under that prefix for any governed source, then none
+    was read, because reading one requires it to exist. Measured: under an
+    empty private prefix the tampered cache above is ignored and the
+    authorized source semantics execute.
+    """
+    dont_write = sys.dont_write_bytecode if dont_write is None else dont_write
+    prefix = sys.pycache_prefix if prefix is None else prefix
+    problems = []
+    if not dont_write:
+        problems.append("sys.dont_write_bytecode is False (launch with -B)")
+    if not prefix:
+        problems.append("sys.pycache_prefix is unset (launch with "
+                        "PYTHONPYCACHEPREFIX pointing at a private "
+                        "directory)")
+    found = 0
+    if prefix:
+        import importlib.util
+        sources = (sorted((repo / "src").rglob("*.py"))
+                   if governed_sources is None else list(governed_sources))
+        present = []
+        for s in sources:
+            cache = Path(importlib.util.cache_from_source(str(s)))
+            if cache.exists():
+                found += 1
+                if len(present) < 3:
+                    present.append(cache.name)
+        if found:
+            problems.append(
+                "%d governed source(s) already have a cache under the active "
+                "prefix (%s...) -- a cache that exists can be read"
+                % (found, ", ".join(present)))
+    if problems:
+        return BytecodeReport(False, "; ".join(problems), found)
+    return BytecodeReport(
+        True, "no readable governed bytecode cache: -B set, pycache_prefix "
+              "%s, 0 cache files for governed sources" % prefix, 0)
+
+
 def seam_recheck(expected_head: str, repo: Path = REPO, *,
-                 environment=None) -> None:
+                 environment=None, bytecode=None,
+                 startup=None) -> None:
     """Re-verify at the first-write seam what A_PRECHECK verified earlier.
 
     Closes the check-then-replace race Condition A names: between the
@@ -463,3 +618,14 @@ def seam_recheck(expected_head: str, repo: Path = REPO, *,
     env = measure_environment() if environment is None else environment
     if not env.pinned:
         raise SeamRefused("seam_environment_unpinned", env.detail)
+    # F01: the seam is the last point before the first production write, so
+    # it is where a readable governed bytecode cache must stop the run.
+    bc = bytecode_report(repo) if bytecode is None else bytecode
+    if not bc.from_source:
+        raise SeamRefused("seam_bytecode_cache_readable", bc.detail)
+    # F02: a startup hook that changed calendar or runtime semantics leaves
+    # every package version matching, so the environment gate above cannot
+    # see it. Checked here for the same reason.
+    st = startup_report() if startup is None else startup
+    if not st.pinned:
+        raise SeamRefused("seam_startup_surface_unpinned", st.detail)

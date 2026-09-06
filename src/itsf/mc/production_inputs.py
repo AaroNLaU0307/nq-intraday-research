@@ -204,11 +204,19 @@ def build_session_schedule(start: str, end: str, *, bars_by_date=None,
     # set, it is listed in the AUTHORIZED manifest with a sha256, and until
     # 2026-09-07 nothing compared the two. Verified before it is read, the
     # same way every .dbn.zst file is.
+    # TWO REPAIRS, 2026-09-07, both reproduced before they were made.
+    # F03: `load_manifest` prefers `_local_manifest.json`, so an unbound local
+    # manifest could become the digest authority while the AUTHORIZED
+    # `manifest.json` -- the one the production identity pins -- sat
+    # unchanged beside it. The governed path now loads the authorized
+    # manifest only.
+    # F04: verifying a PATHNAME and then reopening it consumes whatever is
+    # there by then; measured, a swap between the two changed the consumed
+    # bytes from "available" to "degraded". One read, verified, parsed.
     from ..data import manifests as _manifests
-    _manifests.verify_file_against_manifest(
-        root / CONDITION_JSON_NAME, _manifests.load_manifest(root))
-    condition = json.loads(
-        (root / CONDITION_JSON_NAME).read_text(encoding="utf-8"))
+    raw = _manifests.read_verified_bytes(
+        root / CONDITION_JSON_NAME, _manifests.load_authorized_manifest(root))
+    condition = json.loads(raw.decode("utf-8"))
     degraded = frozenset(r["date"] for r in condition
                          if r["condition"] != "available")
     return SessionSchedule(close_minute=close_minute,

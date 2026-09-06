@@ -51,6 +51,16 @@ LINE_PARSERS = {
     ("mc_registry.py", "_FIELD_RE"): "field parser over a segment",
     ("supplement_registry.py", "_NOTE_BRACKET_RE"): "note parser, stripped",
     ("supplement_registry.py", "_FIELD_RE"): "field parser over a segment",
+    # QROS-CF F05. This one is an INTENT SCAN, not an identity validator, and
+    # anchoring it would defeat its purpose: it must match a line the row
+    # parser CANNOT read -- a missing final pipe, an extra pipe inside the
+    # reason, the wrong cell count -- so the tail is by definition arbitrary.
+    # It runs per line (`text.splitlines()`), so no trailing newline reaches
+    # it, and it decides nothing about validity: every line it matches must
+    # then be produced as a validated row by the shared parser or the start
+    # refuses.
+    ("owner_control.py", "_OWNER_INTENT_RE"):
+        "per-line intent scan; must match rows the row parser rejects",
 }
 
 

@@ -42,7 +42,8 @@ from . import supplement_registry as _sr
 
 __all__ = ["OWNER_HOLD", "OWNER_RELEASE", "OWNER_TOKENS", "OWNER_ACTOR",
            "GLOBAL_SCOPE", "OwnerControlRefusal", "OwnerRow",
-           "parse_owner_rows", "active_holds", "assert_no_owner_hold"]
+           "parse_owner_rows", "active_holds", "assert_no_owner_hold",
+           "owner_intent_lines"]
 
 OWNER_HOLD = "OWNER_HOLD"
 OWNER_RELEASE = "OWNER_RELEASE"
@@ -93,13 +94,59 @@ def _fields(remainder: str, line_no: int) -> dict:
     return out
 
 
+#: A line that LOOKS like a registry row and CARRIES an owner-control token.
+#: Deliberately loose: it must match things the shared row parser will NOT
+#: yield as a row, because those are exactly the lines that used to vanish.
+_OWNER_INTENT_RE = re.compile(
+    r"^\s*\|.*(?<![A-Z0-9_])(OWNER_HOLD|OWNER_RELEASE)(?![A-Z0-9_])")
+
+
+def owner_intent_lines(text: str) -> tuple:
+    """`(line_no, token, line)` for every line that ASSERTS owner control.
+
+    Intent is read off the raw text, not off the shared parser's output,
+    because the defect this closes is a line the shared parser silently drops.
+    """
+    out = []
+    for i, line in enumerate(text.splitlines(), 1):
+        m = _OWNER_INTENT_RE.match(line)
+        if m:
+            out.append((i, m.group(1), line))
+    return tuple(out)
+
+
 def parse_owner_rows(text: str) -> tuple:
-    """Every OWNER_* row in `text`, validated. Other rows are ignored."""
+    """Every OWNER_* row in `text`, validated. Other rows are ignored.
+
+    OWNER-CONTROL INTENT FAILS CLOSED (QROS-CF F05). The shared row parser
+    skips lines it cannot read as six-cell rows -- correct for prose, fatal
+    for an owner's hold: reproduced 2026-09-07, a hold with a missing final
+    pipe, an extra pipe inside the reason, or the wrong cell count returned
+    NO ACTIVE HOLDS and a start could proceed. So before anything is
+    ignored, every line carrying a recognizable owner-control token must
+    have produced a validated owner row; a line that did not is a deterministic
+    refusal, not silence.
+
+    No second parser and no parallel ledger: the intent scan decides only
+    WHICH lines must be accounted for, and the shared parser still does all
+    the reading.
+    """
+    intents = owner_intent_lines(text)
     rows, refusal = _sr.parse_registry_rows(text)
     if refusal is not None:
         raise OwnerControlRefusal("owner_control_registry_unparseable",
                                   f"{refusal.code}: {refusal.detail}",
                                   getattr(refusal, "line_no", None))
+    readable_lines = {row.line_no for row in rows
+                      if row.event.strip("*").strip() in OWNER_TOKENS}
+    for line_no, token, _line in intents:
+        if line_no not in readable_lines:
+            raise OwnerControlRefusal(
+                "owner_control_row_unreadable",
+                f"line {line_no} carries {token} but the registry row parser "
+                "cannot read it as an owner-control row; an owner-control "
+                "line is never ignored",
+                line_no)
     out = []
     holds_by_seq: dict = {}
     released: set = set()

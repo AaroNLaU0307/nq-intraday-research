@@ -128,6 +128,11 @@ _KNOWN_TEST_CONSTRUCTIONS = {
     # The P3 seam's tests copy the real ledger to a temp file and write
     # only to the copy; the construction is the READ of the original.
     "tests/test_p3_append_seam.py": 1,
+    # QROS-CF F05/F06 settling tests. Six constructions, all of them the
+    # READ of the live ledger used as realistic text for the owner-control
+    # intent scan, plus the final assertion that this file wrote nothing to
+    # it. Every append case writes to a tmp_path copy.
+    "tests/test_qros_cf_astra_repairs.py": 6,
     "tests/test_registry_absence_refuses.py": 7,
     "tests/test_registry_boundary.py": 2,
     "tests/test_registry_path_single_construction.py": 2,

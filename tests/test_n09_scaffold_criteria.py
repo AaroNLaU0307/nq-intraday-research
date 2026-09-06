@@ -113,15 +113,56 @@ class TestCriterion1NoRegistryWritePath(unittest.TestCase):
 
         from itsf.mc import registry_boundary as rb
         tree = _module("mc/registry_boundary.py")
-        seam = next(n for n in ast.walk(tree)
-                    if isinstance(n, ast.FunctionDef)
-                    and n.name == "append_run_started")
+        # WIDENED 2026-09-07 for QROS-CF F06, and the property is unchanged.
+        # The write moved out of `append_run_started` into
+        # `_compare_and_append`, because the check and the write had to share
+        # ONE registry version: an OWNER_HOLD committed between the seam's two
+        # independent reads was invisible to the hold check and preserved by
+        # the second read, so the P3 landed after the hold on pre-hold state.
+        # The seam is therefore two functions now, and this asserts what it
+        # asserted before -- every write in the module belongs to that seam --
+        # plus the thing that keeps the second function from becoming a
+        # general writer: only the seam may call it.
+        # The seam is two functions plus the lock that serializes them. The
+        # lock's `unlink` removes its OWN lockfile, never the registry, and
+        # the sharper assertion below is what pins that distinction: exactly
+        # one registry-byte write exists in the module and it is the
+        # compare-and-swap's.
+        SEAM = ("append_run_started", "_compare_and_append")
+        LOCK = "_AppendLock"
+        funcs = {n.name: n for n in ast.walk(tree)
+                 if isinstance(n, ast.FunctionDef)}
+        classes = {n.name: n for n in ast.walk(tree)
+                   if isinstance(n, ast.ClassDef)}
+        for name in SEAM:
+            self.assertIn(name, funcs, "the P3 seam lost %s" % name)
+        self.assertIn(LOCK, classes, "the append lock is gone")
         everywhere = _write_actions_in(tree)
-        inside = _write_actions_in(seam)
+        inside = [w for name in SEAM for w in _write_actions_in(funcs[name])]
+        inside += _write_actions_in(classes[LOCK])
         self.assertTrue(inside, "the seam performs no write at all")
         self.assertEqual(sorted(everywhere), sorted(inside),
-                         "registry_boundary writes outside `append_run_started`"
+                         "registry_boundary writes outside the P3 seam"
                          ": %r" % sorted(set(everywhere) - set(inside)))
+        self.assertEqual(
+            ["write_bytes"], _write_actions_in(funcs["_compare_and_append"]),
+            "the compare-and-swap is the one place registry bytes are written")
+        self.assertEqual(
+            [], _write_actions_in(funcs["append_run_started"]),
+            "`append_run_started` writes registry bytes directly again, "
+            "bypassing the compare-and-swap")
+        self.assertNotIn(
+            "write_bytes", _write_actions_in(classes[LOCK]),
+            "the append lock writes registry bytes")
+        callers = sorted(
+            f.name for f in funcs.values()
+            for c in ast.walk(f)
+            if isinstance(c, ast.Call)
+            and getattr(c.func, "id", getattr(c.func, "attr", None))
+            == "_compare_and_append")
+        self.assertEqual(["append_run_started"], callers,
+                         "the compare-and-swap has callers other than the P3 "
+                         "seam, which would make it a general registry writer")
         del rb, inspect
 
     def test_the_seam_is_the_only_exported_writer_and_writes_one_token(self):
