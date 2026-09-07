@@ -93,7 +93,15 @@ def _mutation_candidates():
                     continue
                 params = {a.arg for a in node.args.args}
                 about_registry = (
-                    "registry" in node.name.lower()
+                    # (b1) the module that OWNS the governed path. Without this
+                    # the rule could not see the primitive or its
+                    # compare-and-swap caller at all, and two of the three
+                    # registered entries below could never fire -- a registered
+                    # entry that cannot fire misrepresents what this test
+                    # checks, which is the failure mode this repository calls
+                    # a vacuous guard.
+                    rel.endswith("mc/registry_boundary.py")
+                    or "registry" in node.name.lower()
                     or any("registry" in q.lower() for q in params)
                     or "TRIAL_REGISTRY.md" in body
                     or PRIMITIVE in called)
@@ -111,11 +119,28 @@ def _mutation_candidates():
 SUPPORTED = {
     # the boundary itself: the one physical write, under the one lock
     ("src/itsf/mc/registry_boundary.py", "serialized_append"): "THE PRIMITIVE",
-    # the compare-and-swap half, which delegates the write
-    ("src/itsf/mc/registry_boundary.py", "_compare_and_append"): "DELEGATES",
+    # `_compare_and_append` is deliberately NOT here. Since the repair it
+    # performs no write and opens nothing, so it is not a mutation candidate at
+    # all -- it is a CALLER of the primitive. Registering it would have been a
+    # row that could never fire, which is what the dead-entry test above exists
+    # to refuse. `test_n09_scaffold_criteria` is what pins its delegation.
     # the cross-module writer this file exists for
     ("src/itsf/s0/runner.py", "append_registry_event_line"): "DELEGATES",
 }
+
+
+def test_every_registered_entry_can_actually_fire():
+    """No dead rows. A registered writer the rule never yields would look like
+    coverage and be none -- and this file found exactly that in its own first
+    version: clauses keyed on names and literals could not see
+    `serialized_append` or `_compare_and_append`, so two of the three rows below
+    were decorative. Clause (b1) is the fix, and this is the test that would
+    have caught it."""
+    found = {(h["path"], h["symbol"]) for h in _mutation_candidates()}
+    dead = sorted(k for k in SUPPORTED if k not in found)
+    assert dead == [], (
+        "these are registered as supported writers but the rule never yields "
+        "them, so nothing about them is actually checked: %r" % (dead,))
 
 
 def test_the_rule_reaches_enough_code_to_prove_anything():

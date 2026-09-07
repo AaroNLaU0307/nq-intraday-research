@@ -3,7 +3,7 @@
 ```ini
 PACKET_TYPE=FINAL_CERTIFICATION_OF_A_REPAIR（沿用既有 Review Packet 件种,不是新件种;不是 A2,不是 Stage I,不解开任何 QROS 门）
 REVIEW_ID=QROS-CF-F01-F06-FINAL-CERT-001
-DELIVERY_STATUS=ISSUED
+DELIVERY_STATUS=RETURNED
 REISSUE_3=本包 §4.5 的写者清单**自己查出一条 F06 阻断项**(`s0/runner.append_registry_event_line` 在序列化之外改动受管 registry),Aaron 授权了仅针对 F06 的 PRE-CERT 定界修复。**那条已修**,见 §4.6。仍是同一 `REVIEW_ID`、同一谱系、一份 manifest;**从未派发过任何一版**
 F06_REPAIR_COMMIT=850f61b
 REISSUE=YES（第 2 次）—— 本次因 **Astra 在实质认证前的传输停止**：入口/写者清单需要更多源文件的字节。**这不是一条 finding,不是新的一轮,不是新 id**。前一次重发的原因是 —— **同一 REVIEW_ID 重发,不是新的复审谱系**。首版打包完成后从未派发;打包过程中机械测出三条残留,Aaron 授权了一次 PRE-CERT 定界修复,修复改动了首版钉住的字节,故撤回并按同一 id 重发。**没有任何席位看过任何一版**
