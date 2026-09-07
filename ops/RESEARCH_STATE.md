@@ -4,7 +4,7 @@
 RECORD_TYPE     = RESEARCH_STATE (QROS-CF v2 §2.2; one page; rewritten in place, history in git)
 OUTCOME_CLEAN   = YES — never quarantined; restates no verdict, exposure count or revealed value
 STAGE_AUTHORITY = this page (ITSF-only, DEC-0003). `qros check` validates seal / freshness / packet integrity and is not the stage authority
-UPDATED         = 2026-09-07 (P5 of the QROS-CF implementation window)
+UPDATED         = 2026-09-07 (QROS-CF governance window CLOSED by the final non-builder mechanical closure; research resumes at N10)
 ```
 
 ## 0. Who is reading this
@@ -20,9 +20,9 @@ UPDATED         = 2026-09-07 (P5 of the QROS-CF implementation window)
 | QROS-CF stage | **S4 RUN** for the MC pipeline (QROS alias C/E): sealed preregistration, build complete through N09, real-data runs in progress |
 | Preregistration | `STUDY_0_PREREGISTRATION.md`, sealed (`qros check` SEAL=VERIFIED at the revision named in `qros-state.yaml`) |
 | Last completed unit | N09 — MC-DS-S004 terminal at P5 (registry seq 33, strict-blind headline replay PASS, 16/16 cells), framework HEAD `7a5570f` |
-| Next unit | **N10 is not a run.** Its master-plan definition (DEC-0005 bounded read, P5): "独立验证＋attestation＋pin（两 commit 序列）", depends on N09, kind 工程＋Codex, structural. The independent verification and the attestation exist (registry seq 33, strict-blind P5 PASS, attestation `0b5d9382…`); the "pin" — formerly a two-commit registration of the rows into the framework — is now carried by the I3 binding (`registry_integrity.current_dependency_check`, verified live at P4). **Whether N10 is thereby closed is Aaron's call (P6 item).** N11 = GRID/K wiring (GridReplayAuthority + KReplayEvidence), depends on N07 and N10, structural, no run. N13 = the full MC runner, depends on N11, N-D3, N12; its MC_RUN_* events are the deferred ND-3 tokens — the first family that needs the QROS-CF run grammar, to be built inside N13's S3 with T-F02/T-F11 fixtures before its PROPOSED row |
+| Next unit | **N10 is not a run.** Its master-plan definition (DEC-0005 bounded read, P5): "独立验证＋attestation＋pin（两 commit 序列）", depends on N09, kind 工程＋Codex, structural. The independent verification and the attestation exist (registry seq 33, strict-blind P5 PASS, attestation `0b5d9382…`); the "pin" — formerly a two-commit registration of the rows into the framework — is now carried by the I3 binding (`registry_integrity.current_dependency_check`, verified live at P4). **Whether N10 is thereby closed is Aaron's call (open owner item).** The QROS-CF window no longer gates it: the window is CLOSED and N10 is the next research unit. N11 = GRID/K wiring (GridReplayAuthority + KReplayEvidence), depends on N07 and N10, structural, no run. N13 = the full MC runner, depends on N11, N-D3, N12; its MC_RUN_* events are the deferred ND-3 tokens — the first family that needs the QROS-CF run grammar, to be built inside N13's S3 with T-F02/T-F11 fixtures before its PROPOSED row |
 | Roadmap | N10 → N11 → N13 full MC → reveal / decision (owner checkpoint 3) → candidate strategy build → validation → final conclusion |
-| Governance | QROS-CF implementation window: I1–I7 implemented (P0–P5 committed); DEC-0006 closes it "at the first N10 AUTHORIZED row" — N10 has no AUTHORIZED row because it is not a run, so the closing event is Aaron's to name at P6 (recommendation: the first AUTHORIZED row of the first run after N10, i.e. N13's, or an explicit closing row in DECISIONS.md) |
+| Governance | **QROS-CF GOVERNANCE WINDOW = CLOSED.** **I1/I2 = SAFE TO ACTIVATE.** Closed by the final non-builder mechanical closure, which returned PASS on the closed-scope criteria A1–A6 / B1–B4 / S (TRANSPORT PASS; A+B 5253 passed 0 failed; full suite 5473 passed, 1 known historical B-20 xfail, 0 failed; real registry unchanged). Certified HEAD `2a358df37c1857ebe2a0c582139387f3b217936d`; final bounded repair `d063834bea5c0011cc4da503c2225e36f172bff7`; closure packet `ops/CLOSURE_CHECK_QROS_CF_FINAL_2026-09-07.md` sha256 `db878545e8475f662faf59fad38cd7f09567da50da8fd969c1dd2e704b5f15e9`; closure manifest sha256 `8dc5609c2b8996a9f8a6058688605d3d81712d65c26aaa193b21662409d8592e`. **No QROS-CF review or repair remains pending, and none is authorized.** The window's closing event is this closure itself, recorded as a row in `ops/DECISIONS.md` — DEC-0006's "first N10 AUTHORIZED row" formulation is superseded by that row, because N10 is not a run and has no AUTHORIZED row. Every earlier HOLD / returned-review record is preserved as history and none was rewritten into a PASS |
 
 ## 2. What exact research question are we answering
 
@@ -37,6 +37,8 @@ Current sub-question: the MC pipeline must produce the Checkpoint-0 statistic th
 ## 3. What can legitimately block progress right now
 
 Only rows in `ops/BACKLOG.md` §1 `CURRENT_BLOCKERS`. A row is admitted only if it names one of the six threats (T1 research correctness · T2 look-ahead/leakage · T3 data identity/provenance · T4 reproducibility · T5 real-run execution safety · T6 independent-verification validity) and a concrete failure path on the current or next stage. As of this update the table holds **zero open rows**; the candidates examined and why they were not admitted are listed under it.
+
+**A CLOSED issue stays closed.** Reopening one requires NEW concrete evidence of a failure on the current path in exactly one of T1–T6 — correctness, reproducibility, data authority, independent-verification validity, or real-run safety. None of the following reopens anything: a cleaner architecture is imaginable; a stronger general guard could exist; another reviewer would add reassurance; historical packet wording could be improved. Two distinctions are load-bearing and were learned the expensive way during the QROS-CF window: a **transport / review-packaging** defect is not an implementation defect, and **reviewer-seat invalidation** is not an implementation HOLD. A closed-scope verification stays closed-scope; observations outside its criteria go to `ops/BACKLOG.md` §2.
 
 ## 4. What is explicitly deferred
 
@@ -58,7 +60,7 @@ Project-finishing rule (QROS-CF v2 §8, verbatim): if the current research quest
 
 - Engineering decisions: the builder (Aaron's delegation of 2026-08-29), recorded as rows, never approved.
 - Owner checkpoints (QROS-CF v2 §7.4 + §2.3): (1) seal a FULL preregistration; (2) `AUTHORIZED` row for each real-data run; (3) reveal; (4) retire / re-research after a consequential negative or a third post-start failure for one purpose; (5) promote / falsify / not-promote, and any change to cost model, primary metric, or sample split; (6) verifier re-dispatch beyond the one retry, or any review beyond budget; (7) open a governance window. Owner hold / revocation rows: Aaron writes them himself in the registry.
-- **Next owner act (P6):** review the window's implementation report; decide whether N10 is closed by seq 33 + the I3 binding; name the window's closing event; dispatch the pending P2 gate-change review (DEC-0011). No AUTHORIZED row is due for N10; the next real-data authorization is N13's.
+- **Next owner act:** decide whether N10 is closed by seq 33 + the I3 binding (B-21). The other three P6 items are discharged: the window's implementation report was reviewed, the closing event is the final mechanical closure recorded in `ops/DECISIONS.md`, and the P2 gate-change review (DEC-0011) was superseded by the F01–F06 certification lineage that ended in that closure — nothing is PENDING_DISPATCH. No AUTHORIZED row is due for N10; the next real-data authorization is N13's.
 
 ## 8. When is an independent seat genuinely required
 

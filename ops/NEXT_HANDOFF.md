@@ -9,12 +9,14 @@
 
 ```
 UPDATED   = 2026-09-07
-REVIEW_ID = QROS-CF-FINAL-CLOSURE-CHECK-001
-PARENT    = QROS-CF-F06-OWNER-SEMANTICS-CLOSURE-001 —— 已以 **HOLD** 归还，记录保持原样
-SCOPE     = **封闭范围**：只裁 A1–A6 / B1–B4 / S。范围外的观察进 BACKLOG
-PACKET    = ops/CLOSURE_CHECK_QROS_CF_FINAL_2026-09-07.md
-SEAT      = GPT-6 Astra，fresh session —— **最终认证；给判决，不代 Aaron 签**
-DISPATCH  = 由 Aaron 派发。builder 不得自行调用任何审阅席位
+ACTIVE    = **NONE —— 当前没有待派发的审阅席位**
+LAST      = QROS-CF-FINAL-CLOSURE-CHECK-001 —— 已以 **PASS** 归还
+            （A1–A6 / B1–B4 / S 全 PASS；`I1/I2 SAFE TO ACTIVATE`；
+             `QROS-CF GOVERNANCE WINDOW CLOSED`）
+STATE     = QROS-CF 治理窗口 **CLOSED**；研究在 **N10 → N11 → N13** 恢复
+            权威状态见 ops/RESEARCH_STATE.md，裁定行见 ops/DECISIONS.md
+DISPATCH  = 由 Aaron 派发。builder 不得自行调用任何审阅席位；
+            **QROS-CF 不得自动重开**（重开条件见 RESEARCH_STATE §3）
 ```
 
 ---
