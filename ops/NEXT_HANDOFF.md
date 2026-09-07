@@ -8,10 +8,10 @@
 > 而两个审阅席位正是因为清单没有随包同行而被烧掉。
 
 ```
-UPDATED   = 2026-09-02
-REVIEW_ID = AMEND-ARCHIVE-CODE-6-REVIEW-001
-PACKET    = ops/REVIEW_PACKET_ARCHIVE_CODE_6_2026-09-05.md
-SEAT      = Fable，fresh session —— **对抗性审查，给建议，不裁定**
+UPDATED   = 2026-09-07
+REVIEW_ID = QROS-CF-F01-F06-FINAL-CERT-001
+PACKET    = ops/REVIEW_PACKET_QROS_CF_F01_F06_FINAL_CERT_2026-09-07.md
+SEAT      = GPT-6 Astra，fresh session —— **最终认证；给判决，不代 Aaron 签**
 DISPATCH  = 由 Aaron 派发。builder 不得自行调用任何审阅席位
 ```
 
@@ -78,12 +78,13 @@ ops/RECOVERY_ANCHOR.md      <- outcome-clean，这是你唯一该用的定位入
 ```
 研究轴  ops/EXPOSURE_LEDGER.md        消耗研究自由度 —— 禁读
 seat 轴 ops/REVIEWER_EXPOSURE_LOG.md  记录哪个审阅席位被烧掉
-                                      本次派发已由 builder 追加一行
+                                      **本次的行在你归还之后才追加**
                                       **你不需要打开它**，也不必去核对
 ```
 
-**两根轴永不合并。** 你这次被派发本身就是一次 seat 轴事件，
-已由 builder 追加到 seat 台账；**它不会动研究轴一格**。
+**两根轴永不合并。** 你这次被派发本身就是一次 seat 轴事件。台账的行记录的是
+**席位归还时的自陈**，所以本次那一行在你的结论回来之后才由 builder 追加——
+现在还没有那一行，本文件不声称有。**它不会动研究轴一格**。
 
 告诉你这件事，是为了让你不必去「查一下曝光状态」——
 那正是会撞上研究轴台账的动作。
@@ -102,42 +103,72 @@ seat 轴 ops/REVIEWER_EXPOSURE_LOG.md  记录哪个审阅席位被烧掉
 
 一句话：
 
-> **一份待批准的修订提案**：给已批准的封闭枚举 `ARCHIVE_CODES`
-> 增加第六个成员，并 widen 它的自述不变量。
+> **同一条 F01–F06 谱系的第二轮修复,请给最终认证判决。**
 
-**你给建议，Aaron 裁，且不得代签。**
+原始的六条 BLOCKING finding 定义在
+`ops/ASTRA_P2_GATE_REVIEW_HOLD_F01_F06_2026-09-07_TRANSCRIPTION.md`。
+**F04 已由你的上一轮 CLOSED,不重开**;本轮的退出判据是余下五条:
+**F01 · F02 · F03 · F05 · F06**。
 
-**builder 在这道题上已经错了两次**（BD-5 的排除法、决策包的「A1 唯一出口」），
-包的 §2 逐条列出。**请把那当成基准怀疑度。**
+包的 §4 点出四个**请特别用力**的方向。它们不是提示,是本席位认为自己最可能
+仍然错的地方。
 
-上一轮（DECISION-ARCHIVED-BYTES-DELETED-001）的席位结果见
-`ops/SEAT_RESULT_ARCHIVED_BYTES_DELETED_2026-09-05.md`（outcome-clean，可读）。
+### 2.1 轮次 —— **请先读这一条**
+
+`ops/REVIEWER_CONTRACT.md` 第 23 行:**每条 issue 谱系两轮**,跨改名与阶段
+连续计数。这条谱系已经用掉两轮:
+
+```
+第 1 轮  P2 门禁复审        -> HOLD,六条 BLOCKING
+第 2 轮  定向复审(修复后)   -> HOLD,F04 CLOSED,五条 STILL_BLOCKING
+第 3 轮  本次               -> 合同预算之外
+```
+
+**所以本轮不是合同允许的一轮,而是 Aaron 明确授权的一次业主例外。**
+把它写在这里,是因为你完全有理由在自己发现合同被突破时 STOP——
+那样做是对的,而让你自己去发现则是本席位的失职。
+
+**这是本谱系的最后一轮。** 若本轮仍为 HOLD,按 Aaron 的指示回到 Aaron,
+不再有第四轮,也不再有 builder 的自动修复循环。
+
+### 2.2 基准怀疑度
+
+**builder 在这条谱系上已经错了两次,而且是同一形态**:第一轮的每一条修复都
+通过了自己写的结算测试,你仍然在其中五条上复现了反例。两次的共同形态是
+**声称宽于事实**——机制做到的比文档说的窄。
+
+包的 §3 与 §5 逐条给出本席位自报的证据。**请当作待验证的声明。**
 
 ## 3. 明确不在范围内
 
 ```
 不是 A2         不是 Stage I        不解开任何 QROS 门
 不审研究结论    不审样本/成本/Primary 指标/promotion-falsified
-只读            发现即报告，不修复。修复需 Aaron 另行授权
-一轮            不开无限复审循环（Aaron 2026-09-02）
+只读            发现即报告,不修复。修复需 Aaron 另行授权
+F04             已 CLOSED,不重开(除非本轮改动使其失效——那本身是 finding)
+F07 / F08       非阻断,已是 B-22 / B-23,不得用来阻挡本轮退出
 ```
 
-**本次 PASS 不等于 ① 被批准。** ①（何时读真实 Development 数据）只有 Aaron 能批。
+**本次 PASS 不等于 ① 被批准。** ①(何时读真实 Development 数据)只有 Aaron 能批。
+本次认证的是**执行安全与数据身份**,不是任何研究结论。
 
-## 4. 席位预算（Aaron 的规矩）
+## 4. 席位预算
 
 ```
-本题范围小且单一，**一波、一个 workflow 足够**，不需要切分
-默认总预算 3，硬上限 6（超出需 Aaron 明批）
-子 workflow 不得再生 workflow
-只读起步：发现即报告，不修复
+一个 fresh 席位,一轮。不需要 workflow,不需要切分
+只读起步:发现即报告,不修复
+不得追加任何 registry 事件,不得执行 qros,不得写入仓库
 ```
 
 ## 5. 回来时请给
 
 ```
-建议与理由        **不要给裁定** —— 裁定归 Aaron
+判决              PASS / PASS_WITH_BACKLOG / HOLD —— 用 REVIEWER_CONTRACT.md 的词表
 Critical/High     放最前
+每条 BLOCKING     恰好一个威胁(T1–T6) + 一条具体失败路径 + 证据类别
+证据类别          REPRODUCED / REASONED / SELF-REPORTED —— 三者不可混
 区分              「你复现的事实」 vs 「本包自述的内容」
-必答五问          见包 §5（Q5：裁定落地前维持 fail-closed 是否安全）
+四个方向          包 §4 的四条,请逐条明确作答
 ```
+
+**判决归你,签署归 Aaron。** 本席位写了被审的修复,不得自审通过。
