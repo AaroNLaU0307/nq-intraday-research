@@ -1389,8 +1389,29 @@ def append_registry_event_line(registry_path: Path, trial_id: str,
                                event: str, note: str, utc: str,
                                commit: str, actor: str) -> None:
     """MAIN-AGENT owned append-only registry writer: one markdown table row
-    appended; existing bytes are never rewritten."""
+    appended; existing bytes are never rewritten.
+
+    SERIALIZED THROUGH THE SHARED BOUNDARY (QROS-CF F06, pre-cert repair). This
+    used `registry_path.open("a")` + `write`, which took no lock and read
+    nothing -- so it wrote straight through a held `_AppendLock` and could put
+    its row on top of an OWNER_HOLD it never saw. Both reproduced. It is a
+    workflow-supported writer of the governed registry (`scripts/s0_real_run.py`
+    passes it the governed REGISTRY), so it must commit through the same
+    mechanism as STARTED and HOLD.
+
+    THE ROW IS BYTE-IDENTICAL to what it wrote before: same f-string, same
+    trailing newline, and `newline="\n"` meant no translation was happening
+    anyway, so encoding it to UTF-8 and writing bytes changes nothing about the
+    bytes. Event semantics, validation and formatting are untouched; the only
+    change is that the write is now serialized.
+
+    No `decided` snapshot is passed because this writer makes no decision
+    against one -- it is an unconditional append. Serialization is what it
+    needs, and a fabricated snapshot would have been a lie about a comparison
+    nobody made.
+    """
+    from itsf.mc.registry_boundary import serialized_append
+
     line = (f"| + | {utc} | {event} | {commit} | {actor} | "
             f"[{trial_id}] {note} |\n")
-    with registry_path.open("a", encoding="utf-8", newline="\n") as fh:
-        fh.write(line)
+    serialized_append(Path(registry_path), line.encode("utf-8"))

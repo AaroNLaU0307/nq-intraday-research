@@ -571,12 +571,26 @@ def test_F06_there_is_exactly_one_read_behind_the_decision():
 
 
 def test_F06_the_cas_is_the_only_writer_and_it_compares_first():
-    """And the CAS itself: it reads under the lock, compares, then writes."""
-    body = _code_only(rb._compare_and_append)
+    """The CAS reads under the lock, compares, then writes.
+
+    UPDATED AT THE PRE-CERT F06 REPAIR. The lock, the read and the physical
+    write moved out of `_compare_and_append` into `serialized_append`, because a
+    WORKFLOW-SUPPORTED writer in another module (`s0/runner.
+    append_registry_event_line`) had nothing to call and was mutating the
+    governed registry outside serialization entirely. The property asserted
+    here is unchanged and is now asserted where the code lives; the comparison
+    still precedes the write, and `_compare_and_append` still passes its decided
+    snapshot rather than dropping it."""
+    body = _code_only(rb.serialized_append)
     assert "_AppendLock(target)" in body
     assert "now = target.read_bytes()" in body
-    assert body.index("if now != decided") < body.index("target.write_bytes(")
-    assert "decided + addition" in body
+    assert body.index("if decided is not None and now != decided") < \
+        body.index("target.write_bytes(")
+    assert "now + addition" in body
+    # and the CAS half still hands its snapshot to the boundary
+    cas = _code_only(rb._compare_and_append)
+    assert "serialized_append(target, addition, decided=decided)" in cas
+    assert "write_bytes" not in cas
 
 
 def test_F06_the_append_is_serialized_by_an_exclusive_lock(tmp_path):

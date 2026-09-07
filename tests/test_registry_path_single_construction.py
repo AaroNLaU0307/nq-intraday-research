@@ -150,6 +150,13 @@ _KNOWN_TEST_CONSTRUCTIONS = {
     #
     # MEASURED, not typed -- the walk says 1.
     "tests/test_qros_cf_pre_cert.py": 1,
+    # F06 cross-module writer completeness + the S0 interleavings. Two
+    # constructions: the tmp_path ledger fixture and the tailless-ledger
+    # case. Its last test asserts the real ledger is untouched.
+    #
+    # MEASURED, not typed -- the walk says 4. I typed 2 first and the walk
+    # corrected me, in the table whose own comment warns about exactly that.
+    "tests/test_qros_cf_f06_writer_completeness.py": 4,
     "tests/test_registry_absence_refuses.py": 7,
     "tests/test_registry_boundary.py": 2,
     "tests/test_registry_path_single_construction.py": 2,

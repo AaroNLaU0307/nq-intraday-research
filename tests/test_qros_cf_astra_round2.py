@@ -635,8 +635,14 @@ def test_F06_the_owner_append_uses_the_SAME_serialization_primitive():
                 writers[node.name] = True
             if "'_compare_and_append'" in body:
                 writers.setdefault("_calls:" + node.name, True)
+    # UPDATED AT THE PRE-CERT F06 REPAIR: the one physical write moved into
+    # `serialized_append`, the boundary a supported writer in ANOTHER module can
+    # reach. `_compare_and_append` is now its compare-and-swap caller. Same
+    # single write, one function further out -- see
+    # tests/test_qros_cf_f06_writer_completeness.py for the cross-module half,
+    # which is the property this file cannot see from inside one module.
     physical = {n for n in writers if not n.startswith("_calls:")}
-    assert physical == {"_compare_and_append"}, (
+    assert physical == {"serialized_append"}, (
         "a registry write appeared outside the one serialized primitive: "
         f"{sorted(physical)}")
     callers = {n[len("_calls:"):] for n in writers if n.startswith("_calls:")}

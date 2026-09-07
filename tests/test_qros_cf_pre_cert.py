@@ -515,8 +515,10 @@ def test_F06_the_physical_write_is_inside_the_lock():
     src = (REPO / "src" / "itsf" / "mc" / "registry_boundary.py").read_text(
         encoding="utf-8")
     tree = ast.parse(src)
+    # PRE-CERT F06 REPAIR: the lock and the write live in `serialized_append`
+    # now, so a supported writer in another module can reach them.
     fn = next(n for n in ast.walk(tree)
-              if isinstance(n, ast.FunctionDef) and n.name == "_compare_and_append")
+              if isinstance(n, ast.FunctionDef) and n.name == "serialized_append")
     withs = [n for n in ast.walk(fn) if isinstance(n, ast.With)]
     assert withs, "the compare-and-swap no longer takes a lock"
     inside = ast.unparse(withs[0])

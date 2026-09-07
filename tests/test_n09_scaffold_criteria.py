@@ -141,8 +141,22 @@ class TestCriterion1NoRegistryWritePath(unittest.TestCase):
         # that `_compare_and_append` has no callers outside the seam. Two
         # appenders, one serialized write. That is what changed; "every write
         # in this module belongs to the seam" did not.
+        # WIDENED AGAIN 2026-09-07, PRE-CERT REPAIR, and the property is
+        # STILL unchanged. The final-cert writer inventory found a
+        # WORKFLOW-SUPPORTED writer that could not participate in
+        # serialization even in principle: `s0/runner.append_registry_event_line`
+        # receives the registry path as a PARAMETER and did `open("a")` +
+        # `write`. The lock and the physical write lived only inside a private
+        # function of this module, so there was nothing for it to call -- the
+        # root cause was the primitive's LOCATION, not the writer's intent.
+        #
+        # `serialized_append` is that boundary, exposed. The physical write
+        # moved into it and `_compare_and_append` became its compare-and-swap
+        # caller. So the seam is one function wider and the invariant reads the
+        # same: every write in this module belongs to the seam, and the one
+        # physical write is in exactly one place.
         SEAM = ("append_run_started", "_append_owner_row",
-                "_compare_and_append")
+                "_compare_and_append", "serialized_append")
         LOCK = "_AppendLock"
         funcs = {n.name: n for n in ast.walk(tree)
                  if isinstance(n, ast.FunctionDef)}
@@ -159,9 +173,11 @@ class TestCriterion1NoRegistryWritePath(unittest.TestCase):
                          "registry_boundary writes outside the P3 seam"
                          ": %r" % sorted(set(everywhere) - set(inside)))
         self.assertEqual(
-            ["write_bytes"], _write_actions_in(funcs["_compare_and_append"]),
-            "the compare-and-swap is the one place registry bytes are written")
-        for appender in ("append_run_started", "_append_owner_row"):
+            ["write_bytes"], _write_actions_in(funcs["serialized_append"]),
+            "the shared serialization boundary is the one place registry "
+            "bytes are written")
+        for appender in ("append_run_started", "_append_owner_row",
+                         "_compare_and_append"):
             self.assertEqual(
                 [], _write_actions_in(funcs[appender]),
                 "`%s` writes registry bytes directly again, bypassing the "
@@ -169,16 +185,29 @@ class TestCriterion1NoRegistryWritePath(unittest.TestCase):
         self.assertNotIn(
             "write_bytes", _write_actions_in(classes[LOCK]),
             "the append lock writes registry bytes")
-        callers = sorted(
-            f.name for f in funcs.values()
-            for c in ast.walk(f)
-            if isinstance(c, ast.Call)
-            and getattr(c.func, "id", getattr(c.func, "attr", None))
-            == "_compare_and_append")
-        self.assertEqual(["_append_owner_row", "append_run_started"], callers,
+        def _callers_of(target):
+            return sorted(
+                f.name for f in funcs.values()
+                for c in ast.walk(f)
+                if isinstance(c, ast.Call)
+                and getattr(c.func, "id", getattr(c.func, "attr", None))
+                == target)
+
+        self.assertEqual(["_append_owner_row", "append_run_started"],
+                         _callers_of("_compare_and_append"),
                          "the compare-and-swap has callers other than the two "
                          "authorized appenders, which would make it a general "
                          "registry writer")
+        # THE REGISTERED CALLER SET for the exposed boundary. It knows no event
+        # vocabulary, so an open door here would be a general registry writer.
+        # In-module there is exactly one caller; the cross-module caller
+        # (`s0/runner.append_registry_event_line`) is pinned by
+        # `tests/test_qros_cf_f06_writer_completeness.py`, which is the test
+        # that owns completeness across modules.
+        self.assertEqual(["_compare_and_append"],
+                         _callers_of("serialized_append"),
+                         "the shared boundary gained an in-module caller "
+                         "outside the compare-and-swap")
         del rb, inspect
 
     def test_the_seam_is_the_only_exported_writer_and_writes_one_token(self):
@@ -202,16 +231,32 @@ class TestCriterion1NoRegistryWritePath(unittest.TestCase):
         # test forbids -- so it was split into two narrow entries over a
         # private `_append_owner_row`. The rule below is unchanged and is now
         # applied to every exported writer rather than to one.
+        # PRE-CERT REPAIR: `serialized_append` is exported deliberately, and
+        # it is the ONE exception to the token rule below -- it takes raw bytes
+        # precisely because it knows no event vocabulary. That makes it more
+        # general, not less, which is why its callers are a registered set
+        # (asserted above and in the completeness test) rather than a rule
+        # about its signature.
+        PRIMITIVE = "serialized_append"
         self.assertEqual(["append_owner_hold", "append_owner_release",
-                          "append_run_started"], suspect,
+                          "append_run_started", PRIMITIVE], suspect,
                          "registry_boundary exposes %r; only the three narrow "
-                         "writers are authorised" % suspect)
+                         "event writers plus the shared boundary are "
+                         "authorised" % suspect)
         for name in suspect:
+            if name == PRIMITIVE:
+                continue
             params = inspect.signature(getattr(rb, name)).parameters
             for forbidden in ("event", "token", "event_type", "note", "row"):
                 self.assertNotIn(forbidden, params,
                                  "%s takes the event as a caller-supplied "
                                  "value" % name)
+        # and the primitive really is mechanism-only: no event-shaped parameter
+        prim = inspect.signature(getattr(rb, PRIMITIVE)).parameters
+        for forbidden in ("event", "token", "event_type", "note", "trial_id"):
+            self.assertNotIn(forbidden, prim,
+                             "the shared boundary grew an event-shaped "
+                             "parameter, which would make it an event writer")
         self.assertEqual("SUPPLEMENT_RUN_STARTED", rb.RUN_STARTED_TOKEN)
 
     def test_the_other_half_of_the_proof_still_exists(self):

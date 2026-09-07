@@ -45,7 +45,7 @@ __all__ = ["RegistrySnapshot", "MediatedResolution", "BoundaryError",
            "read_snapshot", "mediate",
            "resolve_registry", "supplement_chain", "resolve_for_supplement",
            "RUN_STARTED_TOKEN", "AppendRefused", "append_run_started",
-           "append_owner_hold", "append_owner_release"]
+           "append_owner_hold", "append_owner_release", "serialized_append"]
 
 BOUNDARY_RULING = "MC_REG_COLLISION_001_C2_AS_MODIFIED_2026-08-25"
 BOUNDARY_RULING_DELEGATED = True
@@ -406,9 +406,68 @@ class _AppendLock:
         return False
 
 
+def serialized_append(target: Path, addition: bytes, *,
+                      decided: bytes | None = None) -> None:
+    """THE ONE serialization boundary for the governed registry.
+
+    QROS-CF F06, PRE-CERT REPAIR. The final-cert writer inventory found a
+    WORKFLOW-SUPPORTED writer that could not participate in serialization even
+    in principle: `itsf.s0.runner.append_registry_event_line` receives the
+    registry path as a PARAMETER and did `open(..., "a")` + `write(...)`.
+    `scripts/s0_real_run.py` passes it the governed REGISTRY built from this
+    module's own frozen constants, so it is a real supported path. Reproduced
+    two ways: it wrote while `_AppendLock` was HELD by another writer, and --
+    because it read nothing at all -- an OWNER_HOLD that landed first was
+    invisible to it and its row went on top.
+
+    ROOT CAUSE WAS LOCATION, NOT INTENT. The lock and the physical write lived
+    only inside a private function of this module, so a supported writer in
+    another module had nothing to call. Protecting STARTED and HOLD while a
+    third supported writer mutated the same bytes outside serialization is not
+    the F06 invariant, it is three quarters of it.
+
+    So the boundary is exposed here, and it is deliberately MECHANISM ONLY: it
+    takes bytes and knows no event vocabulary. That is why its callers are a
+    REGISTERED set rather than an open door -- `test_n09_scaffold_criteria`
+    pins who may call it, and `tests/test_qros_cf_f06_writer_completeness.py`
+    pins that every supported governed-registry mutation path does.
+
+    `decided` is the compare-and-swap half and stays OPTIONAL, because the two
+    supported writer shapes genuinely differ:
+
+      * a writer that made decisions on a snapshot passes it, and any
+        intervening change refuses (`p3_registry_changed_under_decision`);
+      * a writer that appends an event unconditionally passes none, and is
+        still SERIALIZED -- it reads and writes under the same lock, so it
+        cannot lose an update or interleave a half-written row.
+
+    Serialization is what both need. Only the first needs the comparison, and
+    requiring a snapshot from a writer that has none would have meant either
+    inventing a fake one or leaving it outside -- which is the defect.
+    """
+    with _AppendLock(target):
+        now = target.read_bytes()
+        if decided is not None and now != decided:
+            raise AppendRefused(
+                "p3_registry_changed_under_decision",
+                "the registry moved between the read every check was decided "
+                "on (%d bytes, sha %s) and this append (%d bytes, sha %s); a "
+                "start decided on stale state is never written"
+                % (len(decided), hashlib.sha256(decided).hexdigest()[:12],
+                   len(now), hashlib.sha256(now).hexdigest()[:12]))
+        if now and not now.endswith(b"\n"):
+            raise AppendRefused(
+                "registry_tail_is_not_a_line",
+                "the registry does not end in a newline, so appending would "
+                "join two rows into one")
+        target.write_bytes(now + addition)
+
+
 def _compare_and_append(target: Path, decided: bytes, addition: bytes) -> None:
-    """Append `addition` ONLY IF the file is still byte-identical to the
-    version every check was decided on (QROS-CF F06).
+    """The compare-and-swap half, kept as the name the event writers call.
+
+    QROS-CF F06 (first round). Append `addition` ONLY IF the file is still
+    byte-identical to the version every check was decided on.
 
     THE CHECK AND THE WRITE MUST SHARE A VERSION. Re-reading and appending to
     whatever is there now is what let an OWNER_HOLD land between the hold
@@ -423,18 +482,12 @@ def _compare_and_append(target: Path, decided: bytes, addition: bytes) -> None:
       * this append wins      -> P3 committed, a later hold is ordered after
                                  it and does not retroactively unauthorize a
                                  start that was already legal.
+
+    It performs no write of its own any more: the lock and the physical write
+    moved into `serialized_append` so a supported writer in another module can
+    reach them. Same lock, same single write.
     """
-    with _AppendLock(target):
-        now = target.read_bytes()
-        if now != decided:
-            raise AppendRefused(
-                "p3_registry_changed_under_decision",
-                "the registry moved between the read every check was decided "
-                "on (%d bytes, sha %s) and this append (%d bytes, sha %s); a "
-                "start decided on stale state is never written"
-                % (len(decided), hashlib.sha256(decided).hexdigest()[:12],
-                   len(now), hashlib.sha256(now).hexdigest()[:12]))
-        target.write_bytes(decided + addition)
+    serialized_append(target, addition, decided=decided)
 
 
 def _next_global_sequence(rows) -> int:
