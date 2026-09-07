@@ -68,24 +68,38 @@ on is MC_METHOD_SPEC §5 and STUDY_0_PREREGISTRATION Appendix A v0.6)
         in that union band and is disclosed.
 
 --------------------------------------------------------------------------
-ONE THING M8 DOES NOT SETTLE, SO THIS MODULE REFUSES INSTEAD OF GUESSING.
+HOW THE BAND TEST MEETS THE EXISTENTIAL — AARON'S B-25 RULING (2026-09-08).
 
 A cell carries classifying statistics PER PRIMARY COMBINATION, and both
 region definitions quantify EXISTENTIALLY over combinations. M8 speaks of
-"its classifying statistic" in the singular and never says how the band test
-combines across combinations. Two readings survive its text:
+"its classifying statistic" in the singular and does not say how the band
+test combines across them. Two readings survived its text: (i) every
+combination must sit in the band, or (ii) only the combination that decides
+the existential must. They disagree on an ordinary case — combo A stable at
+−$5000 while combo B flips +$3 → −$2 — and the difference decides whether
+`deployable_region` may support H1 entry, so it was referred to Aaron.
 
-  (i)  every combination's statistics must sit in the band, or
-  (ii) only the combination that decides the existential must.
+AARON RULED (ii). Boundary classification applies to the CELL-LEVEL
+EXISTENTIAL REGION DECISION: a non-decisive combination must NOT veto
+convergence merely because its own statistics sit outside the band. A cell
+is boundary when the combination-level statistics that actually determine
+its region membership lie inside the ALREADY-FROZEN M8 band.
 
-They disagree on a reachable case — combo A stable at −$5000 while combo B
-flips +$3 → −$2 — where (i) says not converged and doubles K, and (ii) says
-boundary band and converges. That difference decides whether
-`deployable_region` may support H1 entry, so it is not a stylistic choice
-and a builder may not settle it. `compare_region_maps` therefore implements
-the three cases both readings agree on and raises
-`grid_replay_boundary_band_multi_combo_unruled` on the case they split,
-naming the open adjudication. See `ops/BACKLOG.md` B-25.
+WHICH COMBINATIONS "ACTUALLY DETERMINE" IT, mechanically. Membership is
+`satisfying(cell) != empty`. A cell's class therefore changes exactly when
+the SATISFYING SET changes, so the deciding combinations are the symmetric
+difference `satisfying(K) XOR satisfying(2K)` — those that entered or left
+the region. A combination satisfying in neither pass (combo A above) never
+contributed to membership and is irrelevant; one satisfying in both cannot
+coexist with a class flip. This is read off the existential itself, so the
+ruling adds NO epsilon, threshold, percentage or second tolerance: the only
+tolerance in this module remains `frozen_tolerance`, i.e. (c)'s
+max($25, 5%), and `_in_band` is still M8's predicate unchanged.
+
+Within a deciding combination, M8 is applied AS RATIFIED — all of that
+combination's classifying statistics (Conservative P5, plus the Stress
+median for `deployable_region`). The ruling narrowed WHICH COMBINATIONS are
+consulted; it did not reinterpret what M8 asks of one.
 """
 from __future__ import annotations
 
@@ -109,6 +123,7 @@ __all__ = (
     "POSITIVE_EV_REGION", "DEPLOYABLE_REGION", "REGION_KINDS",
     "IN_REGION", "OUT_OF_REGION", "BOUNDARY_BAND",
     "GRID_CELL_KEYS", "frozen_tolerance", "CellStatistics",
+    "cell_category", "satisfying_combos",
     "GridReplayAuthority", "derive_grid_replay_authority",
     "derive_grid_replay_authority_for_tests", "verify_grid_replay_authority",
     "region_map", "RegionComparison", "compare_region_maps",
@@ -510,18 +525,26 @@ class CellStatistics:
         object.__setattr__(self, "identity",
                            MappingProxyType(dict(self.identity)))
 
-    def classifying_values(self, kind: str) -> tuple:
+    def classifying_values(self, kind: str, combos=None) -> tuple:
         """The statistics `kind` classifies on, as ((label, value), ...).
 
         positive_EV_region reads Conservative P5 alone; deployable_region
         additionally reads the Stress median (M8's parenthesis).
+
+        `combos` restricts the result to the named combinations. M8's band
+        test passes the DECIDING combinations (B-25, ruled (ii)); passing
+        None keeps every combination, which is what rule (c) wants — (c)
+        governs drift per statistic and has nothing to do with which
+        combination decides the existential.
         """
         _require_kind(kind)
+        keys = (sorted(self.conservative_p5) if combos is None
+                else sorted(c for c in self.conservative_p5 if c in combos))
         out = [(f"conservative_p5[{cid}]", float(self.conservative_p5[cid]))
-               for cid in sorted(self.conservative_p5)]
+               for cid in keys]
         if kind == DEPLOYABLE_REGION:
             out += [(f"stress_median[{cid}]", float(self.stress_median[cid]))
-                    for cid in sorted(self.stress_median)]
+                    for cid in keys]
         return tuple(out)
 
 
@@ -548,15 +571,27 @@ def cell_category(cell, kind: str) -> str:
     issued — `qualifying_distribution_vs_payout_requirements` is still
     DECISION_REQUIRED.
     """
+    return (IN_REGION if satisfying_combos(cell, kind) else OUT_OF_REGION)
+
+
+def satisfying_combos(cell, kind: str) -> frozenset:
+    """The combinations that satisfy `kind`'s FROZEN per-combination
+    predicate — the witnesses of Appendix A's existential.
+
+    THE single source of both the cell's class (`cell_category` is just
+    "is this set non-empty") and, per Aaron's B-25 ruling, of which
+    combinations decide a class change. Deriving both from one function is
+    what keeps "decisive" honest: a combination is decisive exactly when
+    its membership in THIS set differs between the two passes.
+    """
     _require_kind(kind)
     if type(cell) is not CellStatistics:
         raise MCInputError("grid_replay_cell_required",
                            f"{type(cell).__name__} is not a CellStatistics")
     if kind == POSITIVE_EV_REGION:
-        return (IN_REGION if any(float(v) > 0.0
-                                 for v in cell.conservative_p5.values())
-                else OUT_OF_REGION)
-    pending = []
+        return frozenset(cid for cid, v in cell.conservative_p5.items()
+                         if float(v) > 0.0)
+    satisfying, pending = set(), []
     for cid in sorted(cell.conservative_p5):
         ev_met = (float(cell.conservative_p5[cid]) > 0.0
                   and float(cell.stress_median[cid]) >= 0.0)
@@ -565,14 +600,14 @@ def cell_category(cell, kind: str) -> str:
         if cell.feasible[cid] is None:
             pending.append(cid)
         elif cell.feasible[cid]:
-            return IN_REGION
-    if pending:
+            satisfying.add(cid)
+    if pending and not satisfying:
         raise MCInputError(
             "deployable_region_feasibility_pending",
             f"combination(s) {pending} meet the frozen EV evidence but carry "
             "feasible=None (PENDING) — the deployable region cannot be "
             "formed while the feasibility verdict is undecided")
-    return OUT_OF_REGION
+    return frozenset(satisfying)
 
 
 def region_map(cells: Mapping, kind: str) -> Mapping:
@@ -626,10 +661,10 @@ def compare_region_maps(kind: str, cells_at_k: Mapping, cells_at_2k: Mapping,
                         *, k: int, k_doubled: int) -> RegionComparison:
     """M8: the two maps must agree cell by cell, boundary-band cells exempt.
 
-    Refuses `grid_replay_boundary_band_multi_combo_unruled` on the one case
-    M8's text does not settle — see this module's docstring. Refusing is the
-    fail-closed choice: it stops a convergence claim from resting on a
-    reading a builder picked.
+    A flipped cell is exempt when the combinations that DECIDE its region
+    membership all sit in the frozen band (Aaron's B-25 ruling, (ii)); a
+    combination that satisfied the region in neither pass is irrelevant to
+    that decision and cannot veto it. See this module's docstring.
     """
     _require_kind(kind)
     if int(k_doubled) != 2 * int(k):
@@ -656,29 +691,26 @@ def compare_region_maps(kind: str, cells_at_k: Mapping, cells_at_2k: Mapping,
                     "K -> 2K; non-USD keys are configuration, not statistics")
         if map_k[key] == map_2k[key]:
             continue
-        # The class flipped. It is exempt only as a boundary-band cell.
-        stats_k = dict(cell_k.classifying_values(kind))
-        stats_2k = dict(cell_2k.classifying_values(kind))
+        # The class flipped, so it is exempt only as a boundary-band cell.
+        # B-25 (Aaron, ruled (ii)): consult the combinations that ACTUALLY
+        # DETERMINE membership — the ones that entered or left the region —
+        # and no others. A combination satisfying in neither pass never
+        # contributed to membership and may not veto convergence.
+        deciding = (satisfying_combos(cell_k, kind)
+                    ^ satisfying_combos(cell_2k, kind))
+        stats_k = dict(cell_k.classifying_values(kind, deciding))
+        stats_2k = dict(cell_2k.classifying_values(kind, deciding))
         if set(stats_k) != set(stats_2k):
             raise MCInputError(
                 "grid_replay_cell_combination_set_mismatch",
                 f"cell {key} carries different combinations at K and 2K")
-        qualifying = {name: _in_band(stats_k[name], stats_2k[name])
-                      for name in stats_k}
-        if all(qualifying.values()):
+        # Within a deciding combination M8 is unchanged: ALL of its
+        # classifying statistics must sit in the frozen band.
+        if stats_k and all(_in_band(stats_k[name], stats_2k[name])
+                           for name in stats_k):
             band.append(key)
-        elif not any(qualifying.values()):
-            flipped.append(key)
         else:
-            raise MCInputError(
-                "grid_replay_boundary_band_multi_combo_unruled",
-                f"cell {key} flipped {map_k[key]} -> {map_2k[key]} with some "
-                f"classifying statistics in the frozen band and some outside "
-                f"({sorted(n for n, ok in qualifying.items() if ok)} in, "
-                f"{sorted(n for n, ok in qualifying.items() if not ok)} out)"
-                " — M8 does not say whether the band test applies to every "
-                "combination or only to the one deciding the existential, "
-                "and the two readings disagree here (B-25)")
+            flipped.append(key)
 
     relabelled_k = dict(map_k)
     relabelled_2k = dict(map_2k)

@@ -337,28 +337,152 @@ def test_a_decisive_flip_is_not_converged(authority):
     assert ev.may_support_h1_entry is False
 
 
-def test_the_multi_combo_band_case_m8_does_not_settle_refuses():
-    """THE ONE OPEN ADJUDICATION (B-25). Combo `a` sits far from zero and
-    is stable; combo `b` flips within the band and decides the existential.
-    Reading (i) "every combination" says not converged; reading (ii) "only
-    the deciding combination" says boundary band. Both survive M8's text,
-    they disagree here, and the difference decides whether
-    `deployable_region` may support H1 entry — so this refuses rather than
-    picking one."""
+def _mixed_cell(p5_a, p5_b, med_a=None, med_b=None):
+    """A two-combination cell. `a` is the far/irrelevant one, `b` the one
+    that can decide the existential."""
+    return gr.CellStatistics(
+        conservative_p5={"a": p5_a, "b": p5_b},
+        stress_median={"a": p5_a if med_a is None else med_a,
+                       "b": p5_b if med_b is None else med_b},
+        feasible={"a": True, "b": True})
+
+
+def test_b25_case1_a_non_decisive_combination_does_not_veto():
+    """CASE 1 — AARON'S B-25 RULING, (ii), AND THE TEST THAT DISTINGUISHES
+    IT FROM (i).
+
+    Combo `a` is stably far negative (−$5000): it satisfies the region in
+    NEITHER pass, so it never contributed to membership. Combo `b` is the
+    existentially relevant candidate and moves +$3 → −$2, inside the frozen
+    band. The cell's class flips because of `b` alone.
+
+    Interpretation (i) — "every combination must sit in the band" — would
+    see `a` at −$5000 outside the band and refuse the exemption, making the
+    cell NOT converged and forcing a K doubling. Interpretation (ii), which
+    Aaron ruled, is governed by `b`: the cell is boundary and converges.
+
+    The assertion below is therefore a genuine discriminator: it FAILS under
+    (i) and passes only under (ii).
+    """
     at_k, at_2k = _grid(), _grid()
     key = gr.GRID_CELL_KEYS[0]
-    at_k[key] = gr.CellStatistics(
-        conservative_p5={"a": -5000.0, "b": 3.0},
-        stress_median={"a": -5000.0, "b": 3.0},
-        feasible={"a": True, "b": True})
-    at_2k[key] = gr.CellStatistics(
-        conservative_p5={"a": -5000.0, "b": -2.0},
-        stress_median={"a": -5000.0, "b": -2.0},
-        feasible={"a": True, "b": True})
-    with pytest.raises(mcc.MCInputError) as ei:
-        gr.compare_region_maps(gr.POSITIVE_EV_REGION, at_k, at_2k,
-                               k=200, k_doubled=400)
-    assert ei.value.code == "grid_replay_boundary_band_multi_combo_unruled"
+    at_k[key] = _mixed_cell(-5000.0, 3.0)
+    at_2k[key] = _mixed_cell(-5000.0, -2.0)
+
+    # the premises the ruling turns on, asserted rather than assumed
+    assert gr.satisfying_combos(at_k[key], gr.POSITIVE_EV_REGION) == {"b"}
+    assert gr.satisfying_combos(at_2k[key], gr.POSITIVE_EV_REGION) == set()
+    assert gr.cell_category(at_k[key], gr.POSITIVE_EV_REGION) == gr.IN_REGION
+    assert gr.cell_category(at_2k[key], gr.POSITIVE_EV_REGION) == gr.OUT_OF_REGION
+    # `a` is outside the band at both passes — under (i) this is the veto
+    assert not gr._in_band(-5000.0, -5000.0)
+
+    comparison = gr.compare_region_maps(
+        gr.POSITIVE_EV_REGION, at_k, at_2k, k=200, k_doubled=400)
+    assert comparison.boundary_band_cells == (key,)
+    assert comparison.flipped_cells == ()
+    assert comparison.converged is True
+    assert comparison.map_at_k[key] == gr.BOUNDARY_BAND
+
+
+def test_b25_case2_a_stable_decisive_combination_is_not_relabelled():
+    """CASE 2 — the decisive combination is clearly away from the boundary
+    and its classification is stable, so the cell keeps its class. An
+    irrelevant combination differing in magnitude does not drag it into the
+    band."""
+    at_k, at_2k = _grid(), _grid()
+    key = gr.GRID_CELL_KEYS[0]
+    #  b decides and is far positive at both passes; a differs in magnitude
+    at_k[key] = _mixed_cell(-5000.0, 4000.0)
+    at_2k[key] = _mixed_cell(-1.0, 4000.0)
+    assert gr.satisfying_combos(at_k[key], gr.POSITIVE_EV_REGION) == {"b"}
+    assert gr.satisfying_combos(at_2k[key], gr.POSITIVE_EV_REGION) == {"b"}
+
+    comparison = gr.compare_region_maps(
+        gr.POSITIVE_EV_REGION, at_k, at_2k, k=200, k_doubled=400)
+    assert comparison.boundary_band_cells == ()      # NOT relabelled
+    assert comparison.map_at_k[key] == gr.IN_REGION
+    assert comparison.map_at_2k[key] == gr.IN_REGION
+    # `a` moved -5000 -> -1, far beyond max($25, 5%): rule (c) still reports
+    # it, because (c) governs drift per statistic and is untouched by B-25.
+    assert (key, "conservative_p5[a]") in comparison.drift_violations
+
+
+def test_b25_case3_a_decisive_combination_inside_the_band_keeps_m8():
+    """CASE 3 — the decisive combination crosses within the frozen band:
+    the already-ratified M8 behaviour applies unchanged, including the
+    relabelling of BOTH maps to the third class and the re-comparison."""
+    at_k, at_2k = _grid(), _grid()
+    key = gr.GRID_CELL_KEYS[0]
+    at_k[key] = _cell(5.0, 5.0)         # single combination, in region
+    at_2k[key] = _cell(-4.0, -4.0)      # crosses, hugging zero
+    comparison = gr.compare_region_maps(
+        gr.POSITIVE_EV_REGION, at_k, at_2k, k=200, k_doubled=400)
+    assert comparison.boundary_band_cells == (key,)
+    assert comparison.map_at_k[key] == gr.BOUNDARY_BAND
+    assert comparison.map_at_2k[key] == gr.BOUNDARY_BAND
+    assert comparison.converged is True
+    # and a decisive combination OUTSIDE the band is still not exempt
+    at_2k[key] = _cell(-4000.0, -4000.0)
+    hard = gr.compare_region_maps(
+        gr.POSITIVE_EV_REGION, at_k, at_2k, k=200, k_doubled=400)
+    assert hard.boundary_band_cells == ()
+    assert hard.converged is False
+
+
+def test_b25_case4_the_ruling_introduced_no_new_tolerance():
+    """CASE 4 — the ruling narrowed WHICH combinations are consulted. It
+    did not add an epsilon, threshold, percentage or second tolerance.
+
+    Asserted mechanically rather than by reading: the band predicate and
+    the comparison carry no numeric literal of their own, and the module's
+    single tolerance is still (c)'s frozen pair, taken from `consumer`
+    rather than re-spelled."""
+    import ast
+    import inspect
+
+    for fn in (gr._in_band, gr.compare_region_maps):
+        # both are module-level, so the source is already at column 0
+        tree = ast.parse(inspect.getsource(fn))
+        numbers = [n.value for n in ast.walk(tree)
+                   if isinstance(n, ast.Constant)
+                   and isinstance(n.value, (int, float))
+                   and not isinstance(n.value, bool)]
+        # only the doubling arithmetic `2 * k` may carry a literal
+        assert set(numbers) <= {2}, (fn.__name__, numbers)
+
+    assert gr.frozen_tolerance(0.0) == mcc.CONV_ABS_USD
+    assert gr.frozen_tolerance(10_000.0) == mcc.CONV_REL * 10_000.0
+    src = inspect.getsource(gr.frozen_tolerance)
+    assert "_mcc.CONV_ABS_USD" in src and "_mcc.CONV_REL" in src, (
+        "the tolerance must stay the frozen pair, not a local copy")
+    # and no second tolerance-shaped constant entered the module
+    module_numbers = {
+        name: value for name, value in vars(gr).items()
+        if isinstance(value, float) and not name.startswith("__")}
+    assert module_numbers == {}, module_numbers
+
+
+def test_b25_decisive_set_is_read_off_the_existential_itself():
+    """The definition of "decisive" is not a new rule: a combination is
+    decisive exactly when its membership of the FROZEN satisfying set
+    differs between the passes. One function answers both "what is this
+    cell's class" and "which combinations changed it", so the two can
+    never drift apart."""
+    a_in = gr.CellStatistics(conservative_p5={"a": 1.0, "b": -1.0},
+                             stress_median={"a": 1.0, "b": -1.0},
+                             feasible={"a": True, "b": True})
+    b_in = gr.CellStatistics(conservative_p5={"a": -1.0, "b": 1.0},
+                             stress_median={"a": -1.0, "b": 1.0},
+                             feasible={"a": True, "b": True})
+    sat_k = gr.satisfying_combos(a_in, gr.POSITIVE_EV_REGION)
+    sat_2k = gr.satisfying_combos(b_in, gr.POSITIVE_EV_REGION)
+    assert sat_k == {"a"} and sat_2k == {"b"}
+    # both combinations changed membership, so both are decisive here
+    assert sat_k ^ sat_2k == {"a", "b"}
+    # ... and the class did NOT flip, because the existential holds in both
+    assert gr.cell_category(a_in, gr.POSITIVE_EV_REGION) == gr.IN_REGION
+    assert gr.cell_category(b_in, gr.POSITIVE_EV_REGION) == gr.IN_REGION
 
 
 def test_k_doubling_must_actually_double():
