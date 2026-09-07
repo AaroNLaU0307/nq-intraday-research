@@ -157,6 +157,12 @@ _KNOWN_TEST_CONSTRUCTIONS = {
     # MEASURED, not typed -- the walk says 4. I typed 2 first and the walk
     # corrected me, in the table whose own comment warns about exactly that.
     "tests/test_qros_cf_f06_writer_completeness.py": 4,
+    # F06-OWNER-SEMANTICS: the confirmed final-cert failure shape and the
+    # ten deterministic orderings around it. Three constructions, all
+    # tmp_path ledgers; its last test asserts the real ledger is untouched.
+    #
+    # MEASURED from the walk, not typed.
+    "tests/test_qros_cf_f06_owner_semantics.py": 3,
     "tests/test_registry_absence_refuses.py": 7,
     "tests/test_registry_boundary.py": 2,
     "tests/test_registry_path_single_construction.py": 2,

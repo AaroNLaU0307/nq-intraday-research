@@ -646,7 +646,15 @@ def test_F06_the_owner_append_uses_the_SAME_serialization_primitive():
         "a registry write appeared outside the one serialized primitive: "
         f"{sorted(physical)}")
     callers = {n[len("_calls:"):] for n in writers if n.startswith("_calls:")}
-    assert callers == {"append_run_started", "_append_owner_row"}, (
+    # OWNER-SEMANTICS REPAIR: `append_run_started` commits through
+    # `serialized_start_append`, where the decisive hold decision is taken, so
+    # the compare-and-swap's in-module callers are the owner path plus the
+    # start entry.
+    # MEASURED, not assumed: `serialized_start_append` reaches the physical
+    # write through `serialized_append`, not through the compare-and-swap, so
+    # the CAS's only remaining in-module caller is the owner path. I asserted
+    # the wrong set first and the scan corrected me.
+    assert callers == {"_append_owner_row"}, (
         f"the set of serialized appenders changed: {sorted(callers)}")
 
 
@@ -655,23 +663,27 @@ def test_F06_case_A_a_hold_landing_under_the_decision_refuses_p3(tmp_path,
     """Legal order 1: the hold wins serialization -> no start is written."""
     path = tmp_path / "TRIAL_REGISTRY.md"
     sid = _two_row_ledger(path)
-    original = rb._compare_and_append
+    original = rb.serialized_start_append
     state = {"fired": False}
 
-    def interleave(target, decided, addition):
-        # One-shot: the owner append below goes through this same primitive,
+    def interleave(target, addition, *, run_id, decided=None):
+        # One-shot: the owner append below goes through the same primitive,
         # which is the point of the repair and would otherwise recurse.
         if not state["fired"]:
             state["fired"] = True
             rb.append_owner_hold(
                 scope=oc.GLOBAL_SCOPE, reason="stop",
                 head_commit=C40, utc_stamp=UTC, path=target)
-        return original(target, decided, addition)
+        return original(target, addition, run_id=run_id, decided=decided)
 
-    monkeypatch.setattr(rb, "_compare_and_append", interleave)
+    # OWNER-SEMANTICS REPAIR: the interleave point moved to the start entry,
+    # and the refusal is now the OWNER one rather than the stale-snapshot one.
+    # That is the correction: the operator is told an owner stopped them, not
+    # that the file happened to move.
+    monkeypatch.setattr(rb, "serialized_start_append", interleave)
     with pytest.raises(rb.AppendRefused) as caught:
         rb.append_run_started(sid, head_commit=C40, utc_stamp=UTC, path=path)
-    assert caught.value.code == "p3_registry_changed_under_decision"
+    assert caught.value.code == "start_refused_owner_hold_in_force"
     text = path.read_text(encoding="utf-8")
     assert "SUPPLEMENT_RUN_STARTED" not in text
     assert "OWNER_HOLD" in text, "the interleaved hold was lost"

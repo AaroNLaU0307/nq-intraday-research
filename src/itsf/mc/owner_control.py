@@ -46,7 +46,8 @@ __all__ = ["OWNER_HOLD", "OWNER_RELEASE", "OWNER_TOKENS", "OWNER_ACTOR",
            "GLOBAL_SCOPE", "OwnerControlRefusal", "OwnerRow",
            "parse_owner_rows", "active_holds", "assert_no_owner_hold",
            "owner_intent_lines", "RUN_ID_FAMILIES",
-           "canonical_run_id_family"]
+           "canonical_run_id_family", "holds_applicable_to_start",
+           "assert_no_hold_blocks_start"]
 
 OWNER_HOLD = "OWNER_HOLD"
 OWNER_RELEASE = "OWNER_RELEASE"
@@ -263,6 +264,60 @@ def parse_owner_rows(text: str) -> tuple:
     return tuple(out)
 
 
+def _live_holds(rows) -> list:
+    """Unreleased OWNER_HOLD rows, in file order. Shared so the two
+    applicability answers below cannot drift apart."""
+    released = {r.releases for r in rows if r.token == OWNER_RELEASE}
+    return [r for r in rows
+            if r.token == OWNER_HOLD and r.seq not in released]
+
+
+def holds_applicable_to_start(text: str, run_id: str) -> tuple:
+    """Holds that PROHIBIT a start of `run_id`, whose family may lie outside
+    the canonical scope grammar.
+
+    QROS-CF F06-OWNER-SEMANTICS. The final certification reproduced a supported
+    ordering where a start-equivalent transition took its owner check, an
+    applicable hold committed, and the start committed anyway. Closing that
+    means asking the applicability question INSIDE the serialized commit, and
+    the S0 start path asks it about a trial id -- `S0-T001` -- that
+    `canonical_run_id_family` does not recognize.
+
+    WHY THAT IS NOT A GAP, and this is the load-bearing sentence: the canonical
+    scope grammar cannot EXPRESS a scope of `[S0-T001]`. `parse_owner_rows`
+    refuses such a row with `owner_control_scope_unrecognized` (F05). So the
+    complete set of holds that can apply to an S0 trial today is the GLOBAL
+    ones, and answering GLOBAL-only for a non-canonical id loses no capability
+    that exists -- it states what the grammar already permits.
+
+    IF scoped holds for S0 trials are ever wanted, that is an extension of the
+    canonical run-id grammar and belongs to a decision about F05, not to this
+    repair. It is named here rather than quietly assumed either way.
+
+    `active_holds` is unchanged and still REFUSES a non-canonical query id:
+    that refusal is F05's query-side sweep and it stays exactly as it was. This
+    function is the start-specific applicability answer, not a replacement.
+    """
+    rows = parse_owner_rows(text)          # fail-closed on any malformed row
+    live = _live_holds(rows)
+    if canonical_run_id_family(run_id) is not None:
+        return tuple(r for r in live if r.scope in (GLOBAL_SCOPE, run_id))
+    return tuple(r for r in live if r.scope == GLOBAL_SCOPE)
+
+
+def assert_no_hold_blocks_start(text: str, run_id: str) -> None:
+    """Raise `OwnerControlRefusal('owner_hold_in_force')` if a hold prohibits
+    starting `run_id`. A malformed owner row raises its own code -- also a
+    refusal, because an owner row nobody can read must never read as no hold."""
+    holds = holds_applicable_to_start(text, run_id)
+    if holds:
+        last = holds[-1]
+        raise OwnerControlRefusal(
+            "owner_hold_in_force",
+            f"OWNER_HOLD seq {last.seq} [{last.scope}] {last.utc}: "
+            f"{last.reason}", last.line_no)
+
+
 def active_holds(text: str, run_id: str) -> tuple:
     """Unreleased holds whose scope is GLOBAL or exactly `run_id`.
 
@@ -280,10 +335,8 @@ def active_holds(text: str, run_id: str) -> tuple:
             f"({', '.join(n for n, _ in RUN_ID_FAMILIES)}); a hold cannot be "
             "checked against an id no family recognizes")
     rows = parse_owner_rows(text)
-    released = {r.releases for r in rows if r.token == OWNER_RELEASE}
-    return tuple(r for r in rows
-                 if r.token == OWNER_HOLD and r.seq not in released
-                 and r.scope in (GLOBAL_SCOPE, run_id))
+    return tuple(r for r in _live_holds(rows)
+                 if r.scope in (GLOBAL_SCOPE, run_id))
 
 
 def assert_no_owner_hold(text: str, run_id: str) -> None:

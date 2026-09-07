@@ -471,17 +471,20 @@ def test_F06_case_A_a_hold_committed_before_the_write_refuses(tmp_path, monkeypa
     wins serialization, so P3 must refuse and write nothing."""
     path = tmp_path / "TRIAL_REGISTRY.md"
     sid = _two_row_ledger(path)
-    original = rb._compare_and_append
+    original = rb.serialized_start_append
 
-    def interleave(target, decided, addition):
+    def interleave(target, addition, *, run_id, decided=None):
         target.write_bytes(target.read_bytes() + (HOLD_ROW + "\n").encode("utf-8"))
-        return original(target, decided, addition)
+        return original(target, addition, run_id=run_id, decided=decided)
 
-    monkeypatch.setattr(rb, "_compare_and_append", interleave)
+    # OWNER-SEMANTICS REPAIR: the interleave point is the start entry now, and
+    # the refusal names the OWNER rather than the moved file. That is the fix --
+    # what actually happened is that an owner stopped this start.
+    monkeypatch.setattr(rb, "serialized_start_append", interleave)
     with pytest.raises(rb.AppendRefused) as caught:
         rb.append_run_started(sid, head_commit=C40,
                               utc_stamp="2026-09-07T00:00:01+00:00", path=path)
-    assert caught.value.code == "p3_registry_changed_under_decision"
+    assert caught.value.code == "start_refused_owner_hold_in_force"
     text = path.read_text(encoding="utf-8")
     assert "SUPPLEMENT_RUN_STARTED" not in text, "P3 bytes were written"
     assert "OWNER_HOLD" in text, "the interleaved hold was lost"
@@ -522,14 +525,17 @@ def test_F06_the_decision_and_the_append_share_one_version(tmp_path):
     a hold. A repair that special-cased OWNER_HOLD would leave the race."""
     path = tmp_path / "TRIAL_REGISTRY.md"
     sid = _two_row_ledger(path)
-    original = rb._compare_and_append
+    original = rb.serialized_start_append
 
-    def interleave(target, decided, addition):
+    def interleave(target, addition, *, run_id, decided=None):
+        # A NON-hold row on purpose: this case is about ANY change refusing, so
+        # the interleaved row must not be an owner row, or the owner rule would
+        # answer and the compare-and-swap would go untested.
         target.write_bytes(target.read_bytes() + b"| + | x | NOTE | y | z | w |\n")
-        return original(target, decided, addition)
+        return original(target, addition, run_id=run_id, decided=decided)
 
     import unittest.mock as mock
-    with mock.patch.object(rb, "_compare_and_append", interleave):
+    with mock.patch.object(rb, "serialized_start_append", interleave):
         with pytest.raises(rb.AppendRefused) as caught:
             rb.append_run_started(sid, head_commit=C40,
                                   utc_stamp="2026-09-07T00:00:03+00:00",
@@ -565,9 +571,13 @@ def test_F06_there_is_exactly_one_read_behind_the_decision():
     body = _code_only(rb.append_run_started)
     assert body.count("target.read_bytes()") == 1, body
     assert "decided = target.read_bytes()" in body
-    assert "_compare_and_append(target, decided" in body
+    # OWNER-SEMANTICS REPAIR: the append goes through the START entry, which
+    # carries the decided snapshot INTO the serialized decision along with the
+    # applicable-hold check. Still one read, still no direct write.
+    assert "serialized_start_append(" in body
+    assert "decided=decided" in body
     assert "target.write_bytes(" not in body, \
-        "append_run_started writes directly again, bypassing the CAS"
+        "append_run_started writes directly again, bypassing the boundary"
 
 
 def test_F06_the_cas_is_the_only_writer_and_it_compares_first():

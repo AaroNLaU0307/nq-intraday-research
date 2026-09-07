@@ -1410,8 +1410,23 @@ def append_registry_event_line(registry_path: Path, trial_id: str,
     needs, and a fabricated snapshot would have been a lie about a comparison
     nobody made.
     """
-    from itsf.mc.registry_boundary import serialized_append
+    from itsf.mc.registry_boundary import (is_start_equivalent,
+                                          serialized_append,
+                                          serialized_start_append)
 
     line = (f"| + | {utc} | {event} | {commit} | {actor} | "
             f"[{trial_id}] {note} |\n")
-    serialized_append(Path(registry_path), line.encode("utf-8"))
+    payload = line.encode("utf-8")
+    if is_start_equivalent(event):
+        # F06-OWNER-SEMANTICS. `RUN_STARTED` is a start-equivalent commit, so
+        # the applicable-hold decision must be taken against the bytes being
+        # committed, inside the same serialized decision. Reproduced before this
+        # change: pre-exposure recheck passed, a GLOBAL hold committed, and this
+        # append still succeeded -- the S0 path performed no owner check at all.
+        serialized_start_append(Path(registry_path), payload,
+                                run_id=trial_id)
+    else:
+        # Generic ordered registry mutation keeps exactly its prior semantics:
+        # serialized, no start-only validation. Subjecting every event to a
+        # start refusal would be a different and wrong change.
+        serialized_append(Path(registry_path), payload)

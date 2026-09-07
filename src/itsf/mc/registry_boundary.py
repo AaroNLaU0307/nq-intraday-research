@@ -45,7 +45,9 @@ __all__ = ["RegistrySnapshot", "MediatedResolution", "BoundaryError",
            "read_snapshot", "mediate",
            "resolve_registry", "supplement_chain", "resolve_for_supplement",
            "RUN_STARTED_TOKEN", "AppendRefused", "append_run_started",
-           "append_owner_hold", "append_owner_release", "serialized_append"]
+           "append_owner_hold", "append_owner_release", "serialized_append",
+           "serialized_start_append", "START_EQUIVALENT_TOKENS",
+           "is_start_equivalent"]
 
 BOUNDARY_RULING = "MC_REG_COLLISION_001_C2_AS_MODIFIED_2026-08-25"
 BOUNDARY_RULING_DELEGATED = True
@@ -406,8 +408,76 @@ class _AppendLock:
         return False
 
 
+#: Events whose commit means GOVERNED EXECUTION HAS STARTED, across all three
+#: families. A hold applicable at the commit must refuse every one of them.
+#:
+#: `MC_RUN_STARTED` has no production writer today (N-D3 deferred) and is listed
+#: anyway: naming it here is what makes a future writer inherit the refusal
+#: instead of having to remember it.
+START_EQUIVALENT_TOKENS = ("SUPPLEMENT_RUN_STARTED", "RUN_STARTED",
+                           "MC_RUN_STARTED")
+
+
+def is_start_equivalent(event: str) -> bool:
+    """Does committing `event` mean governed execution has started?
+
+    Bold-marked (`**TOKEN**`) and whitespace-padded spellings resolve to the
+    same answer, because the row grammar admits both and a start that hid
+    behind an asterisk would be exactly the bypass this exists to stop."""
+    return (event or "").strip().strip("*").strip() in START_EQUIVALENT_TOKENS
+
+
+def serialized_start_append(target: Path, addition: bytes, *, run_id: str,
+                            decided: bytes | None = None) -> None:
+    """Commit a START-EQUIVALENT event: the decisive owner-control decision and
+    the physical append share ONE serialized decision.
+
+    QROS-CF F06-OWNER-SEMANTICS. The final certification reproduced this
+    supported ordering:
+
+        1. a start-equivalent transition performs its final owner/control check
+        2. an applicable unreleased OWNER_HOLD commits
+        3. the in-progress transition appends RUN_STARTED
+        4. the transition returns successfully
+
+    Serialization was working; the SEMANTICS at the commit boundary were wrong.
+    Two separate reasons, both real:
+
+      * the S0 start path performed no owner-control check at all, anywhere,
+        and appended with no `decided` snapshot -- so nothing could notice;
+      * the supplement path did check, but on bytes read BEFORE the lock. Its
+        compare-and-swap made that safe in effect, and "safe because a second
+        mechanism happens to catch it" is not the contract. The contract wants
+        the decision taken against the bytes being committed.
+
+    So the check moved INSIDE. `validate` runs under the lock, on the
+    authoritative current bytes, immediately before the write; a refusal there
+    means no start row is written at all.
+
+    NOT A NEW MECHANISM: same `_AppendLock`, same single physical write, same
+    parsers, same canonical grammar, same applicability logic. Generic ordered
+    appends are untouched -- only start-equivalent commits carry this refusal,
+    which is why this is a separate entry rather than a flag on the generic one.
+    """
+    from . import owner_control as _oc
+
+    def _decide(now: bytes) -> None:
+        try:
+            _oc.assert_no_hold_blocks_start(
+                now.decode("utf-8", errors="replace"), run_id)
+        except _oc.OwnerControlRefusal as exc:
+            raise AppendRefused(
+                "start_refused_owner_hold_in_force"
+                if exc.code == "owner_hold_in_force"
+                else "start_refused_owner_control_unreadable",
+                "%s: %s" % (exc.code, exc.detail)) from exc
+
+    serialized_append(target, addition, decided=decided, validate=_decide)
+
+
 def serialized_append(target: Path, addition: bytes, *,
-                      decided: bytes | None = None) -> None:
+                      decided: bytes | None = None,
+                      validate=None) -> None:
     """THE ONE serialization boundary for the governed registry.
 
     QROS-CF F06, PRE-CERT REPAIR. The final-cert writer inventory found a
@@ -447,6 +517,13 @@ def serialized_append(target: Path, addition: bytes, *,
     """
     with _AppendLock(target):
         now = target.read_bytes()
+        # THE AUTHORITATIVE SERIALIZED COMMIT DECISION (F06-OWNER-SEMANTICS).
+        # `validate` is handed the bytes about to be committed against, under
+        # the lock, so a decision made here cannot be stale by the time the
+        # write happens. That is the whole difference between this and a check
+        # performed before the lock and trusted afterwards.
+        if validate is not None:
+            validate(now)
         if decided is not None and now != decided:
             raise AppendRefused(
                 "p3_registry_changed_under_decision",
@@ -762,7 +839,11 @@ def append_run_started(supplement_id: str, *, head_commit: str,
     if not decided.endswith(b"\n"):
         raise AppendRefused("p3_registry_tail_is_not_a_line",
                             "the registry does not end in a newline")
-    _compare_and_append(target, decided, (row + "\n").encode("utf-8"))
+    # F06-OWNER-SEMANTICS: the decisive hold check happens INSIDE the lock, on
+    # the bytes being appended to. The pre-lock check above stays as a cheap
+    # early refusal with its own code, but it is no longer what makes this safe.
+    serialized_start_append(target, (row + "\n").encode("utf-8"),
+                            run_id=supplement_id, decided=decided)
 
     after = _read_text(target)
     verified = _sr.resolve_supplement_chain(after, supplement_id)

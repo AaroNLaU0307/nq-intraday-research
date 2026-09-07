@@ -482,13 +482,17 @@ def test_F06_all_three_supported_writers_reach_the_same_physical_write():
     sid = R1._two_row_ledger(path)
 
     seen = []
-    real = rb._compare_and_append
+    real = rb.serialized_append
 
-    def counting(target, decided, addition):
+    def counting(target, addition, *, decided=None, validate=None):
         seen.append(Path(target).name)
-        return real(target, decided, addition)
+        return real(target, addition, decided=decided, validate=validate)
 
-    rb._compare_and_append = counting
+    # OWNER-SEMANTICS REPAIR: P3 now commits through `serialized_start_append`,
+    # so counting `_compare_and_append` would miss it. `serialized_append` is
+    # the one physical write every supported writer still passes through, which
+    # is the property this test is actually about.
+    rb.serialized_append = counting
     try:
         rb.append_owner_hold(scope=oc.GLOBAL_SCOPE, reason="one",
                              head_commit=C40, utc_stamp=UTC, path=path)
@@ -499,7 +503,7 @@ def test_F06_all_three_supported_writers_reach_the_same_physical_write():
                                 releases_event_sequence=hold_seq, path=path)
         rb.append_run_started(sid, head_commit=C40, utc_stamp=UTC, path=path)
     finally:
-        rb._compare_and_append = real
+        rb.serialized_append = real
 
     assert len(seen) == 3, (
         "one of the three supported writers did not go through the shared "

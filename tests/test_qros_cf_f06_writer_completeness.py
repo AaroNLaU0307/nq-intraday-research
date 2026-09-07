@@ -251,23 +251,50 @@ def _events(path):
             if ln.strip().startswith("|") and len(ln.split("|")) > 4]
 
 
-def test_case_A_owner_hold_wins_so_the_S0_append_cannot_stale_write(ledger):
-    """A. The HOLD wins serialization. The S0 append is ordered AFTER it and
-    cannot land across it -- it reads under the lock, so it appends to the
-    version that already contains the hold rather than to a stale one."""
+def test_case_A_owner_hold_wins_so_the_S0_start_is_REFUSED(ledger):
+    """A. INVERTED AT THE OWNER-SEMANTICS REPAIR, AND THIS TEST WAS WRONG.
+
+    It used to assert that the S0 append lands AFTER the hold and called that
+    correct, on the reasoning that reading under the lock made the ordering
+    honest. Ordering was never the question. `RUN_STARTED` is a START-EQUIVALENT
+    commit, and an applicable unreleased hold must REFUSE it -- which is exactly
+    the failure the final certification reproduced and held on.
+
+    So this file, written to close an F06 defect, asserted the next F06 defect
+    as the intended behaviour. Serialization was right and semantics were
+    missing, and a test that checks only the half you fixed will happily bless
+    the half you did not.
+
+    The ordering property it did care about is kept for GENERIC events, which is
+    where it actually belongs: see `test_case_A_generic_events_still_order`.
+    """
     path, _sid = ledger
     rb.append_owner_hold(scope=oc.GLOBAL_SCOPE, reason="stop",
                          head_commit=C40, utc_stamp=UTC, path=path)
     before = path.read_bytes()
-    _s0(path, note="after the hold")
+    with pytest.raises(rb.AppendRefused) as caught:
+        _s0(path, note="after the hold")
+    assert caught.value.code == "start_refused_owner_hold_in_force"
+    assert path.read_bytes() == before, "bytes moved under a refused start"
+    assert "RUN_STARTED" not in _events(path)
+    assert oc.holds_applicable_to_start(
+        path.read_text(encoding="utf-8"), "MC-DS-S001"), "the hold was lost"
+
+
+def test_case_A_generic_events_still_order_behind_a_hold(ledger):
+    """The property the inverted test above was really about, kept where it
+    belongs: a GENERIC append reads under the lock and builds on the committed
+    version, so it can never reorder or replace a hold."""
+    path, _sid = ledger
+    rb.append_owner_hold(scope=oc.GLOBAL_SCOPE, reason="stop",
+                         head_commit=C40, utc_stamp=UTC, path=path)
+    before = path.read_bytes()
+    _s0(path, note="generic after the hold", event="STAGE_D_COMPLETE")
     after = path.read_bytes()
     assert after.startswith(before), (
-        "the S0 append did not build on the committed version; a stale write "
-        "would have replaced or reordered the hold")
+        "the generic append did not build on the committed version")
     ev = _events(path)
-    assert ev.index("OWNER_HOLD") < ev.index("RUN_STARTED")
-    assert oc.active_holds(path.read_text(encoding="utf-8"), "MC-DS-S001"), (
-        "the hold was lost")
+    assert ev.index("OWNER_HOLD") < ev.index("STAGE_D_COMPLETE")
 
 
 def test_case_B_the_S0_append_wins_and_a_later_hold_is_ordered_after(ledger):
@@ -291,11 +318,17 @@ def test_case_C_STARTED_and_the_S0_append_race_and_neither_erases_the_other(
     real = rb.serialized_append
     state = {"fired": False}
 
-    def interleave(target, addition, *, decided=None):
+    def interleave(target, addition, *, decided=None, validate=None):
         if decided is not None and not state["fired"]:
             state["fired"] = True
-            _s0(target, note="landed under P3's decision")
-        return real(target, addition, decided=decided)
+            # A GENERIC S0 event, not a start: the point here is that P3's
+            # compare-and-swap refuses on ANY intervening change, and that a
+            # refusal is not a rollback of the other writer's row. Using a
+            # start event would now (correctly) be refused itself, which would
+            # test the owner rule instead of the CAS.
+            _s0(target, note="landed under P3's decision",
+                event="STAGE_D_COMPLETE")
+        return real(target, addition, decided=decided, validate=validate)
 
     monkeypatch.setattr(rb, "serialized_append", interleave)
     with pytest.raises(rb.AppendRefused) as caught:
@@ -303,7 +336,7 @@ def test_case_C_STARTED_and_the_S0_append_race_and_neither_erases_the_other(
     assert caught.value.code == "p3_registry_changed_under_decision"
     text = path.read_text(encoding="utf-8")
     assert "SUPPLEMENT_RUN_STARTED" not in text, "P3 bytes were written"
-    assert "RUN_STARTED" in text, "the S0 row was erased by the refusal"
+    assert "STAGE_D_COMPLETE" in text, "the other row was erased by the refusal"
 
 
 def test_case_D_two_S0_appends_lose_nothing_and_corrupt_nothing(ledger):
