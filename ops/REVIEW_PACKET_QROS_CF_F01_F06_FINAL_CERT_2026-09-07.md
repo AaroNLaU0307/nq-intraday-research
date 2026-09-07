@@ -3,7 +3,7 @@
 ```ini
 PACKET_TYPE=FINAL_CERTIFICATION_OF_A_REPAIR（沿用既有 Review Packet 件种,不是新件种;不是 A2,不是 Stage I,不解开任何 QROS 门）
 REVIEW_ID=QROS-CF-F01-F06-FINAL-CERT-001
-DELIVERY_STATUS=RETURNED
+DELIVERY_STATUS=ISSUED
 REISSUE_3=本包 §4.5 的写者清单**自己查出一条 F06 阻断项**(`s0/runner.append_registry_event_line` 在序列化之外改动受管 registry),Aaron 授权了仅针对 F06 的 PRE-CERT 定界修复。**那条已修**,见 §4.6。仍是同一 `REVIEW_ID`、同一谱系、一份 manifest;**从未派发过任何一版**
 F06_REPAIR_COMMIT=850f61b
 REISSUE=YES（第 2 次）—— 本次因 **Astra 在实质认证前的传输停止**：入口/写者清单需要更多源文件的字节。**这不是一条 finding,不是新的一轮,不是新 id**。前一次重发的原因是 —— **同一 REVIEW_ID 重发,不是新的复审谱系**。首版打包完成后从未派发;打包过程中机械测出三条残留,Aaron 授权了一次 PRE-CERT 定界修复,修复改动了首版钉住的字节,故撤回并按同一 id 重发。**没有任何席位看过任何一版**
@@ -77,7 +77,7 @@ Aaron 随后授权了一次**定界的 PRE-CERT 修复**（不是一轮复审,�
 | sha256 | bytes | 路径 | 作用 |
 |---|---|---|---|
 | `4a5f9cafe32f5e232ebfdabf880136e39053dfacb6fe5e5f8a3f8b6f21483759` | `26873` | `tests/test_qros_cf_pre_cert.py` | **本轮结算测试，30 条**：启动顺序、R1/R2/R3 的原样复现与关闭、入口清单、F06 动态写入证明、F03/F04/F05 保全 |
-| `f07fb06af0bc3331fa07eea17eab747204e5012c598bcbe8486efeca11f22a4b` | `18080` | `tests/test_qros_cf_f06_writer_completeness.py` | **F06 跨模块完整性 + S0 交错,15 条**：完整性规则（不按字面量、不限单模块）、六条确定性交错、以及反方向的误分类断言 |
+| `4102cd50b31fc67f0b0a7f8e1635197cf4def0dc8a5c96a1be818dd75165a638` | `19648` | `tests/test_qros_cf_f06_writer_completeness.py` | **F06 跨模块完整性 + S0 交错,15 条**：完整性规则（不按字面量、不限单模块）、六条确定性交错、以及反方向的误分类断言 |
 | `cd6592d9802a4f1c021cd0c6ca3450887de1191e407e5c1bb49c54a1a5b8090a` | `39220` | `tests/test_qros_cf_astra_round2.py` | 第二轮结算测试。`_Flags` 增补 `no_site`；**`-S` 的结论被倒转并写明理由** |
 | `4ffe6d6b6049db4ba0d8870e1da0d19a70e3da3c0cbecfd89eb9a5415c34e319` | `29181` | `tests/test_qros_cf_astra_repairs.py` | 第一轮结算测试；本轮未改动 |
 | `31bb95295ebf21f228fa62417b70d700a1fb451104dcdfd0e3bd137056b962f6` | `25270` | `tests/test_execution_identity.py` | T-F01；本轮未改动 |
