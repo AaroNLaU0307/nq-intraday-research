@@ -4,7 +4,7 @@
 PACKET_TYPE=FINAL_CERTIFICATION_OF_A_REPAIR（沿用既有 Review Packet 件种,不是新件种;不是 A2,不是 Stage I,不解开任何 QROS 门）
 REVIEW_ID=QROS-CF-F01-F06-FINAL-CERT-001
 DELIVERY_STATUS=ISSUED
-REISSUE=YES —— **同一 REVIEW_ID 重发,不是新的复审谱系**。首版打包完成后从未派发;打包过程中机械测出三条残留,Aaron 授权了一次 PRE-CERT 定界修复,修复改动了首版钉住的字节,故撤回并按同一 id 重发。**没有任何席位看过任何一版**
+REISSUE=YES（第 2 次）—— 本次因 **Astra 在实质认证前的传输停止**：入口/写者清单需要更多源文件的字节。**这不是一条 finding,不是新的一轮,不是新 id**。前一次重发的原因是 —— **同一 REVIEW_ID 重发,不是新的复审谱系**。首版打包完成后从未派发;打包过程中机械测出三条残留,Aaron 授权了一次 PRE-CERT 定界修复,修复改动了首版钉住的字节,故撤回并按同一 id 重发。**没有任何席位看过任何一版**
 PRE_CERT_REPAIR_COMMIT=81c0d22ab9df7bfc5f99224bd1e89af0fd7178af
 SECOND_ROUND_REPAIR_COMMIT=0d15a62e7611049ee2095e52d3d55d2037d698a5
 FIRST_ROUND_REPAIR_COMMIT=f461f098a407ffc87dd0e2187c14ee4f4f00d1fd
@@ -107,6 +107,129 @@ Aaron 随后授权了一次**定界的 PRE-CERT 修复**（不是一轮复审,�
 | `5c9af31df771eb9c36ff8100b881b5efd17f4e69a2e80e5a42e76cec1961540d` | `6084` | `ops/RECOVERY_ANCHOR.md` | **允许的 outcome-clean 定位入口** |
 | `a61c125b4e2e551955ce59816c9ccbc6a449a91d7f7701095eeb586e5c155f4b` | `2563` | `ops/OUTCOME_CARRYING_ARTIFACTS.json` | **隔离登记册**（12 条） |
 | `1cdd2dce3b33796e75f3dedfcac720704166f5d7a1bc93f2bde54a6f51de4c79` | `7424` | `ops/NEXT_HANDOFF.md` | **强制同行件**，禁读清单载体；本轮未改动 |
+
+---
+
+## 0.6 本次因入口/写者清单而新钉的源文件
+
+Astra 在实质认证前停在传输环节:入口/写者清单需要这些源文件的字节,而它们
+未被钉住。**这是一次传输停止,不是一条 finding。** 同一 `REVIEW_ID` 重发。
+
+| sha256 | bytes | 路径 | 为什么被钉(它让哪个判断可决) |
+|---|---|---|---|
+| `66d746d83e76fcfc2145820e5262025bf27ad50538d671dbbbeca80600d393bd` | `4658` | `scripts/run_data_qa.py` | SANCTIONED_REAL_RUN_ENTRY (`__main__`) |
+| `9d0e6134d814b869482a3ed8bffe77afa5119158ed4d4afa9146832dcda834d5` | `11135` | `scripts/qa_addendum_a1.py` | SANCTIONED_REAL_RUN_ENTRY (`__main__`) |
+| `faf6ee467ffb18b04070b71719016587b1f0ddb00a77c901b144877e66aca12f` | `2428` | `scripts/qa_addendum_a2.py` | SANCTIONED_REAL_RUN_ENTRY (`__main__`) |
+| `21512097b688bade80eb185d39ace0413dd7d2a1cbc7e54818afa1ce26e9f512` | `67832` | `scripts/s0_input_preflight.py` | SANCTIONED_REAL_RUN_ENTRY (`__main__`) |
+| `e37bd5c2cd434568b16645f4a36970b2f2df5aeff02aaf8bee3e39cf7670b6d7` | `165998` | `src/itsf/mc/consumer.py` | SANCTIONED_REAL_RUN_ENTRY `run_real_mc` |
+| `b07827067ed68033f1b21834f680546ef7f2c99629fb71c78deab62fdc76ea2a` | `4649` | `src/itsf/mc/real_input.py` | TWO SANCTIONED entries: `prepare_real_mc_input`, `prepare_supplement_mc_input` |
+| `c34a9d13368eb4106d432c0b77ce25f7fd8e56f43642e5d1dee4f20e46c6d41a` | `6148` | `src/itsf/data/dbn_loader.py` | the flag-path seam: `load_real` calls the gate with the loader's OWN flags, so a temp-flag construction reaches real bytes without the launch proof. **This is the FLAG-PATH_BYPASS the reviewer must judge** |
+| `f0035e1d5e2f3ca5b8c6189dcb6196970ddc79263cbf4dca008ff253a4d94d4b` | `11560` | `src/itsf/data/cost_calibration_loader.py` | same flag-path seam, three call sites |
+| `817419cd5910fd352bf291c8c74d6e4723cc6afefcd1a1f5fe3cb1326bd88e34` | `10894` | `src/itsf/mc/mc_contract.py` | `RUN_ID_RE` — one of F05's two authoritative families |
+| `e93a75e44c72d77d19abf72c7cd0d923d4b719ddd1e19e34f6924c19fbc0e24f` | `34389` | `src/itsf/mc/supplement_contract.py` | `SUPPLEMENT_ID_PATTERN` — F05's other family; sequence/row grammar |
+| `ff4ba0f66aee5625e4ee1d53d915bfc3e78cf31c110dd0cf6bd85d579e2042b5` | `72459` | `src/itsf/mc/supplement_registry.py` | the shared row parser F05 routes through, and the GLOBAL sequence rule F06's derived sequence reuses |
+| `499224b94113f47333fc2d2e8f2d3bcf6b24bc803a699d7419f51a716e1b3ede` | `13331` | `src/itsf/mc/registry_integrity.py` | calls `assert_no_owner_hold` with an MC-family id — why F05 routes BOTH families |
+| `774cd76f927effa4560e699f4243269d833b34f09dbd8fff800044fe39d9b652` | `37130` | `src/itsf/mc/supplement_authority.py` | the authorization layer the relocated refusal assertions land on |
+| `e0be5ae9771029d8c3e96a7d06f41808f15f28902d4e8739c33350df575bd8ee` | `78591` | `src/itsf/s0/runner.py` | **contains `append_registry_event_line`, a SUPPORTED_REGISTRY_WRITER that does NOT share the serialization primitive.** Load-bearing for F06 writer completeness |
+| `888d639194578b8d22d93e4d61ab87d2cb8860d00759bfc1994f5b27c4f3b276` | `90687` | `src/itsf/s0/runinfra.py` | S0 run infrastructure; its writers were candidates under the writer rule and are classified NON-registry in the inventory |
+| `97d50740d938cb40eccab6595e6ba7284c493e9a662e311ddce31700f294a002` | `64677` | `src/itsf/contracts.py` | `RunConfig` / `TrialState` / ruled roots the S0 entry constructs |
+| `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | `0` | `src/itsf/__init__.py` | **0 bytes, and that is the measured fact `BOOTSTRAP_IMPORT_CLOSURE` rests on**: importing `itsf.execution_identity` pulls in exactly two governed modules. F01's pre-import proof depends on it |
+| `67a91c9ede5a8a53bceccafb39102cd5ce083cb2ca4cbf087aa56360bbe89c71` | `7231` | `tests/conftest.py` | test collection/fixtures Astra will execute |
+| `d441aad613d6f1138a67d166434084f4d8792a2a23eb40091325fd33a102a136` | `5347` | `tests/tiers.py` | the tier map defining the A+B suite Astra will run |
+| `27a4d763fc7c58b498a50d8b738d4846fdc5b8a4ce7d818e3167e2934e6c5db6` | `9312` | `src/itsf/mc/account.py` | **本席位追加(超出 19 件清单)**：SANCTIONED_ENTRY completeness. The stated discovery rule classifies `run_real_study` as a SANCTIONED_REAL_RUN_ENTRY (it calls the gate on the production defaults), and it is in NEITHER the 19-file list NOR the previous builder inventory. The reviewer cannot decide entry completeness without its bytes. |
+| `272a804505b5ba51acc4ac62ca5c044a616213d770672f3330205352c8232088` | `24144` | `src/itsf/mc/orchestrator.py` | **本席位追加(超出 19 件清单)**：SANCTIONED_ENTRY completeness. Same rule, same omission: `run_real_lifecycle` calls the gate on the production defaults and was absent from both lists. |
+
+**没有做整仓递归钉定。** 每一行都对应下面清单里一个具体判断;
+被 Python 顺带 import 的模块、标准库与第三方包内部**不因为被 import 就成为受审件**。
+
+---
+
+## 4.5 SUPPORTED_ENTRY_WRITER_INVENTORY —— 在冻结 HEAD 上机械导出
+
+**导出方式,可复核。** 工作树在 `3bc415e41ec606ee5b47d331f30a5a57af0c9328` 处干净,故对工作树做 AST 即等于对
+冻结 HEAD 做 AST。两条规则,逐条施加,不抄任何先前的 builder 报告:
+
+```
+规则 E（候选真实运行入口）
+  scripts/ 下带 `if __name__ == "__main__"` 的文件,
+  或 src/itsf/ 下调用 assert_real_run_allowed 的函数。
+  当它以**生产默认旗标**到达该门时(无参调用、传 G9_FLAG/SECOND_COPY_FLAG、
+  或构造未覆盖旗标的 DevelopmentSignalLoader)即 SANCTIONED_REAL_RUN_ENTRY,
+  因为那正是 assert_trusted_launch 触发的那个调用。
+
+规则 W（候选 registry 写者）
+  src/ 或 scripts/ 下函数体含写调用(write_bytes/write_text/write/writelines)
+  或以追加模式 open,且满足其一:
+    (a) 位于拥有受管 registry 路径的模块;
+    (b) 文本中出现 TRIAL_REGISTRY.md;
+    (c) 调用共享原语 _compare_and_append;
+    (d) 函数名或参数名含 "registry"。
+  条 (d) 是**本轮补上的**:第一版规则只按路径字面量匹配,因而漏掉了一个把
+  registry 路径当**参数**接收的真实写者——见下表 `append_registry_event_line`。
+```
+
+**允许你自己重跑这两条规则。** 对 `src/` 与 `scripts/` 做 AST 扫描是被明确许可的:
+它只读项目源码,**不触及 `ops/`**,因此不可能命中任何隔离件。不要把扫描扩到 `ops/`。
+
+### 4.5.1 真实运行入口
+
+| 路径 | 入口符号 | 分类 | 发现依据 | 受信启动 | 共享序列化 | 该文件 sha256 |
+|---|---|---|---|---|---|---|
+| `scripts/s0_real_run.py` | `__main__` | **SANCTIONED_REAL_RUN_ENTRY** | scripts/ + `__main__`; gate on production defaults | YES | n/a | `f51d19a8e1768d4223a44145d79213d012a132d1933e9184662c786f7dd16ebc` |
+| `scripts/run_data_qa.py` | `__main__` | **SANCTIONED_REAL_RUN_ENTRY** | scripts/ + `__main__`; gate on production defaults | YES | n/a | `66d746d83e76fcfc2145820e5262025bf27ad50538d671dbbbeca80600d393bd` |
+| `scripts/qa_addendum_a1.py` | `__main__` | **SANCTIONED_REAL_RUN_ENTRY** | scripts/ + `__main__`; gate on defaults + default-flag loader | YES | n/a | `9d0e6134d814b869482a3ed8bffe77afa5119158ed4d4afa9146832dcda834d5` |
+| `scripts/qa_addendum_a2.py` | `__main__` | **SANCTIONED_REAL_RUN_ENTRY** | scripts/ + `__main__`; gate on production defaults | YES | n/a | `faf6ee467ffb18b04070b71719016587b1f0ddb00a77c901b144877e66aca12f` |
+| `scripts/s0_input_preflight.py` | `__main__` | **SANCTIONED_REAL_RUN_ENTRY** | scripts/ + `__main__`; default-flag `DevelopmentSignalLoader` | YES (through the loader) | n/a | `21512097b688bade80eb185d39ace0413dd7d2a1cbc7e54818afa1ce26e9f512` |
+| `src/itsf/mc/consumer.py` | `run_real_mc` | **SANCTIONED_REAL_RUN_ENTRY** | src/ function; gate with `G9_FLAG, SECOND_COPY_FLAG` | YES | n/a | `e37bd5c2cd434568b16645f4a36970b2f2df5aeff02aaf8bee3e39cf7670b6d7` |
+| `src/itsf/mc/real_input.py` | `prepare_real_mc_input` | **SANCTIONED_REAL_RUN_ENTRY** | src/ function; gate on defaults | YES | n/a | `b07827067ed68033f1b21834f680546ef7f2c99629fb71c78deab62fdc76ea2a` |
+| `src/itsf/mc/real_input.py` | `prepare_supplement_mc_input` | **SANCTIONED_REAL_RUN_ENTRY** | src/ function; gate on defaults | YES | n/a | `b07827067ed68033f1b21834f680546ef7f2c99629fb71c78deab62fdc76ea2a` |
+| `src/itsf/mc/supplement_runner.py` | `run_supplement_production` | **SANCTIONED_REAL_RUN_ENTRY** | src/ function; gate on defaults; also the sole `seam_recheck` caller | YES (gate + seam) | via `append_run_started` | `9ba7ad59ed012112e700aac59451ec729660ca3fa25a3d89a9bf5ef74784b166` |
+| `src/itsf/mc/account.py` | `run_real_study` | **SANCTIONED_REAL_RUN_ENTRY** | src/ function; gate on defaults. **ABSENT from the 19-file list and from the previous builder inventory** | YES | n/a | `27a4d763fc7c58b498a50d8b738d4846fdc5b8a4ce7d818e3167e2934e6c5db6` |
+| `src/itsf/mc/orchestrator.py` | `run_real_lifecycle` | **SANCTIONED_REAL_RUN_ENTRY** | src/ function; gate on defaults. **ABSENT from both lists** | YES | n/a | `272a804505b5ba51acc4ac62ca5c044a616213d770672f3330205352c8232088` |
+| `scripts/run_governed.py` | `main / run_parent / run_child` | **INTERNAL_ONLY** | scripts/ + `__main__`; performs no run — it IS the boundary | IT IS THE MECHANISM | n/a | `f51f166ad4fc18db8a8cd12201dcfd3adf1e86e670bf2a6ec490a8f21437714b` |
+| `src/itsf/data/dbn_loader.py` | `load_real` | **INTERNAL_ONLY** | src/ function calling the gate with the LOADER'S OWN flags, not the production defaults | NO — flag-path seam, see §4.5 | n/a | `c34a9d13368eb4106d432c0b77ce25f7fd8e56f43642e5d1dee4f20e46c6d41a` |
+| `src/itsf/data/cost_calibration_loader.py` | `build_spread_table_real, _qa_crossed_forensics, _qa_ts_phase_census` | **INTERNAL_ONLY** | same flag-path seam, three sites | NO — flag-path seam, see §4.5 | n/a | `f0035e1d5e2f3ca5b8c6189dcb6196970ddc79263cbf4dca008ff253a4d94d4b` |
+| `scripts/render_qa_addendum.py` | `__main__` | **NON_REAL** | `__main__`; no gate on defaults, no loader — its real-data names are docstrings | n/a | n/a | 未钉(该分类按 §4.5 的规则可自行复核) |
+| `scripts/mc_ds_rehearsal.py` | `__main__` | **NON_REAL** | `__main__`; no gate, no loader | n/a | n/a | 未钉(该分类按 §4.5 的规则可自行复核) |
+| `scripts/archive_code_6_block_builder.py` | `__main__` | **NON_REAL** | `__main__`; no gate, no loader | n/a | n/a | 未钉(该分类按 §4.5 的规则可自行复核) |
+| `scripts/build_verifier_dir.py` | `__main__` | **NON_REAL** | `__main__`; no gate, no loader | n/a | n/a | 未钉(该分类按 §4.5 的规则可自行复核) |
+| `scripts/fetch_symbology_d5.py` | `__main__` | **NON_REAL** | `__main__`; no gate, no loader | n/a | n/a | 未钉(该分类按 §4.5 的规则可自行复核) |
+| `scripts/final_candidate_scans.py` | `__main__` | **NON_REAL** | `__main__`; no gate, no loader | n/a | n/a | 未钉(该分类按 §4.5 的规则可自行复核) |
+| `scripts/mc_cost_probe.py` | `__main__` | **NON_REAL** | `__main__`; no gate, no loader | n/a | n/a | 未钉(该分类按 §4.5 的规则可自行复核) |
+| `scripts/physical_copy_verify.py` | `__main__` | **NON_REAL** | `__main__`; no gate, no loader | n/a | n/a | 未钉(该分类按 §4.5 的规则可自行复核) |
+
+### 4.5.2 registry 写者
+
+| 路径 | 符号 | 分类 | 发现依据 | 受信启动 | 共享序列化 | 该文件 sha256 |
+|---|---|---|---|---|---|---|
+| `src/itsf/mc/registry_boundary.py` | `_compare_and_append` | **SUPPORTED_REGISTRY_WRITER** | owns the governed path; the ONE physical `write_bytes` | n/a (called after the seam) | **IT IS THE PRIMITIVE** — lock + CAS | `dcf34cc27cbc4295af6690a2dccf7c328b9573a4f9c16c7d7357520cd5d24fac` |
+| `src/itsf/mc/registry_boundary.py` | `append_run_started` | **SUPPORTED_REGISTRY_WRITER** | exported appender in `__all__` | YES — `seam_recheck` requires the attestation | YES | `dcf34cc27cbc4295af6690a2dccf7c328b9573a4f9c16c7d7357520cd5d24fac` |
+| `src/itsf/mc/registry_boundary.py` | `append_owner_hold` | **SUPPORTED_REGISTRY_WRITER** | exported appender in `__all__` | NO — owner control is Aaron's path and is not gated on a governed launch | YES | `dcf34cc27cbc4295af6690a2dccf7c328b9573a4f9c16c7d7357520cd5d24fac` |
+| `src/itsf/mc/registry_boundary.py` | `append_owner_release` | **SUPPORTED_REGISTRY_WRITER** | exported appender in `__all__` | NO — same reason | YES | `dcf34cc27cbc4295af6690a2dccf7c328b9573a4f9c16c7d7357520cd5d24fac` |
+| `src/itsf/s0/runner.py` | `append_registry_event_line` | **SUPPORTED_REGISTRY_WRITER** | **opens the path in APPEND MODE and writes a row; the path arrives as a PARAMETER**, so a rule keyed on the path literal misses it. Called at `scripts/s0_real_run.py:3174` with that script's `REGISTRY` constant | YES, indirectly — its only caller is a SANCTIONED entry whose gate now requires the attestation | **NO — plain `open('a')` + `write`, no lock, no compare-and-swap** | `e0be5ae9771029d8c3e96a7d06f41808f15f28902d4e8739c33350df575bd8ee` |
+| `src/itsf/s0/registry_witness.py` | `append_witness` | **NON_REAL** | append mode, but `witness_path` — writes WITNESS files, not the registry | n/a | n/a | 未钉(该分类按 §4.5 的规则可自行复核) |
+| `src/itsf/s0/runinfra.py` | `append_manifest_record, write_failure_report, archive_sealed_run, validate_output_roots_operational` | **NON_REAL** | write calls in a module that mentions the registry path in prose; every target is a run-directory artifact | n/a | n/a | `888d639194578b8d22d93e4d61ab87d2cb8860d00759bfc1994f5b27c4f3b276` |
+| `src/itsf/mc/supplement_runner.py` | `resolve_partial` | **NON_REAL** | writes `out_dir / filename`, a run output | n/a | n/a | `9ba7ad59ed012112e700aac59451ec729660ca3fa25a3d89a9bf5ef74784b166` |
+| `src/itsf/mc/day_strata_supplement.py` | `seal_supplement_test_only` | **NON_REAL** | writes the sealed supplement artifact in `out_dir` | n/a | n/a | 未钉(该分类按 §4.5 的规则可自行复核) |
+
+### 4.5.3 这份清单查出的两件事 —— **请当作待验证的声明**
+
+**① 两个 SANCTIONED 入口在两份清单里都缺失。** `mc/account.py::run_real_study`
+与 `mc/orchestrator.py::run_real_lifecycle` 都以生产默认旗标调用那道门,
+既不在 19 件清单里,也不在本席位上一版的入口清单里。两者已在 §0.6 补钉。
+上一版的入口清单只枚举了 `scripts/*.py` 的 `__main__` 加三个模块入口——
+**那是一份不完整的清单,而我当时称它「机械枚举」**。
+
+**② 有一个受支持的 registry 写者不共享序列化原语。**
+`s0/runner.py::append_registry_event_line` 以 `open('a')` 直接追加,没有锁、
+没有 compare-and-swap,其唯一调用点 `scripts/s0_real_run.py:3174` 传入的正是
+受管 registry。本席位上一版把 F06 表述为「三个受支持写者共享同一原语」——
+**那句话对 `registry_boundary` 的三个 appender 成立,对「每个受支持的 registry
+写者」不成立**,这与第 2 轮「机制化强制」那次是同一形态。
+
+**本轮是 transport-only,故两者都没有被修。** ① 只是补钉字节;② 是一条
+**尚未修复的事实**,交给你判断它是否构成 BLOCKING、以及归 T5 还是别处。
+不要因为我先说出来就替我打折。
 
 ---
 

@@ -3,7 +3,7 @@
   "under_review": [
     {
       "path": "ops/REVIEW_PACKET_QROS_CF_F01_F06_FINAL_CERT_2026-09-07.md",
-      "sha256": "c879a17b27a15c16f6cae1c40fc3b1122a0d9e83e1ac97f492adf15fc314a0a1",
+      "sha256": "042fdf593310c0c58ae7b321643b87caca49dac0466d88b21144d3a9eeaaba4a",
       "role": "delivery",
       "is_the_delivery_document": true,
       "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
@@ -12,7 +12,7 @@
       "issued_to": "GPT-6 Astra (fresh session)",
       "issued_at": "2026-09-07",
       "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
-      "note": "REISSUE of the same review id against the pre-cert repaired bytes. The first packing was never dispatched; no seat has seen any version. Round 3 of this lineage, outside the contract's two-round budget, by Aaron's explicit owner exception."
+      "note": "REISSUE #2 of the same review id: Astra stopped before substantive certification because the entry/writer inventory needed source files that were not pinned. A transport stop, not a finding, not a new round. Carries SUPPORTED_ENTRY_WRITER_INVENTORY derived mechanically at the frozen HEAD."
     },
     {
       "path": "src/itsf/execution_identity.py",
@@ -332,6 +332,237 @@
       "issued_at": "2026-09-07",
       "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
       "note": "MANDATORY COMPANION, off-limits-list carrier; unchanged this round"
+    },
+    {
+      "path": "scripts/run_data_qa.py",
+      "sha256": "66d746d83e76fcfc2145820e5262025bf27ad50538d671dbbbeca80600d393bd",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "SANCTIONED_REAL_RUN_ENTRY (__main__); gate on production defaults"
+    },
+    {
+      "path": "scripts/qa_addendum_a1.py",
+      "sha256": "9d0e6134d814b869482a3ed8bffe77afa5119158ed4d4afa9146832dcda834d5",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "SANCTIONED_REAL_RUN_ENTRY (__main__); gate on defaults + default-flag loader"
+    },
+    {
+      "path": "scripts/qa_addendum_a2.py",
+      "sha256": "faf6ee467ffb18b04070b71719016587b1f0ddb00a77c901b144877e66aca12f",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "SANCTIONED_REAL_RUN_ENTRY (__main__); gate on production defaults"
+    },
+    {
+      "path": "scripts/s0_input_preflight.py",
+      "sha256": "21512097b688bade80eb185d39ace0413dd7d2a1cbc7e54818afa1ce26e9f512",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "SANCTIONED_REAL_RUN_ENTRY (__main__); default-flag DevelopmentSignalLoader"
+    },
+    {
+      "path": "src/itsf/mc/consumer.py",
+      "sha256": "e37bd5c2cd434568b16645f4a36970b2f2df5aeff02aaf8bee3e39cf7670b6d7",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "SANCTIONED_REAL_RUN_ENTRY run_real_mc"
+    },
+    {
+      "path": "src/itsf/mc/real_input.py",
+      "sha256": "b07827067ed68033f1b21834f680546ef7f2c99629fb71c78deab62fdc76ea2a",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "TWO SANCTIONED entries: prepare_real_mc_input, prepare_supplement_mc_input"
+    },
+    {
+      "path": "src/itsf/data/dbn_loader.py",
+      "sha256": "c34a9d13368eb4106d432c0b77ce25f7fd8e56f43642e5d1dee4f20e46c6d41a",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "the FLAG-PATH BYPASS the reviewer must judge: load_real gates on the loader's own flags, not the production defaults"
+    },
+    {
+      "path": "src/itsf/data/cost_calibration_loader.py",
+      "sha256": "f0035e1d5e2f3ca5b8c6189dcb6196970ddc79263cbf4dca008ff253a4d94d4b",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "the same flag-path seam, three call sites"
+    },
+    {
+      "path": "src/itsf/mc/mc_contract.py",
+      "sha256": "817419cd5910fd352bf291c8c74d6e4723cc6afefcd1a1f5fe3cb1326bd88e34",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "RUN_ID_RE, one of F05's two authoritative families"
+    },
+    {
+      "path": "src/itsf/mc/supplement_contract.py",
+      "sha256": "e93a75e44c72d77d19abf72c7cd0d923d4b719ddd1e19e34f6924c19fbc0e24f",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "SUPPLEMENT_ID_PATTERN, F05's other family; row/sequence grammar"
+    },
+    {
+      "path": "src/itsf/mc/supplement_registry.py",
+      "sha256": "ff4ba0f66aee5625e4ee1d53d915bfc3e78cf31c110dd0cf6bd85d579e2042b5",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "the shared row parser F05 routes through; the GLOBAL sequence rule F06 reuses"
+    },
+    {
+      "path": "src/itsf/mc/registry_integrity.py",
+      "sha256": "499224b94113f47333fc2d2e8f2d3bcf6b24bc803a699d7419f51a716e1b3ede",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "calls assert_no_owner_hold with an MC-family id: why F05 routes BOTH families"
+    },
+    {
+      "path": "src/itsf/mc/supplement_authority.py",
+      "sha256": "774cd76f927effa4560e699f4243269d833b34f09dbd8fff800044fe39d9b652",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "the authorization layer the relocated refusal assertions land on"
+    },
+    {
+      "path": "src/itsf/s0/runner.py",
+      "sha256": "e0be5ae9771029d8c3e96a7d06f41808f15f28902d4e8739c33350df575bd8ee",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "CONTAINS append_registry_event_line, a SUPPORTED_REGISTRY_WRITER that does NOT share the serialization primitive. Load-bearing for F06 writer completeness"
+    },
+    {
+      "path": "src/itsf/s0/runinfra.py",
+      "sha256": "888d639194578b8d22d93e4d61ab87d2cb8860d00759bfc1994f5b27c4f3b276",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "S0 run infrastructure; its writers were writer-rule candidates and are classified NON-registry in the inventory"
+    },
+    {
+      "path": "src/itsf/contracts.py",
+      "sha256": "97d50740d938cb40eccab6595e6ba7284c493e9a662e311ddce31700f294a002",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "RunConfig / TrialState / ruled roots the S0 entry constructs"
+    },
+    {
+      "path": "src/itsf/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "0 bytes, and that is the measured fact BOOTSTRAP_IMPORT_CLOSURE rests on; F01's pre-import proof depends on it"
+    },
+    {
+      "path": "tests/conftest.py",
+      "sha256": "67a91c9ede5a8a53bceccafb39102cd5ce083cb2ca4cbf087aa56360bbe89c71",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "test collection and fixtures Astra will execute"
+    },
+    {
+      "path": "tests/tiers.py",
+      "sha256": "d441aad613d6f1138a67d166434084f4d8792a2a23eb40091325fd33a102a136",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "the tier map defining the A+B suite Astra will run"
+    },
+    {
+      "path": "src/itsf/mc/account.py",
+      "sha256": "27a4d763fc7c58b498a50d8b738d4846fdc5b8a4ce7d818e3167e2934e6c5db6",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "ADDED BEYOND THE 19-FILE LIST: run_real_study is a SANCTIONED_REAL_RUN_ENTRY under the stated rule and was absent from the list AND from the previous builder inventory"
+    },
+    {
+      "path": "src/itsf/mc/orchestrator.py",
+      "sha256": "272a804505b5ba51acc4ac62ca5c044a616213d770672f3330205352c8232088",
+      "role": "reference",
+      "is_the_delivery_document": false,
+      "unchanged_since": "81c0d22ab9df7bfc5f99224bd1e89af0fd7178af",
+      "issued_to": "GPT-6 Astra (fresh session)",
+      "issued_at": "2026-09-07",
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "note": "ADDED BEYOND THE 19-FILE LIST: run_real_lifecycle, same rule, same omission"
     }
   ],
   "_active_review": {
@@ -345,7 +576,12 @@
     "round": "3 of this issue lineage; REVIEWER_CONTRACT.md line 23 allows two. Aaron's explicit owner exception, and the last one.",
     "pin_is_derived": "derive_pin over the reference paths only; never typed.",
     "not_dispatched_by_the_builder": "GPT-6 Astra has NOT been dispatched.",
-    "owed_at_dispatch": "ops/DECISIONS.md REVIEW_DISPATCH row, and on return the seat-axis row plus a REVIEW_VERDICT row. None written: none of those events has happened."
+    "owed_at_dispatch": "ops/DECISIONS.md REVIEW_DISPATCH row, and on return the seat-axis row plus a REVIEW_VERDICT row. None written: none of those events has happened.",
+    "reissue_count": 2,
+    "reissue_reason": "transport stop: the entry/writer inventory required source files that were not pinned. Same review id, same lineage, same artifact kind, one manifest.",
+    "artifact_count": 51,
+    "inventory_findings": "the mechanically derived inventory surfaced two things the builder had not: (1) two SANCTIONED_REAL_RUN_ENTRY items absent from both the 19-file list and the builder's previous inventory (mc/account.py::run_real_study, mc/orchestrator.py::run_real_lifecycle) -- pinned here; (2) a SUPPORTED_REGISTRY_WRITER that does NOT share the serialization primitive (s0/runner.py::append_registry_event_line, plain open('a')), which is an UNREPAIRED fact handed to the reviewer, not a fix.",
+    "bounded_dependency_rule": "no recursive whole-repo pinning. A file is pinned only when it is a semantic dependency for deciding F01/F02/F03/F05/F06, SANCTIONED_ENTRY/FLAG-PATH_BYPASS, or SUPPORTED_WRITER completeness. Incidental imports, stdlib and third-party internals are not artifacts. Considered and EXCLUDED: src/itsf/s0/registry_witness.py (append mode, but writes witness files, not the registry)."
   },
   "_withdrawn_before_dispatch": {
     "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
