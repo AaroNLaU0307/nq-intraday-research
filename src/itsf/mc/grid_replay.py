@@ -85,16 +85,38 @@ convergence merely because its own statistics sit outside the band. A cell
 is boundary when the combination-level statistics that actually determine
 its region membership lie inside the ALREADY-FROZEN M8 band.
 
-WHICH COMBINATIONS "ACTUALLY DETERMINE" IT, mechanically. Membership is
-`satisfying(cell) != empty`. A cell's class therefore changes exactly when
-the SATISFYING SET changes, so the deciding combinations are the symmetric
-difference `satisfying(K) XOR satisfying(2K)` — those that entered or left
-the region. A combination satisfying in neither pass (combo A above) never
+HOW THAT IS APPLIED, mechanically, IN TWO ORDERED STEPS.
+
+STEP 1 — the CELL-LEVEL existential decision, and nothing else, decides
+whether M8 is engaged at all. Membership is `satisfying(cell) != empty`, so
+`compare_region_maps` compares the two CLASSES first and moves on when they
+agree. WITNESS SUBSTITUTION IS THEREFORE NOT A BOUNDARY EVENT: a cell whose
+support moves from combination A to combination B — `satisfying(K) = {A}`,
+`satisfying(2K) = {B}`, IN at both passes — has an identical class, so M8 is
+never reached. The satisfying SET changed and the cell's MEMBERSHIP did not,
+and B-25 governs membership. (An earlier draft of this docstring claimed a
+cell's class "changes exactly when the satisfying set changes". That is
+false, and the counterexample above is why; the CODE has always compared
+classes first, so only this description was wrong. Pinned now by
+`test_b25_caseA_witness_substitution_is_not_an_existential_crossing`.)
+
+STEP 2 — only once the class actually changed are the deciding combinations
+identified, and there the symmetric difference `satisfying(K) XOR
+satisfying(2K)` is exact: a class flip means one of the two sets is empty,
+so the XOR is precisely the combinations that entered or left the region. A
+combination satisfying in neither pass (combo A in Aaron's case) never
 contributed to membership and is irrelevant; one satisfying in both cannot
-coexist with a class flip. This is read off the existential itself, so the
-ruling adds NO epsilon, threshold, percentage or second tolerance: the only
-tolerance in this module remains `frozen_tolerance`, i.e. (c)'s
-max($25, 5%), and `_in_band` is still M8's predicate unchanged.
+coexist with a flip.
+
+Combination-level movement that does NOT change membership is not waved
+through — it is simply not M8's business. Rule (c) still measures every
+combination's drift, so the witness-substitution cell above is reported as
+non-converged by (c) on its own.
+
+Both steps are read off the existential itself, so the ruling adds NO
+epsilon, threshold, percentage or second tolerance: the only tolerance in
+this module remains `frozen_tolerance`, i.e. (c)'s max($25, 5%), and
+`_in_band` is still M8's predicate unchanged.
 
 Within a deciding combination, M8 is applied AS RATIFIED — all of that
 combination's classifying statistics (Conservative P5, plus the Stress
@@ -689,9 +711,12 @@ def compare_region_maps(kind: str, cells_at_k: Mapping, cells_at_2k: Mapping,
                     "grid_replay_cell_identity_mismatch",
                     f"cell {key} identity key {name!r} is not identical "
                     "K -> 2K; non-USD keys are configuration, not statistics")
+        # STEP 1 (B-25): the CELL-LEVEL existential decision gates M8. Equal
+        # classes end it here — witness substitution ({A} -> {B}, IN -> IN)
+        # is not a boundary event, however much the satisfying set moved.
         if map_k[key] == map_2k[key]:
             continue
-        # The class flipped, so it is exempt only as a boundary-band cell.
+        # STEP 2: the class flipped, so it is exempt only as a boundary cell.
         # B-25 (Aaron, ruled (ii)): consult the combinations that ACTUALLY
         # DETERMINE membership — the ones that entered or left the region —
         # and no others. A combination satisfying in neither pass never

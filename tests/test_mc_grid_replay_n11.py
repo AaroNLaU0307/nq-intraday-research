@@ -463,26 +463,183 @@ def test_b25_case4_the_ruling_introduced_no_new_tolerance():
     assert module_numbers == {}, module_numbers
 
 
-def test_b25_decisive_set_is_read_off_the_existential_itself():
-    """The definition of "decisive" is not a new rule: a combination is
-    decisive exactly when its membership of the FROZEN satisfying set
-    differs between the passes. One function answers both "what is this
-    cell's class" and "which combinations changed it", so the two can
-    never drift apart."""
-    a_in = gr.CellStatistics(conservative_p5={"a": 1.0, "b": -1.0},
-                             stress_median={"a": 1.0, "b": -1.0},
-                             feasible={"a": True, "b": True})
-    b_in = gr.CellStatistics(conservative_p5={"a": -1.0, "b": 1.0},
-                             stress_median={"a": -1.0, "b": 1.0},
-                             feasible={"a": True, "b": True})
-    sat_k = gr.satisfying_combos(a_in, gr.POSITIVE_EV_REGION)
-    sat_2k = gr.satisfying_combos(b_in, gr.POSITIVE_EV_REGION)
-    assert sat_k == {"a"} and sat_2k == {"b"}
-    # both combinations changed membership, so both are decisive here
-    assert sat_k ^ sat_2k == {"a", "b"}
-    # ... and the class did NOT flip, because the existential holds in both
-    assert gr.cell_category(a_in, gr.POSITIVE_EV_REGION) == gr.IN_REGION
-    assert gr.cell_category(b_in, gr.POSITIVE_EV_REGION) == gr.IN_REGION
+def _two_combo_grid(pa, pb):
+    """A full grid whose every cell carries combination A at `pa` and B at
+    `pb` — both the Conservative P5 and the Stress median."""
+    return {key: gr.CellStatistics(conservative_p5={"A": pa, "B": pb},
+                                   stress_median={"A": pa, "B": pb},
+                                   feasible={"A": True, "B": True})
+            for key in gr.GRID_CELL_KEYS}
+
+
+def test_b25_caseA_witness_substitution_is_not_an_existential_crossing():
+    """CASE A — THE DISCRIMINATOR FOR THE ACCEPTANCE CHECK.
+
+    `satisfying(K) = {A}`, `satisfying(2K) = {B}`: the satisfying SET
+    changed completely, and its symmetric difference is `{A, B}` — yet the
+    cell is IN at both passes, because the existential only asks whether
+    the set is non-empty. B-25 governs the CELL-LEVEL EXISTENTIAL REGION
+    DECISION, so this is witness substitution, NOT a boundary crossing, and
+    M8 must not fire.
+
+    This distinguishes "the satisfying set changed" from "membership
+    changed". An implementation that keyed M8 off a non-empty symmetric
+    difference would relabel this cell; this one compares CLASSES first and
+    never reaches the deciding-set computation.
+
+    The instability is not waved through — it is simply not M8's business.
+    Rule (c) sees both combinations move by $200 and reports the cell as
+    non-converged on its own, which is asserted below so this test cannot
+    be mistaken for "witness substitution is harmless".
+    """
+    at_k = _two_combo_grid(100.0, -100.0)      # A supports
+    at_2k = _two_combo_grid(-100.0, 100.0)     # B supports
+    key = gr.GRID_CELL_KEYS[0]
+    kind = gr.POSITIVE_EV_REGION
+
+    sat_k = gr.satisfying_combos(at_k[key], kind)
+    sat_2k = gr.satisfying_combos(at_2k[key], kind)
+    assert set(sat_k) == {"A"} and set(sat_2k) == {"B"}
+    assert set(sat_k ^ sat_2k) == {"A", "B"}           # non-empty XOR
+    assert gr.cell_category(at_k[key], kind) == gr.IN_REGION
+    assert gr.cell_category(at_2k[key], kind) == gr.IN_REGION
+
+    comparison = gr.compare_region_maps(kind, at_k, at_2k, k=200,
+                                        k_doubled=400)
+    # M8 did NOT fire, despite the fully-changed satisfying set
+    assert comparison.boundary_band_cells == ()
+    assert comparison.flipped_cells == ()
+    assert comparison.map_at_k[key] == gr.IN_REGION
+    assert comparison.map_at_2k[key] == gr.IN_REGION
+    # ... and the existing convergence checks are still active
+    assert (key, "conservative_p5[A]") in comparison.drift_violations
+    assert (key, "conservative_p5[B]") in comparison.drift_violations
+    assert comparison.converged is False
+
+
+def test_b25_caseB_a_true_existential_crossing_uses_the_responsible_combo():
+    """CASE B — `satisfying(K) = {B}`, `satisfying(2K) = {}`: membership
+    genuinely changes IN -> OUT, so M8 applies, and it applies to the
+    combination responsible for the transition.
+
+    Proven by varying only that combination: when B's transition sits in
+    the frozen band the cell is exempt, and when it does not the cell is
+    a real flip. A's statistics are identical in both runs, so the
+    difference can only come from B."""
+    kind = gr.POSITIVE_EV_REGION
+    key = gr.GRID_CELL_KEYS[0]
+
+    at_k = _two_combo_grid(-5000.0, 3.0)       # B supports; A far negative
+    in_band = _two_combo_grid(-5000.0, -2.0)   # B crosses inside the band
+    assert set(gr.satisfying_combos(at_k[key], kind)) == {"B"}
+    assert set(gr.satisfying_combos(in_band[key], kind)) == set()
+    assert gr.cell_category(at_k[key], kind) == gr.IN_REGION
+    assert gr.cell_category(in_band[key], kind) == gr.OUT_OF_REGION
+
+    exempt = gr.compare_region_maps(kind, at_k, in_band, k=200, k_doubled=400)
+    assert exempt.boundary_band_cells == tuple(gr.GRID_CELL_KEYS)
+    assert exempt.flipped_cells == ()
+
+    out_of_band = _two_combo_grid(-5000.0, -4000.0)   # B crosses decisively
+    hard = gr.compare_region_maps(kind, at_k, out_of_band, k=200,
+                                  k_doubled=400)
+    assert hard.boundary_band_cells == ()
+    assert key in hard.flipped_cells
+    assert hard.converged is False
+
+
+def test_b25_caseC_stable_membership_and_stable_support():
+    """CASE C — `{A}` at both passes, IN -> IN: nothing crossed, so no
+    boundary treatment and no flip."""
+    kind = gr.POSITIVE_EV_REGION
+    key = gr.GRID_CELL_KEYS[0]
+    at_k = _two_combo_grid(100.0, -100.0)
+    at_2k = _two_combo_grid(105.0, -100.0)    # A still supports, small move
+    assert set(gr.satisfying_combos(at_k[key], kind)) == {"A"}
+    assert set(gr.satisfying_combos(at_2k[key], kind)) == {"A"}
+
+    comparison = gr.compare_region_maps(kind, at_k, at_2k, k=200,
+                                        k_doubled=400)
+    assert comparison.boundary_band_cells == ()
+    assert comparison.flipped_cells == ()
+    assert comparison.map_at_k[key] == gr.IN_REGION
+    assert comparison.drift_violations == ()      # $5 is inside max($25, 5%)
+    assert comparison.converged is True
+
+
+def test_b25_caseD_out_to_out_with_combination_movement():
+    """CASE D — both satisfying sets empty, statistics still moving. The
+    cell is OUT at both passes, so no existential crossing and no M8; the
+    frozen drift rule still reports the movement."""
+    kind = gr.POSITIVE_EV_REGION
+    key = gr.GRID_CELL_KEYS[0]
+    at_k = _two_combo_grid(-100.0, -200.0)
+    at_2k = _two_combo_grid(-5000.0, -6000.0)
+    assert set(gr.satisfying_combos(at_k[key], kind)) == set()
+    assert set(gr.satisfying_combos(at_2k[key], kind)) == set()
+    assert gr.cell_category(at_k[key], kind) == gr.OUT_OF_REGION
+    assert gr.cell_category(at_2k[key], kind) == gr.OUT_OF_REGION
+
+    comparison = gr.compare_region_maps(kind, at_k, at_2k, k=200,
+                                        k_doubled=400)
+    assert comparison.boundary_band_cells == ()
+    assert comparison.flipped_cells == ()
+    assert (key, "conservative_p5[A]") in comparison.drift_violations
+    assert comparison.converged is False
+
+
+def test_b25_membership_not_witness_identity_gates_m8():
+    """The rule itself, stated as one mechanical assertion over both
+    directions: M8 is reached IFF the cell-level class changed — never
+    because the supporting combination was substituted."""
+    kind = gr.POSITIVE_EV_REGION
+    key = gr.GRID_CELL_KEYS[0]
+    cases = {
+        "substitution {A}->{B}, IN->IN": (_two_combo_grid(100.0, -100.0),
+                                          _two_combo_grid(-100.0, 100.0)),
+        "stable {A}->{A}, IN->IN": (_two_combo_grid(100.0, -100.0),
+                                    _two_combo_grid(105.0, -100.0)),
+        "empty {}->{}, OUT->OUT": (_two_combo_grid(-100.0, -200.0),
+                                   _two_combo_grid(-5000.0, -6000.0)),
+        "crossing {B}->{}, IN->OUT": (_two_combo_grid(-5000.0, 3.0),
+                                      _two_combo_grid(-5000.0, -2.0)),
+    }
+    for label, (at_k, at_2k) in cases.items():
+        class_changed = (gr.cell_category(at_k[key], kind)
+                         != gr.cell_category(at_2k[key], kind))
+        comparison = gr.compare_region_maps(kind, at_k, at_2k, k=200,
+                                            k_doubled=400)
+        m8_fired = bool(comparison.boundary_band_cells
+                        or comparison.flipped_cells)
+        assert m8_fired == class_changed, label
+
+
+def test_b25_decisive_set_is_exact_once_the_class_has_flipped():
+    """WAS `test_b25_decisive_set_is_read_off_the_existential_itself`, whose
+    wording implied a combination is decisive whenever its membership of the
+    satisfying set differs. That is only true AFTER a class flip, and this
+    test is the very case that shows why: `{A}` -> `{B}` differs in both
+    directions while the class holds at IN.
+
+    Given a flip, one of the two sets is empty, so the symmetric difference
+    is exactly the combinations that entered or left. That is asserted here
+    in both directions."""
+    kind = gr.POSITIVE_EV_REGION
+    key = gr.GRID_CELL_KEYS[0]
+
+    # substitution: XOR is non-empty, yet the class never moved
+    a_in = _two_combo_grid(100.0, -100.0)[key]
+    b_in = _two_combo_grid(-100.0, 100.0)[key]
+    assert (gr.satisfying_combos(a_in, kind)
+            ^ gr.satisfying_combos(b_in, kind)) == {"A", "B"}
+    assert gr.cell_category(a_in, kind) == gr.cell_category(b_in, kind)
+
+    # a real flip: one side is empty, so the XOR names the responsible combo
+    supported = _two_combo_grid(-5000.0, 3.0)[key]
+    lost = _two_combo_grid(-5000.0, -2.0)[key]
+    assert gr.satisfying_combos(lost, kind) == frozenset()
+    assert (gr.satisfying_combos(supported, kind)
+            ^ gr.satisfying_combos(lost, kind)) == {"B"}
 
 
 def test_k_doubling_must_actually_double():
