@@ -3,7 +3,7 @@
   "under_review": [
     {
       "path": "ops/REVIEW_PACKET_QROS_CF_F06_OWNER_SEMANTICS_CLOSURE_2026-09-07.md",
-      "sha256": "f4e410decb7d26ef5d3398135df3140a6eb9ec335bab8eb0a105b17913a21f05",
+      "sha256": "69230bda8fefe11bfef06e594ee24b04b8d5959a742c99469df067469237da30",
       "role": "delivery",
       "is_the_delivery_document": true,
       "unchanged_since": "c5a0559223a15ba2d90ed5e147d8519ff382fe30",
@@ -649,6 +649,8 @@
     "artifact_count": 54,
     "closure_scope": "(1) independently verify the repaired F06 owner semantics; (2) finish disposition of F01, F02, SANCTIONED_REAL_RUN_ENTRY, FLAG_PATH_BYPASS, F03, F05. F04 preservation-only unless regressed.",
     "pin_is_derived": "derive_pin over the reference paths only; never typed.",
-    "not_dispatched_by_the_builder": "GPT-6 Astra has NOT been dispatched."
+    "not_dispatched_by_the_builder": "GPT-6 Astra has NOT been dispatched.",
+    "reissue_count": 1,
+    "reissue_reason": "TRANSPORT-ONLY correction. Astra measured ops/NEXT_HANDOFF.md at 5200e6dd.../7536 while packet 2.7 still declared 1cdd2dce.../7424, so transport stopped before substantive certification. Builder cause: the closure packet's tables were computed BEFORE the companion was re-pointed in the same commit, and the manifest was armed after -- so the manifest was right and the packet was one field stale. Same review id; no new round; no implementation byte touched."
   }
 }

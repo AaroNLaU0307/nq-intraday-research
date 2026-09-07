@@ -190,7 +190,7 @@ GLOBAL 那些**,GLOBAL-only 的回答没有丢掉任何**存在的**能力。
 | `7a0fd26969f68e1a4ac2de6167b03ebbb6c83368e1f6998dec93422485ab187a` | `11381` | `ops/BACKLOG.md` | F07/F08 = B-22 / B-23 |
 | `5c9af31df771eb9c36ff8100b881b5efd17f4e69a2e80e5a42e76cec1961540d` | `6084` | `ops/RECOVERY_ANCHOR.md` | 允许的 outcome-clean 定位入口 |
 | `a61c125b4e2e551955ce59816c9ccbc6a449a91d7f7701095eeb586e5c155f4b` | `2563` | `ops/OUTCOME_CARRYING_ARTIFACTS.json` | 隔离登记册（12 条） |
-| `1cdd2dce3b33796e75f3dedfcac720704166f5d7a1bc93f2bde54a6f51de4c79` | `7424` | `ops/NEXT_HANDOFF.md` | **强制同行件**，禁读清单载体 |
+| `5200e6dd9d28663235b586d1fc7d9752db3d175accf55dd32c20c8b10b98cb59` | `7536` | `ops/NEXT_HANDOFF.md` | **强制同行件**，禁读清单载体 |
 
 ---
 
