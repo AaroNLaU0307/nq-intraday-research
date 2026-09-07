@@ -478,17 +478,26 @@ def test_f4_matrix_covers_every_declared_prepared_field(prod_like):
 # F5 — positive paths: the boundary adds a refusal, it changes no semantics
 # ===========================================================================
 
-def test_f5_production_shaped_product_still_reaches_the_feasibility_gate(
+def test_f5_production_shaped_product_gets_past_the_battery_boundary(
         prod_like):
-    """The genuine article passes the battery/receipt boundary and stops
-    exactly where it stopped before.
+    """WAS `..._still_reaches_the_feasibility_gate`.
 
-    The stopping POINT is unchanged; only the reason moved. It used to be
-    that no feasibility rule existed anywhere; since M1-M5 (2026-08-24) the
-    rule exists and this call supplies no evidence for it. Either way the
-    code is a marker meaning "the forward path reached the gate", which is
-    what this test is actually about."""
-    assert _seal_code(prod_like) == "feasibility_gate_input_absent"
+    The genuine article passes the battery/receipt boundary. That is the
+    subject; the refusal code was only ever the marker for "the forward
+    path got this far", and the docstring said so.
+
+    The marker has now moved twice. It was `feasibility_gate_input_absent`
+    while nothing composed the feasibility evidence; B-26 composes it, so
+    the path continues and stops at the next real requirement — this call
+    supplies no seed runs, and rule (b) needs all three. What matters is
+    unchanged and is asserted directly: the stop is BEYOND the battery
+    boundary, not at it."""
+    code = _seal_code(prod_like)
+    assert code == "seed_set_violation"
+    for boundary_code in ("battery_receipt_missing", "battery_receipt_forged",
+                          "prepared_authority_missing",
+                          "seal_test_only_prepared_input"):
+        assert code != boundary_code
     assert mcc.FEASIBILITY_GATE_STATUS == "RULED_ND2_ND3_2026-08-24"
 
 

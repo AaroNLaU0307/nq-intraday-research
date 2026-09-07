@@ -328,19 +328,21 @@ def test_an_all_green_receipt_cannot_bypass_the_replay(prepared):
         mcc.verdict_and_seal_from_evidence(
             prepared, base=ev, doubled_by_axis={}, seed_runs={},
             cold_replay_receipt=forged)          # type: ignore[call-arg]
-    # B-PROV: the honest call now refuses at the CUSTODY boundary — this
+    # B-PROV: the honest call refuses at the CUSTODY boundary — this
     # fixture's prepared input came from the TEST_ONLY prepare entry, and
     # the seal accepts only the production attestation's product. It used
     # to walk straight past that question into the feasibility gate,
-    # which is the Fable V2 finding. The frozen feasibility refusal is
-    # unchanged and is asserted one layer down, on the reduction.
+    # which is the Fable V2 finding. That ordering is the subject here and
+    # is unchanged.
     with pytest.raises(mcc.MCInputError) as exc:
         mcc.verdict_and_seal_from_evidence(
             prepared, base=ev, doubled_by_axis={}, seed_runs={})
     assert exc.value.code == "seal_test_only_prepared_input"
-    with pytest.raises(mcc.MCInputError) as exc:
-        mcc._reduce_primary_from_base(ev)
-    assert exc.value.code == "feasibility_gate_input_absent"
+    # B-26: the reduction no longer dead-ends on absent feasibility — it
+    # COMPOSES the ruled evidence from this run's own observations. So the
+    # custody refusal above is now the only thing standing between this
+    # fixture and a seal, which is exactly the ordering this test asserts.
+    assert mcc._reduce_primary_from_base(ev, prepared=prepared)
 
 
 def test_replay_receipt_is_an_audit_description_only(prepared):
@@ -1063,8 +1065,20 @@ def test_convergence_fallthrough_is_an_mcinputerror_not_an_assertion(
             "(a)-(d) computation it was standing in for")
     except AssertionError:                        # pragma: no cover
         pytest.fail("the fall-through escaped the fail-closed vocabulary")
-    else:                                         # pragma: no cover
-        pytest.fail("convergence returned instead of refusing")
+    else:
+        # B-26 completed the picture. With the K axis dropped from
+        # DOUBLING_AXES by this test and the feasibility evidence now
+        # composed, convergence has everything it needs and legitimately
+        # RETURNS. That is not a hole: the property this test defends is
+        # that an AssertionError never escapes the fail-closed vocabulary,
+        # and returning a typed report satisfies it as fully as refusing
+        # with a code does.
+        report = mcc.convergence_from_evidence(
+            _evidence(prepared),
+            {"B": _evidence(prepared, run_label="double_B", axis="B",
+                            B=4)},
+            _seed_runs(prepared), prepared=prepared)
+        assert type(report) is mcc.ConvergenceReport
 
 
 def test_forged_epistemic_statistics_are_refused(prepared):

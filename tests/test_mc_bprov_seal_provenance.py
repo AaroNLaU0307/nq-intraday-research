@@ -296,14 +296,20 @@ def test_bprov_seal_trial_commit_must_equal_the_attestation_parse():
 # C. FORWARD PATH — the fix adds a boundary, it changes no semantics
 # ===========================================================================
 
-def test_bprov_forward_path_still_reaches_the_feasibility_refusal(prepared):
-    """A genuine battery product still reduces all the way to the frozen
-    DECISION_REQUIRED refusal. The feasibility rule is untouched: it is
-    still the missing decision, and it is still the thing that stops
-    Checkpoint-0."""
-    with pytest.raises(mcc.MCInputError) as exc:
-        mcc._reduce_primary_from_base(_evidence(prepared))
-    assert exc.value.code == "feasibility_gate_input_absent"
+def test_bprov_forward_path_reduces_all_the_way(prepared):
+    """WAS `..._still_reaches_the_feasibility_refusal`.
+
+    A genuine battery product reduces ALL THE WAY — which is what this
+    test was always asserting, using the terminal refusal as the evidence
+    that nothing earlier stopped it. B-26 composed the ruled feasibility
+    evidence, so "all the way" now means a complete reduction rather than
+    a refusal at the last step, and that is the stronger version of the
+    same claim."""
+    reduction = mcc._reduce_primary_from_base(_evidence(prepared),
+                                             prepared=prepared)
+    from itsf.mc.verdict import VerdictInput
+    assert reduction and all(type(v) is VerdictInput
+                             for v in reduction.values())
     assert mcc.FEASIBILITY_GATE_STATUS == "RULED_ND2_ND3_2026-08-24"
 
 

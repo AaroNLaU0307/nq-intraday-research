@@ -2672,16 +2672,18 @@ def convergence_from_evidence(base: RunEvidence,
                            f"need exactly {sorted(DOUBLING_AXES)}, got "
                            f"{sorted(doubled_by_axis)}")
     return _convergence_rules_a_to_d(base, doubled_by_axis, seed_runs,
-                                     k_replay=k_replay_witness)
+                                     k_replay=k_replay_witness,
+                                     prepared=prepared)
 
 
-def _run_category(run: RunEvidence) -> str:
+def _run_category(run: RunEvidence, *, prepared) -> str:
     """The Checkpoint-0 decision category of ONE run (STOP/GO/beta/alpha),
     reduced through the SAME single internal path the verdict uses, so
     rule (a)/(b) can never compare a category the verdict would not
-    produce."""
+    produce — including the feasibility composition (B-26)."""
     from itsf.mc.verdict import apply_verdict
-    return apply_verdict(_reduce_primary_from_base(run)).verdict
+    return apply_verdict(_reduce_primary_from_base(
+        run, prepared=prepared)).verdict
 
 
 #: frozen: the key quantiles rule (c) acts on. MC_METHOD_SPEC SS4.4 fixes
@@ -2691,7 +2693,7 @@ KEY_QUANTILE_FIELDS = ("p5", "median", "p95")
 
 
 def _convergence_rules_a_to_d(base: RunEvidence, doubled_by_axis: Mapping,
-                              seed_runs: Mapping, *, k_replay
+                              seed_runs: Mapping, *, k_replay, prepared
                               ) -> ConvergenceReport:
     """Rules (a)-(d) of MC SS5, computed from the supplied evidence.
 
@@ -2709,18 +2711,20 @@ def _convergence_rules_a_to_d(base: RunEvidence, doubled_by_axis: Mapping,
         reads the derived flag rather than recomputing it from numbers a
         caller could have supplied.
     """
-    base_category = _run_category(base)
+    base_category = _run_category(base, prepared=prepared)
     # --- (a) ----------------------------------------------------------
     category_stable = True
     for axis in sorted(doubled_by_axis):
         if axis == "K":
             continue                      # M6: K's object is the regions
-        if _run_category(doubled_by_axis[axis]) != base_category:
+        if _run_category(doubled_by_axis[axis],
+                         prepared=prepared) != base_category:
             category_stable = False
     grid_converged = True if k_replay is None else k_replay.grid_converged
     # --- (b) ----------------------------------------------------------
-    same_across_seeds = all(_run_category(seed_runs[s]) == base_category
-                            for s in sorted(seed_runs))
+    same_across_seeds = all(
+        _run_category(seed_runs[s], prepared=prepared) == base_category
+        for s in sorted(seed_runs))
     # --- (c) ----------------------------------------------------------
     drift_by_axis, drift_ok = {}, True
     arms = [(f"double_{axis}", doubled_by_axis[axis])
@@ -2759,7 +2763,8 @@ def _convergence_rules_a_to_d(base: RunEvidence, doubled_by_axis: Mapping,
         drift_by_axis=MappingProxyType(drift_by_axis))
 
 
-def _reduce_primary_from_base(base: RunEvidence) -> dict:
+def _reduce_primary_from_base(base: RunEvidence, *,
+                              prepared: "PreparedMCInput") -> dict:
     """R2.2 PHASE D — THE single internal reduction: Primary VerdictInputs
     are derived EXCLUSIVELY from `base.results` (Conservative/Stress,
     platform, engine, theta channel and prepared digest all come from the
@@ -2767,15 +2772,66 @@ def _reduce_primary_from_base(base: RunEvidence) -> dict:
     built VerdictInputs, so a hand-made positive grid has no callable
     path into the verdict or the seal.
 
-    Today this reduction refuses deterministically at the feasibility
-    gate inside `epistemic_go_gate_input` (FEASIBILITY_GATE=
-    DECISION_REQUIRED) — CHECKPOINT0_VERDICT_REACHABLE=NO. When Aaron
-    freezes the feasibility rule, the ONLY legal extension is a typed,
+    B-26: THE FEASIBILITY EVIDENCE IS COMPOSED HERE, and this is the
+    extension the earlier draft of this docstring reserved — "a typed,
     provenance-bound decision-evidence object attached to this same
-    reduction — never a reopened boolean."""
+    reduction, never a reopened boolean". M1-M5 ruled the three gates on
+    2026-08-24; `feasibility.combo_feasibility` already implemented them
+    and already refuses a missing scenario. What was missing was only
+    that nobody passed its product in, so `epistemic_go_gate_input`
+    refused `feasibility_gate_input_absent` and no Checkpoint-0 category
+    was reachable. Nothing about the methodology is decided here.
+
+    WHAT BINDS IT. `prepared` is required and its digest must equal the
+    run's, so the gates cannot be evaluated over a different sealed input
+    than the one the epistemic results came from. That single check also
+    covers the day universe, because `prepared_digest` binds "the
+    complete day sequences and traded sets per channel" — a prepared
+    input with a different universe cannot carry a matching digest.
+
+    WHERE THE DAY UNIVERSE COMES FROM. `day_sequences[PRIMARY_THETA_
+    CHANNEL]` — the sealed day POPULATION for the only channel
+    Checkpoint-0 accepts. That is what M2's constant names ("from the
+    SEALED DAY UNIVERSE — dates, not results ... an S0-side
+    measurement"). It is deliberately NOT `traded_day_sets`: that is the
+    ORACLE-SELECTED (TP) subset, so feeding it to the frequency gate
+    would make a feasibility gate consume the oracle classification, and
+    the gate's whole claim to being computable without touching a
+    revealed value is that its input is dates.
+
+    A `FeasibilityGateError` is translated into the fail-closed
+    `MCInputError` vocabulary with its own code preserved. It is a
+    ValueError but NOT an MCInputError, so letting it escape would be the
+    D-4 defect again: a caller's refusal handling would not catch it."""
     base.validate_inner_binding()
-    return {cid: epistemic_go_gate_input(cons, stress)
-            for cid, (cons, stress) in sorted(base.results.items())}
+    if not isinstance(prepared, PreparedMCInput):
+        raise MCInputError(
+            "prepared_authority_missing",
+            "the reduction needs the prepared input: the feasibility gates "
+            "are evaluated over the SEALED day universe, which only the "
+            "prepared input carries")
+    if prepared_digest(prepared) != base.prepared_digest:
+        raise MCInputError(
+            "provenance_mismatch",
+            f"{base.run_label}: feasibility would be composed over a "
+            "different prepared input than the run's own evidence")
+    from .feasibility import FeasibilityGateError, combo_feasibility
+    day_universe = prepared.day_sequences[PRIMARY_THETA_CHANNEL]
+    reduction = {}
+    for cid, (cons, stress) in sorted(base.results.items()):
+        # keyed by each result's OWN declared scenario, so a mis-roled pair
+        # collapses to one key and `combo_feasibility` refuses with
+        # `feasibility_scenario_missing` rather than silently evaluating
+        # M5's conjunction over whichever scenario happened to be present.
+        try:
+            feasibility = combo_feasibility(
+                {cons.scenario: cons.observations,
+                 stress.scenario: stress.observations}, day_universe)
+        except FeasibilityGateError as exc:
+            raise MCInputError(exc.code, f"{cid}: {exc}") from exc
+        reduction[cid] = epistemic_go_gate_input(cons, stress,
+                                                feasibility=feasibility)
+    return reduction
 
 
 # ---------------------------------------------------------------------------
@@ -3373,7 +3429,7 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
     # surface as the feasibility gate's DECISION_REQUIRED.
     _assert_seal_provenance(prepared)
     battery_receipt = prepared.battery_receipt
-    reduction = _reduce_primary_from_base(base)
+    reduction = _reduce_primary_from_base(base, prepared=prepared)
     convergence_from_evidence(base, doubled_by_axis, seed_runs,
                               prepared=prepared)
     verdict = apply_verdict(dict(reduction))

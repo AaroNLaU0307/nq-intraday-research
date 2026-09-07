@@ -164,9 +164,10 @@ def test_epistemic_carries_complete_within_world_ses():
 
 def test_codex_ce2_verdict_path_is_single_source():
     """The seal/verdict path derives Primary quantiles EXCLUSIVELY from
-    base.results; the reduction refuses at the unruled feasibility gate
-    today (CHECKPOINT0_VERDICT_REACHABLE=NO) — and there is no other
-    callable path (surface scan lives in test_mc_consumer).
+    base.results, and there is no other callable path (surface scan lives
+    in test_mc_consumer). Since B-26 the reduction COMPLETES rather than
+    refusing at the feasibility gate, so the single-source property is
+    asserted on its output instead of on its refusal.
 
     B-PROV: the SEAL entry now refuses this TEST_ONLY-certified prepared
     input at the custody boundary before it can reduce anything, so the
@@ -194,9 +195,12 @@ def test_codex_ce2_verdict_path_is_single_source():
                        match="seal_test_only_prepared_input"):
         mcc.verdict_and_seal_from_evidence(
             prepared, base=base, doubled_by_axis={}, seed_runs={})
-    with pytest.raises(mcc.MCInputError,
-                       match="feasibility_gate_input_absent"):
-        mcc._reduce_primary_from_base(base)
+    # B-26: the reduction no longer dead-ends, so the single-source claim
+    # is asserted on what it PRODUCES — one VerdictInput per combo in
+    # `base.results`, and nothing else. A hand-made grid still has no
+    # callable path in; that surface scan lives in test_mc_consumer.
+    reduction = mcc._reduce_primary_from_base(base, prepared=prepared)
+    assert set(reduction) == set(base.results)
 
 
 def test_codex_ce2_foreign_base_evidence_refused():

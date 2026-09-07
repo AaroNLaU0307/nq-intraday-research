@@ -818,16 +818,25 @@ def test_a_witness_from_another_seed_refuses(prepared, authority, small_scale):
 
 
 def test_a_forged_witness_refuses(prepared, authority, small_scale):
+    """A mutated witness fails its own digest.
+
+    THIS TEST WAS GREEN FOR THE WRONG REASON until B-26 landed. The
+    original mutation set `converged_by_kind` to all-True and `k_doubled`
+    to 400 — both of which the honest witness ALREADY carried, so nothing
+    was actually forged, the digest still verified, and the only reason an
+    MCInputError appeared was the feasibility dead end further down.
+    Removing that dead end exposed it. The mutation is now real.
+    """
     base, doubled, witness = _k_case(prepared, authority)
+    assert witness.grid_converged is True          # so flipping it is a lie
     forged = object.__new__(gr.KReplayEvidence)
     for f in dataclasses.fields(witness):
         object.__setattr__(forged, f.name, getattr(witness, f.name))
-    object.__setattr__(forged, "converged_by_kind",
-                       {k: True for k in gr.REGION_KINDS})
-    object.__setattr__(forged, "k_doubled", 400)
-    with pytest.raises(mcc.MCInputError):
+    object.__setattr__(forged, "master_seed", witness.master_seed + 6)
+    with pytest.raises(mcc.MCInputError) as ei:
         mcc.convergence_from_evidence(base, doubled, CR._seed_runs(prepared),
                                       prepared=prepared, k_replay=forged)
+    assert ei.value.code == "k_replay_evidence_digest_mismatch"
 
 
 def test_a_k_pass_may_not_move_the_oracle_main_channel(prepared, authority, small_scale):
@@ -848,21 +857,35 @@ def test_a_k_pass_may_not_move_the_oracle_main_channel(prepared, authority, smal
     assert ei.value.code == "k_axis_main_channel_not_invariant"
 
 
-def test_the_k_axis_is_no_longer_the_blocker(prepared, authority, small_scale):
+def test_the_k_axis_is_no_longer_the_blocker(prepared, authority,
+                                            small_scale):
     """SYNTHETIC GRID -> K END TO END: sealed supplement -> authority ->
-    two grid passes -> witness -> the K arm ADMITS and control reaches the
-    rules (a)-(d) computation.
+    two grid passes -> witness -> the K arm ADMITS -> rules (a)-(d) ->
+    ConvergenceReport.
 
-    What stops it there is NOT a K code: `_reduce_primary_from_base` does
-    not compose the ruled feasibility evidence, so the Checkpoint category
-    rules (a)/(b) need is unavailable. That is the feasibility path's own
-    remaining wiring, upstream of and independent from GRID/K, and this
-    test pins the boundary so the next session does not re-diagnose it as
-    a K problem."""
+    When N11 closed, this test asserted that the path stopped one step
+    later at `feasibility_gate_input_absent`, and it named that boundary
+    so the next session would not re-diagnose it as a K problem. B-26 has
+    since composed the feasibility evidence, so the path now completes and
+    the assertion becomes the positive one.
+
+    No MC is run: the arms are synthetic RunEvidence fixtures at B=2/M=2.
+    """
     base, doubled, witness = _k_case(prepared, authority)
+    report = mcc.convergence_from_evidence(
+        base, doubled, CR._seed_runs(prepared), prepared=prepared,
+        k_replay=witness)
+    assert type(report) is mcc.ConvergenceReport
+    assert set(report.drift_by_axis) == {"double_B", "double_K", "seed_7",
+                                        "seed_13", "seed_31"}
+    for flag in (report.category_stable_under_doubling,
+                 report.category_same_across_seeds,
+                 report.quantile_drift_ok, report.mcse_ok,
+                 report.converged):
+        assert isinstance(flag, bool)
+    # the witness still has to be there: K is admitted on evidence, never
+    # on outer metadata (N11), and B-26 did not relax that.
     with pytest.raises(mcc.MCInputError) as ei:
         mcc.convergence_from_evidence(base, doubled, CR._seed_runs(prepared),
-                                      prepared=prepared, k_replay=witness)
-    assert ei.value.code == "feasibility_gate_input_absent"
-    assert "k_axis" not in ei.value.code
-    assert "grid" not in ei.value.code
+                                      prepared=prepared)
+    assert ei.value.code == "k_axis_evidence_blocked_grid_replay"
