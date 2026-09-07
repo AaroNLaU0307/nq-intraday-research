@@ -337,10 +337,23 @@ class TestCriterion3TheRefusalNamesItsBlocker(unittest.TestCase):
                 "report, not a governed refusal" % fn.__name__)
 
     def test_every_refusal_names_the_token_that_blocks_it(self):
+        """WIDENED AT THE PRE-CERT REPAIR (R3). The launch refusal now arrives
+        first for the entries that call the real-run gate with production
+        flags, and it names ITS blocker, not the authorization token. The
+        property below is about the authorization layer, so the launch is
+        attested for the duration of each call -- the alternative, accepting
+        any message, would have removed the check instead of relocating it."""
+        import unittest.mock as mock
+
+        from itsf import execution_identity as ei
+        attested = ei.LaunchAttestation("/injected", 0, "injected", True)
         missing = []
         for fn in self._entries():
+            text = ""
             try:
-                fn()
+                with mock.patch.object(ei, "launch_attestation",
+                                       lambda: attested):
+                    fn()
             except Exception as exc:
                 text = str(exc)
             token = self._EXPECTED[fn.__name__]

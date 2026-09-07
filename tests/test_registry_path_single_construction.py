@@ -144,6 +144,12 @@ _KNOWN_TEST_CONSTRUCTIONS = {
     # one comment about a hand-typed count coming out wrong; no reason to add
     # a second.
     "tests/test_qros_cf_astra_round2.py": 11,
+    # QROS-CF PRE-CERT settling tests. One construction: the tmp_path ledger
+    # the F06 physical-write count is driven against. Its last test asserts the
+    # real ledger is byte-identical to round one's snapshot afterwards.
+    #
+    # MEASURED, not typed -- the walk says 1.
+    "tests/test_qros_cf_pre_cert.py": 1,
     "tests/test_registry_absence_refuses.py": 7,
     "tests/test_registry_boundary.py": 2,
     "tests/test_registry_path_single_construction.py": 2,

@@ -93,10 +93,32 @@ class TestTheMcGateWasNotWeakened(unittest.TestCase):
                       _reachable_calls(MODULE, "prepare_real_mc_input"))
 
     def test_the_real_entry_still_refuses_naming_its_blocker(self):
-        with self.assertRaises(Exception) as caught:
-            real_input.prepare_real_mc_input()
+        """WIDENED AT THE PRE-CERT REPAIR (R3), and the property is unchanged.
+
+        A real run started outside the trusted launch boundary is now blocked
+        BEFORE authorization is consulted, so a bare call meets the launch
+        refusal first. That refusal names its own blocker, which is correct for
+        its layer -- but the property this test owns is about the MC
+        authorization layer, so the launch fact is attested for the duration of
+        the call and the assertion is made where it belongs. Accepting whatever
+        message arrived first would have quietly deleted the check."""
+        import unittest.mock as mock
+
+        from itsf import execution_identity as ei
+        attested = ei.LaunchAttestation("/injected", 0, "injected", True)
+        with mock.patch.object(ei, "launch_attestation",
+                               lambda: attested):
+            with self.assertRaises(Exception) as caught:
+                real_input.prepare_real_mc_input()
         self.assertNotIsInstance(caught.exception, AssertionError)
         self.assertIn("MC_RUN_AUTHORIZED", str(caught.exception))
+
+    def test_the_real_entry_ALSO_refuses_outside_the_trusted_launch(self):
+        """The new outer refusal, asserted rather than merely worked around."""
+        from itsf.guards import RunBlockedError
+        with self.assertRaises(RunBlockedError) as caught:
+            real_input.prepare_real_mc_input()
+        self.assertIn("trusted launch boundary", str(caught.exception))
 
     def test_no_mc_run_authorized_row_was_minted_to_dodge_the_problem(self):
         """Requirement 5. The refusal above must be the registry's, not a

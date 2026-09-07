@@ -69,6 +69,8 @@ __all__ = [
     "StartupReport", "startup_report", "EXPECTED_EXECUTABLE_PTH",
     "LaunchAttestation", "assert_governed_launch", "launch_attestation",
     "BOOTSTRAP_IMPORT_CLOSURE", "LAUNCH_FLAGS_REQUIRED",
+    "EXECUTABLE_STARTUP_SURFACE", "NON_EXECUTABLE_PATH_DECLARATION",
+    "classify_startup_artifact", "FORBIDDEN_STARTUP_MODULES",
 ]
 
 REPO = Path(__file__).resolve().parents[2]
@@ -490,7 +492,31 @@ EXPECTED_EXECUTABLE_PTH = MappingProxyType({
 
 #: Modules the interpreter imports automatically at startup if they are
 #: importable. Neither exists on this machine and neither may appear.
+#:
+#: Under `-S` neither is imported AT ALL, which is what the governed child is
+#: launched with. This check therefore constrains the OUTER launcher's own
+#: environment and reports the machine's state; it is no longer the thing that
+#: protects the governed process. Kept because a machine that grew a
+#: `sitecustomize` is a machine whose other Python processes changed, and the
+#: launcher should say so rather than shrug.
 FORBIDDEN_STARTUP_MODULES = ("sitecustomize", "usercustomize")
+
+#: The two kinds of `.pth` line, named rather than left implicit (F02).
+#:
+#: A `.pth` line beginning `import ` is CODE: the interpreter execs it during
+#: site initialisation, before any project line runs. Every other line is a
+#: path to append to `sys.path` -- it cannot execute on its own, and refusing
+#: it would be a disguised whole-machine hash.
+EXECUTABLE_STARTUP_SURFACE = "EXECUTABLE_STARTUP_SURFACE"
+NON_EXECUTABLE_PATH_DECLARATION = "NON_EXECUTABLE_PATH_DECLARATION"
+
+
+def classify_startup_artifact(text: str) -> str:
+    """`EXECUTABLE_STARTUP_SURFACE` if any line of this `.pth` execs."""
+    for line in text.splitlines():
+        if line.strip().startswith(("import ", "import\t")):
+            return EXECUTABLE_STARTUP_SURFACE
+    return NON_EXECUTABLE_PATH_DECLARATION
 
 
 @_dc.dataclass(frozen=True)
@@ -547,8 +573,8 @@ def startup_report(*, sitedirs=None, find_spec=None) -> StartupReport:
             except Exception as exc:                          # noqa: BLE001
                 problems.append(f"{pth.name} unreadable: {exc}")
                 continue
-            if any(ln.strip().startswith(("import ", "import\t"))
-                   for ln in lines):
+            if (classify_startup_artifact("\n".join(lines))
+                    == EXECUTABLE_STARTUP_SURFACE):
                 executable.append(pth.name)
                 # F02: the name is not the identity. Hash what will execute.
                 got = hashlib.sha256(pth.read_bytes()).hexdigest()
@@ -653,28 +679,50 @@ def bytecode_report(repo: Path = REPO, *, dont_write=None, prefix=None,
 #: importing this module pulls in exactly these two.
 BOOTSTRAP_IMPORT_CLOSURE = frozenset({"itsf", "itsf.execution_identity"})
 
-#: The MINIMUM COMPATIBLE launch semantics, measured 2026-09-07 rather than
-#: copied from a hardening guide:
+#: The MINIMUM COMPATIBLE launch semantics for the GOVERNED CHILD, measured
+#: 2026-09-07:
 #:
+#:   -S                     -> sys.flags.no_site == 1, READ-ONLY. No `.pth`
+#:                             line executes, `site` is never imported, and
+#:                             `sitecustomize`/`usercustomize` never run.
 #:   -B                     -> sys.flags.dont_write_bytecode == 1, READ-ONLY
 #:   PYTHONPYCACHEPREFIX=D  -> every cache lookup leaves the repo tree
+#:   explicit site dirs     -> handed in on argv by the launcher and appended
+#:                             to `sys.path`, because -S no longer adds them
 #:
-#: and explicitly NOT these, each of which was tried and rejected on
-#: measurement:
-#:   -S  `import pandas` fails    (it would also close F02, and cannot be used)
-#:   -I  implies -s -E, same failure
-#:   -E  ignores PYTHONPYCACHEPREFIX, so the prefix silently goes unset and
-#:       the repository's own __pycache__ becomes readable again
-LAUNCH_FLAGS_REQUIRED = ("-B", "PYTHONPYCACHEPREFIX")
+#: CORRECTED 2026-09-07, and the correction is the whole of this repair. The
+#: earlier note here said `-S` "cannot be used" because `import pandas` fails
+#: under it. That measurement was real and the conclusion drawn from it was
+#: wrong: `-S` alone fails, `-S` PLUS the site directories on `sys.path` does
+#: not. Measured under `-S -B` with the three real site dirs appended, all of
+#: pandas, numpy, scipy, pyarrow, databento, zstandard, exchange_calendars,
+#: pandas_market_calendars and pytest import, `site` is absent from
+#: `sys.modules`, and no `.pth` executes. So the startup surface is PREVENTED
+#: from running rather than inspected afterwards -- which is the only thing
+#: that answers "constrained BEFORE it executes".
+#:
+#: Still rejected, still measured:
+#:   -I  implies -E, and -E ignores PYTHONPYCACHEPREFIX, so the private prefix
+#:       silently goes unset and the repository's own __pycache__ becomes
+#:       readable again. The launcher passes the child's environment
+#:       explicitly instead.
+LAUNCH_FLAGS_REQUIRED = ("-S", "-B", "PYTHONPYCACHEPREFIX")
 
 
 @_dc.dataclass(frozen=True)
 class LaunchAttestation:
-    """Proof, taken BEFORE the governed imports, that no pre-existing
-    bytecode cache can have supplied this process's semantics."""
+    """Proof, taken BEFORE the governed imports, that no pre-existing bytecode
+    cache and no executable startup surface can have supplied this process's
+    semantics.
+
+    `no_site` carries the fact that closes the temporal hole: it is the
+    read-only `-S` launch flag, so nothing executed during site initialisation
+    in this process AT ALL. Defaulted True only so an injected test stub built
+    from three positional arguments keeps working."""
     pycache_prefix: str
     caches_under_prefix: int
     detail: str
+    no_site: bool = True
 
 
 _LAUNCH_ATTESTATION: "LaunchAttestation | None" = None
@@ -702,6 +750,11 @@ def assert_governed_launch(*, flags=None, prefix=None,
     SO THE PROOF MOVED EARLIER INSTEAD OF GETTING STRONGER. Three facts,
     taken together and taken BEFORE the governed modules are imported:
 
+      0. `sys.flags.no_site` is set -- the read-only `-S` launch flag. No
+         `.pth` line, `sitecustomize` or `usercustomize` executed in this
+         process, so no startup surface could have touched a governed module
+         before this line ran. This is the fact that makes the proof
+         PREVENTIVE; facts 1-3 then rule out the cache path.
       1. `sys.flags.dont_write_bytecode` is set. This is the LAUNCH flag on
          the read-only `sys.flags` structseq -- measured: assigning to it
          raises AttributeError. The first repair read `sys.dont_write_bytecode`,
@@ -736,6 +789,29 @@ def assert_governed_launch(*, flags=None, prefix=None,
     prefix = sys.pycache_prefix if prefix is None else prefix
     modules = sys.modules if modules is None else modules
 
+    # R1 AND R2, CLOSED BY PREVENTION RATHER THAN BY INSPECTION.
+    #
+    # Both residuals were the same temporal hole. A `.pth` `import` line and
+    # `sitecustomize` execute during site initialisation -- before any project
+    # line can look at them -- so checking their bytes later cannot constrain
+    # what already ran (R1), and a hook that ran could import a governed
+    # module, mutate it, and delete the child entries from `sys.modules`,
+    # leaving exactly the permitted bootstrap closure behind (R2, reproduced).
+    #
+    # No strengthening of a later check reaches either one. `sys.flags.no_site`
+    # does: it is the read-only `-S` launch flag, and under it NO `.pth` line
+    # is executed, `site` is never imported, and neither automatic startup
+    # module is imported. There is no hook to hide anything, so there is
+    # nothing for the `sys.modules` census below to be fooled about -- that
+    # census stays as a second line, not as the proof.
+    if not getattr(flags, "no_site", 0):
+        raise SeamRefused(
+            "launch_site_processing_enabled",
+            "sys.flags.no_site is not set, so site initialisation ran and any "
+            "executable .pth line, sitecustomize or usercustomize already "
+            "executed in this process. Launch with -S through "
+            "scripts/run_governed.py, which supplies the site directories "
+            "explicitly.")
     if not getattr(flags, "dont_write_bytecode", 0):
         raise SeamRefused(
             "launch_bytecode_writing_enabled",
@@ -772,9 +848,11 @@ def assert_governed_launch(*, flags=None, prefix=None,
     global _LAUNCH_ATTESTATION
     _LAUNCH_ATTESTATION = LaunchAttestation(
         str(prefix), 0,
-        "attested before any governed import: -B set (read-only launch "
-        "flag), pycache_prefix %s holds 0 caches, only %s imported"
-        % (prefix, sorted(BOOTSTRAP_IMPORT_CLOSURE)))
+        "attested before any governed import: -S set (read-only, so no .pth "
+        "line, sitecustomize or usercustomize executed at all), -B set "
+        "(read-only), pycache_prefix %s holds 0 caches, only %s imported"
+        % (prefix, sorted(BOOTSTRAP_IMPORT_CLOSURE)),
+        True)
     return _LAUNCH_ATTESTATION
 
 

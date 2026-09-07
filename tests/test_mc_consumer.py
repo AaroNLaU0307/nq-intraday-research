@@ -597,7 +597,23 @@ def test_hand_built_verdict_inputs_have_no_callable_entry():
 # --- authorization gate -----------------------------------------------------
 
 def test_public_real_runner_refuses_deterministically():
-    with pytest.raises(McConsumerAbsent, match="NOT authorized"):
+    # PRE-CERT REPAIR (R3): a real run started outside the trusted launch
+    # boundary is blocked before authorization is consulted, so a bare call
+    # meets that refusal first. This test owns an AUTHORIZATION property, so
+    # the launch fact is attested for the duration of the call.
+    import unittest.mock as _mock
+
+    from itsf import execution_identity as _ei
+    _attested = _ei.LaunchAttestation("/injected", 0, "injected", True)
+    with _mock.patch.object(_ei, "launch_attestation", lambda: _attested):
+        with pytest.raises(McConsumerAbsent, match="NOT authorized"):
+            mcc.run_real_mc()
+
+
+def test_public_real_runner_ALSO_refuses_outside_the_trusted_launch():
+    """The new outer refusal, asserted rather than merely stepped around."""
+    from itsf.guards import RunBlockedError
+    with pytest.raises(RunBlockedError, match="trusted launch boundary"):
         mcc.run_real_mc()
 
 
@@ -605,8 +621,17 @@ def test_production_prepare_caller_is_gate_first():
     """R2.1 PHASE F: the non-test production caller exists and refuses at
     the authorization gate BEFORE any sealed byte is read."""
     from itsf.mc import real_input
-    with pytest.raises(McConsumerAbsent, match="NOT authorized"):
-        real_input.prepare_real_mc_input()
+    # PRE-CERT REPAIR (R3): a real run started outside the trusted launch
+    # boundary is blocked before authorization is consulted, so a bare call
+    # meets that refusal first. This test owns an AUTHORIZATION property, so
+    # the launch fact is attested for the duration of the call.
+    import unittest.mock as _mock
+
+    from itsf import execution_identity as _ei
+    _attested = _ei.LaunchAttestation("/injected", 0, "injected", True)
+    with _mock.patch.object(_ei, "launch_attestation", lambda: _attested):
+        with pytest.raises(McConsumerAbsent, match="NOT authorized"):
+            real_input.prepare_real_mc_input()
 
 
 def test_lookalike_registry_token_cannot_open_the_gate():

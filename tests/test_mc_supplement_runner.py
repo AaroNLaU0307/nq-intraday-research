@@ -804,17 +804,37 @@ def test_the_guards_are_already_satisfied_so_authorization_is_the_real_defence()
     runner's defence therefore rests entirely on the authorization layer,
     and this test pins that fact so nobody reasons from a stale "G9 still
     blocks everything" assumption."""
+    from itsf import execution_identity as _ei
     from itsf.guards import G9_FLAG, SECOND_COPY_FLAG, assert_real_run_allowed
     assert G9_FLAG.exists() and SECOND_COPY_FLAG.exists()
-    assert_real_run_allowed(G9_FLAG, SECOND_COPY_FLAG)      # does not raise
+    # WIDENED AT THE PRE-CERT REPAIR (R3). The gate now ALSO requires the
+    # trusted-launch attestation when called with both production flag paths,
+    # so "does not refuse" has to be stated about the FLAGS specifically --
+    # the launch fact is injected here exactly as `seam_recheck`'s reports are.
+    # The launch requirement's own cases live in tests/test_qros_cf_pre_cert.py.
+    assert_real_run_allowed(
+        G9_FLAG, SECOND_COPY_FLAG,
+        launch=_ei.LaunchAttestation("/injected", 0, "injected", True))
 
 
 def test_production_entry_refuses_even_with_the_guards_satisfied():
-    """The first refusal a real caller meets today. It must arrive from
-    the authorization/chain layer, and it must arrive as a refusal — not
-    as an AttributeError or a silent None."""
-    with pytest.raises(r.SupplementRunNotAuthorized):
+    """The first refusal a real caller meets today, and it MOVED EARLIER at
+    the pre-cert repair (R3).
+
+    It used to arrive from the authorization/chain layer. It now arrives
+    before that, from the trusted-launch requirement: a real run started
+    outside `scripts/run_governed.py` is blocked before authorization is even
+    consulted. Both are refusals and neither is an AttributeError or a silent
+    None, which is what this test has always actually been about.
+
+    The authorization refusal is still reachable and still asserted -- with the
+    launch fact injected, the next refusal is the missing authorization, which
+    is what `test_production_entry_refuses_at_authorization_once_guards_pass`
+    covers."""
+    from itsf.guards import RunBlockedError
+    with pytest.raises(RunBlockedError) as caught:
         r.run_supplement_production()
+    assert "trusted launch boundary" in str(caught.value)
 
 
 def test_production_entry_refuses_at_authorization_once_guards_pass(

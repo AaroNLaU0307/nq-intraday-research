@@ -188,8 +188,15 @@ class TestEvenWithBothRowsItStillCannotRun(unittest.TestCase):
         def _nothing_authorises(_text, supplement_id):
             return sreg.resolve_supplement_chain("", supplement_id)
 
-        with self.assertRaises(Exception) as caught:
-            sr.run_supplement_production(resolver=_nothing_authorises)
+        # PRE-CERT REPAIR (R3): the trusted-launch refusal arrives before
+        # authorization, and this case owns the authorization property.
+        import unittest.mock as _mock
+
+        from itsf import execution_identity as _ei
+        _attested = _ei.LaunchAttestation("/injected", 0, "injected", True)
+        with _mock.patch.object(_ei, "launch_attestation", lambda: _attested):
+            with self.assertRaises(Exception) as caught:
+                sr.run_supplement_production(resolver=_nothing_authorises)
         self.assertIn("0 live SUPPLEMENT_EXECUTION_AUTHORIZED",
                       str(caught.exception))
 

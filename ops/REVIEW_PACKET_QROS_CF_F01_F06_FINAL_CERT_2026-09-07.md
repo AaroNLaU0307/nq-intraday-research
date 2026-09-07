@@ -3,7 +3,9 @@
 ```ini
 PACKET_TYPE=FINAL_CERTIFICATION_OF_A_REPAIR（沿用既有 Review Packet 件种,不是新件种;不是 A2,不是 Stage I,不解开任何 QROS 门）
 REVIEW_ID=QROS-CF-F01-F06-FINAL-CERT-001
-DELIVERY_STATUS=ISSUED
+DELIVERY_STATUS=RETURNED
+WITHDRAWN_BEFORE_DISPATCH=YES —— **本包从未派发,没有任何席位看过这些字节**。「RETURNED」是词表里表示「不在外面」的那个记号,不表示有过一轮复审
+WITHDRAWN_REASON=打包过程中机械测出三条残留(R1/R2/R3),Aaron 授权了一次 PRE-CERT 定界修复;修复改动了本表钉住的字节,故先撤回再以**同一 REVIEW_ID** 重发
 ISSUE_LINEAGE=同一条 F01–F06 谱系的第 3 轮（前两轮:P2 门禁复审 HOLD → 定向复审 HOLD）
 ROUND_BUDGET=**合同预算之外**。ops/REVIEWER_CONTRACT.md 第 23 行为「每条 issue 谱系两轮」,已用尽;本轮由 Aaron 明确授权为一次业主例外。详见 §2.1
 COMPANION=ops/NEXT_HANDOFF.md（禁读清单载体,**必须同行**;已按 sha256 钉在 §0.4 与 ARTIFACTS_UNDER_REVIEW.json）

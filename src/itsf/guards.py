@@ -55,13 +55,65 @@ def verify_frozen_hashes() -> None:
             raise FrozenTamperError(f"frozen file modified: {rel} ({got[:16]}...)")
 
 
+def assert_trusted_launch(launch=None) -> None:
+    """Refuse unless this process came through the trusted launch boundary.
+
+    QROS-CF R3, PRE-CERT REPAIR. Preparing the final-certification transport
+    measured that `scripts/s0_real_run.py` referenced neither `seam_recheck`
+    nor `assert_governed_launch` nor `execution_identity` -- not once. So the
+    trusted-launch proof covered exactly one path (the P3 seam) while eight
+    production entries reached real bytes without it, and the earlier claim
+    that the boundary was "mechanically enforced" was true of the seam and
+    false of every real-run entry. That is the claim-wider-than-the-fact shape
+    this project keeps finding, and this time it was mine.
+
+    THIS GATE IS WHERE IT BELONGS, because it is already the single real-run
+    gate: `assert_real_run_allowed` is called with the production defaults by
+    `s0_real_run`, `run_data_qa`, `qa_addendum_a1`, `qa_addendum_a2`,
+    `consumer.run_real_mc`, `real_input` (twice) and
+    `supplement_runner.run_supplement_production`, and reached through the
+    default-flag loader by `s0_input_preflight`. One requirement here covers
+    every one of them, and covers a future entry that calls the gate without
+    anyone remembering to add anything.
+
+    `launch` is an explicit injection seam, the same shape `seam_recheck` uses
+    for its environment and bytecode reports, so a test can exercise the gate
+    without being launched through the boundary. It is a named parameter, not a
+    branch on whether the caller looks like a test.
+    """
+    from . import execution_identity as _ei
+
+    attested = _ei.launch_attestation() if launch is None else launch
+    if attested is None:
+        raise RunBlockedError(
+            "real run blocked: this process was not started through the "
+            "trusted launch boundary, so no startup surface or bytecode-cache "
+            "proof exists for it. Launch through scripts/run_governed.py "
+            "(or scripts\\run_governed.cmd), which runs the governed child "
+            "under -S with a private pycache prefix and attests before any "
+            "governed import.")
+
+
 def assert_real_run_allowed(g9_flag: Path = G9_FLAG,
-                            second_copy_flag: Path = SECOND_COPY_FLAG) -> None:
+                            second_copy_flag: Path = SECOND_COPY_FLAG,
+                            *, launch=None) -> None:
     """Gate for ANY computation on real market data producing readable numbers.
 
     The flag-path parameters exist so unit tests can exercise this exact gate
     logic against temporary attestation files; production callers use the
     defaults. The gate logic itself is never bypassed or monkeypatched.
+
+    THE TRUSTED-LAUNCH REQUIREMENT APPLIES TO A REAL AUTHORIZED RUN (R3), which
+    is precisely a call made with BOTH production attestation paths. A call
+    carrying temporary flag paths is exercising this gate's logic against
+    fixtures and cannot be a real authorized run on those flags.
+
+    THAT CONDITION IS NAMED RATHER THAN HIDDEN, and here is what it does not
+    cover: a caller that supplies temporary flag paths while pointing a loader
+    at the real job directory would read real bytes without the launch proof.
+    That seam is the pre-existing purpose of the flag parameters, it predates
+    this window, and this repair neither widens nor closes it. It is stated so
+    the next reader does not mistake this gate for more than it is.
     """
     verify_frozen_hashes()
     missing = [str(p) for p in (g9_flag, second_copy_flag) if not p.exists()]
@@ -69,3 +121,6 @@ def assert_real_run_allowed(g9_flag: Path = G9_FLAG,
         raise RunBlockedError(
             "real S0/MC computation blocked; missing attestations: "
             + "; ".join(missing))
+    if (Path(g9_flag) == G9_FLAG
+            and Path(second_copy_flag) == SECOND_COPY_FLAG):
+        assert_trusted_launch(launch)

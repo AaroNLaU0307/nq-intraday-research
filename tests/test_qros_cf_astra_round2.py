@@ -60,10 +60,16 @@ UTC = "2026-09-07T00:00:00+00:00"
 # ===========================================================================
 
 class _Flags:
-    """Stand-in for `sys.flags`, whose real attribute is READ-ONLY."""
+    """Stand-in for `sys.flags`, whose real attributes are READ-ONLY.
 
-    def __init__(self, dont_write_bytecode):
+    `no_site` defaults to set, because these F01 cases are each about ONE
+    other fact and a stub that failed the -S check first would test the
+    wrong refusal. The -S fact has its own cases in
+    `tests/test_qros_cf_pre_cert.py`."""
+
+    def __init__(self, dont_write_bytecode, no_site=1):
         self.dont_write_bytecode = dont_write_bytecode
+        self.no_site = no_site
 
 
 @pytest.fixture
@@ -109,8 +115,13 @@ def test_F01_setting_only_the_writable_mirror_does_not_attest(clean_prefix,
     This process is not launched with -B, so the read-only flag is 0 no
     matter what the mirror says."""
     monkeypatch.setattr(sys, "dont_write_bytecode", True)
+    # pytest is launched with neither -S nor -B, so the real `sys.flags` fails
+    # the no_site check FIRST. The fact under test here is the bytecode mirror,
+    # so no_site is supplied as set and dont_write_bytecode is left at its real
+    # (unset) value -- which is exactly the round-one bypass.
+    flags = _Flags(sys.flags.dont_write_bytecode, no_site=1)
     with pytest.raises(ei.SeamRefused) as caught:
-        ei.assert_governed_launch(flags=sys.flags, prefix=str(clean_prefix),
+        ei.assert_governed_launch(flags=flags, prefix=str(clean_prefix),
                                   modules=_ok_modules())
     assert caught.value.args[0].startswith("launch_bytecode_writing_enabled")
 
@@ -233,15 +244,28 @@ def test_F01_no_production_source_mutates_the_cache_knobs():
 
 
 def test_F01_the_rejected_launch_flags_are_recorded_with_the_reason():
-    """`-S` would close F02 by construction and cannot be used: measured,
-    `import pandas` fails under it. Pinned so the next reader does not
-    re-propose it as an easy win."""
-    assert ei.LAUNCH_FLAGS_REQUIRED == ("-B", "PYTHONPYCACHEPREFIX")
+    """REWRITTEN AT THE PRE-CERT REPAIR, and the rewrite is the correction.
+
+    This used to assert that `-S` "cannot be used" because `import pandas`
+    fails under it, and pinned that as a decision. The measurement was real
+    and the conclusion drawn from it was wrong: `-S` ALONE fails, `-S` plus
+    the site directories on `sys.path` does not. So `-S` is now required
+    rather than rejected, and it is what closes R1 and R2 by prevention.
+
+    A test that pins a wrong conclusion is worse than no test, because it
+    argues against fixing it. Kept, inverted, with the reason on the record."""
+    assert ei.LAUNCH_FLAGS_REQUIRED == ("-S", "-B", "PYTHONPYCACHEPREFIX")
     doc = ei.assert_governed_launch.__doc__ or ""
     assert "read-only" in doc
     launcher = (REPO / "scripts" / "run_governed.py").read_text(encoding="utf-8")
-    for flag in ("-S", "-I", "-E"):
-        assert flag in launcher, f"{flag}'s rejection is not recorded"
+    assert "-S" in launcher, "the launcher does not name the mechanism it uses"
+    # -I and -E stay REJECTED, and their reasons are recorded where the
+    # required-flags decision itself lives, not duplicated into the launcher.
+    where = (REPO / "src" / "itsf" / "execution_identity.py").read_text(
+        encoding="utf-8")
+    for flag in ("-I", "-E"):
+        assert flag in where, f"{flag}'s rejection is no longer recorded"
+    assert "ignores PYTHONPYCACHEPREFIX" in where
 
 
 # ===========================================================================

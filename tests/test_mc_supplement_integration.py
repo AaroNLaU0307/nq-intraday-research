@@ -617,8 +617,17 @@ def test_the_production_entry_refuses_when_nothing_authorises_it():
     def _nothing_authorises(_text, supplement_id):
         return sreg.resolve_supplement_chain("", supplement_id)
 
-    with pytest.raises(runner.SupplementRunNotAuthorized) as ei:
-        runner.run_supplement_production(resolver=_nothing_authorises)
+    # PRE-CERT REPAIR (R3): a real run started outside the trusted launch
+    # boundary is blocked before authorization is consulted, so a bare call
+    # meets that refusal first. This test owns an AUTHORIZATION property, so
+    # the launch fact is attested for the duration of the call.
+    import unittest.mock as _mock
+
+    from itsf import execution_identity as _ei
+    _attested = _ei.LaunchAttestation("/injected", 0, "injected", True)
+    with _mock.patch.object(_ei, "launch_attestation", lambda: _attested):
+        with pytest.raises(runner.SupplementRunNotAuthorized) as ei:
+            runner.run_supplement_production(resolver=_nothing_authorises)
     msg = str(ei.value)
     assert "0 live" in msg
     assert sc.EVENTS["P2"].token in msg
