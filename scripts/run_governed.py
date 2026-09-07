@@ -1,64 +1,77 @@
 """The trusted launch boundary for every governed real run.
 
-QROS-CF F01/F02, PRE-CERT REPAIR. The previous version of this file re-launched
-with `-B` and a private `PYTHONPYCACHEPREFIX` and then attested. Preparing the
-final-certification transport measured two residuals that shape survives:
+QROS-CF ROOT BLOCKER A, FINAL BOUNDED REPAIR. The independent reviewer
+reproduced two things about the previous shape:
 
-  R1  an allowed executable `.pth` was checked AFTER Python startup. A `.pth`
-      `import` line runs during site initialisation, before any project line,
-      so checking its bytes later cannot constrain what already ran.
-  R2  a startup hook could import a governed module, mutate it, delete the
-      child entries from `sys.modules`, and leave exactly the permitted
-      bootstrap closure -- after which the attestation passed. Reproduced.
+  F01  the parent imported `itsf.execution_identity` BEFORE the trusted
+       execution boundary existed, and `-B` prevents bytecode WRITES but not
+       READS -- a timestamp-valid forged `.pyc` in the governed tree therefore
+       influenced launch behaviour from inside the supposed trust boundary.
+  F02  the documented direct form `python scripts/run_governed.py ...` starts
+       an ORDINARY interpreter. Startup customization influences that first
+       process, and `-S` applied only to the child it went on to spawn.
 
-Both are the same temporal hole, and no later check reaches either. So the
-control is now PREVENTION rather than inspection:
+So the trust root moved OUT of project-governed Python semantics.
 
-    the governed child runs with `-S`, and under `-S` no `.pth` line is
-    executed, `site` is never imported, and neither `sitecustomize` nor
-    `usercustomize` is imported.
+THE BOOTSTRAP TRUST ASSUMPTION, stated once and not proved by this file --
+because a launcher that tried to prove its own trust while already executing is
+the recursion this repair must not introduce:
 
-THE MEASUREMENT THAT MADE THAT POSSIBLE, and it corrects an earlier one. The
-first repair recorded that `-S` "cannot be used" because `import pandas` fails
-under it. That was true and the conclusion was wrong: `-S` alone fails; `-S`
-plus the site directories placed on `sys.path` does not. Measured under
-`-S -B` with this machine's three real site directories appended -- pandas,
-numpy, scipy, pyarrow, databento, zstandard, exchange_calendars,
-pandas_market_calendars and pytest all import, `site` is absent from
-`sys.modules`, and no `.pth` executes. Supplying those directories is this
-launcher's job, which is why the boundary is two processes rather than one.
+    trusted bootstrap boundary =
+        OS process creation
+      + the selected Python executable and its stdlib startup under the
+        hardened flags, which are fixed AT process creation and are read-only
+      + the explicitly invoked launcher SOURCE bytes
 
-THE SHAPE
+Everything after that boundary is checked. Nothing before it is, and nothing
+here pretends otherwise. There is no machine hashing, no executable signing, no
+launcher signature, no provenance framework and no trust ledger: the recursion
+stops at the assumption above.
 
-    scripts/run_governed.cmd            (optional; starts the parent under -S)
-      -> PARENT, stdlib only, -S -E -B
-           verifies the executable startup surfaces by BYTES
-           creates a fresh private pycache directory at an unpredictable path
-           scrubs the hostile PYTHON*/GIT_* variables
-      -> CHILD, -S -B, PYTHONPYCACHEPREFIX=<fresh>
-           appends the site directories handed to it on argv
-           imports ONLY itsf.execution_identity and attests
-      -> the governed target
+THE SANCTIONED FORM
 
-WHY THE PARENT ALSO RUNS -S. The parent is not the governed process, but a
-`.pth` that executed in it could patch `subprocess` and spawn a child without
-`-S`. Running the parent under `-S` too removes that step rather than arguing
-about it. `-E` is added for the parent alone: it ignores the hostile PYTHON*
-variables outright, and the parent has no use for `PYTHONPYCACHEPREFIX`
-because `-B` means it writes nothing. The CHILD must not get `-E`, because
-`-E` would make the interpreter ignore the private prefix and the
-repository's own `__pycache__` would become readable again.
+    python -I -S -B scripts/run_governed.py <module>[:<callable>] [args...]
+    scripts\\run_governed.cmd            <module>[:<callable>] [args...]
 
-WHAT IS NOT CLAIMED. The outermost process in any chain has already completed
-its own interpreter startup by the time it can run a line of code. What this
-boundary gives is that no startup surface executes in the process that runs
-governed semantics, and that the parent refuses to spawn at all when a
-permitted startup artifact's bytes have changed. It is not a whole-machine
-hash and does not pretend to be.
+`-I` supplies `-E`, `-s` and `-P`. The `.cmd` file is only a fixed spelling of
+that same form. The unflagged form is NOT a sanctioned production launch: it
+fails closed, spawns nothing, and deliberately does NOT re-exec itself -- an
+upgrade attempted from an already-untrusted interpreter proves nothing about
+what ran in it.
 
-USAGE
-    python scripts/run_governed.py <module>[:<callable>] [args...]
-    scripts\\run_governed.cmd       <module>[:<callable>] [args...]
+WHY THE PARENT IMPORTS NOTHING FROM THE PROJECT. A forged cache can only
+influence code that gets imported. The parent's job is to construct the child;
+it does that with the standard library alone, so there is no governed module
+whose bytes a cache could substitute. `HOSTILE_ENV_VARS` is the one small
+constant it needs, and it is duplicated below as a frozen tuple with its
+equality to the authoritative project constant pinned by test rather than by
+hope.
+
+THE CHILD'S CONDITIONS, all fixed at ITS process creation:
+
+    -I  isolated: implies -E (env ignored), -s (no user site), -P (safe_path)
+    -S  no site processing: no `.pth` line, no sitecustomize, no usercustomize
+    -B  no bytecode written
+    -X pycache_prefix=<fresh private dir>
+        every cache lookup -- READ as well as write -- leaves the repository,
+        into a directory created for this run at a path nothing could predict.
+        Passed as -X rather than an environment variable precisely because -I
+        makes the interpreter ignore PYTHONPYCACHEPREFIX.
+
+`-P` (safe_path) is what stops the script's own directory from being prepended
+to `sys.path`, so the governed tree cannot shadow a stdlib module during
+bootstrap. The child then APPENDS the site directories and `src/`, never
+prepends, so stdlib resolution stays ahead of the governed tree until the
+attestation has been taken.
+
+Measured, not assumed: under `-I -S -B` with the site directories appended,
+pandas, numpy, scipy, pyarrow, databento, zstandard, exchange_calendars and
+pandas_market_calendars all import, `site` is absent from `sys.modules`, and no
+`.pth` executes.
+
+WHAT THE STARTUP-SURFACE BYTE CHECK IS NOW FOR. It runs in the child, AFTER the
+attestation, as reporting and secondary verification. It is no longer the proof
+that startup code could not execute -- `-S`, fixed at process creation, is.
 """
 from __future__ import annotations
 
@@ -72,27 +85,48 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 SRC = REPO / "src"
 
-PREFIX_VAR = "PYTHONPYCACHEPREFIX"
-
-#: Set by the parent so a child cannot re-launch itself forever if the flags
-#: somehow fail to take effect. A second failure is a refusal, not a loop.
-RELAUNCH_MARKER = "ITSF_GOVERNED_RELAUNCHED"
-
 #: Child mode is a flag rather than a second file: one file, one story.
 CHILD_FLAG = "--itsf-governed-child"
 SITEDIR_FLAG = "--itsf-sitedir"
 
+#: The parent's own conditions, every one fixed at process creation and exposed
+#: read-only on `sys.flags`. `-I` supplies the last three.
+REQUIRED_PARENT_FLAGS = ("no_site", "ignore_environment",
+                         "dont_write_bytecode", "safe_path")
+
+#: The sanctioned spelling, kept as data so the refusal can print it and a test
+#: can pin it.
+SANCTIONED_FORM = ("python -I -S -B scripts/run_governed.py "
+                   "<module>[:<callable>] [args...]")
+
+#: DUPLICATED DELIBERATELY, and minimally. The parent must scrub these before
+#: constructing the child, and importing the project to learn them is exactly
+#: what Root A forbids. This is a frozen copy, not a second policy authority:
+#: `tests/test_qros_cf_pre_cert.py` pins it equal to
+#: `itsf.execution_identity.HOSTILE_ENV_VARS` from the governed context, so the
+#: two cannot drift.
+HOSTILE_ENV_VARS = ("PYTHONPATH", "PYTHONSTARTUP", "PYTHONHOME",
+                    "PYTEST_ADDOPTS", "GIT_DIR", "GIT_WORK_TREE",
+                    "GIT_CONFIG", "GIT_CONFIG_GLOBAL", "GIT_TEMPLATE_DIR",
+                    "GIT_CEILING_DIRECTORIES")
+
 
 # --------------------------------------------------------------------------
-# site directories -- discovered with the stdlib, because -S means they are
-# not on sys.path and the child has to be told.
+# parent -- STANDARD LIBRARY ONLY until the child has been constructed
 # --------------------------------------------------------------------------
+def missing_parent_flags(flags=None) -> list:
+    """Which required launch conditions this process does NOT have."""
+    flags = sys.flags if flags is None else flags
+    return [name for name in REQUIRED_PARENT_FLAGS
+            if not getattr(flags, name, 0)]
+
+
 def site_directories() -> list:
-    """Every real site directory this interpreter would normally add.
+    """Every real site directory, discovered with the stdlib.
 
-    `import site` works under `-S`; only its automatic INVOCATION is skipped.
-    `sysconfig` is the fallback so a stripped build still yields something
-    rather than silently yielding nothing.
+    `import site` is a standard-library import; under `-S` only its automatic
+    INVOCATION is skipped, so its helpers still answer. `sysconfig` is the
+    fallback so a stripped build yields something rather than nothing.
     """
     found = []
     try:
@@ -110,88 +144,37 @@ def site_directories() -> list:
             path = sysconfig.get_paths().get(key)
             if path:
                 found.append(path)
-        for scheme in ("nt_user", "posix_user"):
-            try:
-                found.append(sysconfig.get_path("purelib", scheme))
-            except Exception:                                  # noqa: BLE001
-                pass
     out = [p for p in dict.fromkeys(found) if p and Path(p).is_dir()]
     if not out:
         raise SystemExit("run_governed: no site directory found; the child "
-                         "would start with no installed packages and the "
-                         "pinned environment gate would refuse anyway")
+                         "would start with no installed packages")
     return out
 
 
-def _startup_surfaces_are_trusted(sitedirs) -> tuple:
-    """(ok, detail) for the executable startup artifacts, BY BYTES.
-
-    This is the parent-side half. Prevention (`-S` on the child) is what makes
-    the guarantee; this makes a CHANGED permitted artifact a refusal to launch
-    rather than a thing the child merely never runs, so tampering is reported
-    instead of tolerated.
-    """
-    sys.path.insert(0, str(SRC))
-    from itsf import execution_identity as ei
-
-    report = ei.startup_report(sitedirs=sitedirs)
-    return report.pinned, report.detail
+def child_command(prefix: str, sitedirs, argv) -> list:
+    """The child's argv. Every trust condition is a flag, fixed at ITS process
+    creation -- not something the child asks for once it is already running."""
+    cmd = [sys.executable, "-I", "-S", "-B",
+           "-X", "pycache_prefix=" + prefix,
+           str(Path(__file__).resolve()), CHILD_FLAG]
+    for d in sitedirs:
+        cmd += [SITEDIR_FLAG, d]
+    return cmd + ["--", *argv]
 
 
-def _child_environment(prefix: str) -> dict:
-    """The child's environment: the private prefix in, hostile variables out."""
-    sys.path.insert(0, str(SRC))
-    from itsf import execution_identity as ei
-
-    env = {k: v for k, v in os.environ.items()
-           if k not in ei.HOSTILE_ENV_VARS}
-    env[PREFIX_VAR] = prefix
-    env[RELAUNCH_MARKER] = "1"
-    return env
-
-
-# --------------------------------------------------------------------------
-# parent
-# --------------------------------------------------------------------------
-def _parent_is_hardened() -> bool:
-    return bool(sys.flags.no_site) and bool(sys.flags.dont_write_bytecode)
-
-
-def _reexec_parent(argv: list) -> int:
-    """Run the parent itself under -S -E -B, so no `.pth` ran in it either."""
-    if os.environ.get(RELAUNCH_MARKER):
-        sys.stderr.write(
-            "run_governed: re-launched once and the parent is still not "
-            "hardened (no_site=%r dont_write_bytecode=%r); refusing rather "
-            "than looping\n"
-            % (sys.flags.no_site, sys.flags.dont_write_bytecode))
-        return 2
-    env = dict(os.environ)
-    env[RELAUNCH_MARKER] = "1"
-    return subprocess.run(
-        [sys.executable, "-S", "-E", "-B", str(Path(__file__).resolve()),
-         *argv], env=env).returncode
+def child_environment(prefix: str) -> dict:
+    """Hostile variables out. The private prefix travels as `-X`, not as an
+    environment variable, because `-I` makes the child ignore the latter."""
+    return {k: v for k, v in os.environ.items()
+            if k not in HOSTILE_ENV_VARS}
 
 
 def run_parent(argv: list) -> int:
     sitedirs = site_directories()
-    ok, detail = _startup_surfaces_are_trusted(sitedirs)
-    if not ok:
-        sys.stderr.write(
-            "run_governed: REFUSING TO LAUNCH -- a permitted executable "
-            "startup artifact is not the one that was pinned, so the child is "
-            "not started at all:\n  %s\n" % detail)
-        return 3
-    sys.stderr.write("run_governed: startup surfaces trusted: %s\n" % detail)
-
     prefix = tempfile.mkdtemp(prefix="itsf-pycache-")
     try:
-        child = [sys.executable, "-S", "-B", str(Path(__file__).resolve()),
-                 CHILD_FLAG]
-        for d in sitedirs:
-            child += [SITEDIR_FLAG, d]
-        child += ["--", *argv]
-        return subprocess.run(child, env=_child_environment(prefix)).returncode
+        return subprocess.run(child_command(prefix, sitedirs, argv),
+                              env=child_environment(prefix)).returncode
     finally:
         # `-B` means the child wrote nothing, so this removes an empty tree.
         shutil.rmtree(prefix, ignore_errors=True)
@@ -216,21 +199,36 @@ def run_child(argv: list) -> int:
         sys.stderr.write("run_governed: child got no target\n")
         return 2
 
-    # The site directories `-S` did not add. Done BEFORE the attestation so
-    # the child can import at all; none of them can execute a `.pth`, because
-    # appending a path is not site initialisation.
+    # APPENDED, never prepended: stdlib resolution stays ahead of the governed
+    # tree until the attestation has been taken. `-P` already kept the script's
+    # own directory off `sys.path`.
     for d in sitedirs:
         if d not in sys.path:
             sys.path.append(d)
     if str(SRC) not in sys.path:
-        sys.path.insert(0, str(SRC))
+        sys.path.append(str(SRC))
 
-    # ONLY the attestation module, and then the proof, before anything else
-    # governed is imported.
+    # The FIRST governed import, and the proof comes immediately after it.
     from itsf.execution_identity import assert_governed_launch
 
     attestation = assert_governed_launch()
-    sys.stderr.write("run_governed: %s\n" % attestation.detail)
+    sys.stderr.write("run_governed: child attested: %s\n" % attestation.detail)
+
+    # SECONDARY, and only now: the executable startup surfaces are reported
+    # against their pinned bytes. This is no longer the proof that startup code
+    # could not execute -- `-S` is -- but a changed pinned surface still refuses,
+    # because a machine whose startup changed is one the operator should hear
+    # about.
+    from itsf import execution_identity as _ei
+
+    report = _ei.startup_report(sitedirs=sitedirs)
+    if not report.pinned:
+        sys.stderr.write("run_governed: REFUSING -- a permitted executable "
+                         "startup artifact is not the one pinned:\n  %s\n"
+                         % report.detail)
+        return 3
+    sys.stderr.write("run_governed: startup surfaces reported clean: %s\n"
+                     % report.detail)
 
     target, _, func = rest[0].partition(":")
     import importlib
@@ -246,12 +244,25 @@ def main(argv: list) -> int:
     if argv and argv[0] == CHILD_FLAG:
         return run_child(argv[1:])
     if not argv:
-        sys.stderr.write(
-            "usage: python scripts/run_governed.py <module>[:<callable>] "
-            "[args...]\n")
+        sys.stderr.write("usage: %s\n" % SANCTIONED_FORM)
         return 2
-    if not _parent_is_hardened():
-        return _reexec_parent(argv)
+    missing = missing_parent_flags()
+    if missing:
+        # FAIL CLOSED. No child, no target, and deliberately NO self-re-exec:
+        # upgrading from an interpreter that is already untrusted would prove
+        # nothing about what ran in it before this line.
+        sys.stderr.write(
+            "run_governed: REFUSING -- this is not a sanctioned production "
+            "launch.\n"
+            "  missing required launch conditions: %s\n"
+            "  the sanctioned form fixes them at process creation:\n"
+            "    %s\n"
+            "  (or scripts\\run_governed.cmd, the same form spelled once)\n"
+            "  This form is not upgraded by re-exec: an interpreter that has "
+            "already run\n"
+            "  startup code cannot establish that it did not.\n"
+            % (", ".join(missing), SANCTIONED_FORM))
+        return 2
     return run_parent(argv)
 
 

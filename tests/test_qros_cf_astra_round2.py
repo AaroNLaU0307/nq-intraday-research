@@ -195,13 +195,21 @@ def test_F01_the_seam_refuses_without_an_attestation(monkeypatch):
 def test_F01_the_launcher_really_attests_end_to_end():
     """The whole boundary, in a real subprocess: re-launch with the measured
     flags, attest before the governed imports, then hand over."""
+    # ROOT A: the sanctioned form is now the hardened one, and the unflagged
+    # form refuses by design. Both halves asserted here.
     r = subprocess.run(
-        [sys.executable, str(REPO / "scripts" / "run_governed.py"),
-         "itsf.mc.owner_control"],
+        [sys.executable, "-I", "-S", "-B",
+         str(REPO / "scripts" / "run_governed.py"), "itsf.mc.owner_control"],
         capture_output=True, text=True, cwd=str(REPO))
     assert r.returncode == 0, r.stderr[-2000:]
     assert "attested before any governed import" in r.stderr
     assert "holds 0 caches" in r.stderr
+    bare = subprocess.run(
+        [sys.executable, str(REPO / "scripts" / "run_governed.py"),
+         "itsf.mc.owner_control"],
+        capture_output=True, text=True, cwd=str(REPO))
+    assert bare.returncode != 0, "the unflagged form no longer fails closed"
+    assert "not a sanctioned production launch" in bare.stderr
 
 
 def test_F01_no_production_source_mutates_the_cache_knobs():
@@ -642,7 +650,7 @@ def test_F06_the_owner_append_uses_the_SAME_serialization_primitive():
     # tests/test_qros_cf_f06_writer_completeness.py for the cross-module half,
     # which is the property this file cannot see from inside one module.
     physical = {n for n in writers if not n.startswith("_calls:")}
-    assert physical == {"serialized_append"}, (
+    assert physical == {"_physical_serialized_write"}, (
         "a registry write appeared outside the one serialized primitive: "
         f"{sorted(physical)}")
     callers = {n[len("_calls:"):] for n in writers if n.startswith("_calls:")}

@@ -570,13 +570,17 @@ def test_the_decisive_owner_check_is_inside_the_serialized_boundary():
 
     start = ast.unparse(fns["serialized_start_append"])
     assert "assert_no_hold_blocks_start" in start
-    assert "validate=" in start, (
+    # ROOT B: the decision is handed to the PRIVATE physical write as `decide`.
+    # It used to be a public `validate=` parameter on the generic entry, which
+    # made it a caller-controlled bypass -- the reviewer committed raw start
+    # bytes through it.
+    assert "decide=_decide" in start, (
         "the start entry no longer hands its decision to the boundary")
 
-    boundary = ast.unparse(fns["serialized_append"])
+    boundary = ast.unparse(fns["_physical_serialized_write"])
     lock = boundary.index("_AppendLock")
     read = boundary.index("now = target.read_bytes()")
-    call = boundary.index("validate(now)")
+    call = boundary.index("decide(now)")
     write = boundary.index("target.write_bytes(")
     assert lock < read < call < write, (
         "the decision is not taken under the lock between the read and the "
@@ -588,7 +592,7 @@ def test_the_start_refusal_precedes_the_stale_snapshot_refusal():
     boundary = ast.unparse(ast.parse(
         (REPO / "src" / "itsf" / "mc" / "registry_boundary.py").read_text(
             encoding="utf-8")))
-    assert boundary.index("validate(now)") < boundary.index(
+    assert boundary.index("decide(now)") < boundary.index(
         "if decided is not None and now != decided")
 
 

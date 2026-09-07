@@ -51,7 +51,35 @@ from itsf.s0.runner import append_registry_event_line          # noqa: E402
 
 C40 = "a" * 40
 UTC = "2026-09-07T00:00:00+00:00"
-PRIMITIVE = "serialized_append"
+# ROOT B: the one physical write is private. The public generic entry no
+# longer performs it, so completeness is measured against the private boundary.
+PRIMITIVE = "_physical_serialized_write"
+
+#: "reaches the shared boundary" means the ONE physical write, directly or
+#: through either public entry -- both of which delegate to it and neither of
+#: which writes itself. Keying only on the private name would have called the
+#: cross-module writer a bypass for calling the public API, which is exactly
+#: what it is supposed to do.
+REACHES = {PRIMITIVE, "serialized_append", "serialized_start_append"}
+
+
+def _code_only(node) -> str:
+    """`node`'s source with docstrings stripped.
+
+    MEASURED NECESSITY, not caution. Before this, clause (a) read
+    `ast.unparse(node)` INCLUDING docstrings, and
+    `append_registry_event_line`'s docstring quotes the pre-repair
+    `registry_path.open("a")` while describing what it no longer does. The rule
+    therefore reported a repaired writer as still opening the registry in append
+    mode -- a guard reading prose instead of code, which is the defect class this
+    repository has been bitten by repeatedly. Stripped here so the rule reads
+    only what executes."""
+    stripped = ast.parse(ast.unparse(node)).body[0]
+    if (stripped.body and isinstance(stripped.body[0], ast.Expr)
+            and isinstance(stripped.body[0].value, ast.Constant)
+            and isinstance(stripped.body[0].value.value, str)):
+        stripped.body = stripped.body[1:] or [ast.Pass()]
+    return ast.unparse(stripped)
 WRITE_CALLS = {"write_bytes", "write_text", "writelines", "write"}
 
 
@@ -85,11 +113,17 @@ def _mutation_candidates():
             for node in ast.walk(tree):
                 if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     continue
-                body = ast.unparse(node)
+                body = _code_only(node)
                 called = {getattr(c.func, "attr", None) or getattr(c.func, "id", None)
                           for c in ast.walk(node) if isinstance(c, ast.Call)}
                 appends = ".open('a'" in body or '.open("a"' in body
-                if not (called & WRITE_CALLS or appends):
+                # Clause (a), WIDENED at the final bounded repair: a function
+                # that CALLS a mutation entry is a registry-mutation path even
+                # though it performs no raw write itself. Without this the rule
+                # lost sight of the cross-module writer the moment Root B made
+                # it delegate -- it would have gone from "the defect this file
+                # exists for" to invisible, which is worse than red.
+                if not (called & WRITE_CALLS or appends or (called & REACHES)):
                     continue
                 params = {a.arg for a in node.args.args}
                 about_registry = (
@@ -107,7 +141,7 @@ def _mutation_candidates():
                     or PRIMITIVE in called)
                 if about_registry:
                     out.append({"path": rel, "symbol": node.name,
-                                "calls_primitive": PRIMITIVE in called,
+                                "calls_primitive": bool(called & REACHES),
                                 "append_mode": appends})
     return out
 
@@ -118,7 +152,16 @@ def _mutation_candidates():
 #: for each is a sentence, not a boolean.
 SUPPORTED = {
     # the boundary itself: the one physical write, under the one lock
-    ("src/itsf/mc/registry_boundary.py", "serialized_append"): "THE PRIMITIVE",
+    ("src/itsf/mc/registry_boundary.py",
+     "_physical_serialized_write"): "THE PRIMITIVE",
+    # the two public entries: neither writes, both reach the primitive
+    ("src/itsf/mc/registry_boundary.py", "serialized_append"): "DELEGATES",
+    ("src/itsf/mc/registry_boundary.py",
+     "serialized_start_append"): "DELEGATES",
+    # the compare-and-swap half, which reaches it through the generic entry
+    ("src/itsf/mc/registry_boundary.py", "_compare_and_append"): "DELEGATES",
+    # the P3 seam, which reaches it through the START entry
+    ("src/itsf/mc/registry_boundary.py", "append_run_started"): "DELEGATES",
     # `_compare_and_append` is deliberately NOT here. Since the repair it
     # performs no write and opens nothing, so it is not a mutation candidate at
     # all -- it is a CALLER of the primitive. Registering it would have been a
@@ -315,10 +358,10 @@ def test_case_C_STARTED_and_the_S0_append_race_and_neither_erases_the_other(
     P3 holds its decision. P3's compare-and-swap must refuse -- and the S0 row
     must survive, because refusing is not the same as rolling back."""
     path, sid = ledger
-    real = rb.serialized_append
+    real = rb._physical_serialized_write
     state = {"fired": False}
 
-    def interleave(target, addition, *, decided=None, validate=None):
+    def interleave(target, addition, *, decided=None, decide=None):
         if decided is not None and not state["fired"]:
             state["fired"] = True
             # A GENERIC S0 event, not a start: the point here is that P3's
@@ -328,9 +371,9 @@ def test_case_C_STARTED_and_the_S0_append_race_and_neither_erases_the_other(
             # test the owner rule instead of the CAS.
             _s0(target, note="landed under P3's decision",
                 event="STAGE_D_COMPLETE")
-        return real(target, addition, decided=decided, validate=validate)
+        return real(target, addition, decided=decided, decide=decide)
 
-    monkeypatch.setattr(rb, "serialized_append", interleave)
+    monkeypatch.setattr(rb, "_physical_serialized_write", interleave)
     with pytest.raises(rb.AppendRefused) as caught:
         rb.append_run_started(sid, head_commit=C40, utc_stamp=UTC, path=path)
     assert caught.value.code == "p3_registry_changed_under_decision"

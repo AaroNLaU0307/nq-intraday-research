@@ -280,9 +280,20 @@ def test_F02_the_parent_REFUSES_TO_LAUNCH_on_changed_permitted_bytes():
     report = ei.startup_report(sitedirs=[str(d)], find_spec=lambda n: None)
     assert report.pinned is False
     assert "changed content" in report.detail
+    # MOVED AT THE FINAL BOUNDED REPAIR (Root A). This check used to run in the
+    # PARENT, which meant the parent imported `itsf.execution_identity` before
+    # any trust boundary existed -- the F01 shape. It now runs in the CHILD as
+    # secondary reporting, after the attestation, and a changed pinned surface
+    # still refuses there. `-S`, fixed at the child's process creation, is what
+    # actually prevents startup code from executing.
     launcher = LAUNCHER.read_text(encoding="utf-8")
-    assert "REFUSING TO LAUNCH" in launcher, (
-        "the launcher does not refuse on an untrusted startup surface")
+    assert "REFUSING -- a permitted executable" in launcher, (
+        "the child no longer refuses on an untrusted startup surface")
+    tree = ast.parse(launcher)
+    funcs = {n.name: n for n in ast.walk(tree)
+             if isinstance(n, ast.FunctionDef)}
+    assert "startup_report" in ast.unparse(funcs["run_child"])
+    assert "startup_report" not in ast.unparse(funcs["run_parent"])
 
 
 def test_F02_sitecustomize_and_usercustomize_are_absent_and_would_be_refused():
@@ -304,35 +315,49 @@ def test_F02_sitecustomize_and_usercustomize_are_absent_and_would_be_refused():
 # 5 — the launcher: two processes, and the flags each one gets
 # ===========================================================================
 
-def test_the_launcher_hardens_the_parent_and_gives_the_child_dash_S_not_dash_E():
+def test_the_launcher_requires_its_own_flags_and_never_re_execs():
+    """REWRITTEN AT THE FINAL BOUNDED REPAIR (Root A).
+
+    The old shape hardened the parent by RE-EXEC from an already-ordinary
+    interpreter. That proves nothing about what ran in the first one, so the
+    re-exec is gone: the parent must ALREADY satisfy its launch conditions or it
+    refuses. The child's private cache prefix now travels as `-X
+    pycache_prefix=`, not as an environment variable, precisely because `-I`
+    makes the child ignore the variable."""
     src = LAUNCHER.read_text(encoding="utf-8")
     tree = ast.parse(src)
     funcs = {n.name: n for n in ast.walk(tree)
              if isinstance(n, ast.FunctionDef)}
-    parent = ast.unparse(funcs["run_parent"])
-    reexec = ast.unparse(funcs["_reexec_parent"])
-    assert "'-S'" in parent and "'-B'" in parent, (
-        "the child is not spawned with -S and -B")
-    assert "'-E'" not in parent, (
-        "the child is spawned with -E, which makes the interpreter ignore "
-        "PYTHONPYCACHEPREFIX and reopens the repository's own __pycache__")
-    assert "'-E'" in reexec, "the parent is not hardened with -E"
-    assert "'-S'" in reexec, "the parent is not hardened with -S"
+    assert "_reexec_parent" not in funcs, (
+        "the self-re-exec path is back; an untrusted interpreter cannot upgrade "
+        "itself into a trusted one")
+    child = ast.unparse(funcs["child_command"])
+    for flag in ("'-I'", "'-S'", "'-B'"):
+        assert flag in child, f"the child is not spawned with {flag}"
+    assert "pycache_prefix=" in child, (
+        "the child's private cache prefix is not passed as -X, so -I would make "
+        "it ignore the environment variable")
+    main = ast.unparse(funcs["main"])
+    assert "missing_parent_flags" in main, (
+        "the parent no longer requires its own launch conditions")
 
 
-def test_the_launcher_attests_end_to_end_under_dash_S():
-    r = _run([str(LAUNCHER), "itsf.mc.owner_control"])
+def test_the_launcher_attests_end_to_end_in_the_sanctioned_form():
+    """The sanctioned form is now `python -I -S -B scripts/run_governed.py`.
+    The unflagged form is refused, which its own test asserts."""
+    r = _run(["-I", "-S", "-B", str(LAUNCHER), "itsf.mc.owner_control"])
     assert r.returncode == 0, r.stderr[-1500:]
-    assert "startup surfaces trusted" in r.stderr
+    assert "child attested" in r.stderr
     assert "-S set (read-only" in r.stderr
     assert "holds 0 caches" in r.stderr
+    assert "startup surfaces reported clean" in r.stderr
 
 
 def test_the_private_pycache_prefix_is_fresh_and_unpredictable():
     """A fixed path could be pre-planted. Two runs must not share one."""
     seen = set()
     for _ in range(2):
-        r = _run([str(LAUNCHER), "itsf.mc.owner_control"])
+        r = _run(["-I", "-S", "-B", str(LAUNCHER), "itsf.mc.owner_control"])
         assert r.returncode == 0, r.stderr[-600:]
         line = [ln for ln in r.stderr.splitlines() if "pycache_prefix" in ln][0]
         seen.add(line.split("pycache_prefix", 1)[1].split(" holds")[0].strip())
@@ -458,7 +483,8 @@ def test_R3_direct_invocation_of_a_sanctioned_entry_fails_closed(rel):
 def test_R3_a_sanctioned_entry_is_reachable_through_the_launcher():
     """The other direction: the boundary must not make real runs impossible,
     only unattested ones. The gate itself is driven through the launcher."""
-    r = _run([str(LAUNCHER), "itsf.guards:assert_real_run_allowed"])
+    r = _run(["-I", "-S", "-B", str(LAUNCHER),
+              "itsf.guards:assert_real_run_allowed"])
     assert r.returncode == 0, r.stderr[-1500:]
     assert "-S set (read-only" in r.stderr
 
@@ -482,17 +508,17 @@ def test_F06_all_three_supported_writers_reach_the_same_physical_write():
     sid = R1._two_row_ledger(path)
 
     seen = []
-    real = rb.serialized_append
+    real = rb._physical_serialized_write
 
-    def counting(target, addition, *, decided=None, validate=None):
+    def counting(target, addition, *, decided=None, decide=None):
         seen.append(Path(target).name)
-        return real(target, addition, decided=decided, validate=validate)
+        return real(target, addition, decided=decided, decide=decide)
 
     # OWNER-SEMANTICS REPAIR: P3 now commits through `serialized_start_append`,
     # so counting `_compare_and_append` would miss it. `serialized_append` is
     # the one physical write every supported writer still passes through, which
     # is the property this test is actually about.
-    rb.serialized_append = counting
+    rb._physical_serialized_write = counting
     try:
         rb.append_owner_hold(scope=oc.GLOBAL_SCOPE, reason="one",
                              head_commit=C40, utc_stamp=UTC, path=path)
@@ -503,7 +529,7 @@ def test_F06_all_three_supported_writers_reach_the_same_physical_write():
                                 releases_event_sequence=hold_seq, path=path)
         rb.append_run_started(sid, head_commit=C40, utc_stamp=UTC, path=path)
     finally:
-        rb.serialized_append = real
+        rb._physical_serialized_write = real
 
     assert len(seen) == 3, (
         "one of the three supported writers did not go through the shared "
@@ -521,8 +547,11 @@ def test_F06_the_physical_write_is_inside_the_lock():
     tree = ast.parse(src)
     # PRE-CERT F06 REPAIR: the lock and the write live in `serialized_append`
     # now, so a supported writer in another module can reach them.
+    # ROOT B: the one physical write is private now, so the generic public
+    # entry cannot be handed a caller-controlled decision.
     fn = next(n for n in ast.walk(tree)
-              if isinstance(n, ast.FunctionDef) and n.name == "serialized_append")
+              if isinstance(n, ast.FunctionDef)
+              and n.name == "_physical_serialized_write")
     withs = [n for n in ast.walk(fn) if isinstance(n, ast.With)]
     assert withs, "the compare-and-swap no longer takes a lock"
     inside = ast.unparse(withs[0])

@@ -161,9 +161,14 @@ class TestCriterion1NoRegistryWritePath(unittest.TestCase):
         # owner check and the physical write share ONE serialized decision. It
         # joins the seam for the same reason `_compare_and_append` did -- it is
         # part of the write path, not an exception to it.
+        # WIDENED 2026-09-07 (final bounded repair, Root B). The physical
+        # write became PRIVATE so the generic public entry could not be handed a
+        # caller-controlled decision: the reviewer had committed raw start bytes
+        # through `serialized_append(validate=None)`. Same lock, same single
+        # write, one function further in.
         SEAM = ("append_run_started", "_append_owner_row",
                 "_compare_and_append", "serialized_append",
-                "serialized_start_append")
+                "serialized_start_append", "_physical_serialized_write")
         LOCK = "_AppendLock"
         funcs = {n.name: n for n in ast.walk(tree)
                  if isinstance(n, ast.FunctionDef)}
@@ -180,11 +185,13 @@ class TestCriterion1NoRegistryWritePath(unittest.TestCase):
                          "registry_boundary writes outside the P3 seam"
                          ": %r" % sorted(set(everywhere) - set(inside)))
         self.assertEqual(
-            ["write_bytes"], _write_actions_in(funcs["serialized_append"]),
+            ["write_bytes"],
+            _write_actions_in(funcs["_physical_serialized_write"]),
             "the shared serialization boundary is the one place registry "
             "bytes are written")
         for appender in ("append_run_started", "_append_owner_row",
-                         "_compare_and_append", "serialized_start_append"):
+                         "_compare_and_append", "serialized_start_append",
+                         "serialized_append"):
             self.assertEqual(
                 [], _write_actions_in(funcs[appender]),
                 "`%s` writes registry bytes directly again, bypassing the "
@@ -221,10 +228,14 @@ class TestCriterion1NoRegistryWritePath(unittest.TestCase):
         # (`s0/runner.append_registry_event_line`) is pinned by
         # `tests/test_qros_cf_f06_writer_completeness.py`, which is the test
         # that owns completeness across modules.
-        self.assertEqual(["_compare_and_append", "serialized_start_append"],
+        self.assertEqual(["_compare_and_append"],
                          _callers_of("serialized_append"),
-                         "the shared boundary gained an in-module caller "
-                         "outside the compare-and-swap and the start entry")
+                         "the generic entry gained an in-module caller outside "
+                         "the compare-and-swap")
+        self.assertEqual(["serialized_append", "serialized_start_append"],
+                         _callers_of("_physical_serialized_write"),
+                         "the one physical write gained a caller outside the "
+                         "two public entries")
         del rb, inspect
 
     def test_the_seam_is_the_only_exported_writer_and_writes_one_token(self):

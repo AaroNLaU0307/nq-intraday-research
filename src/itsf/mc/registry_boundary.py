@@ -48,6 +48,8 @@ __all__ = ["RegistrySnapshot", "MediatedResolution", "BoundaryError",
            "append_owner_hold", "append_owner_release", "serialized_append",
            "serialized_start_append", "START_EQUIVALENT_TOKENS",
            "is_start_equivalent"]
+#: `_physical_serialized_write` is deliberately NOT exported: it is the one
+#: physical write, and exporting it would restore the raw route Root B closed.
 
 BOUNDARY_RULING = "MC_REG_COLLISION_001_C2_AS_MODIFIED_2026-08-25"
 BOUNDARY_RULING_DELEGATED = True
@@ -472,12 +474,92 @@ def serialized_start_append(target: Path, addition: bytes, *, run_id: str,
                 else "start_refused_owner_control_unreadable",
                 "%s: %s" % (exc.code, exc.detail)) from exc
 
-    serialized_append(target, addition, decided=decided, validate=_decide)
+    # ROOT BLOCKER B: the start shape is REQUIRED, so this entry cannot be used
+    # as a general writer either. Exactly one row, and it must be
+    # start-equivalent -- a non-start or multi-row addition belongs to the
+    # generic entry and is refused here.
+    rows, starts = _classify_addition(addition)
+    if len(rows) != 1 or len(starts) != 1:
+        raise AppendRefused(
+            "start_append_requires_exactly_one_start_row",
+            "a start commit is exactly one start-equivalent row; got %d row(s) "
+            "of which %d start-equivalent" % (len(rows), len(starts)))
+    _physical_serialized_write(target, addition, decided=decided,
+                               decide=_decide)
+
+
+def _classify_addition(addition: bytes) -> tuple:
+    """`(rows, start_events)` for the bytes about to be committed.
+
+    QROS-CF ROOT BLOCKER B. Uses the AUTHORITATIVE row parser and the existing
+    start vocabulary -- no second grammar, no new tokens, no case folding. The
+    parser already normalizes the supported spellings, so `RUN_STARTED`,
+    `**RUN_STARTED**` and a padded cell all resolve to the same event and all
+    classify identically.
+
+    MALFORMED NONBLANK ROWS ARE REFUSED, not waved through as generic. Measured:
+    `parse_registry_rows` returns zero rows and NO refusal for a malformed
+    line, so a caller could otherwise smuggle bytes past classification by
+    making them unparseable. Comparing nonblank lines to parsed rows is what
+    closes that.
+    """
+    from . import supplement_registry as _sr
+
+    text = addition.decode("utf-8", errors="replace")
+    nonblank = [ln for ln in text.splitlines() if ln.strip()]
+    rows, refusal = _sr.parse_registry_rows(text)
+    if refusal is not None:
+        raise AppendRefused(
+            "append_addition_unparseable",
+            "%s: %s" % (refusal.code, getattr(refusal, "detail", "")))
+    if len(rows) != len(nonblank):
+        raise AppendRefused(
+            "append_addition_unparseable",
+            "%d nonblank line(s) but %d parsed row(s); an addition the "
+            "authoritative parser cannot read is never treated as generic"
+            % (len(nonblank), len(rows)))
+    starts = [r.event for r in rows if is_start_equivalent(r.event)]
+    return rows, starts
+
+
+def _physical_serialized_write(target: Path, addition: bytes, *,
+                               decided: bytes | None = None,
+                               decide=None) -> None:
+    """THE one physical registry write, under THE one lock.
+
+    PRIVATE, and that is the Root B repair. `decide` is the serialized
+    commit decision -- it used to be a public `validate=` parameter on the
+    generic entry, which made it a caller-controlled switch: workflow code
+    could pass `validate=None` and commit start bytes through the generic API.
+    The reviewer reproduced exactly that. A public bypass parameter is not a
+    boundary, so the parameter moved behind the boundary and the two public
+    entries below decide for themselves what it is.
+    """
+    with _AppendLock(target):
+        now = target.read_bytes()
+        # THE AUTHORITATIVE SERIALIZED COMMIT DECISION: handed the bytes about
+        # to be committed against, under the lock, so it cannot be stale by the
+        # time the write happens.
+        if decide is not None:
+            decide(now)
+        if decided is not None and now != decided:
+            raise AppendRefused(
+                "p3_registry_changed_under_decision",
+                "the registry moved between the read every check was decided "
+                "on (%d bytes, sha %s) and this append (%d bytes, sha %s); a "
+                "start decided on stale state is never written"
+                % (len(decided), hashlib.sha256(decided).hexdigest()[:12],
+                   len(now), hashlib.sha256(now).hexdigest()[:12]))
+        if now and not now.endswith(b"\n"):
+            raise AppendRefused(
+                "registry_tail_is_not_a_line",
+                "the registry does not end in a newline, so appending would "
+                "join two rows into one")
+        target.write_bytes(now + addition)
 
 
 def serialized_append(target: Path, addition: bytes, *,
-                      decided: bytes | None = None,
-                      validate=None) -> None:
+                      decided: bytes | None = None) -> None:
     """THE ONE serialization boundary for the governed registry.
 
     QROS-CF F06, PRE-CERT REPAIR. The final-cert writer inventory found a
@@ -515,29 +597,27 @@ def serialized_append(target: Path, addition: bytes, *,
     requiring a snapshot from a writer that has none would have meant either
     inventing a fake one or leaving it outside -- which is the defect.
     """
-    with _AppendLock(target):
-        now = target.read_bytes()
-        # THE AUTHORITATIVE SERIALIZED COMMIT DECISION (F06-OWNER-SEMANTICS).
-        # `validate` is handed the bytes about to be committed against, under
-        # the lock, so a decision made here cannot be stale by the time the
-        # write happens. That is the whole difference between this and a check
-        # performed before the lock and trusted afterwards.
-        if validate is not None:
-            validate(now)
-        if decided is not None and now != decided:
-            raise AppendRefused(
-                "p3_registry_changed_under_decision",
-                "the registry moved between the read every check was decided "
-                "on (%d bytes, sha %s) and this append (%d bytes, sha %s); a "
-                "start decided on stale state is never written"
-                % (len(decided), hashlib.sha256(decided).hexdigest()[:12],
-                   len(now), hashlib.sha256(now).hexdigest()[:12]))
-        if now and not now.endswith(b"\n"):
-            raise AppendRefused(
-                "registry_tail_is_not_a_line",
-                "the registry does not end in a newline, so appending would "
-                "join two rows into one")
-        target.write_bytes(now + addition)
+    # ROOT BLOCKER B: GENERIC MEANS NON-START, STRUCTURALLY.
+    #
+    # The reviewer reproduced RUN_AUTHORIZED -> OWNER_HOLD -> RUN_STARTED through
+    # THIS entry while `serialized_start_append` correctly refused the same
+    # start. The high-level start APIs were right and the generic mutation
+    # boundary underneath them still permitted start semantics.
+    #
+    # There is no flag, callback or keyword by which a caller can re-enable
+    # them here. A start-equivalent addition is refused whether or not a hold is
+    # active, because "generic" now means non-start rather than
+    # "unvalidated" -- and the start entry is the only public route that carries
+    # start semantics.
+    _rows, starts = _classify_addition(addition)
+    if starts:
+        raise AppendRefused(
+            "generic_append_refuses_start_equivalent",
+            "the generic registry entry cannot commit start-equivalent "
+            "event(s) %s; a start commits only through "
+            "serialized_start_append, which applies the owner-control "
+            "decision" % sorted(set(starts)))
+    _physical_serialized_write(target, addition, decided=decided)
 
 
 def _compare_and_append(target: Path, decided: bytes, addition: bytes) -> None:

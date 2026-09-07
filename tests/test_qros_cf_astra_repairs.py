@@ -591,11 +591,17 @@ def test_F06_the_cas_is_the_only_writer_and_it_compares_first():
     here is unchanged and is now asserted where the code lives; the comparison
     still precedes the write, and `_compare_and_append` still passes its decided
     snapshot rather than dropping it."""
-    body = _code_only(rb.serialized_append)
+    # ROOT B: the physical write is private now; the public generic entry
+    # classifies and delegates. The property is unchanged and is asserted where
+    # the code lives.
+    body = _code_only(rb._physical_serialized_write)
     assert "_AppendLock(target)" in body
     assert "now = target.read_bytes()" in body
     assert body.index("if decided is not None and now != decided") < \
         body.index("target.write_bytes(")
+    generic = _code_only(rb.serialized_append)
+    assert "_physical_serialized_write(" in generic
+    assert "write_bytes" not in generic
     assert "now + addition" in body
     # and the CAS half still hands its snapshot to the boundary
     cas = _code_only(rb._compare_and_append)
