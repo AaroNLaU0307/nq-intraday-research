@@ -23,6 +23,7 @@
 | [`ASTRA_P2_GATE_REVIEW_HOLD_F01_F06_2026-09-07_TRANSCRIPTION.md`](ASTRA_P2_GATE_REVIEW_HOLD_F01_F06_2026-09-07_TRANSCRIPTION.md) | **GPT-6 Astra P2 门禁复审 HOLD 的持久转录**（六条 BLOCKING F01–F06 + 两条非阻断 F07/F08）。原报告仅经聊天传递、从未落盘，故本文件即 F01–F06 的权威定义；与 `qros-cf-redesign/ASTRA_CHALLENGE_REPORT_2026-09-07_TRANSCRIPTION.md`（提案 v1 复审，编号无关）**不是同一份** |
 | [`REVIEW_PACKET_QROS_CF_F01_F06_REREVIEW_2026-09-07.md`](REVIEW_PACKET_QROS_CF_F01_F06_REREVIEW_2026-09-07.md) | F01–F06 定向复审送审包（delivery）：受审集逐字节 sha256、修复提交 `f461f09`、退出判据；包自身的 sha256 由 `ARTIFACTS_UNDER_REVIEW.json` 承载（送审文档不能自钉） |
 | [`REVIEW_PACKET_QROS_CF_F01_F06_FINAL_CERT_2026-09-07.md`](REVIEW_PACKET_QROS_CF_F01_F06_FINAL_CERT_2026-09-07.md) | F01/F02/F03/F05/F06 **最终认证**送审包（delivery，第 3 轮，Aaron 授权的业主例外——合同两轮预算已用尽）：第二轮修复提交 `0d15a62`、21 件受审集逐字节 sha256、F04 保持 CLOSED、F07/F08 非阻断。**§4 是 Aaron 点名的四个方向，本席位自测其中三条答案为「否」并写在包内**；包自身的 sha256 由 `ARTIFACTS_UNDER_REVIEW.json` 承载（送审文档不能自钉） |
+| [`REVIEW_PACKET_QROS_CF_F06_OWNER_SEMANTICS_CLOSURE_2026-09-07.md`](REVIEW_PACKET_QROS_CF_F06_OWNER_SEMANTICS_CLOSURE_2026-09-07.md) | F06-OWNER-SEMANTICS 修复的**后续结案认证**包（delivery）。父谱系 `QROS-CF-F01-F06-FINAL-CERT-001` 已以 **HOLD** 完成并作为历史证据保留（**未改写为 PASS**）；本件另起 review id。结案范围：修复后的 F06 owner 语义 + 因父 HOLD 而搁置的 F01 / F02 / SANCTIONED_REAL_RUN_ENTRY / FLAG_PATH_BYPASS / F03 / F05（F04 仅保全） |
 | [`DECISIONS.md`](DECISIONS.md) | **owner 决定与复审裁决的 append-only 台账**（QROS-CF v2 §10.1）。OD-CF-1..7 逐字转录在此；此后不再新建 OWNER_DECISIONS_* / RULING_* / SEAT_RESULT_* 文种 |
 
 ## 1. 现势入口（从这里开始）
