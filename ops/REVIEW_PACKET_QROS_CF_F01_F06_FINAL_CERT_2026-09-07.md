@@ -3,8 +3,9 @@
 ```ini
 PACKET_TYPE=FINAL_CERTIFICATION_OF_A_REPAIR（沿用既有 Review Packet 件种,不是新件种;不是 A2,不是 Stage I,不解开任何 QROS 门）
 REVIEW_ID=QROS-CF-F01-F06-FINAL-CERT-001
-DELIVERY_STATUS=RETURNED
-WITHDRAWN_BEFORE_DISPATCH=YES（第 2 次）—— **本包从未派发**。本包 §4.5 的写者清单自己查出一条 F06 阻断项(`s0/runner.append_registry_event_line` 在序列化之外改动受管 registry),Aaron 授权仅针对 F06 的 PRE-CERT 定界修复;修复改动了本表钉住的字节,故撤回并以**同一 REVIEW_ID** 重发
+DELIVERY_STATUS=ISSUED
+REISSUE_3=本包 §4.5 的写者清单**自己查出一条 F06 阻断项**(`s0/runner.append_registry_event_line` 在序列化之外改动受管 registry),Aaron 授权了仅针对 F06 的 PRE-CERT 定界修复。**那条已修**,见 §4.6。仍是同一 `REVIEW_ID`、同一谱系、一份 manifest;**从未派发过任何一版**
+F06_REPAIR_COMMIT=850f61b
 REISSUE=YES（第 2 次）—— 本次因 **Astra 在实质认证前的传输停止**：入口/写者清单需要更多源文件的字节。**这不是一条 finding,不是新的一轮,不是新 id**。前一次重发的原因是 —— **同一 REVIEW_ID 重发,不是新的复审谱系**。首版打包完成后从未派发;打包过程中机械测出三条残留,Aaron 授权了一次 PRE-CERT 定界修复,修复改动了首版钉住的字节,故撤回并按同一 id 重发。**没有任何席位看过任何一版**
 PRE_CERT_REPAIR_COMMIT=81c0d22ab9df7bfc5f99224bd1e89af0fd7178af
 SECOND_ROUND_REPAIR_COMMIT=0d15a62e7611049ee2095e52d3d55d2037d698a5
@@ -59,7 +60,7 @@ Aaron 随后授权了一次**定界的 PRE-CERT 修复**（不是一轮复审,�
 | `f51f166ad4fc18db8a8cd12201dcfd3adf1e86e670bf2a6ec490a8f21437714b` | `10328` | `scripts/run_governed.py` | **受信启动边界，本轮重写为两个进程**：父进程 `-S -E -B` 按字节核验启动面并在不符时**拒绝启动子进程**；子进程 `-S -B` + 私有前缀 + 显式 site 目录 |
 | `45373b43985f99747ce42f603fc09a0b3ab03f079645658b5a10bf6f680bb6f2` | `209` | `scripts/run_governed.cmd` | **新增**：让父进程本身在 `-S` 下启动的入口 |
 | `2e850c8dd099a7b7c6dae87a14c4dfc23dbef240b489d7a27f73b8fc66ce3e61` | `6022` | `src/itsf/guards.py` | **R3**：`assert_trusted_launch` + 在单一真实运行门内以生产默认旗标为条件要求它 |
-| `dcf34cc27cbc4295af6690a2dccf7c328b9573a4f9c16c7d7357520cd5d24fac` | `34487` | `src/itsf/mc/registry_boundary.py` | **F06**（`append_owner_hold` / `append_owner_release` 与 P3 共用 `_AppendLock` 与 compare-and-swap）；**本轮未改动** |
+| `7912fdc6b2047b08da5fecbcf55fcc39e3b7acb406a2311242c86f67c727def8` | `37420` | `src/itsf/mc/registry_boundary.py` | **F06**（`append_owner_hold` / `append_owner_release` 与 P3 共用 `_AppendLock` 与 compare-and-swap）；**本轮未改动** |
 | `e7f6b65cf82fe7f0fcd97e9762f64d7f1df3b0ff5c7b1b9dda4bb6a28638eef9` | `13579` | `src/itsf/mc/owner_control.py` | **F05**（族系路由）；**本轮未改动** |
 | `eb6e499e4348f2a43138aaf24fa33cedda035b01d445b39a1d3e39ad44c9a17d` | `8050` | `src/itsf/data/manifests.py` | **F03/F04**；**本轮未改动** |
 | `474a5c83f90ab4f13f698fc118564bbace3f8153d2faf245c54edf583963d4fc` | `13439` | `src/itsf/mc/production_inputs.py` | **F03/F04**；**本轮未改动** |
@@ -75,12 +76,13 @@ Aaron 随后授权了一次**定界的 PRE-CERT 修复**（不是一轮复审,�
 
 | sha256 | bytes | 路径 | 作用 |
 |---|---|---|---|
-| `ba78db2015fa18d361308031ebaf40896d8dbe90c6a02b27e1da022021e233ce` | `26730` | `tests/test_qros_cf_pre_cert.py` | **本轮结算测试，30 条**：启动顺序、R1/R2/R3 的原样复现与关闭、入口清单、F06 动态写入证明、F03/F04/F05 保全 |
-| `3e678becc47bc37df7eb3132bd64bd41a9836f32580fd32aa7720cc3ac08a8e6` | `38785` | `tests/test_qros_cf_astra_round2.py` | 第二轮结算测试。`_Flags` 增补 `no_site`；**`-S` 的结论被倒转并写明理由** |
-| `2e800045bf09eb3e40636efeca7491eae6d0e57ffb6a515ab3b47f7c4b6b0f37` | `28383` | `tests/test_qros_cf_astra_repairs.py` | 第一轮结算测试；本轮未改动 |
+| `4a5f9cafe32f5e232ebfdabf880136e39053dfacb6fe5e5f8a3f8b6f21483759` | `26873` | `tests/test_qros_cf_pre_cert.py` | **本轮结算测试，30 条**：启动顺序、R1/R2/R3 的原样复现与关闭、入口清单、F06 动态写入证明、F03/F04/F05 保全 |
+| `f07fb06af0bc3331fa07eea17eab747204e5012c598bcbe8486efeca11f22a4b` | `18080` | `tests/test_qros_cf_f06_writer_completeness.py` | **F06 跨模块完整性 + S0 交错,15 条**：完整性规则（不按字面量、不限单模块）、六条确定性交错、以及反方向的误分类断言 |
+| `cd6592d9802a4f1c021cd0c6ca3450887de1191e407e5c1bb49c54a1a5b8090a` | `39220` | `tests/test_qros_cf_astra_round2.py` | 第二轮结算测试。`_Flags` 增补 `no_site`；**`-S` 的结论被倒转并写明理由** |
+| `4ffe6d6b6049db4ba0d8870e1da0d19a70e3da3c0cbecfd89eb9a5415c34e319` | `29181` | `tests/test_qros_cf_astra_repairs.py` | 第一轮结算测试；本轮未改动 |
 | `31bb95295ebf21f228fa62417b70d700a1fb451104dcdfd0e3bd137056b962f6` | `25270` | `tests/test_execution_identity.py` | T-F01；本轮未改动 |
-| `bc1c1668aa0a44360d5807cf5bf329dd4684d6182d20c9d6b6be015045399180` | `27994` | `tests/test_n09_scaffold_criteria.py` | 元守卫：写者集合。本轮把「拒绝须点名阻断者」一条改为**先注入 launch 事实**，以便断言仍落在授权层 |
-| `2466c2e92a219182aa1183546c3414272f1a64c84a0a4ee552db1c4196da813c` | `12968` | `tests/test_registry_path_single_construction.py` | 元守卫：路径构造登记 |
+| `2cbc7a4c778e65fc46f96985dfa8e2d0e462170684bf33ba65dfcdddb6426672` | `30818` | `tests/test_n09_scaffold_criteria.py` | 元守卫：写者集合。本轮把「拒绝须点名阻断者」一条改为**先注入 launch 事实**，以便断言仍落在授权层 |
+| `71e2e617d3b7e452d3b6753ac77ec9e9aeaac48816f124546b51c319e86067c6` | `13390` | `tests/test_registry_path_single_construction.py` | 元守卫：路径构造登记 |
 | `985569a7cbe92db4a6a81a1e47233efc0270d9dabbab9dd7312350d8886d38d3` | `9728` | `tests/test_every_identity_pattern_is_swept.py` | 元守卫；本轮未改动 |
 
 ### 0.4 因本轮而改动的既有测试 —— **请特别检查是否有测试被削弱**
@@ -131,7 +133,7 @@ Astra 在实质认证前停在传输环节:入口/写者清单需要这些源文
 | `ff4ba0f66aee5625e4ee1d53d915bfc3e78cf31c110dd0cf6bd85d579e2042b5` | `72459` | `src/itsf/mc/supplement_registry.py` | the shared row parser F05 routes through, and the GLOBAL sequence rule F06's derived sequence reuses |
 | `499224b94113f47333fc2d2e8f2d3bcf6b24bc803a699d7419f51a716e1b3ede` | `13331` | `src/itsf/mc/registry_integrity.py` | calls `assert_no_owner_hold` with an MC-family id — why F05 routes BOTH families |
 | `774cd76f927effa4560e699f4243269d833b34f09dbd8fff800044fe39d9b652` | `37130` | `src/itsf/mc/supplement_authority.py` | the authorization layer the relocated refusal assertions land on |
-| `e0be5ae9771029d8c3e96a7d06f41808f15f28902d4e8739c33350df575bd8ee` | `78591` | `src/itsf/s0/runner.py` | **contains `append_registry_event_line`, a SUPPORTED_REGISTRY_WRITER that does NOT share the serialization primitive.** Load-bearing for F06 writer completeness |
+| `7d0983ae2c5277a9b5617dd0fddcb3e9c616f6930503355d1d7f353e569212ed` | `79728` | `src/itsf/s0/runner.py` | **contains `append_registry_event_line`, a SUPPORTED_REGISTRY_WRITER that does NOT share the serialization primitive.** Load-bearing for F06 writer completeness |
 | `888d639194578b8d22d93e4d61ab87d2cb8860d00759bfc1994f5b27c4f3b276` | `90687` | `src/itsf/s0/runinfra.py` | S0 run infrastructure; its writers were candidates under the writer rule and are classified NON-registry in the inventory |
 | `97d50740d938cb40eccab6595e6ba7284c493e9a662e311ddce31700f294a002` | `64677` | `src/itsf/contracts.py` | `RunConfig` / `TrialState` / ruled roots the S0 entry constructs |
 | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | `0` | `src/itsf/__init__.py` | **0 bytes, and that is the measured fact `BOOTSTRAP_IMPORT_CLOSURE` rests on**: importing `itsf.execution_identity` pulls in exactly two governed modules. F01's pre-import proof depends on it |
@@ -203,11 +205,12 @@ Astra 在实质认证前停在传输环节:入口/写者清单需要这些源文
 
 | 路径 | 符号 | 分类 | 发现依据 | 受信启动 | 共享序列化 | 该文件 sha256 |
 |---|---|---|---|---|---|---|
-| `src/itsf/mc/registry_boundary.py` | `_compare_and_append` | **SUPPORTED_REGISTRY_WRITER** | owns the governed path; the ONE physical `write_bytes` | n/a (called after the seam) | **IT IS THE PRIMITIVE** — lock + CAS | `dcf34cc27cbc4295af6690a2dccf7c328b9573a4f9c16c7d7357520cd5d24fac` |
-| `src/itsf/mc/registry_boundary.py` | `append_run_started` | **SUPPORTED_REGISTRY_WRITER** | exported appender in `__all__` | YES — `seam_recheck` requires the attestation | YES | `dcf34cc27cbc4295af6690a2dccf7c328b9573a4f9c16c7d7357520cd5d24fac` |
-| `src/itsf/mc/registry_boundary.py` | `append_owner_hold` | **SUPPORTED_REGISTRY_WRITER** | exported appender in `__all__` | NO — owner control is Aaron's path and is not gated on a governed launch | YES | `dcf34cc27cbc4295af6690a2dccf7c328b9573a4f9c16c7d7357520cd5d24fac` |
-| `src/itsf/mc/registry_boundary.py` | `append_owner_release` | **SUPPORTED_REGISTRY_WRITER** | exported appender in `__all__` | NO — same reason | YES | `dcf34cc27cbc4295af6690a2dccf7c328b9573a4f9c16c7d7357520cd5d24fac` |
-| `src/itsf/s0/runner.py` | `append_registry_event_line` | **SUPPORTED_REGISTRY_WRITER** | **opens the path in APPEND MODE and writes a row; the path arrives as a PARAMETER**, so a rule keyed on the path literal misses it. Called at `scripts/s0_real_run.py:3174` with that script's `REGISTRY` constant | YES, indirectly — its only caller is a SANCTIONED entry whose gate now requires the attestation | **NO — plain `open('a')` + `write`, no lock, no compare-and-swap** | `e0be5ae9771029d8c3e96a7d06f41808f15f28902d4e8739c33350df575bd8ee` |
+| `src/itsf/mc/registry_boundary.py` | `_compare_and_append` | **SUPPORTED_REGISTRY_WRITER** | compare-and-swap 半边;**本轮起自身不再写入**,委托给 `serialized_append` | n/a | YES（委托） | `7912fdc6b2047b08da5fecbcf55fcc39e3b7acb406a2311242c86f67c727def8` |
+| `src/itsf/mc/registry_boundary.py` | `serialized_append` | **SUPPORTED_REGISTRY_WRITER** | **本轮新暴露的唯一序列化边界**:一把锁、一次物理写入。`decided` 可选 | n/a | **它就是那个原语** | `7912fdc6b2047b08da5fecbcf55fcc39e3b7acb406a2311242c86f67c727def8` |
+| `src/itsf/mc/registry_boundary.py` | `append_run_started` | **SUPPORTED_REGISTRY_WRITER** | exported appender in `__all__` | YES — `seam_recheck` requires the attestation | YES | `7912fdc6b2047b08da5fecbcf55fcc39e3b7acb406a2311242c86f67c727def8` |
+| `src/itsf/mc/registry_boundary.py` | `append_owner_hold` | **SUPPORTED_REGISTRY_WRITER** | exported appender in `__all__` | NO — owner control is Aaron's path and is not gated on a governed launch | YES | `7912fdc6b2047b08da5fecbcf55fcc39e3b7acb406a2311242c86f67c727def8` |
+| `src/itsf/mc/registry_boundary.py` | `append_owner_release` | **SUPPORTED_REGISTRY_WRITER** | exported appender in `__all__` | NO — same reason | YES | `7912fdc6b2047b08da5fecbcf55fcc39e3b7acb406a2311242c86f67c727def8` |
+| `src/itsf/s0/runner.py` | `append_registry_event_line` | **SUPPORTED_REGISTRY_WRITER** | 路径以**参数**到达,故按字面量匹配的规则看不见它。调用点 `scripts/s0_real_run.py:3174` 传入该脚本的 `REGISTRY` | YES,—— 其唯一调用者是一个 SANCTIONED 入口 | **YES（本轮修复）** —— 改为调用 `serialized_append`,行字节不变 | `7d0983ae2c5277a9b5617dd0fddcb3e9c616f6930503355d1d7f353e569212ed` |
 | `src/itsf/s0/registry_witness.py` | `append_witness` | **NON_REAL** | append mode, but `witness_path` — writes WITNESS files, not the registry | n/a | n/a | 未钉(该分类按 §4.5 的规则可自行复核) |
 | `src/itsf/s0/runinfra.py` | `append_manifest_record, write_failure_report, archive_sealed_run, validate_output_roots_operational` | **NON_REAL** | write calls in a module that mentions the registry path in prose; every target is a run-directory artifact | n/a | n/a | `888d639194578b8d22d93e4d61ab87d2cb8860d00759bfc1994f5b27c4f3b276` |
 | `src/itsf/mc/supplement_runner.py` | `resolve_partial` | **NON_REAL** | writes `out_dir / filename`, a run output | n/a | n/a | `9ba7ad59ed012112e700aac59451ec729660ca3fa25a3d89a9bf5ef74784b166` |
@@ -387,6 +390,82 @@ F06  owner-hold / P3 serialization race T5   待认证（本轮未改动其字�
 **registry 在另一个仓,追加路径里没有 git 提交,本轮也没有加**——按 Aaron 的指示,
 不变量是顺序与落盘字节。若你认为提交顺序也须由同一原语覆盖,那是一条应当提出的
 finding,而不是本轮偷偷加进去的要求。
+
+---
+
+## 4.6 F06 PRE-CERT 修复 —— 把 S0 写者接进同一序列化边界
+
+**这条不是审阅席位提出的**:是本包 §4.5 的写者清单在机械导出时自己查出来的。
+Aaron 据此授权了一次**仅针对 F06** 的定界修复(提交 `850f61b`)。
+请核那次修复本身。
+
+**复现(修复前,两种,都是机械跑出来的)**
+
+```
+① 另一个写者持有 _AppendLock 时,S0 写者照样写入          -> 确认旁路
+② 它完全不读文件,所以先落账的 OWNER_HOLD 对它不可见,
+   它的行直接压在 hold 之上                                -> 确认无比较
+   提交顺序实测: ['X', 'OWNER_HOLD', 'RUN_STARTED']
+```
+
+**根因是位置,不是意图。** 锁与物理写入只存在于 `registry_boundary` 的一个
+私有函数里,所以另一个模块里的受支持写者**在原理上无从参与**。
+只保护 STARTED 与 HOLD、却让第三个受支持写者在序列化之外改同一批字节,
+不是 F06 的不变量,而是它的四分之三。
+
+**修复(最小,复用而非新建)**
+
+```
+serialized_append(target, addition, *, decided=None)   <- 唯一暴露的边界
+    一把锁(_AppendLock)、一次读、一次物理写入
+_compare_and_append(target, decided, addition)          <- 只剩 compare-and-swap
+    委托给 serialized_append,自身零写入
+s0/runner.append_registry_event_line                    <- 改为调用该边界
+    f-string、尾换行、事件语义、校验全部不变;行字节逐字节相同
+```
+
+没有新增第二把锁、第二层、第二个存储文件、第二套写者框架。
+**没有加 git 提交要求**——不变量是落盘字节的顺序。
+
+`decided` 保持**可选**,因为两种受支持写者的形态确实不同:一种基于快照做过
+判断、快照一动就必须拒绝;另一种是无条件追加,它只需要序列化。
+向一个从未做过比较的写者索要快照,只能靠**编造**一个——那是对不存在的比较撒谎。
+
+**为什么先前两个守卫都报干净**(这条比修复本身更值得你看):
+`test_n09_scaffold_criteria` 证明的是 `registry_boundary` **本模块**内的性质
+——它就只声称这些,没有过界;`test_registry_path_single_construction` 按**路径
+字面量**匹配,而这个写者从不拼那个路径。一个模块内守卫加一个字符串守卫,
+双双通过,而第三个受支持写者在序列化之外改着同一个文件。
+
+所以新的完整性守卫两者都不用:它问的是**哪些函数能改动一个 registry 形状的
+文件**(有写调用**或**以追加模式 open,且函数名或**参数名**含 `registry`),
+并要求每一个都到达那个边界。它自带一条变异测试,把**修复前的形态**喂给规则,
+证明「参数名」那一条正是让该缺陷可见的唯一原因。
+
+**确定性交错(六条,含并发与异常)**
+
+```
+A  HOLD 先赢     -> S0 追加排在其后,不能跨越它做过期写入
+B  S0 先赢       -> HOLD 排在其后,两者都不丢
+C  STARTED 与 S0 竞争 -> P3 的 CAS 拒绝;**S0 的行不被拒绝抹掉**
+D  两次 S0 追加  -> 顺序一遍 + 4 线程并发一遍:无丢失、无半行、仍可解析
+E  持锁期间抛异常 -> 不继续无锁写入、不留残锁、下一次追加仍可用
+F  既有 STARTED / HOLD 顺序测试全绿
+```
+
+**同时断言了反方向**:witness 文件与 run 产物的写者(`append_witness`、
+`runinfra` 的四个、`resolve_partial`、`seal_supplement_test_only`)**不得**被
+误分类成 registry 写者——一个把所有文件写入都扫进来的守卫是不可用的,
+而不可用的守卫迟早会被放宽。
+
+**范围说明,主动记录**:`tests/test_supplement_input_provenance.py` 里有一条
+把 `src/itsf/s0/` 声明为**另一次修复**范围之外的守卫。它比对的是**未提交的
+工作树**,故本改动未提交时它红、提交后转绿。`src/itsf/s0/runner.py` 在本轮
+**确实被改动**,已按新 sha256 钉入 manifest,请把它当作 F06 范围内的文件读,
+而不是「守卫说它没被动过」。
+
+**另一处自我更正**:本席位把新测试文件的 registry 路径构造数**手键为 2**,
+而扫描得出 4——就在那张表自己的注释警告「不要手键计数」的地方。已按扫描结果订正。
 
 ---
 
