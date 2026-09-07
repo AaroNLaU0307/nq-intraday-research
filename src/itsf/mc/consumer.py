@@ -2513,6 +2513,7 @@ def convergence_from_evidence(base: RunEvidence,
                               doubled_by_axis: Mapping,
                               seed_runs: Mapping, *,
                               prepared: "PreparedMCInput",
+                              k_replay=None,
                               ) -> ConvergenceReport:
     """Compute MC SS5 rules (a)-(d) FROM run evidence. Validation order
     (so every violation surfaces with its OWN code):
@@ -2527,12 +2528,22 @@ def convergence_from_evidence(base: RunEvidence,
     4. M axis: doubling FORBIDDEN (IR-29a); the exhaustive-support
        certificate is DERIVED HERE from the actual atom trace — the
        caller can no longer supply one (N01 PHASE D4);
-    5. K axis: REFUSED — grid replay is BLOCKED (missing per-day
-       DAY_STRATA), so no ACTUAL K-doubled evidence can exist; outer
-       metadata may not impersonate it.
+    5. K axis (N11): admitted ONLY against a `KReplayEvidence` witness
+       minted from a `GridReplayAuthority`. The epistemic layer is B
+       worlds x M start phases and does not consume K at all, so a
+       `double_K` label has NO counterpart inside `results`; the only
+       honest witness is the pair of Appendix-A region maps at K and 2K
+       (N-D2 M6), and this is where the outer K is bound to it. A K pass
+       must also leave the Oracle main channel bit-identical, because K
+       is inner random source (2), "grid analysis ONLY";
+    6. rules (a)-(d) are then computed and returned.
 
-    Production convergence is therefore STRUCTURALLY UNSATISFIABLE until
-    the GRID-B supplement executes — the honest fail-closed state."""
+    WHAT THE K ARM DOES *NOT* DO (N-D2 M7): a non-converged grid does not
+    withhold the Checkpoint-0 verdict. The two regions are report items
+    that take no part in GO/STOP; their K-convergence is the grid
+    section's own validity precondition, so failure seals that section
+    NON_CONVERGED and withdraws `deployable_region`'s right to support
+    H1 entry, and nothing more."""
     if base.axis != "base":
         raise MCInputError("axis_identity_mismatch",
                            f"base run carries axis={base.axis!r}")
@@ -2589,35 +2600,163 @@ def convergence_from_evidence(base: RunEvidence,
     # caller-supplied certificate parameter any more, so a hand-built
     # "complete support" object has no callable path into convergence.
     derive_support_certificate(base, prepared)
-    # (4) K — grid replay BLOCKED (GRID Option B tooling exists but the
-    # supplement is UNEXECUTED): no actual K-doubled evidence can exist
-    # and metadata may not impersonate it.
+    # (4) K — the axis the sealed GRID-B supplement unblocked (N11).
+    # `k_axis_evidence_blocked_grid_replay` used to fire here
+    # unconditionally. It is now conditional on the witness being absent:
+    # the refusal's REASON was never "K is forbidden", it was "no actual
+    # K-doubled evidence can exist", and a sealed per-day DAY_STRATA
+    # authority is exactly what made it able to exist.
+    k_replay_witness = None
     if "K" in doubled_by_axis:
-        raise MCInputError(
-            "k_axis_evidence_blocked_grid_replay",
-            "grid replay is BLOCKED (EXACT_PER_DAY_DAY_STRATA supplement "
-            "MC-DS-S001 not yet executed) — no actual K-doubled evidence "
-            "can exist and metadata may not impersonate it")
-    # (5) axes-set completeness — reachable only when no K entry was
-    # supplied at all.
+        from itsf.mc import grid_replay as _gr
+        if k_replay is None:
+            raise MCInputError(
+                "k_axis_evidence_blocked_grid_replay",
+                "a K entry needs its KReplayEvidence witness: the region "
+                "maps at K and 2K are the ONLY inner witness a K-doubled "
+                "pass has (N-D2 M6) — outer metadata may not impersonate "
+                "it. Mint one with grid_replay.derive_k_replay_evidence "
+                "from a GridReplayAuthority over the sealed supplement")
+        _gr.verify_k_replay_evidence(k_replay)
+        k_run = doubled_by_axis["K"]
+        # scale + provenance: K doubles, B and M do not move.
+        _check_run_provenance(base, k_run, "K")
+        # THE OUTER/INNER K BINDING. This is what the pre-N11 guard
+        # `test_the_outer_k_has_no_inner_witness_and_that_is_deliberate`
+        # demanded, placed at the layer where the witness actually lives.
+        if k_replay.prepared_digest != base.prepared_digest:
+            raise MCInputError("provenance_mismatch",
+                               "k_replay vs base prepared digest")
+        if k_replay.master_seed != base.master_seed:
+            raise MCInputError(
+                "k_replay_inner_mismatch:master_seed",
+                f"witness carries {k_replay.master_seed}, base run "
+                f"{base.master_seed}")
+        if k_replay.k != base.K:
+            raise MCInputError(
+                "k_replay_inner_mismatch:K",
+                f"witness base arm K={k_replay.k}, base run K={base.K}")
+        if k_replay.k_doubled != k_run.K:
+            raise MCInputError(
+                "k_replay_inner_mismatch:K",
+                f"witness doubled arm K={k_replay.k_doubled}, "
+                f"{k_run.run_label} K={k_run.K}")
+        # K is inner random source (2), "grid analysis ONLY", and M10
+        # reruns the grid channel alone — so a K pass MUST leave the
+        # Oracle main channel bit-identical. A K run whose Checkpoint
+        # statistics moved either did not hold K to the grid, or is not
+        # the run it claims to be.
+        for cid in sorted(base.results):
+            if cid not in k_run.results:
+                raise MCInputError(
+                    "run_evidence_inner_mismatch:combo",
+                    f"{k_run.run_label} is missing combo {cid}")
+            for role, b_r, k_r in (
+                    ("Conservative", base.results[cid][0],
+                     k_run.results[cid][0]),
+                    ("Stress", base.results[cid][1],
+                     k_run.results[cid][1])):
+                for field in ("p5", "median", "p95", "between_world_sd",
+                              "max_within_world_se"):
+                    if getattr(b_r, field) != getattr(k_r, field):
+                        raise MCInputError(
+                            "k_axis_main_channel_not_invariant",
+                            f"{k_run.run_label}:{cid}:{role}.{field} moved "
+                            f"{getattr(b_r, field)} -> {getattr(k_r, field)} "
+                            "on a K-doubling run; K is grid-analysis only "
+                            "and may not reach the Oracle main channel")
+        k_replay_witness = k_replay
+    # (5) axes-set completeness.
     if set(doubled_by_axis) != DOUBLING_AXES:
         raise MCInputError("doubling_axes_violation",
                            f"need exactly {sorted(DOUBLING_AXES)}, got "
                            f"{sorted(doubled_by_axis)}")
-    # N01 fix D-4: this arm was an AssertionError, which is only correct
-    # while DOUBLING_AXES permanently contains "K". The moment the K axis
-    # is unblocked (GRID-B supplement sealed + KReplayEvidence wired),
-    # this path becomes reachable and an AssertionError would escape the
-    # fail-closed vocabulary entirely — it is not an MCInputError, so no
-    # caller's refusal handling would catch it and it carries no machine-
-    # readable code. It is now a normal fail-closed refusal.
-    raise MCInputError(
-        "convergence_unreachable_state",
-        "every legal axes-set carries a K entry and must refuse above "
-        f"until the GRID-B supplement executes; reaching here means "
-        f"DOUBLING_AXES={sorted(DOUBLING_AXES)} no longer implies a K "
-        "refusal and the rule (a)-(d) computation below has not been "
-        "wired yet — no verdict may be produced from this state")
+    return _convergence_rules_a_to_d(base, doubled_by_axis, seed_runs,
+                                     k_replay=k_replay_witness)
+
+
+def _run_category(run: RunEvidence) -> str:
+    """The Checkpoint-0 decision category of ONE run (STOP/GO/beta/alpha),
+    reduced through the SAME single internal path the verdict uses, so
+    rule (a)/(b) can never compare a category the verdict would not
+    produce."""
+    from itsf.mc.verdict import apply_verdict
+    return apply_verdict(_reduce_primary_from_base(run)).verdict
+
+
+#: frozen: the key quantiles rule (c) acts on. MC_METHOD_SPEC SS4.4 fixes
+#: the unit (24-month total prop_operating / 24 = USD per calendar month)
+#: and names P5/P50/P95 as the decision quantiles.
+KEY_QUANTILE_FIELDS = ("p5", "median", "p95")
+
+
+def _convergence_rules_a_to_d(base: RunEvidence, doubled_by_axis: Mapping,
+                              seed_runs: Mapping, *, k_replay
+                              ) -> ConvergenceReport:
+    """Rules (a)-(d) of MC SS5, computed from the supplied evidence.
+
+    (a) doubling invariance. The B arm is a CHECKPOINT-category
+        obligation. The K arm is NOT: per N-D2 M6 the K object is the two
+        frozen Appendix-A region maps, because the Checkpoint layer does
+        not consume K and calling a K-blind category twice would be the
+        empty verification the master plan prohibits. So K contributes
+        its region-map convergence instead.
+    (b) the three master seeds agree on the category.
+    (c) key-quantile drift within max($25, relative 5%), measured against
+        the base run per combo and per scenario role.
+    (d) within-world MCSE <= 10% of the between-world SD — already
+        DERIVED on every EpistemicResult from its own atom trace, so this
+        reads the derived flag rather than recomputing it from numbers a
+        caller could have supplied.
+    """
+    base_category = _run_category(base)
+    # --- (a) ----------------------------------------------------------
+    category_stable = True
+    for axis in sorted(doubled_by_axis):
+        if axis == "K":
+            continue                      # M6: K's object is the regions
+        if _run_category(doubled_by_axis[axis]) != base_category:
+            category_stable = False
+    grid_converged = True if k_replay is None else k_replay.grid_converged
+    # --- (b) ----------------------------------------------------------
+    same_across_seeds = all(_run_category(seed_runs[s]) == base_category
+                            for s in sorted(seed_runs))
+    # --- (c) ----------------------------------------------------------
+    drift_by_axis, drift_ok = {}, True
+    arms = [(f"double_{axis}", doubled_by_axis[axis])
+            for axis in sorted(doubled_by_axis)]
+    arms += [(f"seed_{seed}", seed_runs[seed]) for seed in sorted(seed_runs)]
+    for label, run in arms:
+        per_arm = {}
+        for cid in sorted(base.results):
+            if cid not in run.results:
+                raise MCInputError(
+                    "run_evidence_inner_mismatch:combo",
+                    f"{run.run_label} is missing combo {cid}")
+            for role, b_r, o_r in (("Conservative", base.results[cid][0],
+                                    run.results[cid][0]),
+                                   ("Stress", base.results[cid][1],
+                                    run.results[cid][1])):
+                for field in KEY_QUANTILE_FIELDS:
+                    b_v, o_v = getattr(b_r, field), getattr(o_r, field)
+                    delta = abs(o_v - b_v)
+                    per_arm[f"{cid}|{role}|{field}"] = delta
+                    if delta > max(CONV_ABS_USD, CONV_REL * abs(b_v)):
+                        drift_ok = False
+        drift_by_axis[label] = MappingProxyType(per_arm)
+    # --- (d) ----------------------------------------------------------
+    mcse_ok = True
+    for run in [base] + [r for _, r in arms]:
+        for pair in run.results.values():
+            for r in pair:
+                if not r.mcse_ok:
+                    mcse_ok = False
+    return ConvergenceReport(
+        category_stable_under_doubling=(category_stable and grid_converged),
+        category_same_across_seeds=same_across_seeds,
+        quantile_drift_ok=drift_ok,
+        mcse_ok=mcse_ok,
+        drift_by_axis=MappingProxyType(drift_by_axis))
 
 
 def _reduce_primary_from_base(base: RunEvidence) -> dict:

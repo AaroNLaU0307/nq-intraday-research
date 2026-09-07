@@ -969,46 +969,64 @@ def test_run_evidence_binds_b_m_and_seed_to_every_inner_result():
             f"{field} is no longer cross-checked against inner results")
 
 
-def test_the_outer_k_has_no_inner_witness_and_that_is_deliberate():
-    """A GUARD THAT MUST INVERT, not one that must keep passing.
+def test_the_outer_k_is_bound_to_its_grid_witness_n11():
+    """WAS `test_the_outer_k_has_no_inner_witness_and_that_is_deliberate`.
 
-    `RunEvidence.__post_init__` binds outer B, M and master_seed to every
-    inner `EpistemicResult`. It does NOT bind K — and it cannot: K appears
-    nowhere in the atom layer. Not on `EpistemicResult`, not on
-    `ObservationSet`, not on `SimulationPathObservation`. The epistemic
-    layer is B worlds x M start phases and does not consume K at all, so
-    the outer K is a caller-declared integer with nothing to check it
-    against.
+    THE PRE-N11 STATE, kept here because it is what this guard was for.
+    `RunEvidence` bound outer B, M and master_seed to every inner
+    `EpistemicResult` and did NOT bind K, because K appears nowhere in the
+    atom layer. That left a real hole: a K-non-consuming category called
+    twice, wearing outer metadata saying `double_K`, was indistinguishable
+    from a real K-doubled run — the impersonation N-D2 forbids. It was
+    unreachable only because the consuming layer refused the K axis
+    outright, and the old docstring said the fix, when the axis unblocked,
+    was to "bind the outer K to whatever inner witness then exists".
 
-    That is exactly the impersonation N-D2 forbids — a K-non-consuming
-    category called twice, wearing outer metadata that says `double_K`.
-    It is unreachable TODAY because the consuming layer refuses the K axis
-    outright (`k_axis_evidence_blocked_grid_replay`, pinned elsewhere in
-    this file), and the source says so in as many words: "outer metadata
-    may not impersonate it".
+    WHAT N11 ACTUALLY FOUND, and why this test changed shape rather than
+    simply inverting. The witness does NOT live in the atom layer, and
+    putting a K field there would have been decoration: MC SS5 lists K as
+    inner random source (2), "TP/FP stratified sampling, K repeats, GRID
+    ANALYSIS ONLY", and the epistemic layer is B worlds x M start phases,
+    which does not consume K at all. So both halves are asserted below:
 
-    WHEN THE K AXIS UNBLOCKS — GRID-B supplement sealed and
-    `KReplayEvidence` wired (N11) — this test will fail, and the correct
-    response is NOT to delete it. It is to bind the outer K to whatever
-    inner witness then exists, exactly as B, M and master_seed are bound.
-    Without that, a real K-doubled run and a relabelled base run stay
-    indistinguishable.
+      * the atom layer STILL has no K field, and that is now EXPLAINED
+        rather than merely observed;
+      * the outer K IS bound — to a `KReplayEvidence` witness, in the
+        consuming layer, which is where the grid pass that actually
+        consumed K leaves its trace.
+
+    The property the original guard protected is the one that matters and
+    it is asserted directly: a relabelled base run can no longer pass as a
+    K-doubled run.
     """
     import inspect
 
     from itsf.mc.atoms import ObservationSet, SimulationPathObservation
 
+    # (1) the atom layer still carries no K, for the stated reason
     witnesses = []
     for T in (mcc.EpistemicResult, ObservationSet, SimulationPathObservation):
         witnesses += [n for n in T.__dataclass_fields__
                       if n == "K" or n.lower().startswith("k_")]
     assert not witnesses, (
-        f"an inner K witness now exists ({witnesses}) — bind the outer "
-        "RunEvidence.K to it in __post_init__, the way B, M and "
-        "master_seed are bound, and then update this test rather than "
-        "deleting it")
+        f"an inner K witness appeared in the atom layer ({witnesses}). If K "
+        "genuinely reached the epistemic layer that is a METHOD change (SS5 "
+        "confines K to the grid), not a binding change — do not simply bind "
+        "to it")
+    assert "self.K" not in inspect.getsource(
+        mcc.RunEvidence.validate_inner_binding), (
+        "validate_inner_binding cross-checks K against `results`, which "
+        "cannot witness it — the binding belongs where the grid evidence is")
 
-    src = inspect.getsource(mcc.RunEvidence.validate_inner_binding)
-    assert "self.K" not in src, (
-        "K is now cross-checked but no inner witness was found — one of "
-        "these two facts is stale")
+    # (2) the outer K IS bound, in the consuming layer, to the grid witness
+    consuming = inspect.getsource(mcc.convergence_from_evidence)
+    assert "k_replay" in consuming, "the K arm no longer takes its witness"
+    for expected in ("k_replay.k", "k_replay.k_doubled",
+                     "k_replay.master_seed", "k_replay.prepared_digest"):
+        assert expected in consuming, (
+            f"{expected} is no longer cross-checked — outer K could drift "
+            "from the pass that produced it")
+
+    # (3) the property itself: no witness, no K axis. A relabelled base run
+    # cannot buy admission with outer metadata alone.
+    assert "k_axis_evidence_blocked_grid_replay" in consuming

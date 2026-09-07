@@ -584,9 +584,32 @@ def test_hand_built_verdict_inputs_have_no_callable_entry():
     assert set(sig.parameters) == {"prepared", "base", "doubled_by_axis",
                                    "seed_runs"}
     conv = inspect.signature(mcc.convergence_from_evidence)
+    # N11 added exactly ONE parameter, `k_replay`, and it does not reopen
+    # the hole this test guards. The hole was HAND-BUILT evidence: an
+    # object a caller could assemble to describe a run that never
+    # happened. `KReplayEvidence` cannot be assembled — it is
+    # factory-only behind a module-private capability, it carries a
+    # self-digest the K arm re-verifies, and it is structurally
+    # unavoidable because the two grid passes it certifies exist nowhere
+    # in `prepared` or `RunEvidence` for convergence to derive them from.
     assert set(conv.parameters) == {"base", "doubled_by_axis", "seed_runs",
-                                    "prepared"}
+                                    "prepared", "k_replay"}
     assert conv.parameters["prepared"].default is inspect.Parameter.empty
+    from itsf.mc import grid_replay as _gr
+    with pytest.raises(mcc.MCInputError) as _ei:
+        _gr.KReplayEvidence(
+            capability=None, schema="x", authority_digest="0" * 64,
+            master_seed=7, k=200, k_doubled=400, prepared_digest="0" * 64,
+            converged_by_kind={}, boundary_band_by_kind={},
+            flipped_by_kind={}, drift_violations_by_kind={},
+            region_map_digest_by_kind={}, test_only=True,
+            evidence_digest="0" * 64)
+    assert _ei.value.code == "k_replay_evidence_capability_required"
+    # ... and the SEAL entry is still exactly the four real inputs: N11
+    # wired the convergence entry, not the seal, so a K-doubled seal has
+    # no witness to travel on until the N13 runner assembles one.
+    assert "k_replay" not in inspect.signature(
+        mcc.verdict_and_seal_from_evidence).parameters
     # the certificate type still exists, but ONLY as the derivation's
     # output — its sole producer is derive_support_certificate(base,
     # prepared), which takes the real trace and the prepared authority

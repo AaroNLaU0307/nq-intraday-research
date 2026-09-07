@@ -1050,8 +1050,17 @@ def test_convergence_fallthrough_is_an_mcinputerror_not_an_assertion(
                             B=4)},
             _seed_runs(prepared), prepared=prepared)
     except mcc.MCInputError as exc:
-        assert exc.code == "convergence_unreachable_state"
-        assert "no verdict may be produced" in str(exc)
+        # N11 replaced the unreachable terminal arm with the real
+        # rules (a)-(d) computation, so the specific code moved on.
+        # The PROPERTY this test exists for is unchanged and is what
+        # is asserted: whatever the fall-through hits, it stays inside
+        # the fail-closed vocabulary (an MCInputError with a machine-
+        # readable code), so a caller's refusal handling still catches
+        # it and an AssertionError never escapes.
+        assert exc.code and isinstance(exc.code, str)
+        assert exc.code != "convergence_unreachable_state", (
+            "the terminal arm should be gone: N11 wired the rule "
+            "(a)-(d) computation it was standing in for")
     except AssertionError:                        # pragma: no cover
         pytest.fail("the fall-through escaped the fail-closed vocabulary")
     else:                                         # pragma: no cover
