@@ -300,7 +300,7 @@
     },
     {
       "path": "ops/OFF_LIMITS_N13_B27_REVIEW_2026-09-08.md",
-      "sha256": "3192f1018ffb05f6476515c1adbd467bf561f2878e1cf908e81909ed3f86048d",
+      "sha256": "b416a156331d76ff9d7756d32cb52349703ee91db965ffd54f5020ccb8166470",
       "issued_to": "fresh Sol claim-blind seat (REVIEWER_CONTRACT.md S2, leakage-sensitive code)",
       "issued_at": "2026-09-08",
       "review_id": "N13-B27-GRID-SELECTOR-001",

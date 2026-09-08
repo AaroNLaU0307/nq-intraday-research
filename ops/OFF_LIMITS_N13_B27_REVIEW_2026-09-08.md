@@ -5,6 +5,13 @@ RECORD_TYPE=OFF_LIMITS_CARRIER_AND_READ_ALLOWLIST
 REVIEW_ID=N13-B27-GRID-SELECTOR-001
 DELIVERY_STATUS=ISSUED
 REVIEWED_SET_UNCHANGED_SINCE=c98a0ef776df76b3d0b0c76935bb8f388413c246
+DELIVERY_REVISION=2 (2026-09-08) -- supersedes revision 1 of the same review_id.
+    R1 was verified as a transport by a fresh seat and then stopped it: its
+    Claim 13 demanded proof of real governed `infeasible_by_sample`
+    reachability, which needs the outcome-derived TP/FP split that the
+    allowlist deliberately withholds, so the seat returned
+    ALLOWLIST_INSUFFICIENT and no substantive review happened. R2 fixes the
+    BRIEF's over-strength, not the implementation. See section 4.
 FOR=the fresh Sol claim-blind seat required by ops/REVIEWER_CONTRACT.md section 2,
     row "Change to a tier-B authorization gate or leakage-sensitive code"
 BLINDNESS=CLAIM_BLIND
@@ -21,17 +28,24 @@ anything else it is stale -- open the file.
 
 ## 0. Why you are reading this before anything else
 
-A previous fresh Sol seat for this same review touched the quarantined subtree
-while trying to discover for itself which contract governed the review. It was
-doing a reasonable thing, and the transport had not told it where the authority
-was. That seat is not reusable. **The failure was the transport's, not the
-seat's**, and this file is the repair.
+Two seats have been spent on this review and neither reached a verdict. Both
+failures were the transport's:
 
-So this package asks you to discover nothing. Section 3 is the exhaustive set of
-paths you may read. **If your work requires a path that is not in section 3,
-STOP and report that as a transport defect rather than opening it.** "The
-allowlist is insufficient for claim X" is a legitimate and useful review result;
-going and looking is not.
+1. The first had no governed transport at all -- no brief, no declared hashes,
+   no allowlist -- so it went looking for the review authority itself, and the
+   path to it runs through the quarantined subtree. It is not reusable.
+2. The second verified this transport correctly and then stopped on
+   `ALLOWLIST_INSUFFICIENT`, because one review item had been written as a
+   mandatory claim whose only proof lies in material the allowlist withholds on
+   purpose. **That item was too strong, and it is fixed in section 4.** No
+   implementation verdict was issued and no implementation defect was
+   established.
+
+So: section 3 is the exhaustive set of paths you may read. **If a MANDATORY
+claim requires a path that is not in section 3, STOP and report it as a
+transport defect.** But read section 4 first -- the `infeasible_by_sample` item
+is explicitly NOT such a claim, and unknown reachability there is a recorded
+non-blocking outcome, never a reason to stop.
 
 ## 1. The forbidden set
 
@@ -47,6 +61,8 @@ Do not open, grep, list or enumerate any of these:
 - OFF-LIMITS -- `S0_REPORT.json`, `S0_REPORT.md`, and any `S0_T001_RESULT_*` record.
 - OFF-LIMITS -- any `.dbn.zst` and any Development bar data under `C:\Users\Aaron\quant-data\`.
 - OFF-LIMITS -- the registry repository `C:\Users\Aaron\quant-data\itsf-registry\` and the registry witness root. This review needs neither: the runner never resolves the registry outside `registry_boundary`, which IS in section 3.
+- OFF-LIMITS -- the per-day TP/FP classification of the governed population, and any artifact carrying per-day outcome labels. **This is not withheld to inconvenience you; it is derived from per-day P&L.** Section 4 is written so that you never need it.
+- OFF-LIMITS, and read this one carefully because it is a trap inside an allowlisted file: the SEALED preregistration is on your allowlist, and its exposure-accounting bullet (`researcher_exposure`, around line 157) names `EXPOSURE_LEDGER.md` as the place researcher exposure is recorded. **That ledger is quarantined and you must not open it.** The preregistration is sealed and cannot be edited to carry this warning itself, so the warning lives here. Reading the sentence is fine; following it is not.
 
 `BLIND_SEAT_MAY_NOT_SEARCH_THE_REPOSITORY` -- no repository-wide grep, no
 recursive directory listing, no broad symbol search, and no "let me get oriented
@@ -56,27 +72,48 @@ The permitted outcome-clean entry point, if you want project orientation at all,
 is `ops/RECOVERY_ANCHOR.md`. This review does not require it, and it is
 deliberately NOT in section 3 -- ask for it rather than assuming.
 
-## 2. The boundary also constrains the CODE you are asked to run
+## 2. How to run the tests, and what running them touches
 
-This project paid for this lesson (`ops/REVIEWER_EXPOSURE_LOG.md` row 12): a
-seat was handed a boundary forbidding `ops/` enumeration and then asked to run
-governance tests whose own source enumerates `ops/`. The boundary constrained
-the person and not the code. Stated mechanically, for this package:
+The second seat reported that `pytest` was unavailable and the authorized suite
+never started. The cause is mundane and needs no new environment: **bare
+`pytest` is not on PATH in this environment; the module form is.** No virtualenv
+exists and none is expected -- `.python-version` is `3.13` and the pinned
+packages are in `ops/requirements.lock.txt`.
 
-- **The category-E tests are safe.** Measured by grep at `c98a0ef776df`: none of them
-  contains `ops/`, `itsf-registry` or `quant-data`.
-  `tests/test_registry_path_single_construction.py` walks `src/`, `tests/` and
-  `scripts/` only -- never `ops/`.
-- **The full suite is NOT safe in the same sense.** Several tier-C governance
-  tests walk `ops/` recursively and read quarantined bytes *inside the test
-  process*. Under `ops/REVIEWER_CONTRACT.md` section 4.2 that is execution, not
-  inspection -- but it is yours to declare, not mine to decide for you. If you
-  run the full suite, record it in your attestation under
-  `MODULES_EXECUTED_NOT_INSPECTED` and say so plainly. **Nothing in this review
-  requires it**: `python -m pytest -q` over the category-E files reaches every
-  claim in the brief.
+Run from the repository root. Both commands below were executed by the builder
+at the frozen target immediately before dispatch:
 
-## 3. The read allowlist -- exhaustive: 27 repository files + 1 external file
+```
+python -m pytest -q tests/test_mc_grid_channel_b27.py
+    -> 19 passed in 5.20s
+
+python -m pytest -q tests/test_mc_grid_channel_b27.py tests/test_mc_runner_n13.py ^
+    tests/test_mc_grid_replay_n11.py tests/test_mc_b26_reduction_feasibility.py ^
+    tests/test_mc_cold_replay.py tests/test_mc_consumer.py ^
+    tests/test_registry_path_single_construction.py
+    -> 207 passed in 11.28s
+```
+
+If `python` resolves to something else in your session, the interpreter used was
+`C:\Users\Aaron\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe`
+(3.13.14, pytest 9.1.1). `scripts/run_governed.cmd` is the sanctioned entry for
+a governed RUN, not for tests -- do not use it here.
+
+**What that command touches, measured rather than asserted.** The builder ran the
+seven-file command under a `sys.addaudithook` recording every `open`:
+**0 files opened under `ops/`, 0 under `ops/outcome_quarantine/`.** The hook sees
+`open` and does not see `os.stat`/`exists()` or reads by C extensions; that limit
+is stated rather than hidden, and it is the same limit the repository's own
+derived read-set test discloses.
+
+**Do NOT run the full suite.** Several tier-C governance tests walk `ops/`
+recursively and read quarantined bytes inside the test process. Under
+`ops/REVIEWER_CONTRACT.md` section 4.2 that would be execution rather than
+inspection, but there is no reason to incur it: **no claim in the brief needs
+anything beyond the seven files above.** If you run it anyway, declare it in your
+attestation under `MODULES_EXECUTED_NOT_INSPECTED`.
+
+## 3. The read allowlist -- exhaustive: 28 repository files + 1 external file
 
 Recompute every hash before any substantive work. **A mismatch is STOP.** These
 are the bytes at the frozen implementation target, and
@@ -84,7 +121,7 @@ are the bytes at the frozen implementation target, and
 touch any of them, which you can verify yourself with
 `git log c98a0ef776df..HEAD -- <path>` (expected: empty output).
 
-### A -- review authority (what governs this review; also restated in the brief so you need not hunt)
+### A -- review authority (what governs this review; also restated below and in the brief so you need not hunt)
 
 | sha256 | bytes | path at `c98a0ef776df` |
 |---|---|---|
@@ -95,14 +132,15 @@ touch any of them, which you can verify yourself with
 
 4 file(s).
 
-### B -- the N13 contract and the backlog rows that define what was owed
+### B -- the N13 contract, the SEALED preregistration, and the backlog rows that define what was owed
 
 | sha256 | bytes | path at `c98a0ef776df` |
 |---|---|---|
 | `a5775555e2e2f01ca496e8e26bd05ce498b6a4fb467146a2df1b1371f73b4611` | 11418 | `ops/RESEARCH_STATE.md` |
 | `db2a29dd3677fa8ed37a6e83d9dcabafc5ee38420bd139ea1a595c82955bd678` | 18702 | `ops/BACKLOG.md` |
+| `6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132` | 22498 | `STUDY_0_PREREGISTRATION.md` |
 
-2 file(s).
+3 file(s).
 
 ### C -- the implementation under review
 
@@ -132,7 +170,7 @@ touch any of them, which you can verify yourself with
 
 10 file(s).
 
-### E -- tests that carry the evidence (run these; see section 2 before running anything wider)
+### E -- tests that carry the evidence (see section 2 for the exact command that runs them)
 
 | sha256 | bytes | path at `c98a0ef776df` |
 |---|---|---|
@@ -147,55 +185,109 @@ touch any of them, which you can verify yourself with
 7 file(s).
 
 
-### F -- the one external file, for the `infeasible_by_sample` question only
+### F -- the one external file, for the `infeasible_by_sample` item only
 
 - `C:\Users\Aaron\quant-data\itsf-runs\supplements\MC-DS-S004_20260906T135831Z\DAY_STRATA_SUPPLEMENT.json`
   -- sha256 `f59a009213f2e3b9ce3b4b4937c1945227c89e724fc6c4fa0c063d0326417e4d`, 233387 bytes.
   The SEALED day-strata supplement `MC-DS-S004`. Its rows carry exactly four
   fields -- `trade_date`, `year`, `vol_stratum`, `event_stratum` -- for 2842
-  days. It contains **no PnL, no return, no direction and no performance value
-  of any kind**; measured by scanning it against the six outcome patterns in
-  `tests/test_review_artifacts_are_outcome_clean.py` (zero matches). It is here
-  because the stratum sizes of the governed day population are what the
-  `infeasible_by_sample` arithmetic is stated over. See section 4.
+  days. It contains **no PnL, no return, no direction, no per-day label and no
+  performance value of any kind**; measured by scanning it against the six
+  outcome patterns in `tests/test_review_artifacts_are_outcome_clean.py` (zero
+  matches). It gives the stratum partition of the governed day population. It
+  does NOT give the TP/FP split, and that is deliberate -- see section 4.
+
+**One row above is allowlisted but NOT in the freeze register, deliberately.**
+`STUDY_0_PREREGISTRATION.md` is SEALED (`seal_revision c685ebc1...`), unchanged
+since the July freeze commit `89e2505`, and `qros check` verifies its bytes
+against HEAD on every run -- so it is frozen more strongly than a register entry
+could manage. It is kept out of `ops/ARTIFACTS_UNDER_REVIEW.json` because
+registering it pulls it into a governance guard that fires on its own line 157
+(see section 1's last bullet), and the only ways to clear that guard would be
+editing a sealed artifact or widening the guard. Neither is permitted. Recorded
+as a transport-tool conflict in `ops/DECISIONS.md`, not silently resolved.
 
 Nothing else. Not `ops/DECISIONS.md` -- that is the dispatch ledger, and it
 records this delivery's own sha256, so hashing it into a table this document
 carries would be circular; ask for it if you want the dispatch row's provenance.
 Not `ops/README.md`. Not the registry. No run directory beyond the one file above.
 
-## 4. The `infeasible_by_sample` question, and why this material is enough
+## 4. The `infeasible_by_sample` item -- CONDITIONAL, and not a reason to stop
 
-The builder's report flagged one open item and did not resolve it: how a cell in
-state `infeasible_by_sample` should enter a published region map. The
-implementation refuses (`grid_cell_infeasible_by_sample`) rather than imputing a
-statistic. Two questions are yours:
+**This section supersedes revision 1's version of it.** R1 asked you to
+establish real governed reachability. That cannot be done inside a claim-blind
+allowlist, because reachability turns on the TP/FP split of the governed
+population, which is derived from per-day P&L. Asking for it made an item that
+had always been non-blocking into a mandatory claim, and the review stopped.
 
-- **(A) Is the frozen 63-cell geometry mechanically feasible under the authorized
-  prepared pools?**
-- **(B) Is this state reachable on the governed path at all?**
+### 4.1 Lawful handling already exists, and it is sealed
 
-The deciding material is in section 3 and is closed-form, not empirical:
+This is the fact R1 failed to surface. The sealed preregistration
+`STUDY_0_PREREGISTRATION.md` (category B; the frozen grid and rounding section)
+already rules what happens to such a cell:
 
-- `src/itsf/s0/gridmix.py` holds the frozen grid (`Q_GRID_MILLIS`,
-  `R_GRID_MILLIS`, 9 x 7 = 63 cells) and the whole arithmetic:
-  `floor_n_tp(r_mil, n_tp_available)`, `n_fp_for(n_tp, q_mil)`, `allocate`
-  (which raises exactly when `required > sum(available)` and calls that "the
-  frozen infeasible_by_sample signal"), and `fp_allocation_from_selected_tp`
-  (which raises `fp_allocation_infeasible_by_sample:<n_fp>><total_avail>`).
-- `src/itsf/mc/grid_channel.py` is where that ValueError becomes the typed
-  refusal, and where you can judge whether refusing is the handling the frozen
-  rule licenses.
-- `src/itsf/mc/day_strata_supplement.py` plus the sealed supplement give the
-  stratum partition of the governed day population.
+> 某分层的可用日不足时，缺额按其余层的可用日数比例重新分配；全部层合计仍不足时，
+> 该网格点标记 `infeasible_by_sample` 跳过并完整报告。
 
-Both questions reduce to a condition on the aggregate pool sizes and the 63 grid
-points, statable exactly from the code and the supplement. **If you conclude that
-settling the quantitative half requires the TP/FP split of the governed
-population -- which is derived from per-day outcome -- then STOP and report that
-as a finding.** Do not open outcome data to answer it. "Reachability is
-undecidable from non-outcome material, so the refusal's lawfulness cannot be
-confirmed at this blindness level" is a correct and expected possible result.
+That is: when a stratum falls short the shortfall is redistributed over the
+remaining strata in proportion to their available days; **when all strata
+together still fall short, that grid point is MARKED `infeasible_by_sample`,
+SKIPPED, and REPORTED IN FULL.** So "no lawful handling exists" is already false
+by authority, and the open question is a narrower and entirely non-outcome one:
+
+- `s0.gridmix._grid_point` implements the sealed text at the S0 layer: it sets
+  `point["infeasible_by_sample"] = True`, adds `infeasible_reason`, and returns
+  the point -- mark, skip, report.
+- `mc.grid_channel.derive_cell_draws` at the MC layer **raises**
+  `MCInputError("grid_cell_infeasible_by_sample", ...)`.
+
+**Whether raising at the MC layer preserves the sealed "mark / skip / report in
+full" -- or aborts a pass that the sealed rule says should continue with that
+cell marked -- is a question you can settle entirely from category B, C and D
+material.** The builder has NOT settled it and does not assert an answer either
+way; it is surfaced here because R1's framing hid it behind a question that
+could not be answered at all. Treat it as part of the mandatory review (it is
+claim 13a in the brief), and name a threat if you find one.
+
+### 4.2 Reachability: three classifications, all of which continue the review
+
+Apply exactly this logic and record which branch you took:
+
+- **A.** Allowlisted non-outcome evidence mechanically proves the frozen
+  governed 63-cell geometry **cannot** reach `infeasible_by_sample` ->
+  `NON_BLOCKING -- governed geometry mechanically feasible`.
+- **B.** Allowlisted evidence mechanically proves it **IS** reachable on the
+  governed path -> then ask whether current authority already defines lawful
+  handling. Per 4.1 it does. **Only if reachable AND no lawful handling existed**
+  could this become a real current-path blocker.
+- **C.** Reachability depends on outcome-derived information you are not
+  authorized to access -> `INCONCLUSIVE_NON_BLOCKING -- reachability cannot be
+  established within the blind allowlist`, **and you CONTINUE with the rest of
+  the review.**
+
+Branch C **must not**: trigger `ALLOWLIST_INSUFFICIENT`; stop or defer any other
+claim; require disclosure of per-day outcomes; require the governed TP/FP split
+merely for reassurance; or by itself invalidate the B-27 implementation.
+
+The governing principle, stated so it is not re-derived:
+**UNKNOWN REACHABILITY != KNOWN CURRENT-PATH DEFECT.**
+
+Do not fabricate a region statistic and do not propose changing the
+implementation's existing fail-closed handling in order to make this item
+decidable. If the non-outcome supplement is insufficient for a reachability
+verdict, branch C is the correct and expected answer.
+
+### 4.3 The authority for treating it this way
+
+Not the builder's preference. `ops/RESEARCH_STATE.md` section 9: "A reviewer who
+cannot name a threat returns PASS_WITH_BACKLOG, not HOLD." Section 10: a review
+that cannot name a threat -> "backlog, record, continue". Section 6, quoting
+QROS-CF v2 section 8 verbatim: proceed "even if non-blocking governance backlog
+remains". `ops/REVIEWER_CONTRACT.md` section 1: "NON-BLOCKING findings are listed
+and become rows in `ops/BACKLOG.md`; they never hold." And nothing in
+`RESEARCH_STATE.md` sections 5, 8 or 9, in `ops/REVIEWER_CONTRACT.md`, or in
+`ops/BACKLOG.md` makes `infeasible_by_sample` reachability an N13 closure
+condition -- the token appears in none of them.
 
 ## 5. What this review is not
 
