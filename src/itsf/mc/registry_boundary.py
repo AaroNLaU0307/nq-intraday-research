@@ -43,7 +43,7 @@ from types import MappingProxyType
 __all__ = ["RegistrySnapshot", "MediatedResolution", "BoundaryError",
            "REGISTRY_PATH", "REGISTRY_REPO_ROOT", "BOUNDARY_RULING",
            "read_snapshot", "mediate",
-           "resolve_registry", "supplement_chain", "resolve_for_supplement",
+           "resolve_registry", "supplement_chain", "resolve_for_supplement", "mc_authorization",
            "RUN_STARTED_TOKEN", "AppendRefused", "append_run_started",
            "append_owner_hold", "append_owner_release", "serialized_append",
            "serialized_start_append", "START_EQUIVALENT_TOKENS",
@@ -302,6 +302,44 @@ def resolve_for_supplement(supplement_id: str,
     """`(snapshot, ChainResolution)` from ONE read. The runner's entry."""
     resolution = resolve_registry(path)
     return (resolution.snapshot, supplement_chain(resolution, supplement_id))
+
+
+def mc_authorization(resolution: MediatedResolution, run_id: str):
+    """One MC run id's LIVE authorization -> `(event | None, commit, detail)`.
+
+    The MC analogue of `supplement_chain`, and it exists for the same C2
+    reason: N13's runner must not call a resolver itself, because a second
+    read of a mutable shared file is exactly the loophole C2 closes. The
+    chain here comes from the SAME mediated read, so MC validation and the
+    run act on one snapshot.
+
+    G1's live semantics are applied to that already-resolved chain rather
+    than re-derived: zero live rows means NOT AUTHORIZED, and more than one
+    fails closed — two live authorizations do not mean the newer wins, they
+    mean the registry does not say which run is authorized.
+    """
+    from .mc_registry import NOT_AUTHORIZED_NO_CHAIN
+
+    if resolution.refusal:
+        return (None, "",
+                f"[{resolution.refusing_lifecycle}] {resolution.refusal}; "
+                f"whole resolution refused over registry snapshot "
+                f"{resolution.snapshot.sha256[:12]} — a refusal from either "
+                "lifecycle leaves nothing usable (C2)")
+    chain = resolution.mc_chains.get(run_id)
+    if chain is None:
+        return (None, "", NOT_AUTHORIZED_NO_CHAIN)
+    live = chain.live_authorizations
+    if not live:
+        return (None, "", f"{run_id}: no live MC_RUN_AUTHORIZED row — the "
+                          "authorization sentence has not been issued, or "
+                          "every issuance has been superseded")
+    if len(live) > 1:
+        return (None, "", f"{run_id}: {len(live)} live MC_RUN_AUTHORIZED "
+                          "rows; exactly one is required and a tie is "
+                          "refused rather than broken")
+    return (live[0], live[0].commit, "ok")
+
 
 
 # ---------------------------------------------------------------------------

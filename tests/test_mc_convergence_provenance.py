@@ -1020,9 +1020,9 @@ def test_the_outer_k_is_bound_to_its_grid_witness_n11():
 
     # (2) the outer K IS bound, in the consuming layer, to the grid witness
     consuming = inspect.getsource(mcc.convergence_from_evidence)
-    assert "k_replay" in consuming, "the K arm no longer takes its witness"
-    for expected in ("k_replay.k", "k_replay.k_doubled",
-                     "k_replay.master_seed", "k_replay.prepared_digest"):
+    assert "k_witness" in consuming, "the K arm no longer takes its witness"
+    for expected in ("k_witness.k", "k_witness.k_doubled",
+                     "k_witness.master_seed", "k_witness.prepared_digest"):
         assert expected in consuming, (
             f"{expected} is no longer cross-checked — outer K could drift "
             "from the pass that produced it")

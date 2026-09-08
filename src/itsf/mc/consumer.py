@@ -2513,7 +2513,7 @@ def convergence_from_evidence(base: RunEvidence,
                               doubled_by_axis: Mapping,
                               seed_runs: Mapping, *,
                               prepared: "PreparedMCInput",
-                              k_replay=None,
+                              k_witness=None,
                               ) -> ConvergenceReport:
     """Compute MC SS5 rules (a)-(d) FROM run evidence. Validation order
     (so every violation surfaces with its OWN code):
@@ -2606,10 +2606,10 @@ def convergence_from_evidence(base: RunEvidence,
     # the refusal's REASON was never "K is forbidden", it was "no actual
     # K-doubled evidence can exist", and a sealed per-day DAY_STRATA
     # authority is exactly what made it able to exist.
-    k_replay_witness = None
+    admitted_witness = None
     if "K" in doubled_by_axis:
         from itsf.mc import grid_replay as _gr
-        if k_replay is None:
+        if k_witness is None:
             raise MCInputError(
                 "k_axis_evidence_blocked_grid_replay",
                 "a K entry needs its KReplayEvidence witness: the region "
@@ -2617,29 +2617,29 @@ def convergence_from_evidence(base: RunEvidence,
                 "pass has (N-D2 M6) — outer metadata may not impersonate "
                 "it. Mint one with grid_replay.derive_k_replay_evidence "
                 "from a GridReplayAuthority over the sealed supplement")
-        _gr.verify_k_replay_evidence(k_replay)
+        _gr.verify_k_replay_evidence(k_witness)
         k_run = doubled_by_axis["K"]
         # scale + provenance: K doubles, B and M do not move.
         _check_run_provenance(base, k_run, "K")
         # THE OUTER/INNER K BINDING. This is what the pre-N11 guard
         # `test_the_outer_k_has_no_inner_witness_and_that_is_deliberate`
         # demanded, placed at the layer where the witness actually lives.
-        if k_replay.prepared_digest != base.prepared_digest:
+        if k_witness.prepared_digest != base.prepared_digest:
             raise MCInputError("provenance_mismatch",
-                               "k_replay vs base prepared digest")
-        if k_replay.master_seed != base.master_seed:
+                               "k_witness vs base prepared digest")
+        if k_witness.master_seed != base.master_seed:
             raise MCInputError(
                 "k_replay_inner_mismatch:master_seed",
-                f"witness carries {k_replay.master_seed}, base run "
+                f"witness carries {k_witness.master_seed}, base run "
                 f"{base.master_seed}")
-        if k_replay.k != base.K:
+        if k_witness.k != base.K:
             raise MCInputError(
                 "k_replay_inner_mismatch:K",
-                f"witness base arm K={k_replay.k}, base run K={base.K}")
-        if k_replay.k_doubled != k_run.K:
+                f"witness base arm K={k_witness.k}, base run K={base.K}")
+        if k_witness.k_doubled != k_run.K:
             raise MCInputError(
                 "k_replay_inner_mismatch:K",
-                f"witness doubled arm K={k_replay.k_doubled}, "
+                f"witness doubled arm K={k_witness.k_doubled}, "
                 f"{k_run.run_label} K={k_run.K}")
         # K is inner random source (2), "grid analysis ONLY", and M10
         # reruns the grid channel alone — so a K pass MUST leave the
@@ -2665,14 +2665,14 @@ def convergence_from_evidence(base: RunEvidence,
                             f"{getattr(b_r, field)} -> {getattr(k_r, field)} "
                             "on a K-doubling run; K is grid-analysis only "
                             "and may not reach the Oracle main channel")
-        k_replay_witness = k_replay
+        admitted_witness = k_witness
     # (5) axes-set completeness.
     if set(doubled_by_axis) != DOUBLING_AXES:
         raise MCInputError("doubling_axes_violation",
                            f"need exactly {sorted(DOUBLING_AXES)}, got "
                            f"{sorted(doubled_by_axis)}")
     return _convergence_rules_a_to_d(base, doubled_by_axis, seed_runs,
-                                     k_replay=k_replay_witness,
+                                     k_witness=admitted_witness,
                                      prepared=prepared)
 
 
@@ -2693,7 +2693,7 @@ KEY_QUANTILE_FIELDS = ("p5", "median", "p95")
 
 
 def _convergence_rules_a_to_d(base: RunEvidence, doubled_by_axis: Mapping,
-                              seed_runs: Mapping, *, k_replay, prepared
+                              seed_runs: Mapping, *, k_witness, prepared
                               ) -> ConvergenceReport:
     """Rules (a)-(d) of MC SS5, computed from the supplied evidence.
 
@@ -2720,7 +2720,7 @@ def _convergence_rules_a_to_d(base: RunEvidence, doubled_by_axis: Mapping,
         if _run_category(doubled_by_axis[axis],
                          prepared=prepared) != base_category:
             category_stable = False
-    grid_converged = True if k_replay is None else k_replay.grid_converged
+    grid_converged = True if k_witness is None else k_witness.grid_converged
     # --- (b) ----------------------------------------------------------
     same_across_seeds = all(
         _run_category(seed_runs[s], prepared=prepared) == base_category
@@ -3358,7 +3358,8 @@ def _assert_seal_provenance(prepared: PreparedMCInput) -> CustodyAuthority:
 def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
                                    base: RunEvidence,
                                    doubled_by_axis: Mapping,
-                                   seed_runs: Mapping) -> dict:
+                                   seed_runs: Mapping,
+                                   k_witness=None) -> dict:
     """The ONLY path to a Checkpoint-0 verdict AND its seal candidate.
 
     N01 PHASE D3 — EVERY call, unconditionally:
@@ -3430,8 +3431,24 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
     _assert_seal_provenance(prepared)
     battery_receipt = prepared.battery_receipt
     reduction = _reduce_primary_from_base(base, prepared=prepared)
-    convergence_from_evidence(base, doubled_by_axis, seed_runs,
-                              prepared=prepared)
+    # N13: the K witness travels with the evidence it belongs to. The
+    # parameter is `k_witness`, not `k_replay`, deliberately:
+    # `test_seal_entry_accepts_no_caller_conclusion` bans any seal parameter
+    # whose name contains "replay", so that no caller-supplied replay
+    # CONCLUSION can ever make the unconditional cold replay skippable.
+    # This object is the grid witness rather than a replay receipt, but the
+    # guard is a deliberate substring rule and the right move was to rename
+    # the parameter, not to carve an exception into the guard.
+    # `DOUBLING_AXES` is {B, K} and rule (a) is frozen, so a complete
+    # axes set carries a K arm, and N11 admits that arm ONLY against a
+    # `KReplayEvidence`. Before this the seal called convergence without
+    # one, so no full-axes seal could ever be produced. The witness is
+    # factory-only and self-digested, so accepting it here does not
+    # reopen the hand-built-evidence hole: a caller cannot construct one,
+    # and convergence re-verifies its digest and binds it to this run.
+    convergence_report = convergence_from_evidence(
+        base, doubled_by_axis, seed_runs, prepared=prepared,
+        k_witness=k_witness)
     verdict = apply_verdict(dict(reduction))
     digest_after = prepared_digest(prepared)
     if digest_before != digest_after:
@@ -3449,6 +3466,27 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
         "method_version": mc_atoms.METHOD_VERSION,
         "prepared_digest": digest_before,
         "primary_theta_channel": PRIMARY_THETA_CHANNEL,
+        # M7: the grid section's own standing, recorded beside the verdict
+        # rather than folded into it. A non-converged grid withdraws
+        # `deployable_region`'s right to support H1 entry and does NOT
+        # withhold Checkpoint-0, so the seal states both facts.
+        "convergence": {
+            "category_stable_under_doubling":
+                convergence_report.category_stable_under_doubling,
+            "category_same_across_seeds":
+                convergence_report.category_same_across_seeds,
+            "quantile_drift_ok": convergence_report.quantile_drift_ok,
+            "mcse_ok": convergence_report.mcse_ok,
+            "converged": convergence_report.converged},
+        "grid_section": ({"status": "NOT_SUPPLIED",
+                          "may_support_h1_entry": False}
+                         if k_witness is None else
+                         {"status": k_witness.grid_seal_status,
+                          "may_support_h1_entry":
+                              k_witness.may_support_h1_entry,
+                          "k": k_witness.k, "k_doubled": k_witness.k_doubled,
+                          "authority_digest": k_witness.authority_digest,
+                          "evidence_digest": k_witness.evidence_digest}),
         "bundle_file_sha256": dict(prepared.file_sha256),
         "seeds": list(prepared.seeds),
         "trace_digests": base.trace_digests(),

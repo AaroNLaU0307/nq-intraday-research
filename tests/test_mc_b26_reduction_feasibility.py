@@ -373,7 +373,7 @@ def test_case5_the_convergence_report_is_now_reachable(prepared, monkeypatch):
                                  K=400)}
     report = mcc.convergence_from_evidence(
         base, doubled, CR._seed_runs(prepared), prepared=prepared,
-        k_replay=witness)
+        k_witness=witness)
 
     assert type(report) is mcc.ConvergenceReport
     for flag in (report.category_stable_under_doubling,
@@ -404,24 +404,19 @@ def test_case5_the_seal_path_is_no_longer_blocked_by_feasibility(prepared):
     assert mcc._reduce_primary_from_base(base, prepared=prepared)
 
 
-def test_the_seal_path_still_cannot_complete_a_full_axes_convergence(
-        prepared, monkeypatch):
-    """WHAT B-26 DID NOT FIX, pinned so it is not rediscovered by accident.
+def test_the_seal_path_now_threads_the_k_witness_n13(prepared, monkeypatch):
+    """WAS `test_the_seal_path_still_cannot_complete_a_full_axes_convergence`.
 
-    `verdict_and_seal_from_evidence` calls `convergence_from_evidence`
-    WITHOUT a `k_replay` witness, and `DOUBLING_AXES` is {B, K}. So the
-    seal path has two exits and no third:
+    B-26 pinned this seam so it would not be rediscovered by accident: the
+    seal called convergence without a witness, and `DOUBLING_AXES` is
+    {B, K}, so a full-axes seal had two exits and no third. N13 threaded the
+    witness through, which is what that note said would happen and who would
+    do it.
 
-      * a `doubled_by_axis` WITHOUT K  -> `doubling_axes_violation`
-      * a `doubled_by_axis` WITH K but no witness
-                                      -> `k_axis_evidence_blocked_grid_replay`
-
-    Both are asserted below on the convergence entry the seal uses, plus
-    the source fact that the seal supplies no witness. Threading one
-    through means widening the seal signature, which
-    `test_hand_built_verdict_inputs_have_no_callable_entry` deliberately
-    pins at four inputs — so it is the N13 runner's call, not B-26's.
-    """
+    What the seal STILL refuses is unchanged and is what this test now
+    asserts: without a witness the K arm is still blocked, and a K-less axes
+    set is still incomplete. The wiring added a way to supply governed
+    evidence, not a way to skip it."""
     monkeypatch.setattr(mcc, "B_WORLDS_FROZEN", 2)
     base = CR._evidence(prepared)
     b_only = {"B": CR._evidence(prepared, run_label="double_B", axis="B",
@@ -439,8 +434,8 @@ def test_the_seal_path_still_cannot_complete_a_full_axes_convergence(
                                       prepared=prepared)
     assert ei.value.code == "k_axis_evidence_blocked_grid_replay"
 
-    # and the seal genuinely supplies no witness
+    # ... and the seal now HAS somewhere for a governed witness to travel
+    assert "k_witness" in inspect.signature(
+        mcc.verdict_and_seal_from_evidence).parameters
     seal_src = inspect.getsource(mcc.verdict_and_seal_from_evidence)
-    assert "convergence_from_evidence(" in seal_src
-    assert "k_replay" not in seal_src
-
+    assert "k_witness=k_witness" in seal_src
