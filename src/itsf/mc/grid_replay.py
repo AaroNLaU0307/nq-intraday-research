@@ -170,6 +170,15 @@ REGION_KINDS = (POSITIVE_EV_REGION, DEPLOYABLE_REGION)
 IN_REGION = "in"
 OUT_OF_REGION = "out"
 BOUNDARY_BAND = "boundary_band"
+#: N13-F1. The SEALED preregistration's fourth class, spelled with its own
+#: token: 「全部层合计仍不足时，该网格点标记 `infeasible_by_sample` 跳过并
+#: 完整报告」 — when all strata together still fall short, MARK the grid
+#: point, SKIP it, REPORT it in full. It is a class rather than a flavour of
+#: OUT because "we evaluated this cell and no combination cleared zero" and
+#: "this cell was never sampleable" are different facts, and a region map
+#: that renders them the same has lost the one the seal asked to be reported.
+INFEASIBLE_BY_SAMPLE = "infeasible_by_sample"
+CELL_CLASSES = (IN_REGION, OUT_OF_REGION, BOUNDARY_BAND, INFEASIBLE_BY_SAMPLE)
 
 #: The Appendix A grid, taken from `s0.gridmix` rather than re-spelled, so a
 #: change to the frozen grid cannot leave this module describing a different
@@ -570,6 +579,55 @@ class CellStatistics:
         return tuple(out)
 
 
+@dataclass(frozen=True, slots=True)
+class InfeasibleCell:
+    """N13-F1 — a grid point the SEALED rule MARKS, SKIPS and REPORTS in full.
+
+    It deliberately carries NO statistics and no `identity`. That is the whole
+    design: `CellStatistics.__post_init__` demands at least one combination
+    and finite values for every one of them, so there is no way to express
+    "this cell was never sampleable" as a `CellStatistics` without inventing a
+    P5, a median or a feasibility verdict. Rather than weaken that guard, an
+    unsampleable cell gets its own type, and every consumer that assumed
+    statistics now says so explicitly (`is_infeasible`).
+
+    It carries exactly what "report in full" needs to be auditable: which
+    cell, which seed, which pass, why, and the frozen arithmetic that decided
+    it — `n_fp` demanded against `fp_available` held. `s0.gridmix._grid_point`
+    reports the same facts one layer down (`infeasible_by_sample` plus
+    `infeasible_reason`) and this mirrors it rather than inventing a second
+    vocabulary.
+    """
+    reason: str
+    q_mil: int
+    r_mil: int
+    master_seed: int
+    doublings: int
+    n_tp: int
+    n_fp: int
+    fp_available: int
+    detail: str
+
+    def __post_init__(self):
+        if self.reason != INFEASIBLE_BY_SAMPLE:
+            raise MCInputError(
+                "grid_replay_infeasible_reason_unknown",
+                f"{self.reason!r} is not {INFEASIBLE_BY_SAMPLE!r}; this type "
+                "exists for the ONE state the sealed rule names, and reusing "
+                "it for another would make the mark mean less than it says")
+
+
+def is_infeasible(cell) -> bool:
+    """Is this cell the sealed marked-and-skipped kind?
+
+    Exact-type, not `isinstance`, for the same reason `satisfying_combos`
+    checks `type(cell) is not CellStatistics`: a subclass could carry
+    statistics and would then be read as a valid ruled cell by half the
+    consumers and a skipped one by the other half.
+    """
+    return type(cell) is InfeasibleCell
+
+
 def _require_kind(kind: str) -> str:
     if kind not in REGION_KINDS:
         raise MCInputError("grid_replay_region_kind_unknown",
@@ -592,7 +650,17 @@ def cell_category(cell, kind: str) -> str:
     either way would be inventing a feasibility verdict the gate has not
     issued — `qualifying_distribution_vs_payout_requirements` is still
     DECISION_REQUIRED.
+
+    N13-F1: a cell the sealed rule marked and skipped classifies as
+    `INFEASIBLE_BY_SAMPLE`. Not OUT — Appendix A's existential over an empty
+    witness set is vacuously false, so OUT would be *arithmetically* defensible
+    and would still be the wrong report: it would say "evaluated, nothing
+    cleared zero" about a cell that was never sampled. The seal asked for the
+    mark to be reported, so the mark is what the map carries.
     """
+    _require_kind(kind)
+    if is_infeasible(cell):
+        return INFEASIBLE_BY_SAMPLE
     return (IN_REGION if satisfying_combos(cell, kind) else OUT_OF_REGION)
 
 
@@ -698,6 +766,22 @@ def compare_region_maps(kind: str, cells_at_k: Mapping, cells_at_2k: Mapping,
     band, flipped = [], []
     for key in GRID_CELL_KEYS:
         cell_k, cell_2k = cells_at_k[key], cells_at_2k[key]
+        # N13-F1, BEFORE the identity clause: a marked-and-skipped cell has
+        # no `identity` and no statistics, so every comparison below is
+        # undefined for it rather than merely awkward.
+        #
+        # The sealed infeasibility test is `n_fp > sum(fp_available)`, whose
+        # terms are the (q, r) quotas and the aggregate pool — neither depends
+        # on k. So a cell marked at K is marked at 2K, the classes agree, and
+        # there is nothing to compare: that is the whole handling.
+        #
+        # If the classes DISAGREE, one pass sampled a cell the other could
+        # not. That should be unreachable, and it is exactly why it is not
+        # silently banded: `residual` below picks it up from the relabelled
+        # maps and reports it as flipped, so convergence goes False and a
+        # human sees it. Fail closed rather than assume the arithmetic.
+        if is_infeasible(cell_k) or is_infeasible(cell_2k):
+            continue
         # M9's identity clause is checked here too, because a cell whose
         # configuration changed between passes is not the same cell and
         # comparing its class would be meaningless.
@@ -774,6 +858,11 @@ def cell_drift_violations(kind: str, cells_at_k: Mapping,
     _require_kind(kind)
     violations = []
     for key in GRID_CELL_KEYS:
+        # N13-F1: a marked-and-skipped cell produced no statistic, so it has
+        # nothing that could drift. Skipping it is not an exemption from (c)
+        # — there is no measurement to hold to the tolerance.
+        if is_infeasible(cells_at_k[key]) or is_infeasible(cells_at_2k[key]):
+            continue
         stats_k = dict(cells_at_k[key].classifying_values(kind))
         stats_2k = dict(cells_at_2k[key].classifying_values(kind))
         for name in sorted(stats_k):
@@ -998,7 +1087,19 @@ def publish_region(kind: str, maps_by_seed: Mapping) -> Mapping:
             published[tuple(key)] = IN_REGION          # intersection
         elif classes == {OUT_OF_REGION}:
             published[tuple(key)] = OUT_OF_REGION
+        elif classes == {INFEASIBLE_BY_SAMPLE}:
+            # N13-F1. The sealed mark survives publication when every seed
+            # made it, which is what will happen: the sealed test compares the
+            # (q, r) quota with the aggregate pool and consults no seed. Left
+            # to the `else`, a unanimously unsampleable cell would publish as
+            # BOUNDARY_BAND — asserting its statistics hug zero when it has
+            # none. That is the invented semantics this branch exists to
+            # avoid, not a new region rule.
+            published[tuple(key)] = INFEASIBLE_BY_SAMPLE
         else:
-            # disagreement, or any seed already in the band -> union band
+            # disagreement, or any seed already in the band -> union band.
+            # A cell some seeds marked and others sampled lands here and is
+            # thereby DISCLOSED rather than resolved — the existing rule,
+            # reused rather than replaced.
             published[tuple(key)] = BOUNDARY_BAND
     return MappingProxyType(published)

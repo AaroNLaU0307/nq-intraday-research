@@ -195,6 +195,48 @@ def _strata_from_supplement(authority, supplement: Mapping) -> dict:
     return out
 
 
+def plan_cell_draws(authority, prepared, supplement: Mapping, *,
+                    master_seed: int, q_mil: int, r_mil: int,
+                    doublings: int = 0,
+                    channel: str = _mcc.PRIMARY_THETA_CHANNEL) -> tuple:
+    """`(draws, None)`, or `((), InfeasibleCell)` for a cell the SEALED rule
+    marks and skips. N13-F1.
+
+    THE SEALED RULE, verbatim from the preregistration's frozen grid section:
+    「某分层的可用日不足时，缺额按其余层的可用日数比例重新分配；全部层合计仍
+    不足时，该网格点标记 `infeasible_by_sample` 跳过并完整报告」— a per-stratum
+    shortfall is redistributed; when ALL strata together still fall short, the
+    grid point is MARKED, SKIPPED and REPORTED IN FULL.
+
+    So the test is `n_fp > sum(fp_available)`, and it is made HERE, before the
+    k loop and before any selection, which is exactly where
+    `s0.gridmix._grid_point` makes it one layer down (`if n_fp >
+    n_fp_available:` → set the flag, add a reason, return the point). Two
+    consequences worth stating because the old code depended on neither:
+
+      * ZERO draws are derived and therefore zero lifecycles can run.
+      * The test's terms are the (q, r) quotas and the AGGREGATE pool. Neither
+        depends on k, so a cell marked at K is marked at 2K by construction.
+        Doubling is not a second chance at feasibility.
+
+    NOT the same thing, and no longer conflated with it: the allocator's other
+    fail-closed exit, `fp_allocation_no_selected_tp_weight`, fires when no
+    stratum holds a selected TP day. That IS k-dependent, it is not the state
+    the seal names, and it keeps a typed refusal. The old handler caught both
+    ValueErrors and called them both `infeasible_by_sample`, which would have
+    let the sealed mark absorb a genuinely different failure.
+
+    The TP side needs no such test: `floor_n_tp` is `(r_mil * N) // 1000` with
+    `r_mil <= 800`, so `n_tp <= N = sum(tp_available)` always. Asserting an
+    unreachable branch would only make the reachable one harder to read.
+    """
+    draws, infeasible = _plan(authority, prepared, supplement,
+                              master_seed=master_seed, q_mil=q_mil,
+                              r_mil=r_mil, doublings=doublings,
+                              channel=channel)
+    return (draws, infeasible)
+
+
 def derive_cell_draws(authority, prepared, supplement: Mapping, *,
                       master_seed: int, q_mil: int, r_mil: int,
                       doublings: int = 0,
@@ -211,7 +253,26 @@ def derive_cell_draws(authority, prepared, supplement: Mapping, *,
     allocation from the SELECTED TP composition, then FP dates on the same
     stream. Reproducing that order matters — the two `_select` calls share
     one Generator, so re-ordering them would change every draw.
+
+    STRICT: an unsampleable cell raises here rather than returning zero draws,
+    so a direct caller cannot mistake "the seal skipped this cell" for "this
+    cell has no draws". The mark/skip/report path is `plan_cell_draws`, and
+    `run_grid_cell` is what takes it.
     """
+    draws, infeasible = _plan(authority, prepared, supplement,
+                              master_seed=master_seed, q_mil=q_mil,
+                              r_mil=r_mil, doublings=doublings,
+                              channel=channel)
+    if infeasible is not None:
+        raise MCInputError("grid_cell_infeasible_by_sample", infeasible.detail)
+    return draws
+
+
+def _plan(authority, prepared, supplement: Mapping, *,
+          master_seed: int, q_mil: int, r_mil: int, doublings: int,
+          channel: str) -> tuple:
+    """The one implementation behind `plan_cell_draws` and
+    `derive_cell_draws`, so the two cannot disagree about a cell."""
     if not isinstance(prepared, _mcc.PreparedMCInput):
         raise MCInputError("grid_draw_prepared_input_required",
                            f"{type(prepared).__name__} is not a "
@@ -247,6 +308,23 @@ def derive_cell_draws(authority, prepared, supplement: Mapping, *,
     fp_avail = {k: len(v) for k, v in fp_pools.items()}
     n_tp = _gridmix.floor_n_tp(int(r_mil), len(tp_days))
     n_fp = _gridmix.n_fp_for(n_tp, int(q_mil))
+
+    # THE SEALED TEST — 「全部层合计仍不足时」. Before the k loop, before any
+    # allocation, before any selection: mark, skip, report. See this function's
+    # sibling docstring for why it belongs here and why it is k-independent.
+    fp_total = sum(fp_avail.values())
+    if n_fp > fp_total:
+        return (), _gr.InfeasibleCell(
+            reason=_gr.INFEASIBLE_BY_SAMPLE,
+            q_mil=int(q_mil), r_mil=int(r_mil),
+            master_seed=int(master_seed), doublings=int(doublings),
+            n_tp=int(n_tp), n_fp=int(n_fp), fp_available=int(fp_total),
+            detail=(f"cell (q_mil={q_mil}, r_mil={r_mil}) seed {master_seed}: "
+                    f"n_fp target {n_fp} exceeds D_FP availability "
+                    f"{fp_total} across all strata — marked "
+                    f"{_gr.INFEASIBLE_BY_SAMPLE}, skipped and reported per "
+                    "the sealed grid rule"))
+
     tp_alloc = _gridmix.allocate(n_tp, tp_avail)
     tp_keys = tuple(sorted(tp_pools))
     # `_selected_tp_composition` takes a MAPPING date -> stratum key
@@ -263,14 +341,25 @@ def derive_cell_draws(authority, prepared, supplement: Mapping, *,
             fp_block = _gridmix.fp_allocation_from_selected_tp(
                 n_fp, selected_tp, fp_avail, fp_allocation)
         except ValueError as exc:
-            # `infeasible_by_sample` is the FROZEN grid's own outcome for a
-            # cell whose (q, r) demands more FP days than the pool holds —
-            # `_grid_point` reports it as a state rather than a crash. It is
-            # surfaced as a typed refusal, and deliberately NOT smoothed into
-            # invented statistics: a cell that cannot be sampled has no
-            # realized P5, and inventing one would be a methodology choice.
+            # N13-F1 separated two failures the old handler merged.
+            #
+            # The sealed `infeasible_by_sample` state is decided ABOVE, before
+            # this loop, so reaching it here means the aggregate precheck and
+            # the allocator disagree about the same cell. That is an internal
+            # inconsistency, not a grid state, and it fails closed under its
+            # own code rather than quietly wearing the sealed mark.
+            if "infeasible_by_sample" in str(exc):
+                raise MCInputError(
+                    "grid_cell_infeasibility_precheck_disagreed",
+                    f"cell (q_mil={q_mil}, r_mil={r_mil}) seed {master_seed} "
+                    f"draw {k}: the aggregate precheck admitted this cell and "
+                    f"the frozen allocator refused it: {exc}") from exc
+            # Everything else — notably `fp_allocation_no_selected_tp_weight`,
+            # which is k-DEPENDENT — is not the state the seal names and keeps
+            # a typed refusal. Mark/skip/report is licensed for the sealed
+            # condition only.
             raise MCInputError(
-                "grid_cell_infeasible_by_sample",
+                "grid_cell_fp_allocation_refused",
                 f"cell (q_mil={q_mil}, r_mil={r_mil}) seed {master_seed} "
                 f"draw {k}: {exc}") from exc
         fp_dates = _gridmix._select(fp_pools, fp_block["fp_alloc"], rng)
@@ -290,7 +379,7 @@ def derive_cell_draws(authority, prepared, supplement: Mapping, *,
             draw_digest=_digest(_DRAW_DIGEST_SCHEMA, payload),
             **{key: (tuple(val) if key == "traded_days" else val)
                for key, val in payload.items()}))
-    return tuple(draws)
+    return tuple(draws), None
 
 
 # ---------------------------------------------------------------------------
@@ -403,11 +492,19 @@ def run_grid_cell(prepared, authority, supplement: Mapping, *,
     Feasibility is the ruled producer, unchanged, over the SEALED day
     population — not the cell's marker set. The selector changes trading
     behaviour; it does not redefine the feasibility population (B-26).
+
+    N13-F1: returns a `grid_replay.InfeasibleCell` instead, for a cell the
+    SEALED rule marks and skips. The return happens BEFORE the combo loop, so
+    zero lifecycles execute for it — the "skip" is structural rather than a
+    promise. Nothing is fabricated: no P5, no median, no feasibility verdict,
+    no `CellStatistics`. The caller's pass keeps going, which is the "continue"
+    half of the sealed rule and the half the old code lost.
     """
-    draws = derive_cell_draws(authority, prepared, supplement,
-                              master_seed=master_seed, q_mil=q_mil,
-                              r_mil=r_mil, doublings=doublings,
-                              channel=channel)
+    draws, infeasible = plan_cell_draws(
+        authority, prepared, supplement, master_seed=master_seed,
+        q_mil=q_mil, r_mil=r_mil, doublings=doublings, channel=channel)
+    if infeasible is not None:
+        return infeasible
     for draw in draws:
         verify_draw(draw)
     day_universe = prepared.day_sequences[channel]
@@ -448,12 +545,19 @@ def run_grid_pass(prepared, authority, supplement: Mapping, *,
                   master_seed: int, B: int, doublings: int = 0,
                   cells: tuple = _gr.GRID_CELL_KEYS,
                   channel: str = _mcc.PRIMARY_THETA_CHANNEL) -> dict:
-    """One seed's grid pass: `{(q_mil, r_mil): CellStatistics}`.
+    """One seed's grid pass: `{(q_mil, r_mil): CellStatistics | InfeasibleCell}`.
 
     `cells` defaults to the frozen Appendix-A grid; a caller may narrow it
     only for a bounded exercise, and `grid_replay.region_map` still requires
     the complete grid before a region can be formed, so a narrowed pass
     cannot become a published region by accident.
+
+    N13-F1: an unsampleable cell contributes an `InfeasibleCell` and the
+    comprehension carries on to the next cell. One marked cell no longer
+    aborts the seed, the K pass, the 2K pass or the runner. And because the
+    marked cell still occupies its key, `region_map`'s all-63-cells
+    completeness check keeps doing the work the seal's "report in full" asks
+    of it: a skipped cell cannot quietly become a missing one.
     """
     return {tuple(cell): run_grid_cell(
         prepared, authority, supplement, q_mil=int(cell[0]),
@@ -471,16 +575,30 @@ def drawn_count(prepared, authority, supplement: Mapping, *,
     witness's word for it. Every cell of a pass shares the same k range —
     `repeat_k_indices` depends on the policy and the doubling count, not on
     (q, r) — so one cell answers for the pass.
+
+    N13-F1: the representative cell must be a SAMPLEABLE one. Taking `cells[0]`
+    unconditionally made the runner abort whenever the frozen grid's first cell
+    happened to be marked — the same blocker one level up, and the reason this
+    scans instead. A marked cell prescribes no draws, so it cannot answer for
+    the pass; it is skipped, exactly as the sealed rule says.
     """
     if not cells:
         raise MCInputError("grid_draw_no_cells",
                            "a pass over zero cells has no draw count")
-    q_mil, r_mil = int(cells[0][0]), int(cells[0][1])
-    at_k = derive_cell_draws(authority, prepared, supplement,
-                             master_seed=master_seed, q_mil=q_mil,
-                             r_mil=r_mil, doublings=0, channel=channel)
-    at_2k = derive_cell_draws(authority, prepared, supplement,
-                              master_seed=master_seed, q_mil=q_mil,
-                              r_mil=r_mil, doublings=1, channel=channel)
-    return (len(at_k), len(at_2k))
+    for cell in cells:
+        q_mil, r_mil = int(cell[0]), int(cell[1])
+        at_k, infeasible = plan_cell_draws(
+            authority, prepared, supplement, master_seed=master_seed,
+            q_mil=q_mil, r_mil=r_mil, doublings=0, channel=channel)
+        if infeasible is not None:
+            continue
+        at_2k, _ = plan_cell_draws(
+            authority, prepared, supplement, master_seed=master_seed,
+            q_mil=q_mil, r_mil=r_mil, doublings=1, channel=channel)
+        return (len(at_k), len(at_2k))
+    raise MCInputError(
+        "grid_draw_every_cell_infeasible",
+        f"all {len(cells)} cell(s) of this pass are marked "
+        f"{_gr.INFEASIBLE_BY_SAMPLE}, so the pass prescribes no draws at all "
+        "and there is no count to check a witness against")
 

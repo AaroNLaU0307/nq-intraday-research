@@ -3,7 +3,15 @@
 ```
 RECORD_TYPE=OFF_LIMITS_CARRIER_AND_READ_ALLOWLIST
 REVIEW_ID=N13-B27-GRID-SELECTOR-001
-DELIVERY_STATUS=ISSUED
+DELIVERY_STATUS=RETURNED
+RETURNED_2026-09-08=HOLD -- one BLOCKING finding (N13-F1, T1 research
+    correctness: the sealed mark/skip/report/continue rule for
+    `infeasible_by_sample` was not implemented). Claims 1-11 and 14
+    established; claim 12 refuted but NON-BLOCKING (N13-F2); claim 13b
+    INCONCLUSIVE_NON_BLOCKING. Ledger row: ops/DECISIONS.md DEC-N13-B27-7.
+    This package described the tree at c98a0ef and is kept as the
+    historical record of the round that produced that verdict. The
+    repaired tree is a NEW target and needs its own transport.
 REVIEWED_SET_UNCHANGED_SINCE=c98a0ef776df76b3d0b0c76935bb8f388413c246
 DELIVERY_REVISION=2 (2026-09-08) -- supersedes revision 1 of the same review_id.
     R1 was verified as a transport by a fresh seat and then stopped it: its

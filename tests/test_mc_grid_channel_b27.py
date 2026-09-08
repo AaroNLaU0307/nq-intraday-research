@@ -12,12 +12,14 @@ Everything here is synthetic: a fabricated bundle, a synthetic DAY_STRATA
 supplement, a synthetic registry chain, B=2, M=2, K=2. No real MC is executed
 and no value below is a research result.
 
-The fixture widens the FP pool relative to TP (3 TP / 9 FP) for one mechanical
-reason, stated so it is not mistaken for tuning: the frozen
-`fp_allocation_from_selected_tp` refuses `infeasible_by_sample` when a cell's
-(q, r) demands more FP days than the pool holds, and the shipped 3-TP/2-FP
-fixture cannot satisfy the low-q corner of the frozen 63-cell grid. Widening
-the pool exercises the whole grid instead of a feasible corner of it.
+TWO POOLS, for two different jobs, stated so neither is mistaken for tuning.
+`wide` (3 TP / 9 FP) is widened so that NO cell of the frozen 63-cell grid is
+unsampleable, which is what lets the Cartesian proofs A-H exercise the whole
+grid instead of a feasible corner of it. `narrow` (3 TP / 3 FP), added with the
+N13-F1 section at the end, is the opposite: there the frozen arithmetic makes
+q=0.35/r=0.80 genuinely unsampleable while q=0.50 and q=0.75 stay sampleable,
+which is what lets the SEALED mark/skip/report/continue rule be proved on a real
+geometry rather than by patching the frozen allocator.
 """
 import dataclasses
 import hashlib
@@ -521,18 +523,23 @@ def test_G_a_non_research_seed_and_a_foreign_authority_refuse(
     assert ei.value.code == "provenance_mismatch"
 
 
-def test_G_an_infeasible_by_sample_cell_fails_closed(wide, authority,
-                                                     supplement, small_grid,
-                                                     monkeypatch):
-    """The frozen allocator's own `infeasible_by_sample` outcome is surfaced
-    as a typed refusal, not smoothed into invented statistics: a cell that
-    cannot be sampled has no realized P5.
+def test_G_a_precheck_disagreement_fails_closed_under_its_own_code(
+        wide, authority, supplement, small_grid, monkeypatch):
+    """REPLACES the N13-F1 defect this test used to certify.
 
-    Forced rather than found: with the widened FP pool NO cell of the frozen
-    63-cell grid is infeasible here (the lowest q is 0.35, so the largest FP
-    demand is 4 against a pool of 9), so the translation is exercised by
-    making the frozen allocator refuse. Stated plainly because a test that
-    silently never reaches its own branch is worse than no test."""
+    It used to force the frozen allocator to raise the sealed message and then
+    assert that a `grid_cell_infeasible_by_sample` refusal came out — treating
+    the abort AS the correct behaviour. The sealed rule says mark / skip /
+    report / continue, so the exception was the defect and this test was
+    pinning it. The real sealed behaviour is proved in the F1 section below,
+    on a fixture where a cell is genuinely unsampleable rather than forced.
+
+    What survives is the narrower thing this monkeypatch can honestly show:
+    the sealed state is decided by the AGGREGATE precheck before the k loop, so
+    if the allocator then refuses the same cell the two disagree, and that
+    inconsistency fails closed under its OWN code instead of quietly wearing
+    the sealed mark. A ValueError must not escape the typed vocabulary either.
+    """
     real = gc._gridmix.fp_allocation_from_selected_tp
 
     def refusing(*a, **k):
@@ -542,10 +549,30 @@ def test_G_an_infeasible_by_sample_cell_fails_closed(wide, authority,
     with pytest.raises(mcc.MCInputError) as ei:
         gc.derive_cell_draws(authority, wide, supplement, master_seed=7,
                              q_mil=CELL[0], r_mil=CELL[1])
-    assert ei.value.code == "grid_cell_infeasible_by_sample"
+    assert ei.value.code == "grid_cell_infeasibility_precheck_disagreed"
+    # and it is NOT allowed to pass itself off as the sealed grid state
+    assert ei.value.code != "grid_cell_infeasible_by_sample"
     # a ValueError would have escaped the fail-closed vocabulary
     assert not issubclass(ValueError, mcc.MCInputError)
     monkeypatch.setattr(gc._gridmix, "fp_allocation_from_selected_tp", real)
+
+
+def test_G_the_other_allocator_refusal_is_not_the_sealed_state(
+        wide, authority, supplement, small_grid, monkeypatch):
+    """`fp_allocation_no_selected_tp_weight` is k-DEPENDENT and is NOT the
+    state the seal names. The old handler called every allocator ValueError
+    `infeasible_by_sample`, which would have let the sealed mark absorb a
+    different failure — and mark/skip/report/continue is licensed for the
+    sealed condition only."""
+    def refusing(*a, **k):
+        raise ValueError("fp_allocation_no_selected_tp_weight: ...")
+    monkeypatch.setattr(gc._gridmix, "fp_allocation_from_selected_tp",
+                        refusing)
+    with pytest.raises(mcc.MCInputError) as ei:
+        gc.derive_cell_draws(authority, wide, supplement, master_seed=7,
+                             q_mil=CELL[0], r_mil=CELL[1])
+    assert ei.value.code == "grid_cell_fp_allocation_refused"
+    assert ei.value.code != "grid_cell_infeasible_by_sample"
 # ---------------------------------------------------------------------------
 # H — DOWNSTREAM END TO END (the N13 closure test)
 # ---------------------------------------------------------------------------
@@ -600,3 +627,277 @@ def test_H_no_caller_can_hand_the_runner_cellstatistics(small_grid):
         assert not any("cellstat" in p.lower() for p in params)
     src = inspect.getsource(run._witness)
     assert "run_grid_pass" in src
+
+
+# ---------------------------------------------------------------------------
+# F1 — THE SEALED `infeasible_by_sample` RULE: MARK / SKIP / REPORT / CONTINUE
+# ---------------------------------------------------------------------------
+#
+# THE SEALED PASSAGE (preregistration, frozen grid section): a per-stratum
+# shortfall is redistributed over the remaining strata; when ALL strata
+# together still fall short, the grid point is MARKED `infeasible_by_sample`,
+# SKIPPED and REPORTED IN FULL — and the pass carries on.
+#
+# FOUND, NOT FORCED, which is the whole point of this fixture. The `wide` pool
+# above (3 TP / 9 FP) was widened precisely so that no cell is unsampleable,
+# which is why the old test had to monkeypatch the frozen allocator to reach
+# the branch at all — and then asserted the abort AS correct. `narrow` restores
+# a 3 TP / 3 FP pool, where the frozen arithmetic splits the geometry by itself:
+#     q=0.35 r=0.80 -> n_tp=2, n_fp=4 >  3   INFEASIBLE
+#     q=0.50 r=0.80 -> n_tp=2, n_fp=2 <= 3   feasible
+#     q=0.75 r=0.80 -> n_tp=2, n_fp=1 <= 3   feasible
+# No allocator is patched anywhere below.
+
+NARROW_FP = ("2026-08-04", "2026-08-06", "2026-08-10")
+INFEASIBLE_CELL = (350, 800)
+FEASIBLE_CELL = (500, 800)
+OTHER_FEASIBLE_CELL = (750, 800)
+MIXED_CELLS = (INFEASIBLE_CELL, FEASIBLE_CELL, OTHER_FEASIBLE_CELL)
+
+
+@pytest.fixture()
+def narrow(monkeypatch, tmp_path_factory, small_grid):
+    """3 TP / 3 FP — a pool where the frozen grid really is part-unsampleable."""
+    monkeypatch.setattr(BB, "TP_DAYS", WIDE_TP)
+    monkeypatch.setattr(BB, "FP_DAYS", NARROW_FP)
+    monkeypatch.setattr(BB, "ALL_DAYS", tuple(sorted(WIDE_TP + NARROW_FP)))
+    root = tmp_path_factory.mktemp("f1root")
+    for rel in BB.FROZEN_METHOD_FILES:
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(BB.REAL_REPO_ROOT / rel, root / rel)
+    bundle = _coherent_bundle()
+    att = BB._attestation_bytes(bundle)
+    (root / mcc.ATTESTATION_PATH).parent.mkdir(parents=True, exist_ok=True)
+    (root / mcc.ATTESTATION_PATH).write_bytes(att)
+    monkeypatch.setattr(mcc, "_REPO_ROOT", root)
+    monkeypatch.setattr(mcc, "ATTESTATION_SHA256_PINNED",
+                        hashlib.sha256(att).hexdigest())
+    monkeypatch.setattr(mcc, "build_template_calendar",
+                        lambda *a, **k: BB._calendar())
+    return mcc.prepare_mc_input(
+        bundle, authorization_snapshot={"trial_id": BB.TRIAL,
+                                        "authorized_commit": BB.COMMIT},
+        attestation_bytes=att)
+
+
+@pytest.fixture()
+def narrow_supplement(narrow):
+    authority = sa.derive_supplement_authority(narrow,
+                                               supplement_id=ds.SUPPLEMENT_ID)
+    days, binding = sa.supplement_build_inputs(authority, narrow)
+    rows = [{"trade_date": d, "year": int(str(d)[:4]),
+             "vol_stratum": ds.VOL_STRATA[i % len(ds.VOL_STRATA)],
+             "event_stratum": ds.EVENT_STRATA[i % len(ds.EVENT_STRATA)]}
+            for i, d in enumerate(sorted(days))]
+    return ds.build_day_strata_supplement_test_only(
+        rows, expected_day_set=days, binding=binding,
+        supplement_id=ds.SUPPLEMENT_ID)
+
+
+@pytest.fixture()
+def narrow_authority(narrow, narrow_supplement):
+    return gr.derive_grid_replay_authority(
+        narrow, narrow_supplement,
+        sealed_artifact_sha256=_sha(narrow_supplement))
+
+
+def _full(partial):
+    """The narrow pass covers three cells; `region_map` requires all 63. The
+    rest are filled from a SAMPLED cell of the same pass, so the padding is
+    real output rather than a fabricated statistic."""
+    donor = partial[FEASIBLE_CELL]
+    return {tuple(key): partial.get(tuple(key), donor)
+            for key in gr.GRID_CELL_KEYS}
+
+
+def test_F1_the_fixture_geometry_is_genuinely_split(narrow, narrow_authority,
+                                                    narrow_supplement,
+                                                    small_grid):
+    """Vacuity check FIRST. If both cells were sampleable, or neither, every
+    proof below would pass while testing nothing — the failure mode the old
+    test's own docstring admitted to."""
+    _, infeasible = gc.plan_cell_draws(
+        narrow_authority, narrow, narrow_supplement, master_seed=7,
+        q_mil=INFEASIBLE_CELL[0], r_mil=INFEASIBLE_CELL[1])
+    assert infeasible is not None, "the infeasible cell is sampleable"
+    assert infeasible.n_fp > infeasible.fp_available   # the sealed condition
+    for cell in (FEASIBLE_CELL, OTHER_FEASIBLE_CELL):
+        draws, inf = gc.plan_cell_draws(
+            narrow_authority, narrow, narrow_supplement, master_seed=7,
+            q_mil=cell[0], r_mil=cell[1])
+        assert inf is None, f"{cell} should be sampleable"
+        assert len(draws) == K_SMALL and all(d.n_tp > 0 for d in draws)
+
+
+def test_F1_A_an_infeasible_cell_executes_zero_lifecycles(
+        narrow, narrow_authority, narrow_supplement, small_grid, monkeypatch):
+    """SKIP, counted at the ONE lifecycle execution site rather than inferred
+    from the absence of statistics."""
+    calls = []
+    real = mcc._run_path_atom
+
+    def counting(prepared, **kw):
+        calls.append(kw["scenario"])
+        return real(prepared, **kw)
+    monkeypatch.setattr(mcc, "_run_path_atom", counting)
+    cell = gc.run_grid_cell(
+        narrow, narrow_authority, narrow_supplement,
+        q_mil=INFEASIBLE_CELL[0], r_mil=INFEASIBLE_CELL[1],
+        master_seed=7, B=B_SMALL)
+    assert gr.is_infeasible(cell)
+    assert calls == [], f"{len(calls)} lifecycle(s) ran for a skipped cell"
+
+
+def test_F1_B_the_pass_continues_past_the_infeasible_cell(
+        narrow, narrow_authority, narrow_supplement, small_grid):
+    """CONTINUE. The infeasible cell is FIRST in the pass order, so the old
+    control flow could not have reached the two behind it."""
+    assert MIXED_CELLS[0] == INFEASIBLE_CELL
+    passed = gc.run_grid_pass(
+        narrow, narrow_authority, narrow_supplement, master_seed=7,
+        B=B_SMALL, cells=MIXED_CELLS)
+    assert set(passed) == set(MIXED_CELLS)
+    assert gr.is_infeasible(passed[INFEASIBLE_CELL])
+    for cell in (FEASIBLE_CELL, OTHER_FEASIBLE_CELL):
+        assert type(passed[cell]) is gr.CellStatistics
+        assert passed[cell].conservative_p5
+
+
+def test_F1_C_the_infeasible_cell_is_reported_in_full(
+        narrow, narrow_authority, narrow_supplement, small_grid):
+    """REPORT. The record names the cell, the seed, the pass, the reason and
+    the frozen arithmetic that decided it — and the region map carries the
+    sealed token rather than losing it."""
+    passed = gc.run_grid_pass(
+        narrow, narrow_authority, narrow_supplement, master_seed=13,
+        B=B_SMALL, cells=MIXED_CELLS)
+    rec = passed[INFEASIBLE_CELL]
+    assert rec.reason == gr.INFEASIBLE_BY_SAMPLE == "infeasible_by_sample"
+    assert (rec.q_mil, rec.r_mil) == INFEASIBLE_CELL
+    assert rec.master_seed == 13 and rec.doublings == 0
+    assert rec.n_fp == 4 and rec.fp_available == 3 and rec.n_tp == 2
+    assert "infeasible_by_sample" in rec.detail
+    for kind in gr.REGION_KINDS:
+        assert gr.cell_category(rec, kind) == gr.INFEASIBLE_BY_SAMPLE
+    # the mark is DISTINGUISHABLE from a real OUT, from IN, and from the band
+    assert gr.INFEASIBLE_BY_SAMPLE not in (gr.OUT_OF_REGION, gr.IN_REGION,
+                                           gr.BOUNDARY_BAND)
+    # ... and from an ABSENT cell, which region_map still refuses outright
+    with pytest.raises(mcc.MCInputError) as ei:
+        gr.region_map({k: v for k, v in _full(passed).items()
+                       if tuple(k) != INFEASIBLE_CELL}, gr.REGION_KINDS[0])
+    assert ei.value.code == "grid_replay_grid_incomplete"
+
+
+def test_F1_D_no_statistics_are_fabricated_for_it(
+        narrow, narrow_authority, narrow_supplement, small_grid):
+    """NO FAKE STATISTICS. Not a sentinel, not a zero, not a NaN, not an empty
+    CellStatistics — and the type cannot be talked into being one."""
+    rec = gc.run_grid_cell(
+        narrow, narrow_authority, narrow_supplement,
+        q_mil=INFEASIBLE_CELL[0], r_mil=INFEASIBLE_CELL[1],
+        master_seed=7, B=B_SMALL)
+    assert type(rec) is not gr.CellStatistics
+    for attr in ("conservative_p5", "stress_median", "feasible", "identity",
+                 "classifying_values"):
+        assert not hasattr(rec, attr), f"a skipped cell exposes {attr}"
+    # the guard that makes this structural rather than a convention: an empty
+    # CellStatistics is refused outright, so there is no "blank cell" to fall
+    # back on even for someone who wanted one
+    with pytest.raises(mcc.MCInputError) as ei:
+        gr.CellStatistics(conservative_p5={}, stress_median={}, feasible={})
+    assert ei.value.code == "grid_replay_cell_no_combination"
+    # and the marked record refuses to carry any other reason
+    with pytest.raises(mcc.MCInputError) as ei:
+        dataclasses.replace(rec, reason="something_else")
+    assert ei.value.code == "grid_replay_infeasible_reason_unknown"
+    # nor may it be read as a region witness
+    with pytest.raises(mcc.MCInputError) as ei:
+        gr.satisfying_combos(rec, gr.REGION_KINDS[0])
+    assert ei.value.code == "grid_replay_cell_required"
+
+
+def test_F1_E_and_F_K_and_2K_both_mark_skip_report(
+        narrow, narrow_authority, narrow_supplement, small_grid, monkeypatch):
+    """E and F together, because the claim spans them: the sealed test is
+    `n_fp > sum(fp_available)`, whose terms are the (q, r) quotas and the
+    AGGREGATE pool. Neither depends on k, so doubling is not a second chance at
+    feasibility — and zero lifecycles run for the marked cell in EITHER pass."""
+    calls = []
+    real = mcc._run_path_atom
+
+    def counting(prepared, **kw):
+        calls.append((kw["q_mil"], kw["r_mil"]) if "q_mil" in kw
+                     else kw["scenario"])
+        return real(prepared, **kw)
+    monkeypatch.setattr(mcc, "_run_path_atom", counting)
+    at_k = gc.run_grid_pass(narrow, narrow_authority, narrow_supplement,
+                            master_seed=7, B=B_SMALL, doublings=0,
+                            cells=MIXED_CELLS)
+    n_after_k = len(calls)
+    at_2k = gc.run_grid_pass(narrow, narrow_authority, narrow_supplement,
+                             master_seed=7, B=B_SMALL, doublings=1,
+                             cells=MIXED_CELLS)
+    n_2k = len(calls) - n_after_k
+    for passed, doublings in ((at_k, 0), (at_2k, 1)):
+        rec = passed[INFEASIBLE_CELL]
+        assert gr.is_infeasible(rec) and rec.reason == gr.INFEASIBLE_BY_SAMPLE
+        assert rec.doublings == doublings
+        for cell in (FEASIBLE_CELL, OTHER_FEASIBLE_CELL):
+            assert type(passed[cell]) is gr.CellStatistics
+    # the 2K pass ran exactly twice the lifecycles of K -- the two feasible
+    # cells doubled and the marked cell contributed zero to both
+    assert n_after_k > 0 and n_2k == 2 * n_after_k
+
+
+def test_F1_the_marked_cell_survives_M8_comparison_and_publication(
+        narrow, narrow_authority, narrow_supplement, small_grid):
+    """DOWNSTREAM. A marked cell has no statistics, so it has no identity to
+    compare, nothing that can drift and no witness set — and it must not be
+    silently relabelled BOUNDARY_BAND, which would assert its statistics hug
+    zero when it has none."""
+    at_k = gc.run_grid_pass(narrow, narrow_authority, narrow_supplement,
+                            master_seed=7, B=B_SMALL, doublings=0,
+                            cells=MIXED_CELLS)
+    at_2k = gc.run_grid_pass(narrow, narrow_authority, narrow_supplement,
+                             master_seed=7, B=B_SMALL, doublings=1,
+                             cells=MIXED_CELLS)
+    full_k, full_2k = _full(at_k), _full(at_2k)
+    for kind in gr.REGION_KINDS:
+        drift = gr.cell_drift_violations(kind, full_k, full_2k)
+        assert INFEASIBLE_CELL not in {key for key, _name in drift}
+        cmp_ = gr.compare_region_maps(kind, full_k, full_2k,
+                                      k=K_SMALL, k_doubled=2 * K_SMALL)
+        assert cmp_.map_at_k[INFEASIBLE_CELL] == gr.INFEASIBLE_BY_SAMPLE
+        assert cmp_.map_at_2k[INFEASIBLE_CELL] == gr.INFEASIBLE_BY_SAMPLE
+        assert INFEASIBLE_CELL not in cmp_.boundary_band_cells
+        assert INFEASIBLE_CELL not in cmp_.flipped_cells
+        # M10: a mark every seed made survives publication AS the mark
+        published = gr.publish_region(kind, {
+            seed: gr.region_map(full_k, kind)
+            for seed in RESEARCH_BOOTSTRAP_SEEDS})
+        assert published[INFEASIBLE_CELL] == gr.INFEASIBLE_BY_SAMPLE
+        # a cell some seeds marked and others sampled is DISCLOSED, not
+        # resolved by majority -- the existing union-band rule, reused
+        mixed = dict(full_k)
+        mixed[INFEASIBLE_CELL] = full_k[FEASIBLE_CELL]
+        disagreeing = gr.publish_region(kind, {
+            RESEARCH_BOOTSTRAP_SEEDS[0]: gr.region_map(mixed, kind),
+            RESEARCH_BOOTSTRAP_SEEDS[1]: gr.region_map(full_k, kind),
+            RESEARCH_BOOTSTRAP_SEEDS[2]: gr.region_map(full_k, kind)})
+        assert disagreeing[INFEASIBLE_CELL] == gr.BOUNDARY_BAND
+
+
+def test_F1_the_witness_and_the_draw_count_survive_a_marked_first_cell(
+        narrow, narrow_authority, narrow_supplement, small_grid):
+    """`drawn_count` used to take `cells[0]` unconditionally, so a marked FIRST
+    cell aborted the runner's own witness check — the same blocker one level
+    up. It now skips marked cells, which is what the sealed rule says to do."""
+    assert MIXED_CELLS[0] == INFEASIBLE_CELL
+    assert gc.drawn_count(narrow, narrow_authority, narrow_supplement,
+                          master_seed=7, cells=MIXED_CELLS) == (K_SMALL,
+                                                                2 * K_SMALL)
+    with pytest.raises(mcc.MCInputError) as ei:
+        gc.drawn_count(narrow, narrow_authority, narrow_supplement,
+                       master_seed=7, cells=(INFEASIBLE_CELL,))
+    assert ei.value.code == "grid_draw_every_cell_infeasible"
