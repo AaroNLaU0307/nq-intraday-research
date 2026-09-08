@@ -40,6 +40,7 @@
 | [`PROMPT_ITEM6_SOL_REVIEW.md`](PROMPT_ITEM6_SOL_REVIEW.md) | **现在挂着的交付** —— ND1 R3 提案复核第二次交付，`rv-6cd8abb41a43-1ddf0617d52e`。第一次因缺 packet／哈希被判 REJECTED_INCOMPLETE（origin=BUILDER） |
 | [`ARTIFACTS_UNDER_REVIEW.json`](ARTIFACTS_UNDER_REVIEW.json) | 谁手上正拿着什么；空表是常态 |
 | [`OUTCOME_CARRYING_ARTIFACTS.json`](OUTCOME_CARRYING_ARTIFACTS.json) | **隔离名单**。给复审席位之前必读 |
+| [`OFF_LIMITS_N13_B27_REVIEW_2026-09-08.md`](OFF_LIMITS_N13_B27_REVIEW_2026-09-08.md) | **现在挂着的交付** —— `N13-B27-GRID-SELECTOR-001` 的禁读清单载体（delivery）。N13/B-27 泄漏敏感选择器的 fresh Sol claim-blind 一轮复审；前一个席位是被**传输**烧掉的（自行发现权威时触到 `outcome_quarantine/`），所以本件把可读集穷尽枚举，并写明「越界即 STOP」。§2 是关键：边界同时约束**席位被要求跑的代码**，不只约束人 |
 
 ## 2. 现势未决
 
