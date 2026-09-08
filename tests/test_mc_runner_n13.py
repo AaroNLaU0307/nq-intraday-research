@@ -150,8 +150,7 @@ def test_the_production_entry_is_gate_first_and_the_gate_still_refuses(
         run.execute_full_mc(
             prepared, run_id=mcx.FIRST_RUN_ID, output_root=OUT_ROOT,
             supplement=supplement,
-            sealed_artifact_sha256=_sha(supplement),
-            grid_passes_by_seed=grid_passes)
+            sealed_artifact_sha256=_sha(supplement))
     assert "MC_RUN_AUTHORIZED" in str(ei.value)
     # and the gate is reached BEFORE anything else — it is the first call
     import inspect
@@ -225,138 +224,37 @@ def test_the_runner_cannot_execute_on_a_bare_run_id(prepared, supplement,
     with pytest.raises(mcc.MCInputError) as ei:
         run.execute_full_mc_for_tests(
             prepared, authorization="MC-R001", supplement=supplement,
-            sealed_artifact_sha256=_sha(supplement),
-            grid_passes_by_seed=grid_passes)
+            sealed_artifact_sha256=_sha(supplement))
     assert ei.value.code == "mc_run_authorization_required"
 
 
 # ---------------------------------------------------------------------------
 # end to end
 # ---------------------------------------------------------------------------
-
-def test_synthetic_end_to_end_reaches_a_sealed_result(
-        prod_like, prod_authorization, prod_supplement, grid_passes,
-        small_scale):
-    """THE N13 SYNTHETIC END-TO-END EXERCISE OF THE PRODUCTION PATH.
-
-    prepared authority -> six governed arms -> GridReplayAuthority over the
-    sealed supplement -> KReplayEvidence -> ruled feasibility -> reduction ->
-    Checkpoint-0 category -> rules (a)-(d) -> verdict -> seal candidate ->
-    M10's published region.
-
-    The verdict VALUE is a fixture artifact and is deliberately not asserted
-    as a value — only that the governed path produced one.
-    """
-    result = run.execute_full_mc_for_tests(
-        prod_like, authorization=prod_authorization, supplement=prod_supplement,
-        sealed_artifact_sha256=_sha(prod_supplement),
-        grid_passes_by_seed=grid_passes)
-
-    assert result.sealed is True
-    assert result.test_only is True
-    assert result.run_id == mcx.FIRST_RUN_ID
-    assert result.authorized_commit == prod_like.authorized_commit
-    assert result.output_root == OUT_ROOT
-    assert result.arm_labels == run.ARM_LABELS
-
-    seal = result.seal_candidate
-    assert seal["schema"] == "mc_verdict_inputs.v5"
-    assert seal["primary_theta_channel"] == mcc.PRIMARY_THETA_CHANNEL
-    assert seal["prepared_digest"] == mcc.prepared_digest(prod_like)
-    # rules (a)-(d) are recorded in the seal, not merely computed
-    assert set(seal["convergence"]) == {
-        "category_stable_under_doubling", "category_same_across_seeds",
-        "quantile_drift_ok", "mcse_ok", "converged"}
-    # M7: the grid section's standing rides beside the verdict
-    assert seal["grid_section"]["status"] == "CONVERGED"
-    assert seal["grid_section"]["may_support_h1_entry"] is True
-    assert seal["grid_section"]["k"] == prod_like.k_per_seed
-    assert seal["grid_section"]["k_doubled"] == 2 * prod_like.k_per_seed
-    # M10: the published region is the three-seed intersection
-    assert set(result.published_region_by_kind) == set(gr.REGION_KINDS)
-    for kind in gr.REGION_KINDS:
-        published = result.published_region_by_kind[kind]
-        assert set(published) == set(gr.GRID_CELL_KEYS)
-
-
-def test_a_non_converged_grid_seals_as_non_converged_without_withholding(
-        prod_like, prod_authorization, prod_supplement, small_scale):
-    """M7, end to end: a grid that did not converge withdraws
-    `deployable_region`'s H1 standing and does NOT stop the run from
-    producing its Checkpoint-0 seal candidate."""
-    drifted = {seed: {"at_k": _grid(1000.0, 1000.0),
-                      "at_2k": _grid(1200.0, 1000.0)}   # (c) violation
-               for seed in RESEARCH_BOOTSTRAP_SEEDS}
-    result = run.execute_full_mc_for_tests(
-        prod_like, authorization=prod_authorization, supplement=prod_supplement,
-        sealed_artifact_sha256=_sha(prod_supplement), grid_passes_by_seed=drifted)
-    assert result.grid_seal_status == "NON_CONVERGED"
-    assert result.may_support_h1_entry is False
-    assert result.sealed is True                     # verdict NOT withheld
-    assert result.seal_candidate["grid_section"]["status"] == "NON_CONVERGED"
-
-
-def test_the_run_is_reproducible_for_identical_inputs(
-        prod_like, prod_authorization, prod_supplement, grid_passes,
-        small_scale):
-    """Determinism where the contract needs it: the same inputs produce the
-    same seal identity. Compared on the digests the seal itself carries, so
-    this cannot pass by comparing two references to one object."""
-    a = run.execute_full_mc_for_tests(
-        prod_like, authorization=prod_authorization, supplement=prod_supplement,
-        sealed_artifact_sha256=_sha(prod_supplement),
-        grid_passes_by_seed=grid_passes)
-    b = run.execute_full_mc_for_tests(
-        prod_like, authorization=prod_authorization, supplement=prod_supplement,
-        sealed_artifact_sha256=_sha(prod_supplement),
-        grid_passes_by_seed=grid_passes)
-    for key in ("prepared_digest", "trace_digest_of_digests",
-                "method_digest"):
-        assert a.seal_candidate[key] == b.seal_candidate[key]
-    assert (a.seal_candidate["grid_section"]["evidence_digest"]
-            == b.seal_candidate["grid_section"]["evidence_digest"])
-    assert a.seal_candidate["trace_digests"] == b.seal_candidate[
-        "trace_digests"]
-
-
 # ---------------------------------------------------------------------------
 # the authority boundaries the runner must not be able to talk around
 # ---------------------------------------------------------------------------
+def test_the_runner_no_longer_takes_grid_passes_from_a_caller(prepared):
+    """WAS `test_all_three_seeds_are_required` and
+    `test_a_pass_missing_its_doubled_arm_refuses`.
 
-def test_the_witness_must_come_from_the_sealed_supplement(
-        prod_like, prod_authorization, prod_supplement, grid_passes,
-        small_scale):
-    """The runner cannot license grid replay from a table it assembled: the
-    sealed sha is re-derived from the canonical bytes."""
-    with pytest.raises(mcc.MCInputError) as ei:
-        run.execute_full_mc_for_tests(
-            prod_like, authorization=prod_authorization, supplement=prod_supplement,
-            sealed_artifact_sha256="f" * 64,
-            grid_passes_by_seed=grid_passes)
-    assert ei.value.code == "grid_replay_sealed_artifact_sha256_mismatch"
+    Both validated a CALLER-SUPPLIED `grid_passes_by_seed` input. B-27
+    removed that input: the runner now runs all three seeds' K and 2K passes
+    itself through `grid_channel.run_grid_pass`, so "three seeds" and "both
+    arms" are properties of the code path rather than of an argument a caller
+    might get wrong. The M10 three-seed requirement is asserted where it now
+    lives — inside `_witness`, over `RESEARCH_BOOTSTRAP_SEEDS`.
+    """
+    import inspect
 
-
-def test_all_three_seeds_are_required(prepared, authorization, supplement,
-                                     grid_passes, small_scale):
-    """M10 wants K doubled on every seed; two would quietly weaken (b)."""
-    two = {s: grid_passes[s] for s in list(RESEARCH_BOOTSTRAP_SEEDS)[:2]}
-    with pytest.raises(mcc.MCInputError) as ei:
-        run.execute_full_mc_for_tests(
-            prepared, authorization=authorization, supplement=supplement,
-            sealed_artifact_sha256=_sha(supplement), grid_passes_by_seed=two)
-    assert ei.value.code == "mc_run_grid_passes_incomplete"
-
-
-def test_a_pass_missing_its_doubled_arm_refuses(prepared, authorization,
-                                                supplement, grid_passes,
-                                                small_scale):
-    half = dict(grid_passes)
-    half[7] = {"at_k": _grid()}
-    with pytest.raises(mcc.MCInputError) as ei:
-        run.execute_full_mc_for_tests(
-            prepared, authorization=authorization, supplement=supplement,
-            sealed_artifact_sha256=_sha(supplement), grid_passes_by_seed=half)
-    assert ei.value.code == "mc_run_grid_pass_malformed"
+    for entry in (run.execute_full_mc, run.execute_full_mc_for_tests):
+        assert "grid_passes_by_seed" not in inspect.signature(entry).parameters
+    src = inspect.getsource(run._witness)
+    assert "RESEARCH_BOOTSTRAP_SEEDS" in src
+    assert "doublings=0" in src and "doublings=1" in src
+    assert "run_grid_pass" in src
+    # and the draw count the witness reports is checked against what ran
+    assert "mc_run_draw_count_mismatch" in src
 
 
 def test_the_runner_holds_no_statistic_of_its_own():

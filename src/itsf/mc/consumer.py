@@ -1444,14 +1444,27 @@ def _validate_calendar(cal: TemplateCalendar) -> None:
 # ---------------------------------------------------------------------------
 
 def _paths_for_world(prepared: PreparedMCInput, world: Sequence[str],
-                     channel: str, engine: str, scenario: str) -> dict:
+                     channel: str, engine: str, scenario: str, *,
+                     traded_selector=None) -> dict:
     """Map template slots to the drawn historical day's path record.
 
-    A slot trades iff the drawn day is in the channel's ORACLE-SELECTED
-    set AND a sealed record exists for it (frozen: MC SS4.1 — bootstrap
-    fills outcomes onto template slots, never invents trades)."""
+    A slot trades iff the drawn day is in the SELECTED set AND a sealed
+    record exists for it (frozen: MC SS4.1 — bootstrap fills outcomes onto
+    template slots, never invents trades).
+
+    `traded_selector` is the B-27 seam and the ONLY thing a GRID cell
+    changes. With None — every Oracle main-channel path, unchanged — the
+    selected set is the channel's ORACLE-SELECTED set. A GRID-channel
+    evaluation passes that cell draw's authorized marker sequence instead.
+    Everything else stays: the same prepared authority, the same day
+    population, the same calendar, the same sealed records, and the same
+    "a slot trades only if a record exists" rule, so a selector can narrow
+    which slots trade but can never invent a trade or reach a day the
+    sealed population does not contain.
+    """
     recs = prepared.records[(engine, scenario)]
-    sel = prepared.traded_day_sets[channel]
+    sel = (prepared.traded_day_sets[channel] if traded_selector is None
+           else traded_selector)
     days = prepared.calendar.days
     out = {}
     for slot, hist_day in zip(days, world):
@@ -1524,7 +1537,8 @@ def _run_path_atom(prepared: PreparedMCInput, *, platform: str,
                    engine: str, scenario: str, channel: str,
                    world: Sequence[str], world_index: int,
                    phase_offset: int, lifecycle_config_digest: str,
-                   master_seed: int, prepared_digest_value: str
+                   master_seed: int, prepared_digest_value: str,
+                   traded_selector=None
                    ) -> SimulationPathObservation:
     """Run ONE (world, start-phase) lifecycle and emit ONE atom.
 
@@ -1540,7 +1554,9 @@ def _run_path_atom(prepared: PreparedMCInput, *, platform: str,
     cfg = lifecycle_config_for(platform)
     days = list(prepared.calendar.days)
     window = days[phase_offset:]
-    paths = _paths_for_world(prepared, world, channel, engine, scenario)
+    paths = _paths_for_world(prepared, world, channel, engine,
+                             scenario,
+                             traded_selector=traded_selector)
     res = orch.run_lifecycle(cfg, days, paths, start_offset=phase_offset)
     # C4: lane S2's single fact-verification entry, UNCONDITIONALLY, on
     # every emitted stream, before a single fact is reduced.

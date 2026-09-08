@@ -44,6 +44,7 @@ from typing import Mapping
 
 from itsf.contracts import RESEARCH_BOOTSTRAP_SEEDS
 from itsf.mc import consumer as _mcc
+from itsf.mc import grid_channel as _gc
 from itsf.mc import grid_replay as _gr
 from itsf.mc import mc_contract as _mcx
 from itsf.mc.atoms import MCInputError
@@ -205,40 +206,59 @@ def _arm(prepared, *, run_label: str, axis: str, B: int, K: int, seed: int):
 
 
 def _witness(prepared, *, supplement: Mapping, sealed_artifact_sha256: str,
-             grid_passes_by_seed: Mapping, production: bool):
-    """Mint the GridReplayAuthority once and a KReplayEvidence per seed.
+             B: int, cells: tuple, production: bool):
+    """Mint the GridReplayAuthority, RUN both grid passes, and derive a
+    KReplayEvidence per seed.
+
+    B-27: the passes are no longer an input. The runner executes them itself
+    through `grid_channel.run_grid_pass`, which composes the adopted
+    Cartesian M x K support inside every B world for each cell and seed, so
+    the witness is produced by the governed path rather than handed in.
 
     The authority is minted from the SEALED supplement, so the runner cannot
-    license grid replay from a table it assembled itself; the per-seed
-    witnesses are computed from the two grid passes, so a witness cannot
-    carry a convergence claim nobody computed (N11).
+    license grid replay from a table it assembled; the witnesses are computed
+    from the two passes it just ran, so a witness cannot carry a convergence
+    claim nobody computed (N11). `doublings=1` is the 2K pass and its first K
+    draws are the K pass's, by the frozen streams.
     """
     derive_authority = (_gr.derive_grid_replay_authority if production
                         else _gr.derive_grid_replay_authority_for_tests)
     authority = derive_authority(
         prepared, supplement,
         sealed_artifact_sha256=sealed_artifact_sha256)
-    if set(grid_passes_by_seed) != set(RESEARCH_BOOTSTRAP_SEEDS):
-        raise MCInputError(
-            "mc_run_grid_passes_incomplete",
-            f"M10 requires all three seeds; got {sorted(grid_passes_by_seed)}")
-    witnesses = {}
+    witnesses, passes = {}, {}
     for seed in RESEARCH_BOOTSTRAP_SEEDS:
-        passes = grid_passes_by_seed[seed]
-        if not isinstance(passes, Mapping) or set(passes) != {"at_k", "at_2k"}:
+        at_k = _gc.run_grid_pass(prepared, authority, supplement,
+                                 master_seed=seed, B=B, doublings=0,
+                                 cells=cells)
+        at_2k = _gc.run_grid_pass(prepared, authority, supplement,
+                                  master_seed=seed, B=B, doublings=1,
+                                  cells=cells)
+        passes[seed] = MappingProxyType({"at_k": at_k, "at_2k": at_2k})
+        witness = _gr.derive_k_replay_evidence(
+            authority, master_seed=seed, cells_at_k=at_k, cells_at_2k=at_2k)
+        # The witness REPORTS k and 2k. Check it against the draws actually
+        # executed, or the evidence could claim a pass size nobody ran —
+        # which is the same class of defect as outer metadata impersonating
+        # an axis. In production both are the ruled `k_per_seed`; they can
+        # only diverge if the draw policy and the prepared input disagree,
+        # and that is worth refusing rather than sealing.
+        ran = _gc.drawn_count(prepared, authority, supplement,
+                              master_seed=seed, cells=cells)
+        if ran != (witness.k, witness.k_doubled):
             raise MCInputError(
-                "mc_run_grid_pass_malformed",
-                f"seed {seed}: need exactly the K and 2K passes, got "
-                f"{sorted(passes) if isinstance(passes, Mapping) else passes!r}")
-        witnesses[seed] = _gr.derive_k_replay_evidence(
-            authority, master_seed=seed, cells_at_k=passes["at_k"],
-            cells_at_2k=passes["at_2k"])
-    return authority, MappingProxyType(witnesses)
+                "mc_run_draw_count_mismatch",
+                f"seed {seed}: the passes executed {ran[0]} and {ran[1]} "
+                f"draws, the witness reports {witness.k} and "
+                f"{witness.k_doubled}")
+        witnesses[seed] = witness
+    return authority, MappingProxyType(witnesses), MappingProxyType(passes)
 
 
 def _execute(prepared, *, authorization: RunAuthorization,
              supplement: Mapping, sealed_artifact_sha256: str,
-             grid_passes_by_seed: Mapping, production: bool) -> RunnerResult:
+             production: bool, cells: tuple = _gr.GRID_CELL_KEYS
+             ) -> RunnerResult:
     """THE run. Everything here delegates; nothing here decides."""
     if not isinstance(authorization, RunAuthorization):
         raise MCInputError(
@@ -267,10 +287,10 @@ def _execute(prepared, *, authorization: RunAuthorization,
                             seed=seed)
                  for seed in RESEARCH_BOOTSTRAP_SEEDS}
 
-    authority, witnesses = _witness(
+    authority, witnesses, grid_passes_by_seed = _witness(
         prepared, supplement=supplement,
         sealed_artifact_sha256=sealed_artifact_sha256,
-        grid_passes_by_seed=grid_passes_by_seed, production=production)
+        B=_mcc.B_WORLDS_FROZEN, cells=cells, production=production)
     # the base arm's seed is what convergence binds the witness to
     witness = witnesses[base_seed]
 
@@ -300,7 +320,7 @@ def _execute(prepared, *, authorization: RunAuthorization,
 
 def execute_full_mc(prepared, *, run_id: str, output_root: str,
                     supplement: Mapping, sealed_artifact_sha256: str,
-                    grid_passes_by_seed: Mapping) -> RunnerResult:
+                    cells: tuple = _gr.GRID_CELL_KEYS) -> RunnerResult:
     """PRODUCTION entry. GATE-FIRST, and the gate is untouched.
 
     The first call is `consumer.authorize_real_mc`, which refuses
@@ -321,13 +341,14 @@ def execute_full_mc(prepared, *, run_id: str, output_root: str,
     return _execute(prepared, authorization=authorization,
                     supplement=supplement,
                     sealed_artifact_sha256=sealed_artifact_sha256,
-                    grid_passes_by_seed=grid_passes_by_seed, production=True)
+                    production=True, cells=cells)
 
 
 def execute_full_mc_for_tests(prepared, *, authorization: RunAuthorization,
                               supplement: Mapping,
                               sealed_artifact_sha256: str,
-                              grid_passes_by_seed: Mapping) -> RunnerResult:
+                              cells: tuple = _gr.GRID_CELL_KEYS
+                              ) -> RunnerResult:
     """Synthetic entry: the SAME `_execute`, reached with an authorization
     the caller bound from synthetic registry text.
 
@@ -341,4 +362,4 @@ def execute_full_mc_for_tests(prepared, *, authorization: RunAuthorization,
     return _execute(prepared, authorization=authorization,
                     supplement=supplement,
                     sealed_artifact_sha256=sealed_artifact_sha256,
-                    grid_passes_by_seed=grid_passes_by_seed, production=False)
+                    production=False, cells=cells)

@@ -120,9 +120,11 @@ _KNOWN_TEST_CONSTRUCTIONS = {
     # walk finds twelve files with 26. A hand-written mirror of derived
     # data, wrong on its first outing -- which is the argument for the
     # walk existing, made against the person who wrote the walk.
-    # N13: the runner tests resolve SYNTHETIC registry bytes through the
-    # real boundary (write to tmp_path, then `resolve_registry(path)`),
-    # so the C2 one-read discipline is exercised rather than bypassed.
+    # N13 / B-27: the runner and grid-channel tests resolve SYNTHETIC
+    # registry bytes through the real boundary (write to tmp_path, then
+    # `resolve_registry(path)`), so the C2 one-read discipline is exercised
+    # rather than bypassed.
+    "tests/test_mc_grid_channel_b27.py": 1,
     "tests/test_mc_runner_n13.py": 1,
     "tests/test_mc_supplement_integration.py": 1,
     "tests/test_mc_supplement_paths_battery.py": 1,
