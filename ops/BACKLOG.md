@@ -4,7 +4,7 @@
 RECORD_TYPE   = BACKLOG (one file; §1 is the ONLY blocker ledger of this project)
 OUTCOME_CLEAN = YES
 ROWS          = close, never delete; a closed row keeps its closing evidence
-UPDATED       = 2026-09-10 (**Astra round 2 returned HOLD on F1-R2-01**; Aaron authorized the bounded builder repair directly — see B-31 and `ops/DECISIONS.md` DEC-N13-B27-17/18/19. **Reviewer budget for the N13-F1 lineage is EXHAUSTED (2 of 2); no round 3.** N13 awaits Aaron's Owner closure decision)
+UPDATED       = 2026-09-10 (**N13 = CLOSED** by Aaron's Owner decision DEC-N13-CLOSE-1/2; F1-R2-01 = `CLOSED_BY_OWNER_AFTER_BOUNDED_REPAIR`, see B-31. §1 `CURRENT_BLOCKERS` holds zero open rows. **B-29 (N13-F2) and B-30 (claim 13b) remain OPEN and NON-BLOCKING** and neither was promoted or repaired. REAL_MC = NOT AUTHORIZED)
 ```
 
 Admission test for §1 (QROS-CF v2 §2.5): a row enters `CURRENT_BLOCKERS` only if it names exactly one threat — T1 research correctness · T2 look-ahead/leakage · T3 data identity/provenance · T4 reproducibility · T5 real-run execution safety · T6 independent-verification validity — and a concrete failure path on the current or next stage. Not admissible: unreachable on the current path; governance format; cosmetic; guard-of-a-guard; a lifecycle edge that cannot occur at this stage; ops-document consistency.
