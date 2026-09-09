@@ -4,7 +4,7 @@
 RECORD_TYPE=OFF_LIMITS_CARRIER_AND_READ_ALLOWLIST
 REVIEW_ID=N13-F1-REREVIEW-002
 DELIVERY_STATUS=ISSUED
-REVIEWED_SET_UNCHANGED_SINCE=b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b
+REVIEWED_SET_UNCHANGED_SINCE=c423183baebdff3c5e189ed99d053613c21d8f50
 ISSUE_LINEAGE=N13-F1
 REVIEW_ROUND=2 of 2 (ops/REVIEWER_CONTRACT.md S1: "HOLD -> builder fixes -> ONE
     re-review covering the fix plus a builder-declared, reviewer-contestable
@@ -22,7 +22,9 @@ BUILDER=Claude Opus / Claude Code (which made the repair and may neither
     dispatch nor perform this review)
 BLINDNESS=CLAIM_BLIND
 BUDGET=1 re-review
-IMPLEMENTATION_REVIEW_TARGET=commit b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b
+IMPLEMENTATION_REVIEW_TARGET=commit b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b   <-- the CODE under review
+    NOTE: `REVIEWED_SET_UNCHANGED_SINCE` above is the FREEZE PIN over the whole
+    allowlist and is a DIFFERENT commit. See section 3.
 IMPLEMENTATION_REVIEW_TREE=c0413d6f89865e38564bf22c2f1c945b1a0d6e93
 PRIOR_REVIEWED_TARGET=c98a0ef776df76b3d0b0c76935bb8f388413c246 -- HISTORICAL EVIDENCE ONLY. It is the tree round
     1 reviewed and it must NOT be substituted as this round's target.
@@ -31,7 +33,7 @@ CREATED=2026-09-10
 
 **Read this file from disk.** Chat-carried bytes are never a source of truth in
 this project. Line 7 of it must read
-`REVIEWED_SET_UNCHANGED_SINCE=b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b`; if the copy in front of you says
+`REVIEWED_SET_UNCHANGED_SINCE=c423183baebdff3c5e189ed99d053613c21d8f50`; if the copy in front of you says
 anything else it is stale -- open the file.
 
 ## 0. Read this before anything else
@@ -145,10 +147,22 @@ anyway, declare it under `MODULES_EXECUTED_NOT_INSPECTED`.
 
 ## 3. The read allowlist -- exhaustive: 26 repository files + 1 external file
 
-Recompute every hash before any substantive work. **A mismatch is STOP.** These
-are the bytes at the repaired target, and `ops/ARTIFACTS_UNDER_REVIEW.json` pins
-them: no commit after `b9eb342f0e8a` may touch any of them, verifiable with
-`git log b9eb342f0e8a..HEAD -- <path>` (expected: empty).
+Recompute every hash before any substantive work. **A mismatch is STOP.**
+
+**Two different commits appear in this package and they are NOT the same quantity.**
+`IMPLEMENTATION_REVIEW_TARGET` = `b9eb342f0e8a` is the code you are reviewing.
+`REVIEWED_SET_UNCHANGED_SINCE` = `c423183baebd` is the FREEZE PIN over this whole
+allowlist, and it is later because the Owner's reviewer-routing migration edited two
+authority files that are IN the allowlist -- `ops/REVIEWER_CONTRACT.md`, which
+defines your seat, and `ops/RESEARCH_STATE.md`. A pin is only meaningful at or after
+every listed path's last change, so it tracks the SET; the target tracks the CODE.
+Both hold at once, and both are yours to verify rather than take from here:
+
+    git log c423183baebd..HEAD -- <any allowlisted path>   ->  expected: empty
+    git log b9eb342f0e8a..HEAD -- src/ tests/           ->  expected: empty
+
+The second is the one that answers "am I reviewing a moving tree": **no
+implementation byte has changed since `b9eb342f0e8a`.**
 
 ### A -- reviewer authority (also restated below and in the brief, so nothing needs hunting)
 
