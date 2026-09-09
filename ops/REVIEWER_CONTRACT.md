@@ -26,15 +26,49 @@ Rounds: HOLD → builder fixes → ONE re-review covering the fix plus a builder
 
 | Situation | Seat | Blindness | Budget |
 |---|---|---|---|
-| FULL pre-seal design challenge (S2) | fresh Sol/Astra | outcome-blind (pre-reveal) | 1 seat, ≤ 2 rounds; travels as Review Packet v1 (L6 A2) |
+| FULL pre-seal design challenge (S2) | fresh `OWNER_DEFAULT_INDEPENDENT_REVIEWER` | outcome-blind (pre-reveal) | 1 seat, ≤ 2 rounds; travels as Review Packet v1 (L6 A2) |
 | Consequential sealed run output | fresh verifier session | claim-blind | 1 dispatch + 1 retry (DEC-0007) |
 | Final confirmatory statistic before reveal (Stage I) | fresh verifier, not a prior seat for this RQ | outcome-blind | 1 + 1; travels as Review Packet v1 (L6 Stage I) |
 | MEASUREMENT with `MATERIALITY: MATERIAL` | fresh session, non-author | claim-blind | 1 round; Review Packet v1 (L6 material-measurement) |
 | Producer and evidence conflict | fresh seat of a different family | claim-blind | 1 round |
-| Change to a tier-B authorization gate or leakage-sensitive code | fresh Sol | claim-blind | 1 round |
+| Change to a tier-B authorization gate or leakage-sensitive code | fresh `OWNER_DEFAULT_INDEPENDENT_REVIEWER` | claim-blind | 1 round |
 | Promotion, `falsified`, public release, other QROS §7 triggers | Fable | as needed | 1 wave ≤ 3 workflows; +1 only for unresolved Critical/High |
 
 Not dispatched by default: maintenance commits, ledger appends, refactors, document edits, enum questions, wording, a review of a review absent contamination. Every review outside the three L6-recognised ones is a one-page brief (`ops/templates/VERIFICATION_BRIEF_TEMPLATE.md`), not a packet.
+
+### 2.1 `OWNER_DEFAULT_INDEPENDENT_REVIEWER` — the seat, resolved at dispatch
+
+Four rows of the table above already name a *property* rather than a product —
+"fresh verifier session", "fresh verifier, not a prior seat for this RQ", "fresh
+session, non-author", "fresh seat of a different family". The two reviewer rows
+named a product only because it happened to be the strongest independent model
+available when they were written. They now name the property too, and the product
+is resolved **at dispatch time** from Aaron's current routing:
+
+| role | model | note |
+|---|---|---|
+| `OWNER_DEFAULT_INDEPENDENT_REVIEWER` | **GPT-6 Astra** | preferred/default strongest suitable independent reviewer, challenger, design and Owner-decision seat for **NEW** work (Aaron, 2026-09-10) |
+| legacy / fallback / frozen-lineage reviewer | GPT-5.6 Sol | valid, and **remains** the seat wherever a lineage is already executed or otherwise frozen and changing the reviewer would break reproducibility or an existing authority |
+| architecture-only | Fable 5.1 | genuine architecture-level blockers; the QROS §7 row above is unchanged by this resolution |
+| builder / Main Agent | Claude Opus / Claude Code | never a reviewer of its own work, at any capability |
+
+**Substituting the model does not relax anything else.** The seat is still a fresh
+top-level session, still claim- or outcome-blind as its row says, still independent
+of the producing session and never a subagent of it, still bound by the transport
+and allowlist discipline, still inside its issue lineage's round budget, and a HOLD
+still escalates to Aaron. `OWNER_DEFAULT_INDEPENDENT_REVIEWER` is a capability
+pointer, not a licence.
+
+**A dispatch must still name the actual model and session class it used**, because
+reproducibility is about what happened, not about what the policy preferred. Rows
+already dispatched, verdicts already returned, and attestations already written are
+**never** retroactively re-attributed: a Sol verdict stays a Sol verdict.
+
+**Resolution is prospective and applies at dispatch.** A round whose transport was
+prepared but never dispatched has consumed nothing (see
+`ops/ARTIFACTS_UNDER_REVIEW.json` `_withdrawn_before_dispatch`, whose entries record
+`was_dispatched: false` and "NOT a review round"), so re-resolving its seat does not
+reset its issue lineage or its round counter.
 
 ## 3. Two verification obligations, never confused
 

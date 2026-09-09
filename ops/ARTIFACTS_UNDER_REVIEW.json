@@ -3,8 +3,8 @@
   "under_review": [
     {
       "path": "ops/REVIEWER_CONTRACT.md",
-      "sha256": "14e2d84defc6a77e408bba37806246d220e1bd2ee5af836a730843443d87d72a",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "sha256": "ce076ca55a3400ffb3b8725ad891097e09915ffb911082c630d0889ce02b43c1",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -15,7 +15,7 @@
     {
       "path": "ops/templates/ATTESTATION_HEADER_TEMPLATE.md",
       "sha256": "fb1bd88098543cb82a1cf63cdf2912deb62177f2a5988aa1a9f68d28c26b06b6",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -26,7 +26,7 @@
     {
       "path": "ops/templates/VERIFICATION_BRIEF_TEMPLATE.md",
       "sha256": "bae72767ec6d6e89a546495a5114c12713ae20f9b9801c15d2d8c711cd90d651",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -37,7 +37,7 @@
     {
       "path": "ops/OUTCOME_CARRYING_ARTIFACTS.json",
       "sha256": "a61c125b4e2e551955ce59816c9ccbc6a449a91d7f7701095eeb586e5c155f4b",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -47,8 +47,8 @@
     },
     {
       "path": "ops/RESEARCH_STATE.md",
-      "sha256": "a5775555e2e2f01ca496e8e26bd05ce498b6a4fb467146a2df1b1371f73b4611",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "sha256": "4df52245c02e7eb20c0f797ad5fa051b1312cc1307b8794f60825f6df00f557b",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -59,7 +59,7 @@
     {
       "path": "src/itsf/mc/grid_channel.py",
       "sha256": "4027542f61e2dac8269320ab86079783e83bd8058cae75ae28338a9800636c39",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -70,7 +70,7 @@
     {
       "path": "src/itsf/mc/grid_replay.py",
       "sha256": "c7b9dd29d886a2261b96988d5f40a0b9fba2d51556d2a1a53c3b9f7feddde485",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -81,7 +81,7 @@
     {
       "path": "src/itsf/mc/mc_runner.py",
       "sha256": "336f9780590e3d9a191dcb839f5fbdc99fff907e7d3f22ae23d437a799411ec4",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -92,7 +92,7 @@
     {
       "path": "src/itsf/mc/consumer.py",
       "sha256": "4375af108e1d03cce266fb59f44b6fbc5e7fbb18e2fd8a40d746919e38f2ee8a",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -103,7 +103,7 @@
     {
       "path": "src/itsf/s0/gridmix.py",
       "sha256": "c5ecded879c62c6509645bd63751be9e73a9d82c956b6132391b759ddea6049e",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -114,7 +114,7 @@
     {
       "path": "src/itsf/mc/atoms.py",
       "sha256": "86ff419f98558592e0a3c4d9cac0dcb7ddbff2d3f8598f88827e23440b91f964",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -125,7 +125,7 @@
     {
       "path": "src/itsf/mc/feasibility.py",
       "sha256": "3431a3b4d96710079b8c6df233d12a8d1771f11178627d4551a6e7f8e38237da",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -136,7 +136,7 @@
     {
       "path": "src/itsf/mc/day_strata_supplement.py",
       "sha256": "3554cd326c06c04c3298ba44164338dcdd9e63df9a253f63ca3b0d82aa30f410",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -147,7 +147,7 @@
     {
       "path": "src/itsf/contracts.py",
       "sha256": "97d50740d938cb40eccab6595e6ba7284c493e9a662e311ddce31700f294a002",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -158,7 +158,7 @@
     {
       "path": "src/itsf/s0/study.py",
       "sha256": "405d3e2001dc691bd1591cdb22a0a67075d31e1c584faf2a432f2049eb471416",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -169,7 +169,7 @@
     {
       "path": "src/itsf/mc/mc_contract.py",
       "sha256": "817419cd5910fd352bf291c8c74d6e4723cc6afefcd1a1f5fe3cb1326bd88e34",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -180,7 +180,7 @@
     {
       "path": "src/itsf/mc/registry_boundary.py",
       "sha256": "549964e3ad657cf91ac3ec44dc4272c453760e1dd9d1b9f6a7d38866ab5391a4",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -191,7 +191,7 @@
     {
       "path": "tests/test_mc_grid_channel_b27.py",
       "sha256": "f9bfb5e251806726ce8be0eebdc45126393f12e4050ba513a9d219336ef33990",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -202,7 +202,7 @@
     {
       "path": "tests/test_mc_runner_n13.py",
       "sha256": "8c3b22702d3ef12b809ec98c458086f43711cf7c6a1a9df6fa4bd7d97526efa6",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -213,7 +213,7 @@
     {
       "path": "tests/test_mc_grid_replay_n11.py",
       "sha256": "5e55324444e83d6c44f4e6b58e1d49da743c1687c8761e0a6ad94203c06bb050",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -224,7 +224,7 @@
     {
       "path": "tests/test_mc_b26_reduction_feasibility.py",
       "sha256": "a5840d3d6878c5753e3ee3eed13cfcb75eece2c33923110b70c23e57fe479458",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -235,7 +235,7 @@
     {
       "path": "tests/test_mc_cold_replay.py",
       "sha256": "8538d499ced68c5e78944af09c09c9677c7eeaec892259981687f5bfbb754608",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -246,7 +246,7 @@
     {
       "path": "tests/test_mc_consumer.py",
       "sha256": "2bae7b182d712faebc98de7c438e78845cb81441b5e6e1d97c018c0ece04daf5",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -257,7 +257,7 @@
     {
       "path": "tests/test_registry_path_single_construction.py",
       "sha256": "e4d6a79220380a6b1251f36b1db8ae6f3ab998d4ef8faf34d7f386a457062756",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -268,7 +268,7 @@
     {
       "path": "tests/test_gridmix_rulings.py",
       "sha256": "289e4c783ed46f3162856da4c6772bdc62f7ca61a11e7c3c53a4330ff27ba630",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -277,9 +277,9 @@
       "is_the_delivery_document": false
     },
     {
-      "path": "ops/OFF_LIMITS_N13_F1_REREVIEW_R2_2026-09-10.md",
-      "sha256": "0707d8032d7d44554e337373c6651263dd2dd038490a8e7249515ad840993e23",
-      "issued_to": "NEW fresh Codex GPT-5.6 Sol session, claim-blind (REVIEWER_CONTRACT.md S1 round 2 of the N13-F1 lineage; S2 row 'leakage-sensitive code')",
+      "path": "ops/OFF_LIMITS_N13_F1_R2_ASTRA_2026-09-10.md",
+      "sha256": "9f3de5215cfa569cce53cb6ae4e2755d853aa017a24112182c328dd89132fca0",
+      "issued_to": "ONE NEW fresh GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §1 round 2 of the N13-F1 lineage)",
       "issued_at": "2026-09-10",
       "review_id": "N13-F1-REREVIEW-002",
       "unchanged_since": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
@@ -327,6 +327,16 @@
       "entries_withdrawn": 54,
       "why": "that closure review RETURNED with HOLD and reduced the remaining failures to two root blocker families. Aaron then authorized ONE final bounded repair on the strength of a Fable 5.1 design-only review. The repair changes bytes this set pinned, so the set is retired. The HOLD record itself is preserved, not rewritten.",
       "successor": "a CLOSED-SCOPE mechanical closure package, scope A1-A6/B1-B4/S"
+    },
+    {
+      "review_id": "N13-F1-REREVIEW-002",
+      "packet": "ops/OFF_LIMITS_N13_F1_REREVIEW_R2_2026-09-10.md",
+      "withdrawn_at": "2026-09-10",
+      "was_dispatched": false,
+      "returned_verdict": null,
+      "why": "Aaron authorized a bounded reviewer-model policy migration on 2026-09-10: GPT-6 Astra becomes the OWNER_DEFAULT_INDEPENDENT_REVIEWER for NEW work, and GPT-5.6 Sol keeps the legacy / fallback / frozen-lineage seat. Resolving this pending round's seat to Astra changes `ops/REVIEWER_CONTRACT.md` §2 and §2.1 and the routing sentence in `ops/RESEARCH_STATE.md`, both of which this set pinned. The set is withdrawn rather than left pinning stale hashes. NOT a review round: nothing was dispatched and no seat saw these bytes -- the Sol brief, dispatch and manifest were prepared and never sent, and no REVIEW_VERDICT row exists for them.",
+      "entries_withdrawn": 26,
+      "reissue": "the SAME review_id is reissued against an Astra seat, which is what preserves ISSUE_LINEAGE=N13-F1 and REVIEW_ROUND=2 of 2. No parallel round-2 review id is created and the round counter is NOT reset. The Sol package remains on disk and in git as a historical prepared-but-never-executed transport."
     }
   ],
   "_last_returned_review": {

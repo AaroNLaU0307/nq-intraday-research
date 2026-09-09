@@ -42,6 +42,7 @@
 | [`OUTCOME_CARRYING_ARTIFACTS.json`](OUTCOME_CARRYING_ARTIFACTS.json) | **隔离名单**。给复审席位之前必读 |
 | [`OFF_LIMITS_N13_B27_REVIEW_2026-09-08.md`](OFF_LIMITS_N13_B27_REVIEW_2026-09-08.md) | **现在挂着的交付** —— `N13-B27-GRID-SELECTOR-001` 的禁读清单载体（delivery）。N13/B-27 泄漏敏感选择器的 fresh Sol claim-blind 一轮复审；前一个席位是被**传输**烧掉的（自行发现权威时触到 `outcome_quarantine/`），所以本件把可读集穷尽枚举，并写明「越界即 STOP」。§2 是关键：边界同时约束**席位被要求跑的代码**，不只约束人 |
 | [`OFF_LIMITS_N13_F1_REREVIEW_R2_2026-09-10.md`](OFF_LIMITS_N13_F1_REREVIEW_R2_2026-09-10.md) | **现在挂着的交付** —— `N13-F1-REREVIEW-002` 的禁读清单载体（delivery）。**N13-F1 谱系第 2 轮，也是最后一轮**（契约 §1：HOLD → 修 → 一次复审 → 再 HOLD 就归 Aaron）。受审目标是**修复后的** `b9eb342`／树 `c0413d6`；前一轮的 `c98a0ef` 只是史料，不得替换。§4 是第四类 `INFEASIBLE_BY_SAMPLE` 的独立审查点，§5 写明 13b 的`INCONCLUSIVE_NON_BLOCKING` 不得再变成 STOP，§6 写明 F2 仍是 backlog |
+| [`OFF_LIMITS_N13_F1_R2_ASTRA_2026-09-10.md`](OFF_LIMITS_N13_F1_R2_ASTRA_2026-09-10.md) | **现在挂着的交付** —— `N13-F1-REREVIEW-002` 的**操作性**载体，席位 = **ONE NEW fresh GPT-6 Astra**（`REVIEWER_CONTRACT.md` §2.1 `OWNER_DEFAULT_INDEPENDENT_REVIEWER`，Aaron 2026-09-10 定为 Astra）。同一 review_id 重发，**谱系 N13-F1、轮次 2 of 2 均未重置**；上一份 Sol 包从未派发、未消耗轮次，作为史料保留。受审目标仍是 `b9eb342`／树 `c0413d6` |
 
 ## 2. 现势未决
 

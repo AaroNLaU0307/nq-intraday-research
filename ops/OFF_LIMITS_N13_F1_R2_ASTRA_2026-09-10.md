@@ -3,19 +3,7 @@
 ```
 RECORD_TYPE=OFF_LIMITS_CARRIER_AND_READ_ALLOWLIST
 REVIEW_ID=N13-F1-REREVIEW-002
-DELIVERY_STATUS=RETURNED
-WITHDRAWN_BEFORE_DISPATCH_2026-09-10=this Sol package was PREPARED AND NEVER
-    DISPATCHED. No Sol seat saw these bytes, no verdict exists from it, and it
-    consumed NO round -- see ops/ARTIFACTS_UNDER_REVIEW.json
-    `_withdrawn_before_dispatch`, whose entries carry `was_dispatched: false`.
-    Aaron migrated the pending round's seat to GPT-6 Astra on 2026-09-10
-    (ops/REVIEWER_CONTRACT.md §2.1). The operative round-2 transport is
-    ops/OFF_LIMITS_N13_F1_R2_ASTRA_2026-09-10.md, reissued under the SAME
-    review_id so ISSUE_LINEAGE=N13-F1 and REVIEW_ROUND=2 of 2 are unchanged.
-    `DELIVERY_STATUS=RETURNED` is used because the register's guard vocabulary
-    has exactly two states, ISSUED and RETURNED, and this package is no longer
-    out: it is history. It is NOT a returned review and produced no verdict.
-    Kept byte-stable below this header block as the historical prepared package.
+DELIVERY_STATUS=ISSUED
 REVIEWED_SET_UNCHANGED_SINCE=b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b
 ISSUE_LINEAGE=N13-F1
 REVIEW_ROUND=2 of 2 (ops/REVIEWER_CONTRACT.md S1: "HOLD -> builder fixes -> ONE
@@ -23,7 +11,15 @@ REVIEW_ROUND=2 of 2 (ops/REVIEWER_CONTRACT.md S1: "HOLD -> builder fixes -> ONE
     impact scope -> still HOLD -> Aaron. Two rounds per issue lineage.")
     Round 1 returned HOLD on N13-F1. This is the ONE re-review. A further HOLD
     goes to Aaron, not to a third round.
-FOR=ONE NEW fresh Codex GPT-5.6 Sol session, claim-blind
+FOR=ONE NEW fresh GPT-6 Astra session, claim-blind
+SEAT_AUTHORITY=ops/REVIEWER_CONTRACT.md S2.1 -- the row's seat is
+    `OWNER_DEFAULT_INDEPENDENT_REVIEWER`, resolved at dispatch, and Aaron set
+    that to GPT-6 Astra for NEW work on 2026-09-10. GPT-5.6 Sol keeps the
+    legacy / fallback / frozen-lineage seat. Substituting the model relaxes
+    nothing else: fresh top-level session, claim-blind, independent of the
+    producing session, never its subagent.
+BUILDER=Claude Opus / Claude Code (which made the repair and may neither
+    dispatch nor perform this review)
 BLINDNESS=CLAIM_BLIND
 BUDGET=1 re-review
 IMPLEMENTATION_REVIEW_TARGET=commit b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b
@@ -158,7 +154,7 @@ them: no commit after `b9eb342f0e8a` may touch any of them, verifiable with
 
 | sha256 | bytes | path at `b9eb342f0e8a` |
 |---|---|---|
-| `14e2d84defc6a77e408bba37806246d220e1bd2ee5af836a730843443d87d72a` | 5985 | `ops/REVIEWER_CONTRACT.md` |
+| `ce076ca55a3400ffb3b8725ad891097e09915ffb911082c630d0889ce02b43c1` | 8418 | `ops/REVIEWER_CONTRACT.md` |
 | `fb1bd88098543cb82a1cf63cdf2912deb62177f2a5988aa1a9f68d28c26b06b6` | 1246 | `ops/templates/ATTESTATION_HEADER_TEMPLATE.md` |
 | `bae72767ec6d6e89a546495a5114c12713ae20f9b9801c15d2d8c711cd90d651` | 2805 | `ops/templates/VERIFICATION_BRIEF_TEMPLATE.md` |
 | `a61c125b4e2e551955ce59816c9ccbc6a449a91d7f7701095eeb586e5c155f4b` | 2563 | `ops/OUTCOME_CARRYING_ARTIFACTS.json` |
@@ -170,7 +166,7 @@ them: no commit after `b9eb342f0e8a` may touch any of them, verifiable with
 | sha256 | bytes | path at `b9eb342f0e8a` |
 |---|---|---|
 | `6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132` | 22498 | `STUDY_0_PREREGISTRATION.md` |
-| `a5775555e2e2f01ca496e8e26bd05ce498b6a4fb467146a2df1b1371f73b4611` | 11418 | `ops/RESEARCH_STATE.md` |
+| `4df52245c02e7eb20c0f797ad5fa051b1312cc1307b8794f60825f6df00f557b` | 11598 | `ops/RESEARCH_STATE.md` |
 
 2 file(s).
 
@@ -251,8 +247,9 @@ declared impact scope (S4, recorded at `DECISIONS.md` DEC-N13-B27-9), the 13b
 classification (S6, B-30) and the F2 classification (S7, B-29). **Ask for either
 file if you want its provenance rather than the brief's account of it** -- that is
 a transport request, not an allowlist breach. Not `ops/README.md`.
-Not the registry. No run directory beyond the one file above. **Not the round-1
-transport** (`ops/OFF_LIMITS_N13_B27_REVIEW_2026-09-08.md` and its brief): it
+Not the registry. No run directory beyond the one file above. **Neither the round-1
+transport** (`ops/OFF_LIMITS_N13_B27_REVIEW_2026-09-08.md` and its brief) **nor the
+withdrawn Sol package for this round** (`ops/OFF_LIMITS_N13_F1_REREVIEW_R2_2026-09-10.md`): the first
 described the superseded tree, it is preserved as history, and reading it would
 tell you what the previous seat concluded -- which is exactly what claim-blindness
 is protecting.
@@ -309,6 +306,26 @@ Do not make it a round-2 blocker **unless the repaired diff creates a new actual
 governed path from a forged draw to consequential output** -- if it does, that is
 a genuine finding and you should say so. Do not require hardening unrelated to
 the F1 repair.
+
+## 6a. Why this package exists twice, and what that does NOT mean
+
+A Sol package for this same round was prepared on 2026-09-10 and **never
+dispatched**: no Sol seat saw its bytes, no verdict came from it, and it consumed
+no round. Aaron then migrated the seat for NEW review work to GPT-6 Astra, so the
+round was reissued under the SAME review_id -- which is precisely what keeps
+`ISSUE_LINEAGE=N13-F1` and `REVIEW_ROUND=2 of 2` intact. The round counter was
+NOT reset by changing the model.
+
+The withdrawal is recorded in `ops/ARTIFACTS_UNDER_REVIEW.json`
+`_withdrawn_before_dispatch` with `was_dispatched: false`, the repository's existing
+vocabulary for a package prepared and never sent. The Sol package itself is still on
+disk and in git as historical evidence; it is deliberately NOT on your allowlist,
+for the same reason the round-1 transport is not -- it would tell you what a prior
+package framed, and you are claim-blind.
+
+**Round 1 of this lineage WAS executed, by a Sol seat, and returned a valid HOLD.**
+That verdict stands and is not re-attributed to any other model. What you are doing
+is round 2.
 
 ## 7. What this review is not
 
