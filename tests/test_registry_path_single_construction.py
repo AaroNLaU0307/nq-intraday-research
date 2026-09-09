@@ -124,7 +124,10 @@ _KNOWN_TEST_CONSTRUCTIONS = {
     # registry bytes through the real boundary (write to tmp_path, then
     # `resolve_registry(path)`), so the C2 one-read discipline is exercised
     # rather than bypassed.
-    "tests/test_mc_grid_channel_b27.py": 1,
+    # 2 since F1-R2-01: the B-27 file now builds a synthetic registry for
+    # test_H (the feasible seal path) and again for the all-marked runner
+    # proof, which must reach the runner to show it no longer aborts.
+    "tests/test_mc_grid_channel_b27.py": 2,
     "tests/test_mc_runner_n13.py": 1,
     "tests/test_mc_supplement_integration.py": 1,
     "tests/test_mc_supplement_paths_battery.py": 1,

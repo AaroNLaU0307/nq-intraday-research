@@ -245,7 +245,33 @@ def _witness(prepared, *, supplement: Mapping, sealed_artifact_sha256: str,
         # and that is worth refusing rather than sealing.
         ran = _gc.drawn_count(prepared, authority, supplement,
                               master_seed=seed, cells=cells)
-        if ran != (witness.k, witness.k_doubled):
+        if ran is None:
+            # F1-R2-01. No cell of this pass prescribed a draw. The sealed rule
+            # licenses that only when EVERY grid point is marked
+            # `infeasible_by_sample` — marked, skipped, reported in full — and
+            # then there is nothing for the count guard to reconcile, because
+            # nothing was sampled anywhere to compare against.
+            #
+            # The absence is CORROBORATED from the passes rather than taken on
+            # `drawn_count`'s word. Trusting it would make `None` a hole in the
+            # guard: a future change that returned it for the wrong reason would
+            # skip the check silently. So "all skipped" must be visible in the
+            # evidence itself, and anything else is a refusal.
+            sampled = sorted(
+                {key for pas in (at_k, at_2k) for key, cell in pas.items()
+                 if not _gr.is_infeasible(cell)})
+            if sampled:
+                # Every offending cell is named, not a slice of them: this is a
+                # fail-closed refusal and the full list is what a human needs.
+                # A slice would also add a numeric constant to a module whose
+                # own guard keeps it free of them.
+                raise MCInputError(
+                    "mc_run_draw_count_absent_but_cells_sampled",
+                    f"seed {seed}: no cell prescribed a draw, yet "
+                    f"{len(sampled)} cell(s) carry statistics — an absent draw "
+                    "count is lawful only when every grid point is marked "
+                    f"{_gr.INFEASIBLE_BY_SAMPLE}: {sampled}")
+        elif ran != (witness.k, witness.k_doubled):
             raise MCInputError(
                 "mc_run_draw_count_mismatch",
                 f"seed {seed}: the passes executed {ran[0]} and {ran[1]} "

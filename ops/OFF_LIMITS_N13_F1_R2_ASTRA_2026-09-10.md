@@ -3,7 +3,19 @@
 ```
 RECORD_TYPE=OFF_LIMITS_CARRIER_AND_READ_ALLOWLIST
 REVIEW_ID=N13-F1-REREVIEW-002
-DELIVERY_STATUS=ISSUED
+DELIVERY_STATUS=RETURNED
+RETURNED_2026-09-10=HOLD -- one BLOCKING finding, F1-R2-01: an ALL-marked
+    grid aborted the runner (`_witness` called `drawn_count()`
+    unconditionally; it raised `grid_draw_every_cell_infeasible`). MARK,
+    SKIP, local REPORT, local K/2K, the mixed marked+feasible case and the
+    absence of fabricated statistics were all established working.
+    Claim 13b: INCONCLUSIVE_NON_BLOCKING, as anticipated. N13-F2: still
+    NON-BLOCKING backlog. Ledger row: ops/DECISIONS.md DEC-N13-B27-17.
+    This package described the tree at b9eb342 and is kept as the
+    historical record of the round that produced that verdict.
+    The reviewer budget for the N13-F1 lineage is now EXHAUSTED (2 of 2);
+    a round-2 HOLD escalates to Aaron, who authorized the bounded builder
+    repair directly. NO round 3 exists and no new reviewer was created.
 REVIEWED_SET_UNCHANGED_SINCE=c423183baebdff3c5e189ed99d053613c21d8f50
 ISSUE_LINEAGE=N13-F1
 REVIEW_ROUND=2 of 2 (ops/REVIEWER_CONTRACT.md S1: "HOLD -> builder fixes -> ONE

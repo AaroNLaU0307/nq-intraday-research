@@ -892,12 +892,276 @@ def test_F1_the_witness_and_the_draw_count_survive_a_marked_first_cell(
         narrow, narrow_authority, narrow_supplement, small_grid):
     """`drawn_count` used to take `cells[0]` unconditionally, so a marked FIRST
     cell aborted the runner's own witness check — the same blocker one level
-    up. It now skips marked cells, which is what the sealed rule says to do."""
+    up. It now skips marked cells, which is what the sealed rule says to do.
+
+    REVISED for F1-R2-01. The second half of this test used to assert that an
+    ALL-marked pass raises `grid_draw_every_cell_infeasible` — it was pinning the
+    round-2 blocker as if it were correct behaviour, the same way the original
+    `test_G` pinned the round-1 one. An all-marked grid is a lawful sealed
+    outcome, so the count is now an explicit ABSENCE.
+    """
     assert MIXED_CELLS[0] == INFEASIBLE_CELL
     assert gc.drawn_count(narrow, narrow_authority, narrow_supplement,
                           master_seed=7, cells=MIXED_CELLS) == (K_SMALL,
                                                                 2 * K_SMALL)
-    with pytest.raises(mcc.MCInputError) as ei:
-        gc.drawn_count(narrow, narrow_authority, narrow_supplement,
-                       master_seed=7, cells=(INFEASIBLE_CELL,))
-    assert ei.value.code == "grid_draw_every_cell_infeasible"
+    # all-marked -> None, and specifically NOT (0, 0): a zero would be a
+    # numeric claim that a representative cell was sampled and prescribed no
+    # draws, which the runner's guard would then compare against the witness.
+    absent = gc.drawn_count(narrow, narrow_authority, narrow_supplement,
+                            master_seed=7, cells=(INFEASIBLE_CELL,))
+    assert absent is None
+    assert absent != (0, 0)
+
+
+# ---------------------------------------------------------------------------
+# F1-R2-01 — THE ALL-MARKED GRID: the sealed rule at its boundary
+# ---------------------------------------------------------------------------
+#
+# THE ROUND-2 BLOCKER. Individual marked cells, and mixed marked+feasible
+# passes, were established working. The boundary that was not: when EVERY
+# frozen cell is `infeasible_by_sample`, the runner still called
+# `drawn_count()` unconditionally, `drawn_count` could find no sampleable
+# representative and RAISED, and the runner aborted -- so the sealed
+# "REPORT IN FULL" never happened for the one grid where every point needed
+# reporting. An all-marked grid is a lawful sealed outcome, not a malformed
+# input.
+#
+# THE GEOMETRY IS FOUND, NOT PATCHED, and it is the SMALLEST that works. The
+# sealed arithmetic is n_tp = floor(r x N_TP) and n_fp = round_half_up(n_tp x
+# (1-q)/q), and the least-demanding frozen cell is the one minimising both:
+# r = 0.20 with q at its maximum. So over the frozen grid the minimum FP
+# demand is round_half_up(floor(0.2 x N_TP) / 3), and every cell is marked iff
+# that exceeds N_FP.
+#
+#   N_TP = 25, N_FP = 1  ->  least-demanding cell (q=0.70, r=0.20):
+#                            n_tp = floor(0.2 x 25) = 5
+#                            n_fp = round_half_up(5 x 0.30/0.70) = 2  >  1
+#                            ALL 63 cells marked.
+#   N_TP = 24, N_FP = 1  ->  q=0.75, r=0.20 gives n_fp = 1, NOT > 1
+#                            -> one cell sampleable. 25 is the minimum.
+#
+# The reviewer's own example (N_TP = 2800, N_FP = 42 -> minimum demand 187)
+# also marks all 63 and is asserted below on the arithmetic alone; 25/1 is used
+# for the executed fixture because it needs 26 synthetic days rather than 2842.
+# N_FP = 1 rather than 0 because an empty FP pool is a different refusal
+# (`grid_draw_pool_degenerate`) and would prove the wrong thing.
+
+ALLMARKED_TP = tuple("2026-%02d-%02d" % (8 + i // 20, 1 + i % 20)
+                     for i in range(25))
+ALLMARKED_FP = ("2026-10-01",)
+
+
+@pytest.fixture()
+def allmarked(monkeypatch, tmp_path_factory, small_grid):
+    """25 TP / 1 FP -- a pool on which EVERY frozen grid cell is marked."""
+    assert len(set(ALLMARKED_TP)) == 25 and len(ALLMARKED_FP) == 1
+    monkeypatch.setattr(BB, "TP_DAYS", ALLMARKED_TP)
+    monkeypatch.setattr(BB, "FP_DAYS", ALLMARKED_FP)
+    monkeypatch.setattr(BB, "ALL_DAYS",
+                        tuple(sorted(ALLMARKED_TP + ALLMARKED_FP)))
+    root = tmp_path_factory.mktemp("f1r2root")
+    for rel in BB.FROZEN_METHOD_FILES:
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(BB.REAL_REPO_ROOT / rel, root / rel)
+    bundle = _coherent_bundle()
+    att = BB._attestation_bytes(bundle)
+    (root / mcc.ATTESTATION_PATH).parent.mkdir(parents=True, exist_ok=True)
+    (root / mcc.ATTESTATION_PATH).write_bytes(att)
+    monkeypatch.setattr(mcc, "_REPO_ROOT", root)
+    monkeypatch.setattr(mcc, "ATTESTATION_SHA256_PINNED",
+                        hashlib.sha256(att).hexdigest())
+    monkeypatch.setattr(mcc, "build_template_calendar",
+                        lambda *a, **k: BB._calendar())
+    return mcc.prepare_mc_input(
+        bundle, authorization_snapshot={"trial_id": BB.TRIAL,
+                                        "authorized_commit": BB.COMMIT},
+        attestation_bytes=att)
+
+
+@pytest.fixture()
+def allmarked_supplement(allmarked):
+    authority = sa.derive_supplement_authority(allmarked,
+                                               supplement_id=ds.SUPPLEMENT_ID)
+    days, binding = sa.supplement_build_inputs(authority, allmarked)
+    rows = [{"trade_date": d, "year": int(str(d)[:4]),
+             "vol_stratum": ds.VOL_STRATA[i % len(ds.VOL_STRATA)],
+             "event_stratum": ds.EVENT_STRATA[i % len(ds.EVENT_STRATA)]}
+            for i, d in enumerate(sorted(days))]
+    return ds.build_day_strata_supplement_test_only(
+        rows, expected_day_set=days, binding=binding,
+        supplement_id=ds.SUPPLEMENT_ID)
+
+
+@pytest.fixture()
+def allmarked_authority(allmarked, allmarked_supplement):
+    return gr.derive_grid_replay_authority(
+        allmarked, allmarked_supplement,
+        sealed_artifact_sha256=_sha(allmarked_supplement))
+
+
+def _grid_lifecycle_counter(monkeypatch):
+    """Count GRID lifecycle executions at the ONE execution site.
+
+    A GRID evaluation is exactly a `_run_path_atom` call carrying a
+    `traded_selector`; the Oracle main channel passes None. `is not None`
+    rather than truthiness, so even an empty selector would be counted.
+    """
+    calls = []
+    real = mcc._run_path_atom
+
+    def counting(prepared, **kw):
+        if kw.get("traded_selector") is not None:
+            calls.append((kw["world_index"], kw["phase_offset"],
+                          kw["scenario"]))
+        return real(prepared, **kw)
+    monkeypatch.setattr(mcc, "_run_path_atom", counting)
+    return calls
+
+
+def test_F1R2_the_arithmetic_marks_every_frozen_cell_vacuity_guard():
+    """THE VACUITY GUARD, and it runs first. If even one frozen cell were
+    sampleable on this geometry, every proof below would pass while testing
+    the mixed case that already worked."""
+    from itsf.s0 import gridmix as g
+    for n_tp_pool, n_fp_pool, label in ((25, 1, "the executed fixture"),
+                                        (2800, 42, "the reviewer's example")):
+        sampleable = [(q, r) for q in g.Q_GRID_MILLIS for r in g.R_GRID_MILLIS
+                      if g.n_fp_for(g.floor_n_tp(r, n_tp_pool), q) <= n_fp_pool]
+        assert not sampleable, f"{label}: {sampleable} are sampleable"
+    # and the boundary: one fewer TP day leaves a cell sampleable, so 25 is
+    # the minimum rather than a round number picked for comfort
+    still = [(q, r) for q in g.Q_GRID_MILLIS for r in g.R_GRID_MILLIS
+             if g.n_fp_for(g.floor_n_tp(r, 24), q) <= 1]
+    assert still == [(750, 200)]
+
+
+def test_F1R2_A_every_cell_is_marked_in_both_passes(
+        allmarked, allmarked_authority, allmarked_supplement, small_grid,
+        monkeypatch):
+    """A + B. Every one of the 63 frozen cells is explicitly marked in the K
+    pass and in the 2K pass, and ZERO grid lifecycles execute for any of
+    them."""
+    calls = _grid_lifecycle_counter(monkeypatch)
+    seen = 0
+    for seed in RESEARCH_BOOTSTRAP_SEEDS:          # all three, not just one
+        for doublings in (0, 1):
+            passed = gc.run_grid_pass(
+                allmarked, allmarked_authority, allmarked_supplement,
+                master_seed=seed, B=B_SMALL, doublings=doublings)
+            assert set(passed) == set(gr.GRID_CELL_KEYS)
+            assert len(passed) == 63
+            for key, cell in passed.items():
+                assert gr.is_infeasible(cell), f"seed {seed} {key} is not marked"
+                assert cell.reason == gr.INFEASIBLE_BY_SAMPLE
+                assert cell.doublings == doublings
+                assert cell.master_seed == seed
+                assert cell.n_fp > cell.fp_available   # the sealed condition
+            for kind in gr.REGION_KINDS:
+                m = gr.region_map(passed, kind)
+                assert set(m) == set(gr.GRID_CELL_KEYS)
+                assert set(m.values()) == {gr.INFEASIBLE_BY_SAMPLE}
+            seen += 1
+    assert seen == 6                               # 3 seeds x {K, 2K}
+    assert calls == [], f"{len(calls)} grid lifecycle(s) ran on an all-marked grid"
+
+
+def test_F1R2_the_draw_count_is_an_explicit_absence_not_a_zero(
+        allmarked, allmarked_authority, allmarked_supplement, small_grid):
+    """The repair's core semantics. `(0, 0)` would be a numeric claim that a
+    representative cell was sampled and prescribed no draws; the runner's guard
+    compares this value against the witness's reported k, so a zero would
+    assert something false about the frozen policy."""
+    absent = gc.drawn_count(allmarked, allmarked_authority,
+                            allmarked_supplement, master_seed=7)
+    assert absent is None
+    assert absent != (0, 0) and absent != 0
+    # ... while a sampleable pass still gets its real count, unchanged
+    assert gc.drawn_count(allmarked, allmarked_authority, allmarked_supplement,
+                          master_seed=7, cells=gr.GRID_CELL_KEYS) is None
+
+
+def test_F1R2_C_and_D_the_runner_returns_a_complete_all_marked_report(
+        allmarked, allmarked_authority, allmarked_supplement, small_grid,
+        tmp_path, monkeypatch):
+    """C + D + F. The runner COMPLETES instead of raising
+    `grid_draw_every_cell_infeasible`, and the report it returns retains every
+    grid coordinate in both passes and in the published cross-seed region."""
+    from itsf.mc.registry_boundary import resolve_registry
+    calls = _grid_lifecycle_counter(monkeypatch)
+    reg = tmp_path / "TRIAL_REGISTRY.md"
+    reg.write_text(RP.Reg().chain(RP.FULL[:5], commit=BB.COMMIT).text(),
+                   encoding="utf-8")
+    authorization = run.bind_run_authorization(
+        resolve_registry(reg), run_id=mcx.FIRST_RUN_ID,
+        expected_commit=allmarked.authorized_commit, output_root=OUT_ROOT,
+        test_only=True)
+
+    result = run.execute_full_mc_for_tests(
+        allmarked, authorization=authorization,
+        supplement=allmarked_supplement,
+        sealed_artifact_sha256=_sha(allmarked_supplement))
+
+    # C: it returned
+    assert result.sealed is True
+    # D: skipped did not become missing. `RunnerResult` deliberately exposes no
+    # raw passes -- that is the no-injection design, and B-27's own test asserts
+    # there is no such parameter -- so completeness is asserted on the report
+    # surface the runner actually returns: the published cross-seed region and
+    # the seal's grid section. The per-seed pass-level completeness for all
+    # three research seeds is proved directly in test_F1R2_A.
+    for kind in gr.REGION_KINDS:
+        published = result.published_region_by_kind[kind]
+        assert set(published) == set(gr.GRID_CELL_KEYS)
+        assert set(published.values()) == {gr.INFEASIBLE_BY_SAMPLE}
+    # B again, through the whole runner: no grid lifecycle for any seed
+    assert calls == [], f"{len(calls)} grid lifecycle(s) ran through the runner"
+    # F: both passes are comparable under the already-governed mark semantics
+    seal = result.seal_candidate
+    assert seal["grid_section"]["k"] == K_SMALL
+    assert seal["grid_section"]["k_doubled"] == 2 * K_SMALL
+    assert seal["grid_section"]["status"] in {"CONVERGED", "NON_CONVERGED"}
+
+
+def test_F1R2_E_no_statistic_is_fabricated_anywhere_on_the_all_marked_path(
+        allmarked, allmarked_authority, allmarked_supplement, small_grid):
+    """E. No P5, no Stress median, no feasibility, no sampled cell identity,
+    no draw metadata and no lifecycle atom is invented for any cell."""
+    passed = gc.run_grid_pass(allmarked, allmarked_authority,
+                              allmarked_supplement, master_seed=7, B=B_SMALL)
+    for cell in passed.values():
+        assert type(cell) is not gr.CellStatistics
+        for attr in ("conservative_p5", "stress_median", "feasible",
+                     "identity", "classifying_values", "draw_digests",
+                     "atoms"):
+            assert not hasattr(cell, attr), f"a marked cell exposes {attr}"
+    # no draw was derived for any cell, so no draw identity can exist
+    for key in gr.GRID_CELL_KEYS:
+        draws, infeasible = gc.plan_cell_draws(
+            allmarked_authority, allmarked, allmarked_supplement,
+            master_seed=7, q_mil=int(key[0]), r_mil=int(key[1]))
+        assert draws == () and infeasible is not None
+    # rule (c) has nothing to measure, and M8 has nothing to band
+    for kind in gr.REGION_KINDS:
+        at_2k = gc.run_grid_pass(allmarked, allmarked_authority,
+                                 allmarked_supplement, master_seed=7,
+                                 B=B_SMALL, doublings=1)
+        assert gr.cell_drift_violations(kind, passed, at_2k) == ()
+        cmp_ = gr.compare_region_maps(kind, passed, at_2k, k=K_SMALL,
+                                      k_doubled=2 * K_SMALL)
+        assert cmp_.boundary_band_cells == () and cmp_.flipped_cells == ()
+        assert cmp_.converged is True
+
+
+def test_F1R2_an_absent_count_is_refused_when_a_cell_was_actually_sampled(
+        narrow, narrow_authority, narrow_supplement, small_grid, monkeypatch):
+    """The new branch must not become a hole in the count guard. If
+    `drawn_count` returns None while the passes DO carry statistics, that is an
+    inconsistency and the runner refuses rather than sealing."""
+    import inspect
+    src = inspect.getsource(run._witness)
+    assert "mc_run_draw_count_absent_but_cells_sampled" in src
+    assert "is_infeasible" in src
+    # the guard is corroborated from the passes, not taken on drawn_count's word
+    assert "drawn_count" in src and "sampled" in src
+    # and the ordinary mismatch guard still exists for sampled passes
+    assert "mc_run_draw_count_mismatch" in src

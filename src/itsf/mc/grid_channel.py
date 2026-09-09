@@ -581,6 +581,23 @@ def drawn_count(prepared, authority, supplement: Mapping, *,
     happened to be marked — the same blocker one level up, and the reason this
     scans instead. A marked cell prescribes no draws, so it cannot answer for
     the pass; it is skipped, exactly as the sealed rule says.
+
+    F1-R2-01: returns **`None`** when EVERY cell of the pass is marked. That is
+    the boundary the first F1 repair still got wrong — it raised
+    `grid_draw_every_cell_infeasible`, which aborted the runner on a grid the
+    sealed rule says to mark, skip and REPORT IN FULL. An all-marked grid is a
+    lawful outcome, not a malformed input.
+
+    `None` is deliberately an explicit ABSENCE rather than `(0, 0)`. `(0, 0)`
+    would be a numeric claim — "a representative cell was sampled and it
+    prescribed zero draws" — and the runner's guard compares this value against
+    the witness's reported `k`, so a zero would silently assert that the frozen
+    policy prescribes no draws. It does not; nothing was sampled to ask. The
+    caller must distinguish "no sampled representative because every grid point
+    is explicitly infeasible" from "the count is missing or invalid", and a
+    sentinel integer cannot carry that distinction. `None` can, and
+    `mc_runner._witness` corroborates it against the passes rather than
+    trusting it.
     """
     if not cells:
         raise MCInputError("grid_draw_no_cells",
@@ -596,9 +613,5 @@ def drawn_count(prepared, authority, supplement: Mapping, *,
             authority, prepared, supplement, master_seed=master_seed,
             q_mil=q_mil, r_mil=r_mil, doublings=1, channel=channel)
         return (len(at_k), len(at_2k))
-    raise MCInputError(
-        "grid_draw_every_cell_infeasible",
-        f"all {len(cells)} cell(s) of this pass are marked "
-        f"{_gr.INFEASIBLE_BY_SAMPLE}, so the pass prescribes no draws at all "
-        "and there is no count to check a witness against")
+    return None
 
