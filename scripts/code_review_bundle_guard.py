@@ -175,9 +175,18 @@ def block_colorama() -> None:
     sys.meta_path.insert(0, _Blocked())
 
 
+#: The armed guard, so a review probe can ASSERT on what the boundary actually
+#: refused rather than take its existence on trust. Read-only by convention;
+#: an audit hook cannot be removed once installed, so this exposes evidence,
+#: not control.
+ACTIVE = None
+
+
 def arm(bundle_root, tmp_root=None, listing_only_roots=()) -> Guard:
     """Install the guard. There is no disarm: an audit hook cannot be removed,
     which is the property that makes this worth using at all."""
+    global ACTIVE
     guard = Guard(bundle_root, tmp_root, listing_only_roots=listing_only_roots)
     sys.addaudithook(guard)
+    ACTIVE = guard
     return guard

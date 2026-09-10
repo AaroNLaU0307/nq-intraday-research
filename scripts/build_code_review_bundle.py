@@ -229,6 +229,8 @@ def main(argv):
     b.template("code_review_bundle_guard.py",
                (REPO / "scripts" / "code_review_bundle_guard.py").read_text(encoding="utf-8"))
     b.template("run_bundle_tests.py", runner_py(profile))
+    from o4d_probe_template import render as _probe          # noqa: E402
+    b.template("probes/test_o4d_write_boundary.py", _probe())
 
     # ---- return/: empty at dispatch, with its scaffolding -------------
     (b.root / "return").mkdir()
@@ -340,15 +342,29 @@ def review_md(profile: dict) -> str:
 
 def runner_py(profile: dict) -> str:
     """The bundle-local runner. It arms the guard BEFORE importing pytest, so
-    nothing the test session does happens outside the boundary."""
-    roots = json.dumps(profile["bounded_admission"]["listing_only_roots"])
-    return '''# -*- coding: utf-8 -*-
-"""Run the selected tests inside the sealed bundle, under the execution guard.
+    nothing the test session does happens outside the boundary.
 
-The guard is armed before pytest is imported. There is no way to disarm an
-audit hook, which is the property that makes this worth doing at all.
-"""
-import os, sys
+    Built by substitution rather than %-formatting: the body is full of %
+    signs from its own logging, and doubling them was a source of noise.
+    """
+    body = RUNNER_BODY
+    body = body.replace("@@LISTING_ONLY@@",
+                        json.dumps(profile["bounded_admission"]["listing_only_roots"]))
+    body = body.replace("@@DESELECT@@", json.dumps(profile["tests_deselected"], indent=4))
+    assert "@@" not in body
+    return body
+
+
+RUNNER_BODY = """# -*- coding: utf-8 -*-
+\"\"\"Run the selected tests and review probes inside the sealed bundle.
+
+The guard is armed before pytest is imported, so nothing the session does --
+collection included -- happens outside the boundary. An audit hook cannot be
+removed once installed, which is the property that makes this worth doing.
+\"\"\"
+import json
+import os
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -362,11 +378,17 @@ for var in ("TMP", "TEMP", "TMPDIR"):
     os.environ[var] = str(TMP)
 import tempfile
 tempfile.tempdir = str(TMP)
+os.environ["N14_BUNDLE_ROOT"] = str(ROOT)
 
-# BOUNDED ADMISSION, N14 profile only: directory-NAME enumeration under these
-# two roots. File contents under them remain denied, which is the difference
+# BOUNDED ADMISSION, this profile only: directory-NAME enumeration under these
+# roots. File CONTENTS under them stay denied, which is the whole difference
 # between the admission the Owner granted and a data read.
-LISTING_ONLY = %s
+LISTING_ONLY = @@LISTING_ONLY@@
+
+# Deselected by node id, with the reason recorded in OBLIGATION_MAP.json. Their
+# SOURCE stays in the bundle and you are expected to read it -- what is withheld
+# is their execution, not their text.
+DESELECT = @@DESELECT@@
 
 guard = G.arm(ROOT, TMP, listing_only_roots=LISTING_ONLY)
 
@@ -376,14 +398,27 @@ sys.path.insert(0, str(TREE / "tests"))
 os.chdir(TREE)
 
 import pytest
-code = pytest.main(["-q", "tests", "-p", "no:cacheprovider", "--color=no"])
+args = ["-q", "tests", str(ROOT / "probes"), "-p", "no:cacheprovider", "--color=no"]
+for node in DESELECT:
+    args += ["--deselect", node]
+code = pytest.main(args)
 
-sys.stderr.write("\\n[guard] denials=%%d  in-bundle path ops=%%d  admitted listings=%%d\\n"
-                 %% (len(guard.denials), guard.allowed_path_ops, guard.admitted_listings))
-for ev, tgt in guard.denials[:20]:
-    sys.stderr.write("[guard] DENIED %%s -> %%s\\n" %% (ev, tgt))
+report = {
+    "denials": len(guard.denials),
+    "in_bundle_path_ops": guard.allowed_path_ops,
+    "admitted_listings": guard.admitted_listings,
+    "denied": [[e, t] for e, t in guard.denials[:50]],
+}
+(ROOT / "return" / "GUARD_REPORT.json").write_text(
+    json.dumps(report, indent=2) + "
+", encoding="utf-8")
+sys.stderr.write("
+[guard] denials=" + str(len(guard.denials))
+                 + "  in-bundle path ops=" + str(guard.allowed_path_ops)
+                 + "  admitted listings=" + str(guard.admitted_listings) + "
+")
 sys.exit(code)
-''' % roots
+"""
 
 
 if __name__ == "__main__":

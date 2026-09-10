@@ -98,7 +98,7 @@
         "tree/tests/test_mc_grid_replay_n11.py"
       ]
     },
-    "O13": {
+    "O13.a": {
       "authority": [
         "authority/MC_METHOD_SPEC.md",
         "authority/STUDY_0_PREREGISTRATION.md"
@@ -108,27 +108,88 @@
       ],
       "implementation_locus": [
         "tree/src/itsf/mc/supplement_authority.py",
-        "tree/src/itsf/mc/supplement_chain.py",
         "tree/src/itsf/mc/supplement_contract.py",
+        "tree/src/itsf/mc/supplement_chain.py"
+      ],
+      "non_imported_evidence": [
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "test_or_probe": [
+        "tree/tests/test_mc_supplement_authority.py",
+        "tree/tests/test_mc_supplement_provenance_battery.py"
+      ]
+    },
+    "O13.b": {
+      "authority": [
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "environment_input_identity": "NONE",
+      "environment_input_identity_none_reason": "refusal on mismatch is a code property, exercised on synthetic input",
+      "implementation_locus": [
         "tree/src/itsf/mc/supplement_inputs.py",
         "tree/src/itsf/mc/supplement_precheck.py",
-        "tree/src/itsf/mc/supplement_production.py",
-        "tree/src/itsf/mc/supplement_registry.py",
-        "tree/src/itsf/mc/supplement_runner.py",
-        "tree/src/itsf/mc/supplement_build.py",
         "tree/src/itsf/mc/supplement_derive.py"
+      ],
+      "non_imported_evidence": [
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "test_or_probe": [
+        "tree/tests/test_mc_supplement_paths_battery.py",
+        "tree/tests/test_mc_supplement_coercion_census.py"
+      ]
+    },
+    "O13.c": {
+      "authority": [
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "environment_input_identity": "NONE",
+      "environment_input_identity_none_reason": "as O13.b",
+      "implementation_locus": [
+        "tree/src/itsf/mc/supplement_precheck.py",
+        "tree/src/itsf/mc/supplement_inputs.py"
+      ],
+      "non_imported_evidence": [
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "test_or_probe": [
+        "tree/tests/test_mc_supplement_paths_battery.py",
+        "tree/tests/test_mc_supplement_runner.py"
+      ]
+    },
+    "O13.d": {
+      "authority": [
+        "authority/MC_METHOD_SPEC.md",
+        "authority/STUDY_0_PREREGISTRATION.md"
+      ],
+      "environment_input_identity": [
+        "tree/src/itsf/execution_identity.py"
+      ],
+      "implementation_locus": [
+        "tree/src/itsf/mc/supplement_registry.py",
+        "tree/src/itsf/mc/supplement_build.py",
+        "tree/src/itsf/mc/supplement_production.py",
+        "tree/src/itsf/execution_identity.py"
       ],
       "non_imported_evidence": [
         "tree/ops/DIRECTORY_CREATION_GRANTS.md"
       ],
       "test_or_probe": [
-        "tree/tests/test_mc_supplement_authority.py",
-        "tree/tests/test_mc_supplement_paths_battery.py",
-        "tree/tests/test_mc_supplement_provenance_battery.py",
-        "tree/tests/test_mc_supplement_runner.py",
-        "tree/tests/test_mc_supplement_coercion_census.py",
+        "tree/tests/test_mc_supplement_registry.py",
         "tree/tests/test_mc_supplement_integration.py"
       ]
+    },
+    "O13.e": {
+      "authority": [
+        "authority/REVIEWER_CONTRACT.md"
+      ],
+      "environment_input_identity": "NONE",
+      "environment_input_identity_none_reason": "see test_or_probe: verified at N15",
+      "implementation_locus": "NONE",
+      "implementation_locus_none_reason": "not an implementation claim: whether the REAL historical artifact carries the identity the workflow asserts. Bound to N15 per the authority below.",
+      "non_imported_evidence": "NONE",
+      "non_imported_evidence_none_reason": "see test_or_probe: verified at N15",
+      "test_or_probe": "NONE",
+      "test_or_probe_none_reason": "NOT verifiable by this seat and deliberately not attempted here. ops/REVIEWER_CONTRACT.md section 3 makes RUN-IDENTITY VERIFICATION a distinct obligation; the DAG's N15 row declares N15_REVIEW=REGISTRY_CHAIN_REVIEW_ON_SAME_REVIEWED_HEAD, which is that stage. A synthetic identity can establish implementation behaviour and can NEVER establish the real artifact's true identity."
     },
     "O2": {
       "authority": [
@@ -166,37 +227,86 @@
         "tree/tests/test_mc_runner_n13.py"
       ]
     },
-    "O4": {
+    "O4.a": {
       "authority": [
         "authority/STUDY_0_PREREGISTRATION.md",
         "authority/REVIEWER_CONTRACT.md"
       ],
-      "environment_input_identity": [
-        "tree/src/itsf/execution_identity.py"
-      ],
+      "environment_input_identity": "NONE",
+      "environment_input_identity_none_reason": "an information-flow property of the code; no environment input bears on it",
       "implementation_locus": [
-        "tree/src/itsf/mc/day_strata_classify.py",
-        "tree/src/itsf/mc/day_strata_context.py",
-        "tree/src/itsf/mc/day_strata_pipeline.py",
-        "tree/src/itsf/mc/day_strata_supplement.py",
-        "tree/src/itsf/mc/supplement_chain.py",
-        "tree/src/itsf/mc/supplement_derive.py",
-        "tree/src/itsf/mc/supplement_inputs.py",
         "tree/src/itsf/mc/consumer.py",
-        "tree/src/itsf/data/calendar.py",
+        "tree/src/itsf/mc/day_strata_classify.py",
+        "tree/src/itsf/mc/day_strata_pipeline.py",
         "tree/src/itsf/s0/labels.py",
-        "tree/src/itsf/s0/features.py",
-        "tree/src/itsf/s0/handoff.py",
-        "tree/src/itsf/s0/context.py"
+        "tree/src/itsf/s0/features.py"
       ],
       "non_imported_evidence": [
         "authority/STUDY_0_PREREGISTRATION.md"
       ],
       "test_or_probe": [
         "tree/tests/test_mc_day_strata_supplement.py",
-        "tree/tests/test_mc_supplement_integration.py",
+        "tree/tests/test_mc_consumer.py"
+      ]
+    },
+    "O4.b": {
+      "authority": [
+        "authority/STUDY_0_PREREGISTRATION.md",
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "environment_input_identity": "NONE",
+      "environment_input_identity_none_reason": "as O4.a",
+      "implementation_locus": [
+        "tree/src/itsf/data/calendar.py",
+        "tree/src/itsf/s0/context.py",
+        "tree/src/itsf/mc/day_strata_context.py"
+      ],
+      "non_imported_evidence": [
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "test_or_probe": [
+        "tree/tests/test_mc_custody_calendar.py",
+        "tree/tests/test_mc_day_strata_supplement.py"
+      ]
+    },
+    "O4.c": {
+      "authority": [
+        "authority/STUDY_0_PREREGISTRATION.md"
+      ],
+      "environment_input_identity": "NONE",
+      "environment_input_identity_none_reason": "as O4.a",
+      "implementation_locus": [
+        "tree/src/itsf/mc/supplement_chain.py",
+        "tree/src/itsf/mc/supplement_derive.py",
+        "tree/src/itsf/mc/supplement_inputs.py",
+        "tree/src/itsf/mc/day_strata_supplement.py",
+        "tree/src/itsf/s0/handoff.py"
+      ],
+      "non_imported_evidence": [
+        "authority/STUDY_0_PREREGISTRATION.md"
+      ],
+      "test_or_probe": [
         "tree/tests/test_mc_supplement_provenance_battery.py",
-        "tree/tests/test_mc_custody_calendar.py"
+        "tree/tests/test_mc_supplement_integration.py"
+      ]
+    },
+    "O4.d": {
+      "authority": [
+        "authority/REVIEWER_CONTRACT.md",
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "environment_input_identity": [
+        "tree/src/itsf/execution_identity.py"
+      ],
+      "implementation_locus": [
+        "tree/src/itsf/mc/supplement_runner.py",
+        "tree/src/itsf/mc/supplement_production.py"
+      ],
+      "non_imported_evidence": [
+        "authority/REVIEWER_CONTRACT.md"
+      ],
+      "test_or_probe": [
+        "probes/test_o4d_write_boundary.py"
       ]
     },
     "O5": {
@@ -307,7 +417,16 @@
     "ops/DECISIONS.md row DEC-N11-B25-1, verdict cell only"
   ],
   "substantive_round": "1 of at most 2",
-  "tests_deselected": [],
+  "tests_deselected": [
+    "tests/test_mc_supplement_integration.py::test_exercising_the_supplement_surface_writes_nothing_protected",
+    "tests/test_mc_supplement_runner.py::test_production_entry_writes_nothing_anywhere",
+    "tests/test_mc_r2_2_integration.py::test_codex_ce3_real_attestation_still_loads"
+  ],
+  "tests_deselected_reasons": {
+    "tests/test_mc_r2_2_integration.py::test_codex_ce3_real_attestation_still_loads": "Loads the REAL historical attestation and compares it to pinned constants -- an actual-artifact identity claim (O13.e), not an implementation claim. Bound to N15. The loader's refusal semantics are already exercised outcome-blind on a synthetic fake_attestation in the test immediately above it, which DOES execute. Source is in the bundle.",
+    "tests/test_mc_supplement_integration.py::test_exercising_the_supplement_surface_writes_nothing_protected": "Digests real protected artifacts before/after, one of which is outcome-carrying. Hygiene only -- no field or value is inspected. Its property is covered, more strongly, by probes/test_o4d_write_boundary.py, which proves the write is denied AT THE ATTEMPT. Source is in the bundle.",
+    "tests/test_mc_supplement_runner.py::test_production_entry_writes_nothing_anywhere": "Same shape, same replacement. Source is in the bundle."
+  },
   "tests_selected": [
     "tests/test_mc_atoms.py",
     "tests/test_mc_b26_reduction_feasibility.py",
