@@ -1026,7 +1026,7 @@
     },
     {
       "path": "ops/N14_CLAIM_BLIND_AUTHORITIES_2026-09-10.md",
-      "sha256": "b928a17b15e5b8df0d34b1e3551c22cb981cd002a56c209b113719478b3c6972",
+      "sha256": "6b8ca8baeae117514145adaecd6810bf08ddbdeee328e99f8b978b91451c71cc",
       "issued_to": "ONE NEW fresh top-level Codex / GPT-6 independent session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §2 row \"Change to a tier-B authorization gate or leakage-sensitive code\"; N14 node review, lineage N14, round 1)",
       "issued_at": "2026-09-10",
       "review_id": "N14-EXACT-TREE-005",
@@ -1202,7 +1202,7 @@
     },
     {
       "path": "ops/OFF_LIMITS_N14_EXACT_TREE_2026-09-10.md",
-      "sha256": "8926b979bd0b2ece74edb3a2347e86e93cbe582b12514bcb8a1f4c2750ad9f28",
+      "sha256": "1dbf56b3e4b9a23cb93dcaafaec5bfe30f060473464374824c6440f21c4fafdc",
       "issued_to": "ONE NEW fresh top-level Codex / GPT-6 independent session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §2 row \"Change to a tier-B authorization gate or leakage-sensitive code\"; N14 node review, lineage N14, round 1)",
       "issued_at": "2026-09-10",
       "review_id": "N14-EXACT-TREE-005",

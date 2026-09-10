@@ -35,9 +35,8 @@ PROVENANCE       = the runner seals a `method_spec_sha256` of this exact file in
 
 ```
 SOURCE_ID        = ND2-M6..M10
-SOURCE_ARTIFACT  = ops/outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md
-                   **OFF-LIMITS (outcome-carrying, do not open)** -- quoted here so
-                   you never need it
+SOURCE_ARTIFACT  = ops/outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md **OFF-LIMITS (outcome-carrying, do not open)**
+                   Quoted here so you never need to reach for it.
 SOURCE_SHA256    = e9745ead35a8f51ed550ccbb08fef2d172989166fee5047311ee1dab11519380
 SOURCE_RANGE     = M6 lines 88-99, M7 lines 100-111, M8 lines 112-123, M9 lines 124-135, M10 lines 136-147
 AUTHORITY_TYPE   = RATIFIED DESIGN (RATIFIED_UNCHANGED 2026-08-24), prospective
@@ -95,7 +94,7 @@ Dependency, quoted from the same ratification:
 SOURCE_ID        = DEC-N11-B25-1
 SOURCE_PATH      = ops/DECISIONS.md   (FORBIDDEN to you -- it is the claim record;
                    the rule-defining cell is quoted here so you never open it)
-SOURCE_SHA256    = 5418dbb39a4a990b369e82e2c5d2f5a81ba2bce8b55bebe03890aea0e643bbfc
+SOURCE_SHA256    = 5ef0d06600343ee696e23d6a94e8c03a379341b5ca96771f1f3b2ed0108234ed
 SOURCE_RANGE     = row DEC-N11-B25-1, verdict cell ONLY
 AUTHORITY_TYPE   = OWNER RULING, rule-defining (interpretation and scope)
 WHY_REQUIRED     = O12 -- fixes WHICH statistics the M8 band is applied to
