@@ -1,8 +1,8 @@
-# DELIVERY / OFF-LIMITS CARRIER -- review `N14-EXACT-TREE-003`
+# DELIVERY / OFF-LIMITS CARRIER -- review `N14-EXACT-TREE-004`
 
 ```
 RECORD_TYPE=OFF_LIMITS_CARRIER_AND_READ_ALLOWLIST
-REVIEW_ID=N14-EXACT-TREE-003
+REVIEW_ID=N14-EXACT-TREE-004
 DELIVERY_STATUS=ISSUED
     ISSUED means FINALISED FOR HANDOVER -- these bytes are the ones a seat will
     hash, so they must not move. It does NOT mean a seat is reading them: this
@@ -13,7 +13,7 @@ NODE_AUTHORITY=ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md section 4 (C
     read under a bounded Owner authorization recorded in the project ledger.
     THAT FILE IS OFF-LIMITS TO YOU -- it is on the outcome quarantine list. Its N14
     row is transcribed in section 4 below, which is everything you need from it.
-REVIEWED_SET_UNCHANGED_SINCE=b2e7a3c9bdc15e085ba80c2ba9194116c6cb811d
+REVIEWED_SET_UNCHANGED_SINCE=4bea958ebd5ba3581ddc90cb811058149e0f1e8b
 ISSUE_LINEAGE=N14
 REVIEW_ROUND=1 of at most 2 -- UNCONSUMED. An earlier session for this node
     stopped on a transport defect without substantive review, so no round was
@@ -30,8 +30,8 @@ SEAT_AUTHORITY=ops/REVIEWER_CONTRACT.md S2.1 -- the seat is
     For THIS node the Owner resolved it to a fresh top-level Codex / GPT-6
     independent session, without requiring a product identity the runtime cannot
     verify. That resolution is scoped to N14 and changes no global routing.
-MUST_NOT_BE=the builder session; any subagent of it; EITHER of the two sessions that
-    stopped on this node's earlier transport defects; or the session that reviewed
+MUST_NOT_BE=the builder session; any subagent of it; ANY of the three sessions that
+    stopped on this node's earlier defects; or the session that reviewed
     the preceding issue lineage on part of this subsystem. The last exclusion is
     this repository's own rule rather than politeness -- the seat that raises a
     defect may not certify its closure. All are eligibility facts and nothing more:
@@ -49,7 +49,7 @@ IMPLEMENTATION_REVIEW_TREE=84f9388d53557685e641929a9b5fb6e85a575e4e
     commit, because the newest change to any allowlisted path IS the implementation
     commit. That is a COINCIDENCE of this package and not an identity -- the two answer
     different questions, so both are stated and both are separately verifiable.
-ALLOWLIST_SIZE=93 repository files, 0 external files
+ALLOWLIST_SIZE=110 repository files, 0 external files
 CREATED=2026-09-10
 ```
 
@@ -82,7 +82,7 @@ comparison could fail for reasons that have nothing to do with the review. No
 formatting-sensitive condition has replaced it.
 
 **Read this file from disk.** Its header block must carry
-`REVIEWED_SET_UNCHANGED_SINCE=b2e7a3c9bdc15e085ba80c2ba9194116c6cb811d`; if the copy in front
+`REVIEWED_SET_UNCHANGED_SINCE=4bea958ebd5ba3581ddc90cb811058149e0f1e8b`; if the copy in front
 of you says anything else, it is stale.
 
 ## 0. Read this before anything else
@@ -90,10 +90,11 @@ of you says anything else, it is stale.
 This is **N14**, a node of the project's canonical DAG, and it is the node's whole
 content: an independent exact-tree review of the Monte Carlo implementation.
 
-**You are the first seat to review this tree.** Two earlier sessions were opened for
-this node and each stopped on a transport defect of the builder's making before doing
-any substantive work; neither inspected code, ran tests or returned a verdict, and
-both are excluded from this attempt. That is
+**You are the first seat to review this tree.** Three earlier sessions were opened
+for this node. Each stopped before substantive review on a defect of the builder's
+making -- the third because two obligations required rules that were not on the read
+surface, which is repaired in section 7. None returned a verdict, none reported an
+implementation finding, and all three are excluded from this attempt. That is
 the entire history you are given, because it is the entire history that bears on your
 eligibility. **No prior conclusion about this code, from any seat or from the Owner, is
 in this package** -- deliberately. If you find yourself reasoning about what someone else
@@ -142,7 +143,7 @@ commit across the frozen reference set, never typed, so `git log <pin>..HEAD` to
 any reference path is empty by construction. Verify it rather than believing it:
 
 ```
-git log b2e7a3c9bdc15e085ba80c2ba9194116c6cb811d..HEAD -- src/ tests/ STUDY_0_PREREGISTRATION.md
+git log 4bea958ebd5ba3581ddc90cb811058149e0f1e8b..HEAD -- src/ tests/ STUDY_0_PREREGISTRATION.md
 ```
 
 It is the one claim in this document that, if false, would mean you are reviewing a
@@ -174,13 +175,23 @@ If `python` resolves elsewhere in your session, the interpreter used was
 governed RUN, **not** for tests -- do not use it here, and do not execute a real MC run
 under any circumstances: none is authorized and N14 explicitly authorizes nothing.
 
+**Project code versus third-party runtime dependency.** Categories C, D and G are
+project code and are IN the review. The 27 third-party packages and the standard
+library that these commands load are NOT: `ops/REVIEWER_CONTRACT.md` section 4.2
+already settles this -- executing an allowlisted module may import its dependencies,
+and that is EXECUTION, not inspection, recorded in your attestation. So no
+third-party source inspection is required of you and none is authorized here. The
+pinned versions are in `ops/requirements.lock.txt`; the interpreter identity is in
+section 2 above. If you believe an obligation genuinely turns on third-party source,
+that is a transport finding -- report it rather than reading it.
+
 **Do NOT run the full suite.** Several tier-C governance tests walk `ops/` recursively
 and read quarantined bytes inside the test process. Under `ops/REVIEWER_CONTRACT.md`
 section 4.2 that is execution rather than inspection, but there is no reason to incur
 it: no obligation in the brief needs it. If you run it anyway, declare it under
 `MODULES_EXECUTED_NOT_INSPECTED`.
 
-## 3. The read allowlist -- exhaustive: 93 repository files
+## 3. The read allowlist -- exhaustive: 110 repository files
 
 Nothing outside this list. The list was built by rule -- glob the MC subsystem, resolve
 its imports from the AST, glob its tests -- so that it is the tree rather than a
@@ -339,6 +350,49 @@ The tests are IN the review, not evidence for it. A test that pins the implement
 of the requirement, or that would still pass on an implementation violating the sealed rule,
 is itself a finding.
 
+### F -- NORMATIVE AUTHORITY: the external rules, added after a reviewer refused to
+        take producer comments as proof of them  (2)
+
+| sha256 | bytes | path at `b2e7a3c9bdc1` |
+|---|---|---|
+| `a6de4a286eaff5ab7487298593f590cbee845afa1939ad4ea675ec219cf29608` | 19068 | `MC_METHOD_SPEC.md` |
+| `9a79b34ce6205bcafcbf9a28ec4222a585e13e2028bb1ea0671e44851b599e53` | 19360 | `ops/N14_NORMATIVE_AUTHORITIES_2026-09-10.md` |
+
+2 file(s).
+
+**The external rules you judge conformance AGAINST.** Not implementation, not test evidence,
+not builder declaration. `MC_METHOD_SPEC.md` is the frozen method authority -- the runner seals
+a `method_spec_sha256` of this exact file into the run identity, so its standing is machinery,
+not a comment. The authorities file carries the verbatim ratified design and the verbatim Owner
+ruling that obligation O12 compares against, with precedence quoted from the sources.
+
+### G -- the RUNTIME execution closure of the authorized commands, measured not parsed  (15)
+
+| sha256 | bytes | path at `b2e7a3c9bdc1` |
+|---|---|---|
+| `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | 0 | `src/itsf/__init__.py` |
+| `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | 0 | `src/itsf/data/__init__.py` |
+| `18a16d62224132ad6985ec59d5b6378898477bc34034249eaf76e16ace10fe9c` | 2520 | `src/itsf/data/roles.py` |
+| `a4f0398fc15f0af451836dc5c4af4d85080e285257751268e471662710603c08` | 3220 | `src/itsf/data/validation.py` |
+| `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | 0 | `src/itsf/s0/__init__.py` |
+| `14f7116bcfe5316029c00f02f72a610799cd49e747eb66d266b6a51b36a0dcd7` | 25259 | `src/itsf/s0/costs.py` |
+| `a5e222f67973164061b56f8d6bdd635e2a2f4b4de4055f1d1006428a77952636` | 7368 | `src/itsf/s0/features.py` |
+| `964af7725061ad5d446a7d41655db5cd170698de9f5a18816b2a137dca99fe5c` | 6059 | `src/itsf/s0/labels.py` |
+| `d77285308aee9832d75ad2a95b8af3fcaf057777ab0ad017f891f6e27ee95af6` | 2922 | `src/itsf/s0/oracle.py` |
+| `dc83b19736e2023a08e7322aca57b89b1d929087ea828fbfa79341734741f5e5` | 8873 | `src/itsf/s0/paths.py` |
+| `cdfea94b4486b6a3e0a0e1332041ed3f9575ebb264f47cd8a7d4163086484c0f` | 24770 | `src/itsf/s0/stability.py` |
+| `1d397f1d0a1dee7d166f17efda7695da474bc1dbfedeb50ee507cc4296c32cfd` | 38045 | `src/itsf/s0/stats.py` |
+| `3ed631fc2714387aab449ea8736c23534d2d62bc86b9e24abf76a1798dba40f9` | 4558 | `tests/_governed_subtrees.py` |
+| `67a91c9ede5a8a53bceccafb39102cd5ce083cb2ca4cbf087aa56360bbe89c71` | 7231 | `tests/conftest.py` |
+| `d441aad613d6f1138a67d166434084f4d8792a2a23eb40091325fd33a102a136` | 5347 | `tests/tiers.py` |
+
+15 file(s).
+
+**What the section 2 commands actually import at runtime**, derived by running them and reading
+`sys.modules` -- not by parsing imports, which misses conditional and plugin loading. A previous
+package authorized you to RUN these commands while these files were not on your read surface.
+That gap is closed by adding them, not by exempting them.
+
 ### Two transport documents, authorized by name
 
 These are part of your authorized surface and are **not** listed in the tables above.
@@ -399,18 +453,53 @@ Three consequences that bound your work:
 - Not a review of a review. If you conclude the earlier rounds erred, that is a finding
   about the code they passed over, not about them.
 
-## 6. The brief
+## 6. Which authority answers which obligation
+
+The previous attempt at this node stopped here, and correctly: two obligations asked
+for a conformance judgement against a frozen rule that was not on the surface. This
+table is the answer. **Every mandatory obligation now names the external rule it is
+judged against, and every one of those rules is on your allowlist.**
+
+Read the classes strictly. An implementation comment is evidence about what the
+producer believes it built; it is NEVER the rule that same implementation is judged
+against. If you find yourself relying on one as authority, that is a finding.
+
+| # | normative authority (category) | evidence you gather |
+|---|---|---|
+| O1 | `STUDY_0_PREREGISTRATION.md` Appendix A, sealed (B) | category C code, category E tests |
+| O2 | `STUDY_0_PREREGISTRATION.md` frozen-grid section, sealed (B) | C, E |
+| O3 | same sealed rule as O2 -- absence must stay absence (B) | C, E |
+| O4 | `STUDY_0_PREREGISTRATION.md` labelling/leakage discipline (B); reviewer contract T2 (A) | C, D, G |
+| O5 | `MC_METHOD_SPEC.md` sections 1 and 3, the interface and simulator (F) | C |
+| O6 | `MC_METHOD_SPEC.md` section 5, seed derivation and common random numbers (F) | C, E |
+| O7 | **`MC_METHOD_SPEC.md` section 5** -- inner random sources and the five-clause convergence rule, whose heading states the RULE is frozen and the counts are not (F) | C, E |
+| O8 | `MC_METHOD_SPEC.md` section 7, freeze and evidence revision (F) | C, E |
+| O9 | `MC_METHOD_SPEC.md` section 7 (F); reviewer contract T5 (A); the node prohibition in section 4 above | C |
+| O10 | reviewer contract T3/T5 (A); `MC_METHOD_SPEC.md` section 2.1 transcription discipline (F) | C, D |
+| O11 | `MC_METHOD_SPEC.md` section 5, the three uncertainty layers (F) | C, E |
+| O12 | **`ops/N14_NORMATIVE_AUTHORITIES_2026-09-10.md`** -- verbatim ratified M6-M10 and the verbatim B-25 Owner ruling, with precedence quoted from the sources; clause (c) itself lives in `MC_METHOD_SPEC.md` section 5 (F) | C, E |
+
+O13-O16 in the brief are scope and judgement obligations rather than conformance
+ones: O14 asks whether a test pins the requirement or the implementation, which is
+answered against whichever authority that test claims to enforce, and O16 is the
+open one. None of them needs an authority this table does not already list.
+
+**If any obligation still requires something not on this surface, that is a
+transport defect and the correct action is STOP.** Three seats have now stopped on
+this node and every stop was worth more than a verdict formed on a bad package.
+
+## 7. The brief
 
 The obligations live outside the repository, because they are written per review and
 the repository is not the reviewer's workspace:
 
 | sha256 | bytes | path |
 |---|---|---|
-| `911eb0d0d6953fd931eec5c32c9cf9ca8adfcead392006150352edf2beec0037` | 15587 | `C:\Users\Aaron\quant-data\review\itsf-n14-exact-tree-2026-09-10\BRIEF.md` |
+| `1bf553b611163a6a897607e21074bd33f6c5b262933e8c36b802eb86d46ef974` | 16319 | `C:\Users\Aaron\quant-data\review\itsf-n14-exact-tree-2026-09-10\BRIEF.md` |
 
 Recompute it. A mismatch is STOP.
 
-## 7. Cross-references
+## 8. Cross-references
 
 - Verdict shape, threats, evidence classes, rounds: `ops/REVIEWER_CONTRACT.md` S1.
 - Seat and blindness: same file, S2 row "Change to a tier-B authorization gate or
