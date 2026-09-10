@@ -1,8 +1,8 @@
-# DELIVERY / OFF-LIMITS CARRIER -- review `N14-EXACT-TREE-004`
+# DELIVERY / OFF-LIMITS CARRIER -- review `N14-EXACT-TREE-005`
 
 ```
 RECORD_TYPE=OFF_LIMITS_CARRIER_AND_READ_ALLOWLIST
-REVIEW_ID=N14-EXACT-TREE-004
+REVIEW_ID=N14-EXACT-TREE-005
 DELIVERY_STATUS=ISSUED
     ISSUED means FINALISED FOR HANDOVER -- these bytes are the ones a seat will
     hash, so they must not move. It does NOT mean a seat is reading them: this
@@ -13,11 +13,11 @@ NODE_AUTHORITY=ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md section 4 (C
     read under a bounded Owner authorization recorded in the project ledger.
     THAT FILE IS OFF-LIMITS TO YOU -- it is on the outcome quarantine list. Its N14
     row is transcribed in section 4 below, which is everything you need from it.
-REVIEWED_SET_UNCHANGED_SINCE=4bea958ebd5ba3581ddc90cb811058149e0f1e8b
+REVIEWED_SET_UNCHANGED_SINCE=4e00871c9afae1f5b1579e51b9013548654c7c1a
 ISSUE_LINEAGE=N14
-REVIEW_ROUND=1 of at most 2 -- UNCONSUMED. An earlier session for this node
-    stopped on a transport defect without substantive review, so no round was
-    spent. (ops/REVIEWER_CONTRACT.md S1: "HOLD -> builder fixes ->
+REVIEW_ROUND=1 of at most 2 -- UNCONSUMED. Four earlier sessions for this node
+    stopped before substantive review, so no round was spent.
+    (ops/REVIEWER_CONTRACT.md S1: "HOLD -> builder fixes ->
     ONE re-review covering the fix plus a builder-declared, reviewer-contestable impact
     scope -> still HOLD -> Aaron. Two rounds per issue lineage.")
 FOR=ONE NEW fresh top-level Codex / GPT-6 independent reviewer session,
@@ -30,7 +30,7 @@ SEAT_AUTHORITY=ops/REVIEWER_CONTRACT.md S2.1 -- the seat is
     For THIS node the Owner resolved it to a fresh top-level Codex / GPT-6
     independent session, without requiring a product identity the runtime cannot
     verify. That resolution is scoped to N14 and changes no global routing.
-MUST_NOT_BE=the builder session; any subagent of it; ANY of the three sessions that
+MUST_NOT_BE=the builder session; any subagent of it; ANY of the FOUR sessions that
     stopped on this node's earlier defects; or the session that reviewed
     the preceding issue lineage on part of this subsystem. The last exclusion is
     this repository's own rule rather than politeness -- the seat that raises a
@@ -82,7 +82,7 @@ comparison could fail for reasons that have nothing to do with the review. No
 formatting-sensitive condition has replaced it.
 
 **Read this file from disk.** Its header block must carry
-`REVIEWED_SET_UNCHANGED_SINCE=4bea958ebd5ba3581ddc90cb811058149e0f1e8b`; if the copy in front
+`REVIEWED_SET_UNCHANGED_SINCE=4e00871c9afae1f5b1579e51b9013548654c7c1a`; if the copy in front
 of you says anything else, it is stale.
 
 ## 0. Read this before anything else
@@ -90,11 +90,12 @@ of you says anything else, it is stale.
 This is **N14**, a node of the project's canonical DAG, and it is the node's whole
 content: an independent exact-tree review of the Monte Carlo implementation.
 
-**You are the first seat to review this tree.** Three earlier sessions were opened
-for this node. Each stopped before substantive review on a defect of the builder's
-making -- the third because two obligations required rules that were not on the read
-surface, which is repaired in section 7. None returned a verdict, none reported an
-implementation finding, and all three are excluded from this attempt. That is
+**You are the first seat to review this tree.** Four earlier sessions were opened for
+this node and every one of them stopped before substantive review, each on a defect
+of the builder's making in the package rather than anything in the code. **None
+returned a verdict.** All four are excluded from this attempt. **What any of them
+observed about the implementation is deliberately NOT in this package** -- including
+whether they observed anything at all. That is
 the entire history you are given, because it is the entire history that bears on your
 eligibility. **No prior conclusion about this code, from any seat or from the Owner, is
 in this package** -- deliberately. If you find yourself reasoning about what someone else
@@ -143,7 +144,7 @@ commit across the frozen reference set, never typed, so `git log <pin>..HEAD` to
 any reference path is empty by construction. Verify it rather than believing it:
 
 ```
-git log 4bea958ebd5ba3581ddc90cb811058149e0f1e8b..HEAD -- src/ tests/ STUDY_0_PREREGISTRATION.md
+git log 4e00871c9afae1f5b1579e51b9013548654c7c1a..HEAD -- src/ tests/ STUDY_0_PREREGISTRATION.md
 ```
 
 It is the one claim in this document that, if false, would mean you are reviewing a
@@ -356,12 +357,15 @@ is itself a finding.
 | sha256 | bytes | path at `b2e7a3c9bdc1` |
 |---|---|---|
 | `a6de4a286eaff5ab7487298593f590cbee845afa1939ad4ea675ec219cf29608` | 19068 | `MC_METHOD_SPEC.md` |
-| `9a79b34ce6205bcafcbf9a28ec4222a585e13e2028bb1ea0671e44851b599e53` | 19360 | `ops/N14_NORMATIVE_AUTHORITIES_2026-09-10.md` |
+| `b928a17b15e5b8df0d34b1e3551c22cb981cd002a56c209b113719478b3c6972` | 9857 | `ops/N14_CLAIM_BLIND_AUTHORITIES_2026-09-10.md` |
 
 2 file(s).
 
 **The external rules you judge conformance AGAINST.** Not implementation, not test evidence,
-not builder declaration. `MC_METHOD_SPEC.md` is the frozen method authority -- the runner seals
+not builder declaration, and **carrying no prior actor's judgement of the code you are
+reviewing**. The authorities file is FIELD-extracted: prospective rules only, and it COUNTS
+what it excluded instead of restating it. `MC_METHOD_SPEC.md` is the frozen method
+authority -- the runner seals
 a `method_spec_sha256` of this exact file into the run identity, so its standing is machinery,
 not a comment. The authorities file carries the verbatim ratified design and the verbatim Owner
 ruling that obligation O12 compares against, with precedence quoted from the sources.
@@ -455,10 +459,9 @@ Three consequences that bound your work:
 
 ## 6. Which authority answers which obligation
 
-The previous attempt at this node stopped here, and correctly: two obligations asked
-for a conformance judgement against a frozen rule that was not on the surface. This
-table is the answer. **Every mandatory obligation now names the external rule it is
-judged against, and every one of those rules is on your allowlist.**
+**Every mandatory obligation names the external rule it is judged against, and every
+one of those rules is on your allowlist.** An earlier package failed to supply two of
+them; this table exists so you can confirm the gap is closed before you start.
 
 Read the classes strictly. An implementation comment is evidence about what the
 producer believes it built; it is NEVER the rule that same implementation is judged
@@ -477,7 +480,7 @@ against. If you find yourself relying on one as authority, that is a finding.
 | O9 | `MC_METHOD_SPEC.md` section 7 (F); reviewer contract T5 (A); the node prohibition in section 4 above | C |
 | O10 | reviewer contract T3/T5 (A); `MC_METHOD_SPEC.md` section 2.1 transcription discipline (F) | C, D |
 | O11 | `MC_METHOD_SPEC.md` section 5, the three uncertainty layers (F) | C, E |
-| O12 | **`ops/N14_NORMATIVE_AUTHORITIES_2026-09-10.md`** -- verbatim ratified M6-M10 and the verbatim B-25 Owner ruling, with precedence quoted from the sources; clause (c) itself lives in `MC_METHOD_SPEC.md` section 5 (F) | C, E |
+| O12 | **`ops/N14_CLAIM_BLIND_AUTHORITIES_2026-09-10.md`** -- verbatim ratified M6-M10 and the verbatim B-25 Owner ruling, with precedence quoted from the sources; clause (c) itself lives in `MC_METHOD_SPEC.md` section 5 (F) | C, E |
 
 O13-O16 in the brief are scope and judgement obligations rather than conformance
 ones: O14 asks whether a test pins the requirement or the implementation, which is
@@ -485,8 +488,9 @@ answered against whichever authority that test claims to enforce, and O16 is the
 open one. None of them needs an authority this table does not already list.
 
 **If any obligation still requires something not on this surface, that is a
-transport defect and the correct action is STOP.** Three seats have now stopped on
-this node and every stop was worth more than a verdict formed on a bad package.
+transport defect and the correct action is STOP.** Four seats have now stopped on
+this node. Every stop was worth more than a verdict formed on a bad package, and
+this one would be too.
 
 ## 7. The brief
 
@@ -495,7 +499,7 @@ the repository is not the reviewer's workspace:
 
 | sha256 | bytes | path |
 |---|---|---|
-| `1bf553b611163a6a897607e21074bd33f6c5b262933e8c36b802eb86d46ef974` | 16319 | `C:\Users\Aaron\quant-data\review\itsf-n14-exact-tree-2026-09-10\BRIEF.md` |
+| `36d1860d4c53851116e23a2211946d912c624365c6e143ed7b3778f84ff1b1f9` | 16319 | `C:\Users\Aaron\quant-data\review\itsf-n14-exact-tree-2026-09-10\BRIEF.md` |
 
 Recompute it. A mismatch is STOP.
 
