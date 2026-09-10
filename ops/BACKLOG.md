@@ -4,7 +4,7 @@
 RECORD_TYPE   = BACKLOG (one file; §1 is the ONLY blocker ledger of this project)
 OUTCOME_CLEAN = YES
 ROWS          = close, never delete; a closed row keeps its closing evidence
-UPDATED       = 2026-09-10 (**N13 = CLOSED**. **N14 = ENTERED and READY FOR ITS REQUIRED INDEPENDENT REVIEW**: Aaron authorized the bounded read (DEC-N14-READ-1), the node contract resolved from the Canonical DAG — N14 is a pre-run exact-tree review of the MC implementation, `依赖 = N13`, completion token `PASS`, successor N15. **B-32 CLOSED**; **B-33 OPEN and NON-BLOCKING**. §1 `CURRENT_BLOCKERS` still holds zero open rows. B-29 and B-30 remain OPEN and NON-BLOCKING. REAL_MC = NOT AUTHORIZED)
+UPDATED       = 2026-09-10 (**N13 = CLOSED**. **N14 = ENTERED; review attempt 1 INVALID on a transport defect — no verdict, no round consumed, no implementation finding (DEC-N14-ATTEMPT1-1/2/3); retry package prepared, lineage N14, still round 1 of at most 2**. B-32 CLOSED; B-33 OPEN and NON-BLOCKING. §1 `CURRENT_BLOCKERS` still holds zero open rows. B-29 and B-30 remain OPEN and NON-BLOCKING. REAL_MC = NOT AUTHORIZED)
 ```
 
 Admission test for §1 (QROS-CF v2 §2.5): a row enters `CURRENT_BLOCKERS` only if it names exactly one threat — T1 research correctness · T2 look-ahead/leakage · T3 data identity/provenance · T4 reproducibility · T5 real-run execution safety · T6 independent-verification validity — and a concrete failure path on the current or next stage. Not admissible: unreachable on the current path; governance format; cosmetic; guard-of-a-guard; a lifecycle edge that cannot occur at this stage; ops-document consistency.

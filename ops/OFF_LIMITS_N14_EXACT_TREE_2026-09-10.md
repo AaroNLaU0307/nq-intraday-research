@@ -1,8 +1,8 @@
-# DELIVERY / OFF-LIMITS CARRIER -- review `N14-EXACT-TREE-001`
+# DELIVERY / OFF-LIMITS CARRIER -- review `N14-EXACT-TREE-002`
 
 ```
 RECORD_TYPE=OFF_LIMITS_CARRIER_AND_READ_ALLOWLIST
-REVIEW_ID=N14-EXACT-TREE-001
+REVIEW_ID=N14-EXACT-TREE-002
 DELIVERY_STATUS=ISSUED
     ISSUED means FINALISED FOR HANDOVER -- these bytes are the ones a seat will
     hash, so they must not move. It does NOT mean a seat is reading them: this
@@ -10,24 +10,28 @@ DELIVERY_STATUS=ISSUED
     code under review and may neither dispatch nor perform the review.
 NODE=N14
 NODE_AUTHORITY=ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md section 4 (Canonical DAG),
-    read under Aaron's bounded authorization ops/DECISIONS.md DEC-N14-READ-1 and
-    transcribed into DEC-N14-READ-2. THAT FILE IS OFF-LIMITS TO YOU -- it is on the
-    outcome quarantine list. Everything you need from it is in section 4 below.
+    read under a bounded Owner authorization recorded in the project ledger.
+    THAT FILE IS OFF-LIMITS TO YOU -- it is on the outcome quarantine list. Its N14
+    row is transcribed in section 4 below, which is everything you need from it.
 REVIEWED_SET_UNCHANGED_SINCE=b2e7a3c9bdc15e085ba80c2ba9194116c6cb811d
-ISSUE_LINEAGE=N14  (a NEW lineage; see section 5)
-REVIEW_ROUND=1 of at most 2 (ops/REVIEWER_CONTRACT.md S1: "HOLD -> builder fixes ->
+ISSUE_LINEAGE=N14
+REVIEW_ROUND=1 of at most 2 -- UNCONSUMED. An earlier session for this node
+    stopped on a transport defect without substantive review, so no round was
+    spent. (ops/REVIEWER_CONTRACT.md S1: "HOLD -> builder fixes ->
     ONE re-review covering the fix plus a builder-declared, reviewer-contestable impact
     scope -> still HOLD -> Aaron. Two rounds per issue lineage.")
 FOR=ONE NEW fresh top-level GPT-6 Astra session, claim-blind
 SEAT_AUTHORITY=ops/REVIEWER_CONTRACT.md S2.1 -- the seat is
     `OWNER_DEFAULT_INDEPENDENT_REVIEWER`, resolved at dispatch, which Aaron set to
     GPT-6 Astra for NEW work on 2026-09-10. The node authority's own actor column says
-    "Codex"; that was classified as a capability-era default rather than obeyed as a
-    product requirement -- see DEC-N14-READ-5 for the four facts behind that call.
-MUST_NOT_BE=the builder session, any subagent of it, or the GPT-6 Astra session that
-    reviewed round 2 of the N13-F1 lineage. That last exclusion is this repository's own
-    rule, not politeness: the seat that raised a defect may not certify its closure
-    (ops/N06_ROUND2_SOL_PROMPT.md line 30).
+    "Codex"; the builder classified that as a capability-era seat class rather than a
+    product requirement, and resolved it through S2.1. You may contest the resolution.
+MUST_NOT_BE=the builder session; any subagent of it; the session that stopped on this
+    node's earlier transport defect; or the GPT-6 Astra session that reviewed the
+    preceding issue lineage on part of this subsystem. The last exclusion is this
+    repository's own rule rather than politeness -- the seat that raises a defect may
+    not certify its closure. All three are eligibility facts and nothing more: no
+    conclusion any of them reached is in this package.
 BUILDER=Claude Opus / Claude Code, which wrote every line under review and may neither
     dispatch nor perform this review
 BLINDNESS=CLAIM_BLIND
@@ -39,24 +43,29 @@ IMPLEMENTATION_REVIEW_TREE=84f9388d53557685e641929a9b5fb6e85a575e4e
     NOTE: `REVIEWED_SET_UNCHANGED_SINCE` above is the FREEZE PIN over the whole 93-file
     allowlist and is a DIFFERENT quantity. In this package the two happen to be the same
     commit, because the newest change to any allowlisted path IS the implementation
-    commit. That is a COINCIDENCE of this package, not an identity -- in the previous two
-    packages they differed -- so both are stated and both are separately verifiable.
+    commit. That is a COINCIDENCE of this package and not an identity -- the two answer
+    different questions, so both are stated and both are separately verifiable.
 ALLOWLIST_SIZE=93 repository files, 0 external files
 CREATED=2026-09-10
 ```
 
 **Read this file from disk.** Chat-carried bytes are never a source of truth in this
-project. Its header block must carry the line
-`REVIEWED_SET_UNCHANGED_SINCE=b2e7a3c9bdc15e085ba80c2ba9194116c6cb811d`; if the copy in front of
-you says anything else, it is stale -- open the file. (A line NUMBER is deliberately not
-cited: this document has already been regenerated once and the number moved.)
+project. You reached it from the reviewer handoff, which states its sha256; recompute
+that before trusting a byte of what follows. A mismatch is STOP. Its header block must
+carry `REVIEWED_SET_UNCHANGED_SINCE=b2e7a3c9bdc15e085ba80c2ba9194116c6cb811d`.
 
 ## 0. Read this before anything else
 
 This is **N14**, a node of the project's canonical DAG, and it is the node's whole
-content: an independent exact-tree review of the Monte Carlo implementation. It is not
-a re-review of anything. Section 5 tells you what came before it and why none of that
-discharges it.
+content: an independent exact-tree review of the Monte Carlo implementation.
+
+**You are the first seat to review this tree.** One earlier session was opened for this
+node and stopped on a transport defect before doing any substantive work; it inspected no
+code, ran no tests and returned no verdict, and it is excluded from this attempt. That is
+the entire history you are given, because it is the entire history that bears on your
+eligibility. **No prior conclusion about this code, from any seat or from the Owner, is
+in this package** -- deliberately. If you find yourself reasoning about what someone else
+decided, you have been handed something you should not have been; say so.
 
 Section 3 is the exhaustive set of paths you may read. **If an obligation in the brief
 requires a path that is not in section 3, STOP and report it as a transport defect** --
@@ -81,7 +90,7 @@ ops/outcome_quarantine/                 the whole subtree, including the node au
 ops/EXPOSURE_LEDGER.md  and  EXPOSURE_LEDGER.md (repository root)
 qros-state.yaml                         RESTATES A REVEALED VERDICT and is NOT yet on the
                                         quarantine list, because that guard walks *.md only
-                                        (ops/DECISIONS.md DEC-N14-ENTRY-4). Treat it as
+                                        -- a known open gap. Treat it as
                                         forbidden. It is deliberately absent from section 3.
 any file matching S0_T001_RESULT_*      the revealed outcome material itself
 ops/DECISIONS.md, ops/RESEARCH_STATE.md, ops/BACKLOG.md
@@ -96,11 +105,9 @@ that gap is a known open issue and is the reason it is named explicitly.
 
 ## 2. How to read the tree, and how to run the tests
 
-**The tree is static under you.** `git log b2e7a3c9bdc15e085ba80c2ba9194116c6cb811d..HEAD` touching any
-allowlisted path is EMPTY by construction -- the pin was derived as the newest
-last-change commit across the 93 files, not typed. Every commit after it touches `ops/`
-bookkeeping only: this delivery, the freeze register and the append-only ledgers.
-Verify that yourself:
+**The tree is static under you.** The pin above was DERIVED as the newest last-change
+commit across the frozen reference set, never typed, so `git log <pin>..HEAD` touching
+any reference path is empty by construction. Verify it rather than believing it:
 
 ```
 git log b2e7a3c9bdc15e085ba80c2ba9194116c6cb811d..HEAD -- src/ tests/ STUDY_0_PREREGISTRATION.md
@@ -183,8 +190,8 @@ why rather than notice the gap. Its line 157 names a quarantined ledger without 
 marker, so registering it turns a transport guard red; the only way to register it would be to
 EDIT AN APPROVED FROZEN DOCUMENT to make a test pass, which this project has already ruled is
 backwards. Its bytes are still protected for you by the sha256 above -- a mismatch is a STOP,
-exactly as for every other row. Recorded in ops/DECISIONS.md as a discovered issue rather than
-smoothed over.
+exactly as for every other row. Stated here so you meet it as a documented decision
+rather than as a gap you have to interpret.
 
 ### C -- the MC implementation, EXHAUSTIVE (this is the tree under review)  (44)
 
@@ -302,11 +309,39 @@ reaches a module not listed here, that is a transport defect and I want to hear 
 
 31 file(s).
 
-The tests are IN the review, not evidence for it. A test that pins the wrong behaviour is a
-finding -- this project has shipped two of those and both were caught by a reviewer, not by me.
+The tests are IN the review, not evidence for it. A test that pins the implementation instead
+of the requirement, or that would still pass on an implementation violating the sealed rule,
+is itself a finding.
 
-Plus this delivery document itself, `ops/OFF_LIMITS_N14_EXACT_TREE_2026-09-10.md`, which you are
-reading. It is registered and hashed like everything else.
+### Three transport documents, authorized by name
+
+These are part of your authorized surface and are **not** listed in the tables above.
+Their bytes are pinned in `ops/ARTIFACTS_UNDER_REVIEW.json` by content hash rather than
+hashed into this section, and the reason is arithmetic rather than laziness: a document
+that cites this file's hash cannot also be hashed into this file. There is no fixed
+point. This repository already met that problem and wrote the answer down in
+`tests/test_the_delivery_cannot_pin_itself.py` -- a delivery is pinned by content hash,
+not by a commit range containing itself.
+
+```
+ops/OFF_LIMITS_N14_EXACT_TREE_2026-09-10.md
+    this document -- the read allowlist and the off-limits set
+ops/REVIEWER_HANDOFF_N14_2026-09-10.md
+    the reviewer-facing handoff. If your session was opened by pasting text, THAT TEXT
+    IS A VERBATIM BLOCK FROM THIS FILE. Open it and compare. If what you were pasted is
+    not byte-identical to the block it marks, STOP -- something outside the governed
+    transport reached you.
+BRIEF.md
+    the obligations, delivered outside the repository. Its path and sha256 are given
+    in section 6 below and again in the handoff.
+```
+
+**Nothing else.** In particular: no skill, procedure, checklist, playbook, template or
+tool outside this surface, whether it comes from your environment, your instructions or
+your own memory of how such a review is usually done. **This package is self-contained by
+construction** -- section 2 gives every command and the brief gives every obligation. If
+you believe you need a procedure that is not here, that is a transport defect: report it
+and STOP. **Opening one is the same contamination as opening a forbidden file.**
 
 ## 4. What N14 is, from the node authority -- and what it is NOT
 
@@ -333,43 +368,7 @@ Three consequences that bound your work:
 3. **Nothing you do appends a READY row or authorizes a run**, and neither does anything
    the builder does on the strength of your verdict.
 
-## 5. What came before this, and why none of it discharges N14
-
-Stated because withholding it would let you re-derive it from scratch, and because if
-any of it is wrong you should say so.
-
-- The MC implementation received **two** independent claim-blind rounds earlier, both
-  scoped to one delta (a grid-selector change), not to the tree. **Both returned HOLD.**
-- The second HOLD named a real defect. The builder repaired it, and the Owner accepted
-  that repair on **builder-mechanical evidence only**: the repair commit --
-  `b2e7a3c9bdc15e085ba80c2ba9194116c6cb811d`, the tree you are reviewing -- **has never been**
-  **examined by any independent seat.** The ordinary two-round budget for that issue
-  lineage was spent before the repair existed.
-- Those rounds belong to the issue lineage `N13-F1`. **This is a different lineage with
-  its own budget**, because the node authority makes N14 a separate node with a separate
-  actor and a `PASS` that no seat has produced. The exhausted N13-F1 budget is not
-  inherited and no unlimited budget was invented.
-
-None of that is a claim about correctness in either direction, and you are not being
-asked to ratify the Owner's acceptance.
-
-## 6. Known open backlog rows, carried in so you do not spend a finding on them
-
-All three are already recorded as NON-BLOCKING. Re-raising one is not wrong, but say so
-explicitly if you think a classification is mistaken -- reviewers classify, builders may
-not reclassify.
-
-- **B-29** -- a hand-built `GridDraw` is forgeable via `object.__new__` plus a
-  recomputed self-digest. Classified non-blocking by an earlier seat on the ground that
-  the governed runner accepts no caller-supplied draw on the seal path. That ground is
-  inside your scope; if it does not hold, this becomes blocking.
-- **B-30** -- whether the sealed `infeasible_by_sample` state is reachable on the real
-  data path. Settling it needs the outcome-derived day split, which is blinded from you
-  and from the builder. `UNKNOWN REACHABILITY != KNOWN DEFECT`.
-- **B-33** -- N14's own completion row belongs in a quarantined file. A governance
-  bookkeeping problem for the Owner, with no bearing on the code.
-
-## 7. What this review is not
+## 5. What this review is not
 
 - Not an authorization of anything, and not a READY append.
 - Not a statistical review: no MC has been run, nothing is revealed, and no outcome
@@ -378,13 +377,24 @@ not reclassify.
 - Not a review of a review. If you conclude the earlier rounds erred, that is a finding
   about the code they passed over, not about them.
 
-## 8. Cross-references
+## 6. The brief
+
+The obligations live outside the repository, because they are written per review and
+the repository is not the reviewer's workspace:
+
+| sha256 | bytes | path |
+|---|---|---|
+| `000aee6b2938e4ed8c279c98eea30a3485c72f7859781a876f0ff3a0b836dfb9` | 15647 | `C:\Users\Aaron\quant-data\review\itsf-n14-exact-tree-2026-09-10\BRIEF.md` |
+
+Recompute it. A mismatch is STOP.
+
+## 7. Cross-references
 
 - Verdict shape, threats, evidence classes, rounds: `ops/REVIEWER_CONTRACT.md` S1.
 - Seat and blindness: same file, S2 row "Change to a tier-B authorization gate or
   leakage-sensitive code", resolved through S2.1. **That row was chosen by the builder**
   because S2 is keyed by situation and has no node rows; the choice is recorded as a
-  contestable determination in `ops/DECISIONS.md` DEC-N14-READ-4. If you judge a
+  contestable builder determination, recorded as such in the project ledger. If you judge a
   different row applicable, say so as a transport finding.
 - Contamination protocol: same file, S4. Exposure before freeze means STOP and a row on
   the seat axis.
