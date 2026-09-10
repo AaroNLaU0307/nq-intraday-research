@@ -3,7 +3,14 @@
 ```
 RECORD_TYPE=OFF_LIMITS_CARRIER_AND_READ_ALLOWLIST
 REVIEW_ID=N14-EXACT-TREE-005
-DELIVERY_STATUS=ISSUED
+DELIVERY_STATUS=RETURNED
+    RETIRED 2026-09-10, not returned with a verdict. `SUBSTANTIVE_VERDICT=ABSENT`,
+    `ROUND_CONSUMED=NO`, `IMPLEMENTATION_FINDING=NONE`. The Owner adopted
+    CODE_REVIEW_BUNDLE_CONTRACT v1 and this live-repo carrier transport is
+    prospectively retired for code-conformance review. RETURNED is this
+    repository's existing term for a delivery that is no longer out, which is
+    also how the withdrawn Sol package of 2026-09-10 is marked. Kept as history;
+    NOT to be handed to any reviewer. See ops/DECISIONS.md DEC-N14-ATTEMPT5-1.
     ISSUED means FINALISED FOR HANDOVER -- these bytes are the ones a seat will
     hash, so they must not move. It does NOT mean a seat is reading them: this
     package is PENDING_DISPATCH and Aaron dispatches it. The builder wrote the
