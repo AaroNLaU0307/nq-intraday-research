@@ -13,7 +13,7 @@ NODE_AUTHORITY=ops/outcome_quarantine/MC_TO_STRATEGY_MASTER_PLAN.md section 4 (C
     read under a bounded Owner authorization recorded in the project ledger.
     THAT FILE IS OFF-LIMITS TO YOU -- it is on the outcome quarantine list. Its N14
     row is transcribed in section 4 below, which is everything you need from it.
-REVIEWED_SET_UNCHANGED_SINCE=4e00871c9afae1f5b1579e51b9013548654c7c1a
+REVIEWED_SET_UNCHANGED_SINCE=b9b8964f3abb64082c059b6e27bd522a2082bca3
 ISSUE_LINEAGE=N14
 REVIEW_ROUND=1 of at most 2 -- UNCONSUMED. Four earlier sessions for this node
     stopped before substantive review, so no round was spent.
@@ -82,7 +82,7 @@ comparison could fail for reasons that have nothing to do with the review. No
 formatting-sensitive condition has replaced it.
 
 **Read this file from disk.** Its header block must carry
-`REVIEWED_SET_UNCHANGED_SINCE=4e00871c9afae1f5b1579e51b9013548654c7c1a`; if the copy in front
+`REVIEWED_SET_UNCHANGED_SINCE=b9b8964f3abb64082c059b6e27bd522a2082bca3`; if the copy in front
 of you says anything else, it is stale.
 
 ## 0. Read this before anything else
@@ -144,7 +144,7 @@ commit across the frozen reference set, never typed, so `git log <pin>..HEAD` to
 any reference path is empty by construction. Verify it rather than believing it:
 
 ```
-git log 4e00871c9afae1f5b1579e51b9013548654c7c1a..HEAD -- src/ tests/ STUDY_0_PREREGISTRATION.md
+git log b9b8964f3abb64082c059b6e27bd522a2082bca3..HEAD -- src/ tests/ STUDY_0_PREREGISTRATION.md
 ```
 
 It is the one claim in this document that, if false, would mean you are reviewing a
@@ -357,7 +357,7 @@ is itself a finding.
 | sha256 | bytes | path at `b2e7a3c9bdc1` |
 |---|---|---|
 | `a6de4a286eaff5ab7487298593f590cbee845afa1939ad4ea675ec219cf29608` | 19068 | `MC_METHOD_SPEC.md` |
-| `b928a17b15e5b8df0d34b1e3551c22cb981cd002a56c209b113719478b3c6972` | 9693 | `ops/N14_CLAIM_BLIND_AUTHORITIES_2026-09-10.md` |
+| `43f455014fea223cd4476070c7c82b7551adfa704549d7c4fff551fd5ad574dd` | 9693 | `ops/N14_CLAIM_BLIND_AUTHORITIES_2026-09-10.md` |
 
 2 file(s).
 
