@@ -392,6 +392,10 @@ ENTRY_CLASSIFICATION = {
     "scripts/final_candidate_scans.py": "NON_REAL",
     "scripts/mc_cost_probe.py": "NON_REAL",
     "scripts/physical_copy_verify.py": "NON_REAL",
+    # ADDED 2026-09-11. The sealed code-review bundle builder. It reads Git
+    # blobs at a pinned commit and writes a review package; it touches no
+    # dataset, opens no real-run path and starts nothing.
+    "scripts/build_code_review_bundle.py": "NON_REAL",
 }
 
 #: Production functions that ARE the real-run entry for their lifecycle.

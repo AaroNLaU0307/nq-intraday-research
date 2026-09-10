@@ -65,6 +65,35 @@ REFUSED_PATTERNS = (
     re.compile(r"(^|/)ops/REVIEW_PACKET"),
 )
 
+#: CLAIM_BLIND, layer 2. REFUSED_PATTERNS judges a file by its PATH; these
+#: judge admitted PROSE by what it says. The distinction that matters, and
+#: that the N14-EXACT-TREE-004 stop turned on: a normative Owner ruling is
+#: admissible even though the Owner issued it -- what is not is a judgment
+#: about the CORRECTNESS OR ACCEPTANCE OF THE IMPLEMENTATION UNDER REVIEW,
+#: including a prior reviewer's verdict, findings and measured test results.
+#: Design vocabulary that merely contains the same words (FAIL_CLOSED, a
+#: PASS|FAIL field enumeration, an APPROVED_PROFILE_ID key) is NOT caught,
+#: and that separation was verified against the seven candidate documents
+#: before this shipped.
+CLAIM_BLIND_PATTERNS = (
+    ("PRIOR_REVIEW_VERDICT", re.compile(r"判\s*(HOLD|PASS)")),
+    ("PRIOR_REVIEW_ROUND",
+     re.compile(r"第[一二三四五六七八九十]+次\s*(HOLD|PASS)")),
+    ("PRIOR_REVIEW_FINDING",
+     re.compile(r"(HOLD|PASS)\s*的\s*Finding|Finding\s*[0-9]+")),
+    ("PRIOR_VERDICT_FIELD",
+     re.compile(r"(PRIOR_)?VERDICT\s*[:=]\s*(PASS|HOLD|FAIL)")),
+    ("PRIOR_TEST_RESULT",
+     re.compile(r"已实测全红|全部通过|测试全绿")),
+    ("PRIOR_REVIEW_SEAT",
+     re.compile(r"(fresh\s+Sol|独立复核).{0,24}(HOLD|PASS|判)")),
+)
+
+
+def claim_blind_hits(text: str) -> dict:
+    return {name: len(pat.findall(text))
+            for name, pat in CLAIM_BLIND_PATTERNS if pat.search(text)}
+
 
 def sha256_bytes(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
@@ -117,6 +146,32 @@ class Bundle:
         cls = provenance["class"]
         if cls not in ("GIT_EXPORT", "GENERATED", "TEMPLATE", "ENVIRONMENT"):
             refuse("unknown admission class %r for %s" % (cls, rel))
+        # ADDED 2026-09-11 after a shipped runner failed to parse: RUNNER_BODY
+        # is a non-raw triple-quoted string, so an unescaped newline escape in
+        # it became a real newline and split a string literal in the file. A
+        # template that does not compile is a bundle that cannot be reviewed,
+        # and the cut is where that has to be caught -- not the reviewer's
+        # first command.
+        if rel.endswith(".py"):
+            try:
+                compile(data.decode("utf-8"), rel, "exec")
+            except (SyntaxError, UnicodeDecodeError) as exc:
+                refuse("emitted Python does not parse: %s -- %s" % (rel, exc))
+        else:
+            # CLAIM_BLIND on PROSE. Source and tests are exempt because they
+            # ARE the object of review -- REVIEW.md already tells the reviewer
+            # that an implementation comment is SELF_REPORTED and never the
+            # rule the implementation is judged against. A governance document
+            # carries no such warning and would read as authority, which is
+            # exactly how the N14-EXACT-TREE-004 leak happened.
+            try:
+                text = data.decode("utf-8")
+            except UnicodeDecodeError:
+                text = ""
+            hits = claim_blind_hits(text)
+            if hits:
+                refuse("CLAIM_BLIND: %s carries prior judgement of the "
+                       "implementation under review -- %s" % (rel, hits))
         dest = self.root / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
@@ -196,7 +251,19 @@ def main(argv):
     b.root.mkdir(parents=True)
 
     # ---- tree/: exact Git exports at the target commit ----------------
+    # One exception, and it is declared rather than quiet: the grant record is
+    # FIELD-SELECTED (see scripts/build_grant_extract_lib.py) because its
+    # correction sections state prior measured results about the code under
+    # review. It enters as GENERATED with its generator recorded, so the
+    # manifest distinguishes it from every Git export around it.
+    from build_grant_extract_lib import render as _grant, SOURCE as _GRANT_SRC
     for rel in profile["tree_payload"]:
+        if rel == _GRANT_SRC:
+            b.generated("tree/" + rel, _grant(REPO),
+                        generator="scripts/build_grant_extract_lib.py:render",
+                        sources=[rel + " (field-selected; retrospective "
+                                       "sections excluded and counted)"])
+            continue
         b.git_export("tree/" + rel, rel)
 
     # ---- authority/: exact Git exports, kept apart from the tree ------
@@ -231,6 +298,10 @@ def main(argv):
     b.template("run_bundle_tests.py", runner_py(profile))
     from o4d_probe_template import render as _probe          # noqa: E402
     b.template("probes/test_o4d_write_boundary.py", _probe())
+    from o13_path_refusal_probe_template import render as _probe13   # noqa: E402
+    b.template("probes/test_o13_path_refusals.py", _probe13())
+    from o9_production_entry_probe_template import render as _probe9  # noqa: E402
+    b.template("probes/test_o9_production_entry_refusals.py", _probe9())
 
     # ---- return/: empty at dispatch, with its scaffolding -------------
     (b.root / "return").mkdir()
@@ -258,6 +329,8 @@ def main(argv):
         "mc_subtree_tree": git("rev-parse", "%s:src/itsf/mc" % b.commit),
         "tests_selected": profile["tests_selected"],
         "tests_deselected": profile["tests_deselected"],
+        "tests_not_collected": profile["tests_not_collected"],
+        "execution_selection_equivalence": profile["execution_selection_equivalence"],
         "authority_set": sorted(profile["authority_payload"]) + ["authority/RULES_EXTRACT.md"],
         "evidence_set": sorted(profile["tree_payload"]),
         "environment": env,
@@ -272,6 +345,28 @@ def main(argv):
 
     # ---- refusal gates -------------------------------------------------
     no_links_anywhere(b.root)
+    # Every admitted document that is neither code nor test must be named in
+    # the profile with a reason. Silence is how a governance record slips in
+    # beside the source it passes judgement on.
+    gov = profile["governance_admissions"]
+    needs = [rel for rel in profile["tree_payload"]
+             if not rel.startswith(("src/", "tests/"))
+             and rel not in ("ops/requirements.lock.txt", ".python-version",
+                             "pytest.ini", "pyproject.toml", "setup.cfg",
+                             "tox.ini")]
+    undeclared = [r for r in needs if not gov.get(r)]
+    if undeclared:
+        refuse("governance document admitted with no recorded reason: %s"
+               % undeclared)
+    stale = [r for r in gov if r not in profile["tree_payload"]]
+    if stale:
+        refuse("governance_admissions names a file that is not admitted: %s"
+               % stale)
+    hits = outcome_scan(b.root)
+    if hits:
+        refuse("outcome restatement inside the bundle:"
+               + "".join(
+                   [chr(10) + "  " + h for h in hits[:10]]))
     declared = {r["path"] for r in b.payload} | {"MANIFEST.json", "return/.keep"}
     actual = {p.relative_to(b.root).as_posix()
               for p in b.root.rglob("*") if p.is_file()}
@@ -332,7 +427,23 @@ def build_obligation_map(profile: dict, b: Bundle) -> dict:
         rows[oid] = resolved
     if unresolved:
         refuse("obligation map incomplete:\n  " + "\n  ".join(unresolved))
-    return {"profile_version": profile["profile_version"], "obligations": rows}
+    # Every withheld execution, with its reason, in the one file the reviewer
+    # is told to read alongside REVIEW.md. A withholding whose reason lives
+    # only in the builder's head is indistinguishable from a quiet omission,
+    # which is the failure this node has already hit four times.
+    withheld = {
+        "deselected_node_ids": {k: profile["tests_deselected_reasons"].get(k)
+                                for k in profile["tests_deselected"]},
+        "not_collected_files": {k: profile["tests_not_collected_reasons"].get(k)
+                                for k in profile["tests_not_collected"]},
+        "measured_consequence": profile["execution_selection_equivalence"],
+    }
+    blank = [k for d in ("deselected_node_ids", "not_collected_files")
+             for k, v in withheld[d].items() if not v]
+    if blank:
+        refuse("execution withheld with no recorded reason: %s" % blank)
+    return {"profile_version": profile["profile_version"], "obligations": rows,
+            "withheld_execution": withheld}
 
 
 def review_md(profile: dict) -> str:
@@ -351,6 +462,8 @@ def runner_py(profile: dict) -> str:
     body = body.replace("@@LISTING_ONLY@@",
                         json.dumps(profile["bounded_admission"]["listing_only_roots"]))
     body = body.replace("@@DESELECT@@", json.dumps(profile["tests_deselected"], indent=4))
+    body = body.replace("@@NOT_COLLECTED@@",
+                        json.dumps(profile["tests_not_collected"], indent=4))
     assert "@@" not in body
     return body
 
@@ -390,6 +503,11 @@ LISTING_ONLY = @@LISTING_ONLY@@
 # is their execution, not their text.
 DESELECT = @@DESELECT@@
 
+# NOT COLLECTED, which is not the same as deselected: pytest never imports
+# these at all, because importing them is what fails. The reason for each is
+# in OBLIGATION_MAP.json and the SOURCE is in tree/ for you to read.
+NOT_COLLECTED = @@NOT_COLLECTED@@
+
 guard = G.arm(ROOT, TMP, listing_only_roots=LISTING_ONLY)
 
 TREE = ROOT / "tree"
@@ -398,10 +516,26 @@ sys.path.insert(0, str(TREE / "tests"))
 os.chdir(TREE)
 
 import pytest
-args = ["-q", "tests", str(ROOT / "probes"), "-p", "no:cacheprovider", "--color=no"]
+
+# TWO INVOCATIONS, NOT ONE, and the reason is mechanical rather than tidy:
+# passing probes/ (which is outside tree/) alongside tests moves pytest's
+# rootdir up to the bundle root, after which every --deselect node id silently
+# stops matching. The first sealed run lost all eleven deselections that way
+# and the only symptom was eleven tests failing that were meant to be skipped.
+# Running the two trees separately keeps rootdir at tree/, where the ids are
+# written, and separates the repository suite from the review probes in the
+# output -- which is worth having on its own.
+BASE = ["-q", "-p", "no:cacheprovider", "--color=no"]
+targs = BASE + ["tests"]
 for node in DESELECT:
-    args += ["--deselect", node]
-code = pytest.main(args)
+    targs += ["--deselect", node]
+for path in NOT_COLLECTED:
+    targs += ["--ignore", str(TREE / path)]
+sys.stderr.write("\\n[bundle] repository tests\\n")
+code = pytest.main(targs)
+sys.stderr.write("\\n[bundle] review probes\\n")
+pcode = pytest.main(BASE + [str(ROOT / "probes")])
+code = code or pcode
 
 report = {
     "denials": len(guard.denials),
@@ -410,13 +544,10 @@ report = {
     "denied": [[e, t] for e, t in guard.denials[:50]],
 }
 (ROOT / "return" / "GUARD_REPORT.json").write_text(
-    json.dumps(report, indent=2) + "
-", encoding="utf-8")
-sys.stderr.write("
-[guard] denials=" + str(len(guard.denials))
+    json.dumps(report, indent=2) + "\\n", encoding="utf-8")
+sys.stderr.write("\\n[guard] denials=" + str(len(guard.denials))
                  + "  in-bundle path ops=" + str(guard.allowed_path_ops)
-                 + "  admitted listings=" + str(guard.admitted_listings) + "
-")
+                 + "  admitted listings=" + str(guard.admitted_listings) + "\\n")
 sys.exit(code)
 """
 
