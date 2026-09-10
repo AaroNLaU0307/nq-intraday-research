@@ -19,6 +19,15 @@ and recorded in the manifest:
 
 Anything else refuses the cut. So does a link, an unexpected file, a refused
 content class, or a payload whose provenance cannot be established.
+
+IMPORT CLOSURE IS NOT EVIDENCE COMPLETENESS -- measured, 2026-09-10. The
+selected N14 surface imports 108 project-local modules and OPENS 270. A payload
+built from the import graph is missing data files, fixtures and configuration
+that execution actually reads, and the gap stays invisible until the guard
+denies something mid-run: the first cut refused on `gate1/platform_params.yaml`,
+a data file no import reveals. So the payload set for this contract must be
+derived from the FILE-OPEN / RESOURCE-ACCESS closure under the guarded runner,
+and validation must measure that closure rather than the AST import graph.
 """
 from __future__ import annotations
 
