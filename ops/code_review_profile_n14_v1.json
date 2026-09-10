@@ -1,0 +1,454 @@
+{
+  "authority_payload": [
+    "ops/REVIEWER_CONTRACT.md",
+    "ops/templates/ATTESTATION_HEADER_TEMPLATE.md",
+    "ops/templates/VERIFICATION_BRIEF_TEMPLATE.md",
+    "MC_METHOD_SPEC.md",
+    "STUDY_0_PREREGISTRATION.md"
+  ],
+  "bounded_admission": {
+    "authorized_by": "Aaron, 2026-09-10, on DEC-CRB-HOLD-1 / B-34",
+    "file_contents_readable_under_those_roots": false,
+    "grant_record": "travels as tree/ops/DIRECTORY_CREATION_GRANTS.md, a Git export, so no live ops/ read occurs at runtime",
+    "listing_only_roots": [
+      "C:\\Users\\Aaron\\quant-data\\itsf-runs\\supplements",
+      "C:\\Users\\Aaron\\quant-data\\itsf-runs-archive\\supplements"
+    ],
+    "scope": "N14 code-review profile only; NOT a generic shared-workflow permission"
+  },
+  "contract_version": "CODE_REVIEW_BUNDLE_CONTRACT v1",
+  "framework_commit": "b2e7a3c9bdc15e085ba80c2ba9194116c6cb811d",
+  "lineage": "N14",
+  "obligations": {
+    "O1": {
+      "authority": [
+        "authority/STUDY_0_PREREGISTRATION.md"
+      ],
+      "environment_input_identity": "NONE",
+      "environment_input_identity_none_reason": "the frozen grid is arithmetic over sealed constants; no environment input enters it",
+      "implementation_locus": [
+        "tree/src/itsf/mc/grid_channel.py",
+        "tree/src/itsf/mc/grid_replay.py"
+      ],
+      "non_imported_evidence": [
+        "authority/STUDY_0_PREREGISTRATION.md"
+      ],
+      "test_or_probe": [
+        "tree/tests/test_mc_grid_channel_b27.py"
+      ]
+    },
+    "O10": {
+      "authority": [
+        "authority/MC_METHOD_SPEC.md",
+        "authority/REVIEWER_CONTRACT.md"
+      ],
+      "environment_input_identity": [
+        "tree/src/itsf/execution_identity.py",
+        "tree/ops/requirements.lock.txt"
+      ],
+      "implementation_locus": [
+        "tree/src/itsf/execution_identity.py",
+        "tree/src/itsf/mc/production_inputs.py",
+        "tree/src/itsf/mc/real_input.py",
+        "tree/src/itsf/mc/bundle_precheck.py",
+        "tree/src/itsf/mc/supplement_precheck.py"
+      ],
+      "non_imported_evidence": [
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "test_or_probe": [
+        "tree/tests/test_mc_bundle_precheck.py",
+        "tree/tests/test_mc_feasibility_gates.py"
+      ]
+    },
+    "O11": {
+      "authority": [
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "environment_input_identity": "NONE",
+      "environment_input_identity_none_reason": "aggregation is deterministic over sealed inputs",
+      "implementation_locus": [
+        "tree/src/itsf/mc/cold_reducer.py",
+        "tree/src/itsf/mc/consumer.py",
+        "tree/src/itsf/mc/verdict.py"
+      ],
+      "non_imported_evidence": [
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "test_or_probe": [
+        "tree/tests/test_mc_b26_reduction_feasibility.py",
+        "tree/tests/test_mc_cold_replay.py",
+        "tree/tests/test_mc_node_integration.py"
+      ]
+    },
+    "O12": {
+      "authority": [
+        "authority/RULES_EXTRACT.md",
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "environment_input_identity": "NONE",
+      "environment_input_identity_none_reason": "the band, the drift rule and the quantifiers are fixed by ratified design",
+      "implementation_locus": [
+        "tree/src/itsf/mc/grid_replay.py"
+      ],
+      "non_imported_evidence": [
+        "authority/RULES_EXTRACT.md"
+      ],
+      "test_or_probe": [
+        "tree/tests/test_mc_grid_replay_n11.py"
+      ]
+    },
+    "O13": {
+      "authority": [
+        "authority/MC_METHOD_SPEC.md",
+        "authority/STUDY_0_PREREGISTRATION.md"
+      ],
+      "environment_input_identity": [
+        "tree/src/itsf/execution_identity.py"
+      ],
+      "implementation_locus": [
+        "tree/src/itsf/mc/supplement_authority.py",
+        "tree/src/itsf/mc/supplement_chain.py",
+        "tree/src/itsf/mc/supplement_contract.py",
+        "tree/src/itsf/mc/supplement_inputs.py",
+        "tree/src/itsf/mc/supplement_precheck.py",
+        "tree/src/itsf/mc/supplement_production.py",
+        "tree/src/itsf/mc/supplement_registry.py",
+        "tree/src/itsf/mc/supplement_runner.py",
+        "tree/src/itsf/mc/supplement_build.py",
+        "tree/src/itsf/mc/supplement_derive.py"
+      ],
+      "non_imported_evidence": [
+        "tree/ops/DIRECTORY_CREATION_GRANTS.md"
+      ],
+      "test_or_probe": [
+        "tree/tests/test_mc_supplement_authority.py",
+        "tree/tests/test_mc_supplement_paths_battery.py",
+        "tree/tests/test_mc_supplement_provenance_battery.py",
+        "tree/tests/test_mc_supplement_runner.py",
+        "tree/tests/test_mc_supplement_coercion_census.py",
+        "tree/tests/test_mc_supplement_integration.py"
+      ]
+    },
+    "O2": {
+      "authority": [
+        "authority/STUDY_0_PREREGISTRATION.md"
+      ],
+      "environment_input_identity": "NONE",
+      "environment_input_identity_none_reason": "as O1",
+      "implementation_locus": [
+        "tree/src/itsf/mc/grid_channel.py",
+        "tree/src/itsf/mc/grid_replay.py"
+      ],
+      "non_imported_evidence": [
+        "authority/STUDY_0_PREREGISTRATION.md"
+      ],
+      "test_or_probe": [
+        "tree/tests/test_mc_grid_channel_b27.py",
+        "tree/tests/test_mc_grid_replay_n11.py"
+      ]
+    },
+    "O3": {
+      "authority": [
+        "authority/STUDY_0_PREREGISTRATION.md"
+      ],
+      "environment_input_identity": "NONE",
+      "environment_input_identity_none_reason": "as O1",
+      "implementation_locus": [
+        "tree/src/itsf/mc/grid_replay.py",
+        "tree/src/itsf/mc/mc_runner.py"
+      ],
+      "non_imported_evidence": [
+        "authority/STUDY_0_PREREGISTRATION.md"
+      ],
+      "test_or_probe": [
+        "tree/tests/test_mc_grid_channel_b27.py",
+        "tree/tests/test_mc_runner_n13.py"
+      ]
+    },
+    "O4": {
+      "authority": [
+        "authority/STUDY_0_PREREGISTRATION.md",
+        "authority/REVIEWER_CONTRACT.md"
+      ],
+      "environment_input_identity": [
+        "tree/src/itsf/execution_identity.py"
+      ],
+      "implementation_locus": [
+        "tree/src/itsf/mc/day_strata_classify.py",
+        "tree/src/itsf/mc/day_strata_context.py",
+        "tree/src/itsf/mc/day_strata_pipeline.py",
+        "tree/src/itsf/mc/day_strata_supplement.py",
+        "tree/src/itsf/mc/supplement_chain.py",
+        "tree/src/itsf/mc/supplement_derive.py",
+        "tree/src/itsf/mc/supplement_inputs.py",
+        "tree/src/itsf/mc/consumer.py",
+        "tree/src/itsf/data/calendar.py",
+        "tree/src/itsf/s0/labels.py",
+        "tree/src/itsf/s0/features.py",
+        "tree/src/itsf/s0/handoff.py",
+        "tree/src/itsf/s0/context.py"
+      ],
+      "non_imported_evidence": [
+        "authority/STUDY_0_PREREGISTRATION.md"
+      ],
+      "test_or_probe": [
+        "tree/tests/test_mc_day_strata_supplement.py",
+        "tree/tests/test_mc_supplement_integration.py",
+        "tree/tests/test_mc_supplement_provenance_battery.py",
+        "tree/tests/test_mc_custody_calendar.py"
+      ]
+    },
+    "O5": {
+      "authority": [
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "environment_input_identity": "NONE",
+      "environment_input_identity_none_reason": "the one-lifecycle-site property is structural; no environment input bears on it",
+      "implementation_locus": [
+        "tree/src/itsf/mc/consumer.py",
+        "tree/src/itsf/mc/atoms.py"
+      ],
+      "non_imported_evidence": [
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "test_or_probe": [
+        "tree/tests/test_mc_consumer.py",
+        "tree/tests/test_mc_atoms.py"
+      ]
+    },
+    "O6": {
+      "authority": [
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "environment_input_identity": [
+        "tree/src/itsf/execution_identity.py"
+      ],
+      "implementation_locus": [
+        "tree/src/itsf/mc/grid_channel.py",
+        "tree/src/itsf/mc/bootstrap.py",
+        "tree/src/itsf/mc/fixed_world.py"
+      ],
+      "non_imported_evidence": [
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "test_or_probe": [
+        "tree/tests/test_mc_grid_channel_b27.py",
+        "tree/tests/test_mc_fixed_world_selection.py",
+        "tree/tests/test_mc_cold_replay.py"
+      ]
+    },
+    "O7": {
+      "authority": [
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "environment_input_identity": "NONE",
+      "environment_input_identity_none_reason": "the convergence rule is fixed by the spec; no environment input enters the witness",
+      "implementation_locus": [
+        "tree/src/itsf/mc/mc_runner.py",
+        "tree/src/itsf/mc/grid_channel.py"
+      ],
+      "non_imported_evidence": [
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "test_or_probe": [
+        "tree/tests/test_mc_runner_n13.py",
+        "tree/tests/test_mc_grid_channel_b27.py"
+      ]
+    },
+    "O8": {
+      "authority": [
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "environment_input_identity": [
+        "tree/src/itsf/execution_identity.py"
+      ],
+      "implementation_locus": [
+        "tree/src/itsf/mc/mc_runner.py",
+        "tree/src/itsf/mc/verdict.py",
+        "tree/src/itsf/mc/atoms.py"
+      ],
+      "non_imported_evidence": [
+        "authority/MC_METHOD_SPEC.md"
+      ],
+      "test_or_probe": [
+        "tree/tests/test_mc_runner_n13.py",
+        "tree/tests/test_mc_bprov_seal_provenance.py"
+      ]
+    },
+    "O9": {
+      "authority": [
+        "authority/MC_METHOD_SPEC.md",
+        "authority/REVIEWER_CONTRACT.md"
+      ],
+      "environment_input_identity": "NONE",
+      "environment_input_identity_none_reason": "the prohibition is on writing a row at all; no environment input can license one",
+      "implementation_locus": [
+        "tree/src/itsf/mc/mc_registry.py",
+        "tree/src/itsf/mc/registry_boundary.py",
+        "tree/src/itsf/mc/registry_integrity.py",
+        "tree/src/itsf/mc/supplement_registry.py",
+        "tree/src/itsf/mc/owner_control.py"
+      ],
+      "non_imported_evidence": [
+        "authority/REVIEWER_CONTRACT.md"
+      ],
+      "test_or_probe": [
+        "tree/tests/test_mc_registry_contract.py",
+        "tree/tests/test_mc_registry_parser.py",
+        "tree/tests/test_mc_supplement_registry.py"
+      ]
+    }
+  },
+  "profile_version": "N14-CODE-REVIEW-PROFILE v1",
+  "review_id": "N14-BUNDLE-001",
+  "rules_extract_sources": [
+    "ops/outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md (OFF-LIMITS; field-selected: ITEM_ID/TIER/RULING/POST_FREEZE_DEFINITION only)",
+    "ops/DECISIONS.md row DEC-N11-B25-1, verdict cell only"
+  ],
+  "substantive_round": "1 of at most 2",
+  "tests_deselected": [],
+  "tests_selected": [
+    "tests/test_mc_atoms.py",
+    "tests/test_mc_b26_reduction_feasibility.py",
+    "tests/test_mc_battery_boundary.py",
+    "tests/test_mc_bprov_seal_provenance.py",
+    "tests/test_mc_bundle_precheck.py",
+    "tests/test_mc_cold_replay.py",
+    "tests/test_mc_consumer.py",
+    "tests/test_mc_convergence_provenance.py",
+    "tests/test_mc_custody_calendar.py",
+    "tests/test_mc_day_strata_supplement.py",
+    "tests/test_mc_feasibility_composition.py",
+    "tests/test_mc_feasibility_gates.py",
+    "tests/test_mc_fixed_world_selection.py",
+    "tests/test_mc_grid_channel_b27.py",
+    "tests/test_mc_grid_replay_n11.py",
+    "tests/test_mc_n01_repairs.py",
+    "tests/test_mc_node_integration.py",
+    "tests/test_mc_over_budget_predicate.py",
+    "tests/test_mc_r2_2_integration.py",
+    "tests/test_mc_r2_3_evidence.py",
+    "tests/test_mc_registry_contract.py",
+    "tests/test_mc_registry_parser.py",
+    "tests/test_mc_runner_n13.py",
+    "tests/test_mc_supplement_authority.py",
+    "tests/test_mc_supplement_coercion_census.py",
+    "tests/test_mc_supplement_integration.py",
+    "tests/test_mc_supplement_paths_battery.py",
+    "tests/test_mc_supplement_provenance_battery.py",
+    "tests/test_mc_supplement_registry.py",
+    "tests/test_mc_supplement_runner.py",
+    "tests/test_no_public_mc_function_is_unreached.py"
+  ],
+  "tree_payload": [
+    ".python-version",
+    "MC_METHOD_SPEC.md",
+    "STUDY_0_PREREGISTRATION.md",
+    "ops/DIRECTORY_CREATION_GRANTS.md",
+    "ops/requirements.lock.txt",
+    "src/itsf/__init__.py",
+    "src/itsf/contracts.py",
+    "src/itsf/data/__init__.py",
+    "src/itsf/data/calendar.py",
+    "src/itsf/data/dbn_loader.py",
+    "src/itsf/data/manifests.py",
+    "src/itsf/data/roles.py",
+    "src/itsf/data/validation.py",
+    "src/itsf/execution_identity.py",
+    "src/itsf/guards.py",
+    "src/itsf/mc/__init__.py",
+    "src/itsf/mc/account.py",
+    "src/itsf/mc/atoms.py",
+    "src/itsf/mc/bootstrap.py",
+    "src/itsf/mc/bundle_precheck.py",
+    "src/itsf/mc/cold_reducer.py",
+    "src/itsf/mc/consumer.py",
+    "src/itsf/mc/day_strata_classify.py",
+    "src/itsf/mc/day_strata_context.py",
+    "src/itsf/mc/day_strata_dryrun.py",
+    "src/itsf/mc/day_strata_failure.py",
+    "src/itsf/mc/day_strata_pipeline.py",
+    "src/itsf/mc/day_strata_rows.py",
+    "src/itsf/mc/day_strata_supplement.py",
+    "src/itsf/mc/feasibility.py",
+    "src/itsf/mc/fixed_world.py",
+    "src/itsf/mc/grid_channel.py",
+    "src/itsf/mc/grid_replay.py",
+    "src/itsf/mc/mc_contract.py",
+    "src/itsf/mc/mc_registry.py",
+    "src/itsf/mc/mc_runner.py",
+    "src/itsf/mc/orchestrator.py",
+    "src/itsf/mc/over_budget.py",
+    "src/itsf/mc/owner_control.py",
+    "src/itsf/mc/platforms/__init__.py",
+    "src/itsf/mc/platforms/authoritative.py",
+    "src/itsf/mc/platforms/base.py",
+    "src/itsf/mc/platforms/lucid.py",
+    "src/itsf/mc/platforms/topstep.py",
+    "src/itsf/mc/production_inputs.py",
+    "src/itsf/mc/real_input.py",
+    "src/itsf/mc/registry_boundary.py",
+    "src/itsf/mc/registry_integrity.py",
+    "src/itsf/mc/supplement_authority.py",
+    "src/itsf/mc/supplement_build.py",
+    "src/itsf/mc/supplement_chain.py",
+    "src/itsf/mc/supplement_contract.py",
+    "src/itsf/mc/supplement_derive.py",
+    "src/itsf/mc/supplement_inputs.py",
+    "src/itsf/mc/supplement_precheck.py",
+    "src/itsf/mc/supplement_production.py",
+    "src/itsf/mc/supplement_registry.py",
+    "src/itsf/mc/supplement_runner.py",
+    "src/itsf/mc/verdict.py",
+    "src/itsf/s0/__init__.py",
+    "src/itsf/s0/context.py",
+    "src/itsf/s0/costs.py",
+    "src/itsf/s0/dataset.py",
+    "src/itsf/s0/features.py",
+    "src/itsf/s0/gridmix.py",
+    "src/itsf/s0/handoff.py",
+    "src/itsf/s0/labels.py",
+    "src/itsf/s0/oracle.py",
+    "src/itsf/s0/paths.py",
+    "src/itsf/s0/report.py",
+    "src/itsf/s0/runinfra.py",
+    "src/itsf/s0/stability.py",
+    "src/itsf/s0/stats.py",
+    "src/itsf/s0/study.py",
+    "tests/_governed_subtrees.py",
+    "tests/conftest.py",
+    "tests/test_mc_atoms.py",
+    "tests/test_mc_b26_reduction_feasibility.py",
+    "tests/test_mc_battery_boundary.py",
+    "tests/test_mc_bprov_seal_provenance.py",
+    "tests/test_mc_bundle_precheck.py",
+    "tests/test_mc_cold_replay.py",
+    "tests/test_mc_consumer.py",
+    "tests/test_mc_convergence_provenance.py",
+    "tests/test_mc_custody_calendar.py",
+    "tests/test_mc_day_strata_supplement.py",
+    "tests/test_mc_feasibility_composition.py",
+    "tests/test_mc_feasibility_gates.py",
+    "tests/test_mc_fixed_world_selection.py",
+    "tests/test_mc_grid_channel_b27.py",
+    "tests/test_mc_grid_replay_n11.py",
+    "tests/test_mc_n01_repairs.py",
+    "tests/test_mc_node_integration.py",
+    "tests/test_mc_over_budget_predicate.py",
+    "tests/test_mc_r2_2_integration.py",
+    "tests/test_mc_r2_3_evidence.py",
+    "tests/test_mc_registry_contract.py",
+    "tests/test_mc_registry_parser.py",
+    "tests/test_mc_runner_n13.py",
+    "tests/test_mc_supplement_authority.py",
+    "tests/test_mc_supplement_coercion_census.py",
+    "tests/test_mc_supplement_integration.py",
+    "tests/test_mc_supplement_paths_battery.py",
+    "tests/test_mc_supplement_provenance_battery.py",
+    "tests/test_mc_supplement_registry.py",
+    "tests/test_mc_supplement_runner.py",
+    "tests/test_no_public_mc_function_is_unreached.py",
+    "tests/tiers.py"
+  ]
+}

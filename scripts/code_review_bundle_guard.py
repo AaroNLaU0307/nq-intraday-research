@@ -87,13 +87,30 @@ def _runtime_roots() -> tuple:
     return tuple(roots)
 
 
+#: Events that only ENUMERATE. A listing-only admission permits exactly these
+#: under the admitted roots; `open` is deliberately absent, so names may be
+#: read and contents may not.
+LISTING_EVENTS = frozenset({"os.listdir", "os.scandir", "os.stat"})
+
+
 class Guard:
-    def __init__(self, bundle_root, tmp_root=None, runtime_roots=None):
+    def __init__(self, bundle_root, tmp_root=None, runtime_roots=None,
+                 listing_only_roots=()):
         self.bundle = Path(bundle_root).resolve()
         self.tmp = Path(tmp_root).resolve() if tmp_root else None
         self.runtime = tuple(runtime_roots) if runtime_roots else _runtime_roots()
+        # BOUNDED ADMISSION (Aaron, 2026-09-10, on DEC-CRB-HOLD-1 / B-34):
+        # directory-NAME enumeration only, under exactly these roots, for the
+        # N14 profile alone. File contents under them stay denied -- which is
+        # the whole difference between the admission granted and a data read.
+        self.listing_only = tuple(Path(p).resolve() for p in listing_only_roots
+                                  if Path(p).exists())
         self.denials = []          # every refusal, for the run report
         self.allowed_path_ops = 0
+        self.admitted_listings = 0
+
+    def _listing_admitted(self, real: Path) -> bool:
+        return any(real == r or r in real.parents for r in self.listing_only)
 
     # -- the only judgement in the file ---------------------------------
     def _inside(self, raw) -> bool:
@@ -130,6 +147,15 @@ class Guard:
         if self._inside(target):
             self.allowed_path_ops += 1
             return
+        if event in LISTING_EVENTS:
+            try:
+                real = Path(os.fsdecode(target)).resolve()
+            except Exception:
+                real = None
+            if real is not None and self._listing_admitted(real):
+                # names only, under the admitted roots, and nothing else
+                self.admitted_listings += 1
+                return
         self.denials.append((event, str(target)))
         raise BundleEscapeDenied(
             "filesystem escape denied inside the review bundle: %s -> %r"
@@ -149,9 +175,9 @@ def block_colorama() -> None:
     sys.meta_path.insert(0, _Blocked())
 
 
-def arm(bundle_root, tmp_root=None) -> Guard:
+def arm(bundle_root, tmp_root=None, listing_only_roots=()) -> Guard:
     """Install the guard. There is no disarm: an audit hook cannot be removed,
     which is the property that makes this worth using at all."""
-    guard = Guard(bundle_root, tmp_root)
+    guard = Guard(bundle_root, tmp_root, listing_only_roots=listing_only_roots)
     sys.addaudithook(guard)
     return guard
