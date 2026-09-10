@@ -357,7 +357,7 @@ is itself a finding.
 | sha256 | bytes | path at `b2e7a3c9bdc1` |
 |---|---|---|
 | `a6de4a286eaff5ab7487298593f590cbee845afa1939ad4ea675ec219cf29608` | 19068 | `MC_METHOD_SPEC.md` |
-| `b928a17b15e5b8df0d34b1e3551c22cb981cd002a56c209b113719478b3c6972` | 9848 | `ops/N14_CLAIM_BLIND_AUTHORITIES_2026-09-10.md` |
+| `b928a17b15e5b8df0d34b1e3551c22cb981cd002a56c209b113719478b3c6972` | 9693 | `ops/N14_CLAIM_BLIND_AUTHORITIES_2026-09-10.md` |
 
 2 file(s).
 
