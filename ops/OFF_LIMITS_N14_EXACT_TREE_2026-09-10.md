@@ -50,9 +50,113 @@ CREATED=2026-09-10
 ```
 
 **Read this file from disk.** Chat-carried bytes are never a source of truth in this
-project. You reached it from the reviewer handoff, which states its sha256; recompute
-that before trusting a byte of what follows. A mismatch is STOP. Its header block must
-carry `REVIEWED_SET_UNCHANGED_SINCE=b2e7a3c9bdc15e085ba80c2ba9194116c6cb811d`.
+project. Its header block must carry
+`REVIEWED_SET_UNCHANGED_SINCE=b2e7a3c9bdc15e085ba80c2ba9194116c6cb811d`; if the copy in front
+of you says anything else, it is stale.
+
+## 0-A. THE PASTE BLOCK -- what the Owner sends, and how you check it
+
+If your session was opened by pasted text, it came from here. **What the Owner
+pastes is the text INSIDE the fence below** -- not the fence, not the markers, not
+this sentence, and nothing else. Compare what you were given against it
+byte-for-byte; a mismatch means something outside the governed transport reached
+you, and that is a STOP.
+
+**This is the repair for the defect that stopped the previous attempt.** That
+attempt was opened from a dispatcher-side file which declared itself outside the
+read set and then carried the text the reviewer had to receive -- unreadable and
+unavoidable at the same time. The payload now lives inside the document that
+defines your read surface, so everything you are handed is something you may read.
+
+The block cannot state THIS file's own sha256: a document containing its own hash
+has no fixed point. It states the brief's, and this file is authenticated the way
+every other allowlisted file is -- it is the repository file at the named path, and
+its own hash is pinned in `ops/ARTIFACTS_UNDER_REVIEW.json`. The pasted text is
+checked against THIS file, not the other way round.
+
+<!-- BEGIN PASTE BLOCK -->
+
+```
+You are the independent reviewer for N14, a node of the ITSF canonical DAG.
+N14's whole content is an exact-tree review of the Monte Carlo implementation,
+and your verdict is the node's completion condition.
+
+REVIEW_ID     = N14-EXACT-TREE-002
+ISSUE_LINEAGE = N14
+REVIEW_ROUND  = 1 of at most 2 (UNCONSUMED)
+ROLE          = independent reviewer; ONE NEW fresh top-level GPT-6 Astra session
+BLINDNESS     = CLAIM_BLIND
+MUST_NOT_BE   = the builder (Claude Opus / Claude Code) session; any subagent of it;
+                the session that stopped on this node's earlier transport defect;
+                the Astra session that reviewed the preceding issue lineage on part
+                of this subsystem
+
+Repository:
+C:\Users\Aaron\OneDrive\Desktop\Quant trade\Intraday Trend Strategy Framework
+
+IMPLEMENTATION TARGET = b2e7a3c9bdc15e085ba80c2ba9194116c6cb811d
+TREE                  = 84f9388d53557685e641929a9b5fb6e85a575e4e
+FREEZE PIN            = b2e7a3c9bdc15e085ba80c2ba9194116c6cb811d
+  Two quantities, not one. The target is the code; the pin covers the whole
+  reference set. They are equal in this package because the newest change to any
+  allowlisted path IS the implementation commit -- a coincidence. Verify both.
+
+READ THESE TWO FILES FROM DISK, IN THIS ORDER, BEFORE ANYTHING ELSE.
+Chat-carried bytes are never a source of truth in this project.
+
+  1. ops/OFF_LIMITS_N14_EXACT_TREE_2026-09-10.md
+     In the repository. Its own sha256 is pinned in ops/ARTIFACTS_UNDER_REVIEW.json,
+     not inside itself -- a document cannot contain its own hash. You are here
+     because the pasted text named this path, and the check that matters is that
+     the pasted text matches its section 0-A verbatim.
+  2. C:\Users\Aaron\quant-data\review\itsf-n14-exact-tree-2026-09-10\BRIEF.md
+     sha256 000aee6b2938e4ed8c279c98eea30a3485c72f7859781a876f0ff3a0b836dfb9
+
+RECOMPUTE THE BRIEF'S HASH FIRST, then every hash in section 3 of the carrier --
+93 files -- before any substantive work. A mismatch is STOP, not a warning.
+
+YOUR AUTHORIZED READ SURFACE is exactly: the 93 files listed in the carrier's
+section 3, plus the three transport documents that section authorizes by name --
+the carrier itself -- which is also where this text lives, so open its section 0-A
+and confirm this block is byte-identical -- and the brief. NOTHING ELSE IS AUTHORIZED.
+
+  - No repository-wide grep, no recursive directory listing, no broad symbol search.
+  - No skill, checklist, playbook, template, tool or remembered procedure from
+    outside this package. It is self-contained by construction: the carrier's
+    section 2 is every command and the brief's section 3 is every obligation.
+    Opening an outside procedure is the same contamination as opening a forbidden
+    file.
+  - Do not open ops/DECISIONS.md, ops/RESEARCH_STATE.md, ops/BACKLOG.md,
+    qros-state.yaml, anything under ops/outcome_quarantine/, either exposure
+    ledger, or any earlier review package. The carrier's section 1 is the
+    exhaustive forbidden set and says what each would cost.
+  - Read-only: commit nothing, append to no ledger, write no repository file.
+
+ALLOWED COMMANDS are exactly those in the carrier's section 2: four
+`python -m pytest -q ...` invocations over the MC test surface, and `git log`
+range checks against the freeze pin above. Nothing else.
+
+PROHIBITED: scripts/run_governed.cmd; any real Monte Carlo run; the full test
+suite; any write, commit, push or ledger append. REAL_MC_AUTHORIZED = NO, and
+nothing in this package authorizes a run.
+
+STOP -- returning no substantive verdict -- if any hash mismatches, if an
+obligation needs a path outside the surface, if you have read anything outside
+it, if you need an outside procedure, or if this pasted text is not byte-identical
+to its source block. A STOP is not a HOLD and costs no review round; reporting one
+is worth more than a verdict formed on a surface you should not have seen.
+
+RETURN exactly one verdict -- PASS, PASS_WITH_BACKLOG, or HOLD -- with the findings
+table the brief's section 5 specifies. Every BLOCKING finding names exactly one of
+the six threats T1-T6, exactly one evidence class (REPRODUCED / REASONED /
+SELF-REPORTED), and a concrete failure path. Then the attestation, using
+ops/templates/ATTESTATION_HEADER_TEMPLATE.md. Hand it back to the Owner.
+
+A PASS SATISFIES N14 AND NOTHING ELSE. It authorizes no run, appends no READY row,
+releases no data, and does not move REAL_MC_AUTHORIZED off NO.
+```
+
+<!-- END PASTE BLOCK -->
 
 ## 0. Read this before anything else
 
@@ -147,12 +251,6 @@ and read quarantined bytes inside the test process. Under `ops/REVIEWER_CONTRACT
 section 4.2 that is execution rather than inspection, but there is no reason to incur
 it: no obligation in the brief needs it. If you run it anyway, declare it under
 `MODULES_EXECUTED_NOT_INSPECTED`.
-
-**Builder-side transport validation, and what it is NOT.** The builder ran the commands
-above at the frozen target immediately before preparing this package and they started
-and completed; the counts are in the DISPATCH. That is evidence the commands work in
-this environment. It is SELF-REPORTED with respect to the implementation. A green suite
-the builder ran is not evidence the code is right; your run and your reading are.
 
 ## 3. The read allowlist -- exhaustive: 93 repository files
 
@@ -313,7 +411,7 @@ The tests are IN the review, not evidence for it. A test that pins the implement
 of the requirement, or that would still pass on an implementation violating the sealed rule,
 is itself a finding.
 
-### Three transport documents, authorized by name
+### Two transport documents, authorized by name
 
 These are part of your authorized surface and are **not** listed in the tables above.
 Their bytes are pinned in `ops/ARTIFACTS_UNDER_REVIEW.json` by content hash rather than
@@ -325,12 +423,8 @@ not by a commit range containing itself.
 
 ```
 ops/OFF_LIMITS_N14_EXACT_TREE_2026-09-10.md
-    this document -- the read allowlist and the off-limits set
-ops/REVIEWER_HANDOFF_N14_2026-09-10.md
-    the reviewer-facing handoff. If your session was opened by pasting text, THAT TEXT
-    IS A VERBATIM BLOCK FROM THIS FILE. Open it and compare. If what you were pasted is
-    not byte-identical to the block it marks, STOP -- something outside the governed
-    transport reached you.
+    this document -- the read allowlist, the off-limits set, AND the paste block in
+    section 0-A that your session was opened from
 BRIEF.md
     the obligations, delivered outside the repository. Its path and sha256 are given
     in section 6 below and again in the handoff.
