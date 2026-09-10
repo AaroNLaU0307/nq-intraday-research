@@ -93,6 +93,34 @@ def _runtime_roots() -> tuple:
 LISTING_EVENTS = frozenset({"os.listdir", "os.scandir", "os.stat"})
 
 
+#: The Windows extended-length prefixes, which `Path.resolve()` leaves in
+#: place. FOUND 2026-09-11 in a sealed run: pytest took its tmp-directory lock
+#: through `\\?\C:\...`, and a path INSIDE the bundle therefore failed to
+#: compare inside and was denied. That failure was fail-closed -- an ESCAPE
+#: spelled the same way is still denied, because after stripping it resolves
+#: outside -- but a boundary that refuses legitimate work is a defect even
+#: when it errs safe, and a reviewer hitting it would read it as a transport
+#: failure. Stripping also makes the `..` case STRICTER, not looser: under the
+#: prefix Windows treats `..` as a literal directory name, and normalising it
+#: can only move the resolved path further out, where it is denied.
+_EXTENDED = ("\\\\?\\UNC\\", "\\\\?\\", "\\\\.\\")
+
+
+def _strip_extended_prefix(text: str) -> str:
+    for prefix in _EXTENDED:
+        if text.upper().startswith(prefix.upper()):
+            rest = text[len(prefix):]
+            if prefix.endswith("UNC\\"):
+                return "\\\\" + rest
+            # A drive-qualified remainder is a path; anything else (`NUL`,
+            # `PhysicalDrive0`) is a DEVICE NAME and must not be treated as
+            # one, so it is left exactly as it came in.
+            if len(rest) >= 2 and rest[1] == ":":
+                return rest
+            return text
+    return text
+
+
 class Guard:
     def __init__(self, bundle_root, tmp_root=None, runtime_roots=None,
                  listing_only_roots=()):
@@ -121,6 +149,7 @@ class Guard:
         stripped = text.lower().rstrip("\\/")
         if stripped in DEVNULL or stripped.rsplit("\\", 1)[-1] == "nul":
             return True
+        text = _strip_extended_prefix(text)
         try:
             # resolve() follows symlinks and junctions: a link inside the
             # bundle is judged by its TARGET, which is what closes link escape.
