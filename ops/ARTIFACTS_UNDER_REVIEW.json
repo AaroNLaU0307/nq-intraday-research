@@ -1015,7 +1015,7 @@
     },
     {
       "path": "ops/OFF_LIMITS_N14_EXACT_TREE_2026-09-10.md",
-      "sha256": "ce8e6fdbaceb8365a6befb2d0cfb4e424eb1e0eb475634c9a18da3a7ce74af4e",
+      "sha256": "8b2c24643d8980ef089f384d46a378b99442b9aebda3e57cfd725abc8ca51351",
       "issued_to": "ONE NEW fresh top-level GPT-6 Astra session, claim-blind (REVIEWER_CONTRACT.md §2.1 OWNER_DEFAULT_INDEPENDENT_REVIEWER; §2 row \"Change to a tier-B authorization gate or leakage-sensitive code\"; N14 node review, lineage N14, round 1)",
       "issued_at": "2026-09-10",
       "review_id": "N14-EXACT-TREE-002",

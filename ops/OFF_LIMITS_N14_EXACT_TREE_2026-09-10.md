@@ -116,9 +116,10 @@ RECOMPUTE THE BRIEF'S HASH FIRST, then every hash in section 3 of the carrier --
 93 files -- before any substantive work. A mismatch is STOP, not a warning.
 
 YOUR AUTHORIZED READ SURFACE is exactly: the 93 files listed in the carrier's
-section 3, plus the three transport documents that section authorizes by name --
-the carrier itself -- which is also where this text lives, so open its section 0-A
-and confirm this block is byte-identical -- and the brief. NOTHING ELSE IS AUTHORIZED.
+section 3, plus the two transport documents that section authorizes by name.
+Those two are the carrier and the brief. The carrier is also where this text
+lives: open its section 0-A and confirm this block is byte-identical.
+NOTHING ELSE IS AUTHORIZED.
 
   - No repository-wide grep, no recursive directory listing, no broad symbol search.
   - No skill, checklist, playbook, template, tool or remembered procedure from
