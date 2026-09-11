@@ -87,6 +87,33 @@ def _runtime_roots() -> tuple:
     return tuple(roots)
 
 
+#: Events that MUTATE the filesystem. Inside the bundle these are permitted
+#: ONLY under the reviewer-writable surface -- the sealed payload is READ-ONLY
+#: to review execution. ADDED 2026-09-11: until now the guard judged only
+#: WHERE an operation pointed, so a write anywhere inside the bundle root was
+#: allowed, the sealed payload included. The reviewer never had permission to
+#: create the old scratch directory at the bundle root, which is what made that
+#: latitude visible.
+MUTATING_EVENTS = frozenset({
+    "os.mkdir", "os.rmdir", "os.remove", "os.rename", "os.replace",
+    "os.truncate", "os.symlink", "os.link", "os.chmod", "os.chown",
+    "shutil.copyfile", "shutil.copymode", "shutil.copystat", "shutil.move"})
+
+#: `open` is a mutation only when the mode says so. args = (path, mode, flags).
+_WRITE_MODES = ("w", "a", "x", "+")
+
+
+def _is_mutation(event, args) -> bool:
+    if event in MUTATING_EVENTS:
+        return True
+    if event != "open":
+        return False
+    mode = args[1] if len(args) > 1 else None
+    if not isinstance(mode, str):
+        return False                     # os.open flags: judged by the caller
+    return any(m in mode for m in _WRITE_MODES)
+
+
 #: Events that only ENUMERATE. A listing-only admission permits exactly these
 #: under the admitted roots; `open` is deliberately absent, so names may be
 #: read and contents may not.
@@ -123,9 +150,16 @@ def _strip_extended_prefix(text: str) -> str:
 
 class Guard:
     def __init__(self, bundle_root, tmp_root=None, runtime_roots=None,
-                 listing_only_roots=()):
+                 listing_only_roots=(), writable_root=None):
         self.bundle = Path(bundle_root).resolve()
         self.tmp = Path(tmp_root).resolve() if tmp_root else None
+        # The ONE writable surface inside the bundle. `return/` is where the
+        # review contract already sends INITIAL_FINDINGS, FREEZE and
+        # ATTESTATION, and it is the only place the review seat has been
+        # observed to be able to write. Everything else in the bundle is
+        # sealed input and stays read-only while the review runs.
+        self.writable = (Path(writable_root).resolve()
+                         if writable_root else None)
         self.runtime = tuple(runtime_roots) if runtime_roots else _runtime_roots()
         # BOUNDED ADMISSION (Aaron, 2026-09-10, on DEC-CRB-HOLD-1 / B-34):
         # directory-NAME enumeration only, under exactly these roots, for the
@@ -136,6 +170,17 @@ class Guard:
         self.denials = []          # every refusal, for the run report
         self.allowed_path_ops = 0
         self.admitted_listings = 0
+
+    def _write_admitted(self, real: Path) -> bool:
+        """A mutation is admitted under the reviewer surface, under a caller-
+        supplied scratch root, or -- unchanged from before -- anywhere the
+        interpreter itself lives. The last one is not new latitude: it is the
+        same runtime allowance reads already have, and B-39 tracks tightening
+        it separately."""
+        for root in (self.writable, self.tmp):
+            if root is not None and (real == root or root in real.parents):
+                return True
+        return any(real == r or r in real.parents for r in self.runtime)
 
     def _listing_admitted(self, real: Path) -> bool:
         return any(real == r or r in real.parents for r in self.listing_only)
@@ -174,6 +219,20 @@ class Guard:
         if not isinstance(target, (str, bytes, os.PathLike)):
             return                            # a file descriptor, already open
         if self._inside(target):
+            if _is_mutation(event, args) and self.writable is not None:
+                try:
+                    real = Path(_strip_extended_prefix(
+                        os.fsdecode(target))).resolve()
+                except Exception:                             # noqa: BLE001
+                    real = None
+                devnull = str(target).lower().rstrip(chr(92) + "/") in DEVNULL
+                if real is not None and not devnull \
+                        and not self._write_admitted(real):
+                    self.denials.append((event, str(target)))
+                    raise BundleEscapeDenied(
+                        "the sealed payload is read-only to review execution: "
+                        "%s -> %r. Reviewer output and ephemeral scratch belong "
+                        "under return/." % (event, target))
             self.allowed_path_ops += 1
             return
         if event in LISTING_EVENTS:
@@ -211,11 +270,13 @@ def block_colorama() -> None:
 ACTIVE = None
 
 
-def arm(bundle_root, tmp_root=None, listing_only_roots=()) -> Guard:
+def arm(bundle_root, tmp_root=None, listing_only_roots=(),
+        writable_root=None) -> Guard:
     """Install the guard. There is no disarm: an audit hook cannot be removed,
     which is the property that makes this worth using at all."""
     global ACTIVE
-    guard = Guard(bundle_root, tmp_root, listing_only_roots=listing_only_roots)
+    guard = Guard(bundle_root, tmp_root, listing_only_roots=listing_only_roots,
+                  writable_root=writable_root)
     sys.addaudithook(guard)
     ACTIVE = guard
     return guard

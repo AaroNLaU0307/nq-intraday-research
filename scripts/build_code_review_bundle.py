@@ -529,12 +529,48 @@ G.block_colorama()
 # machine. That accident was masking the dependency, not satisfying it.
 import ctypes                                             # noqa: E402,F401
 
-TMP = ROOT / "_tmp"
-TMP.mkdir(exist_ok=True)
+# EPHEMERAL SCRATCH LIVES UNDER THE REVIEWER SURFACE, NOT AT THE BUNDLE ROOT.
+# The previous runner created `<bundle_root>/_tmp`, and the review seat got
+# WinError 5 there before the guard was even armed -- which was correct of the
+# seat: a sealed input directory has no business being writable. `return/` is
+# where the review contract already sends INITIAL_FINDINGS, FREEZE and
+# ATTESTATION, and it is the only surface the seat has demonstrably been able to
+# write. Scratch is a DOT directory inside it so it can never be mistaken for a
+# reviewer artefact.
+RETURN = ROOT / "return"
+SCRATCH = RETURN / ".scratch"
+if not RETURN.is_dir():
+    sys.stderr.write(
+        "DELIVERY FAILURE: the reviewer surface " + str(RETURN)
+        + " is missing. Report this and stop.\\n")
+    raise SystemExit(94)
+
+# LIFECYCLE, step 1: absent or empty before execution. Done BEFORE the guard is
+# armed, because `shutil.rmtree` is one of the escape classes the guard denies
+# outright and this must not become a reason to carve a hole in that.
+import shutil
+if SCRATCH.exists():
+    shutil.rmtree(SCRATCH, ignore_errors=True)
+try:
+    SCRATCH.mkdir(parents=True)
+except OSError as exc:
+    sys.stderr.write(
+        "DELIVERY FAILURE: cannot create the review scratch directory "
+        + str(SCRATCH) + " (" + type(exc).__name__ + ": " + str(exc) + ")."
+        "\\nThe reviewer surface return/ must be writable. Report this and "
+        "stop; do not make the sealed payload writable.\\n")
+    raise SystemExit(95)
+
 for var in ("TMP", "TEMP", "TMPDIR"):
-    os.environ[var] = str(TMP)
+    os.environ[var] = str(SCRATCH)
 import tempfile
-tempfile.tempdir = str(TMP)
+tempfile.tempdir = str(SCRATCH)
+
+# The payload stays read-only even if this runner is started WITHOUT -B. The
+# launcher passes -B; setting the flag here means a reviewer who invokes the
+# runner directly still writes no bytecode into the sealed tree.
+sys.dont_write_bytecode = True
+
 os.environ["N14_BUNDLE_ROOT"] = str(ROOT)
 
 # BOUNDED ADMISSION, this profile only: directory-NAME enumeration under these
@@ -552,7 +588,8 @@ DESELECT = @@DESELECT@@
 # in OBLIGATION_MAP.json and the SOURCE is in tree/ for you to read.
 NOT_COLLECTED = @@NOT_COLLECTED@@
 
-guard = G.arm(ROOT, TMP, listing_only_roots=LISTING_ONLY)
+guard = G.arm(ROOT, SCRATCH, listing_only_roots=LISTING_ONLY,
+              writable_root=RETURN)
 
 TREE = ROOT / "tree"
 sys.path.insert(0, str(TREE / "src"))
@@ -569,8 +606,11 @@ import pytest
 # Running the two trees separately keeps rootdir at tree/, where the ids are
 # written, and separates the repository suite from the review probes in the
 # output -- which is worth having on its own.
+# `--basetemp` pins pytest's own tmp tree into the scratch surface. Without it
+# pytest derives one from TMP/TEMP, which works but is implicit -- and implicit
+# is what put a scratch directory in the sealed payload in the first place.
 BASE = ["-q", "-p", "no:cacheprovider", "--color=no"]
-targs = BASE + ["tests"]
+targs = BASE + ["tests", "--basetemp", str(SCRATCH / "pytest-tests")]
 for node in DESELECT:
     targs += ["--deselect", node]
 for path in NOT_COLLECTED:
@@ -578,7 +618,8 @@ for path in NOT_COLLECTED:
 sys.stderr.write("\\n[bundle] repository tests\\n")
 code = pytest.main(targs)
 sys.stderr.write("\\n[bundle] review probes\\n")
-pcode = pytest.main(BASE + [str(ROOT / "probes")])
+pcode = pytest.main(BASE + [str(ROOT / "probes"),
+                            "--basetemp", str(SCRATCH / "pytest-probes")])
 code = code or pcode
 
 report = {
@@ -586,12 +627,65 @@ report = {
     "in_bundle_path_ops": guard.allowed_path_ops,
     "admitted_listings": guard.admitted_listings,
     "denied": [[e, t] for e, t in guard.denials[:50]],
+    "scratch_root": str(SCRATCH.relative_to(ROOT)).replace(chr(92), "/"),
+    "writable_root": str(RETURN.relative_to(ROOT)).replace(chr(92), "/"),
+    "sealed_payload_writable": False,
 }
 (ROOT / "return" / "GUARD_REPORT.json").write_text(
     json.dumps(report, indent=2) + "\\n", encoding="utf-8")
 sys.stderr.write("\\n[guard] denials=" + str(len(guard.denials))
                  + "  in-bundle path ops=" + str(guard.allowed_path_ops)
                  + "  admitted listings=" + str(guard.admitted_listings) + "\\n")
+# LIFECYCLE, steps 3 and 4. On success the scratch is REMOVED, so nothing
+# ephemeral survives to be mistaken for evidence. On failure it is kept for
+# diagnosis and labelled, because a stopped review is exactly when the
+# temporary state is worth having -- and the label is what keeps it from
+# reading as a reviewer artefact. `shutil.rmtree` is denied by the armed
+# guard, so this walks and unlinks, which is permitted under return/.
+def _wipe(root):
+    removed = 0
+    for base, dirs, names in os.walk(root, topdown=False):
+        for name in names:
+            try:
+                os.remove(os.path.join(base, name))
+                removed += 1
+            except OSError:
+                pass
+        for name in dirs:
+            try:
+                os.rmdir(os.path.join(base, name))
+            except OSError:
+                pass
+    try:
+        os.rmdir(root)
+    except OSError:
+        pass
+    return removed
+
+
+if code == 0 and pcode == 0:
+    n_removed = _wipe(str(SCRATCH))
+    sys.stderr.write("\\n[scratch] removed after a clean run ("
+                     + str(n_removed) + " files)\\n")
+else:
+    try:
+        with open(str(SCRATCH / "EPHEMERAL_DO_NOT_READ_AS_EVIDENCE.txt"),
+                  "w", encoding="utf-8") as fh:
+            fh.write(
+                "This directory is EPHEMERAL EXECUTION STATE from a review run"
+                " that did not exit clean.\\n\\nIt is NOT a reviewer"
+                " artefact and is NOT evidence for O1-O13. The reviewer's"
+                " returns are INITIAL_FINDINGS.md, FREEZE.json and"
+                " ATTESTATION.md, which live in return/ itself and never"
+                " here.\\n\\nIt is kept only because the run failed and"
+                " the temporary state may help diagnose why. Delete it"
+                " freely.\\n")
+    except OSError:
+        pass
+    sys.stderr.write("\\n[scratch] kept for diagnosis at "
+                     + str(SCRATCH) + " -- labelled ephemeral, not"
+                     " evidence\\n")
+
 sys.exit(code)
 """
 

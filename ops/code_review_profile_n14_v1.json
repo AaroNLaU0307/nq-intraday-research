@@ -473,9 +473,21 @@
       "round_consumed": false,
       "substantive_verdict": "ABSENT",
       "why_retired": "presented to a review seat and STOPPED TWICE on an execution-environment delivery failure, never on its content: the seat verified 130/130 payload hashes and then could not start Python. Retired when the review runtime became part of the delivery identity, which changes ENVIRONMENT.json and the manifest."
+    },
+    "N14-BUNDLE-003": {
+      "dispatched": true,
+      "manifests": [
+        "7e1a16f5784a32c518b222989db193871d3ce7aa7b83022df31a60538c9ab362"
+      ],
+      "on_disk_as": [
+        "N14-BUNDLE-003.RETIRED_SCRATCH_WRITE_DO_NOT_DISPATCH"
+      ],
+      "round_consumed": false,
+      "substantive_verdict": "ABSENT",
+      "why_retired": "delivered, and STOPPED pre-substantively on a WRITE-PERMISSION failure: the runner created its scratch directory at the SEALED BUNDLE ROOT and the review seat got WinError 5 there, before the guard was armed. Correct of the seat -- a sealed input directory has no business being writable. Retired because moving scratch onto the reviewer surface changes the runner and the guard, hence the bytes."
     }
   },
-  "review_id": "N14-BUNDLE-003",
+  "review_id": "N14-BUNDLE-004",
   "review_runtime": {
     "bytes": 424900000,
     "entrypoint": "run_review.cmd (cmd.exe; no PATH lookup, no py launcher, no network, no App Execution Alias)",
@@ -496,7 +508,9 @@
     "python_version_major_minor": "3.13",
     "runtime_id": "N14-RUNTIME-001",
     "runtime_manifest_sha256": "293f460242614eb83a0281a74bc3da8532e8dc039badc1f92fb37b07cb9c27ce",
-    "startup_injection": "NONE -- every .pth is removed from the runtime and the omission is declared in RUNTIME_MANIFEST.json"
+    "startup_injection": "NONE -- every .pth is removed from the runtime and the omission is declared in RUNTIME_MANIFEST.json",
+    "unchanged_by_the_scratch_correction": true,
+    "unchanged_reason": "the write-permission defect was in the bundle's runner and guard, not in the runtime. The runtime's 12002 files and 49 pins are byte-identical and its RUNTIME_MANIFEST_SHA256 is unchanged."
   },
   "rules_extract_sources": [
     "ops/outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md (OFF-LIMITS; field-selected: ITEM_ID/TIER/RULING/POST_FREEZE_DEFINITION only)",
@@ -713,5 +727,18 @@
     "tests/test_mc_supplement_runner.py",
     "tests/test_no_public_mc_function_is_unreached.py",
     "tests/tiers.py"
-  ]
+  ],
+  "write_surfaces": {
+    "bytecode": "sys.dont_write_bytecode is set by the runner itself, so the sealed tree stays clean even if a reviewer invokes run_bundle_tests.py directly without the launcher's -B.",
+    "ephemeral_scratch": "return/.scratch/ -- a DOT directory inside the reviewer surface, so it can never be mistaken for a reviewer artefact. pytest's basetemp is pinned into it; TMP/TEMP/TMPDIR and tempfile.tempdir all point at it.",
+    "reviewer_return": "return/ -- the contract's existing writable surface. REVIEW.md already sends INITIAL_FINDINGS.md, FREEZE.json and ATTESTATION.md there, and the review seat has demonstrably written into it three times across two deliveries.",
+    "scratch_is_evidence": false,
+    "scratch_lifecycle": {
+      "after_failure": "KEPT for diagnosis and labelled with EPHEMERAL_DO_NOT_READ_AS_EVIDENCE.txt",
+      "after_success": "REMOVED by the runner, walking and unlinking (permitted under return/) rather than rmtree",
+      "before": "removed if present, then created empty -- done BEFORE the guard arms, because shutil.rmtree is one of the escape classes the guard denies outright",
+      "during": "the only place temporary files may exist"
+    },
+    "sealed_payload": "READ-ONLY to review execution. The guard now denies every mutating event inside the bundle that is not under return/, so tree/, authority/, probes/, environment/, MANIFEST.json and the runner itself cannot be written by the run that reads them."
+  }
 }
