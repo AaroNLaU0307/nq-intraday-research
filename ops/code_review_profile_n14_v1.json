@@ -525,9 +525,21 @@
       "round_consumed": false,
       "substantive_verdict": "ABSENT",
       "why_retired": "delivered to a fresh round-2 seat and STOPPED pre-substantively: it verified the manifest, all 133 payload hashes, the runtime, the interpreter and all 49 pins, then failed creating return/.scratch with WinError 5. The bundle DECLARED return/ writable and never materialised a permission for the review principal, which is a different account inheriting ReadAndExecute only. Preserved unmutated: its permission state is part of what that seat actually received."
+    },
+    "N14-BUNDLE-007": {
+      "dispatched": true,
+      "manifests": [
+        "7bbe029e51d7d1d9297f2723903b3e557b018c059822464835d9d13b7a7407db"
+      ],
+      "on_disk_as": [
+        "N14-BUNDLE-007"
+      ],
+      "round_consumed": false,
+      "substantive_verdict": "ABSENT",
+      "why_retired": "delivered and failed BEFORE substantive inspection: the seat proved that the sealed-bundle path is not writable under its RESTRICTED token even with an ordinary Modify ACE present, so the bundle-local return surface could never have worked. Preserved unmutated as failed-delivery evidence."
     }
   },
-  "review_id": "N14-BUNDLE-007",
+  "review_id": "N14-BUNDLE-008",
   "review_runtime": {
     "bytes": 424900000,
     "entrypoint": "run_review.cmd (cmd.exe; no PATH lookup, no py launcher, no network, no App Execution Alias)",
@@ -774,16 +786,24 @@
     "tests/tiers.py"
   ],
   "write_surfaces": {
-    "bytecode": "sys.dont_write_bytecode is set by the runner itself, so the sealed tree stays clean even if a reviewer invokes run_bundle_tests.py directly without the launcher's -B.",
-    "ephemeral_scratch": "return/.scratch/ -- a DOT directory inside the reviewer surface, so it can never be mistaken for a reviewer artefact. pytest's basetemp is pinned into it; TMP/TEMP/TMPDIR and tempfile.tempdir all point at it.",
-    "reviewer_return": "return/ -- the contract's existing writable surface. REVIEW.md already sends INITIAL_FINDINGS.md, FREEZE.json and ATTESTATION.md there, and the review seat has demonstrably written into it three times across two deliveries.",
+    "bytecode": "sys.dont_write_bytecode is set by the runner itself, so nothing is written into the sealed tree or the runtime even if the runner is invoked without the launcher's -B.",
+    "ephemeral_scratch": "<review output root>/.scratch/ -- a dot directory beside the returns, never inside them. pytest's basetemp is pinned into it.",
+    "in_bundle_writable": [],
+    "output_binding": "OUTPUT_BINDING.json in the root names REVIEW_ID, MANIFEST_SHA256, RUNTIME_MANIFEST_SHA256 and the substantive round. The runner re-derives the path from the sealed manifest and refuses a root bound to any other review object, so one delivery's artifacts cannot be read as another's.",
+    "read_boundary": "the output root is an OUTPUT surface only. The guard admits that one directory and nothing else outside the bundle and the runtime, so temp siblings cannot be enumerated, read, or used as an input source.",
+    "retained_returns": [
+      "INITIAL_FINDINGS.md",
+      "FREEZE.json",
+      "ATTESTATION.md"
+    ],
+    "review_output_root": "EXTERNAL and seat-native: <os temp base>/itsf-review/<REVIEW_ID>-<first 12 of MANIFEST_SHA256>. Resolved by tempfile.gettempdir(), which honours TMP/TEMP/TMPDIR and falls back to the platform temporary directory -- no username and no absolute path is written into the contract.",
     "scratch_is_evidence": false,
     "scratch_lifecycle": {
-      "after_failure": "KEPT for diagnosis and labelled with EPHEMERAL_DO_NOT_READ_AS_EVIDENCE.txt",
-      "after_success": "REMOVED by the runner, walking and unlinking (permitted under return/) rather than rmtree",
-      "before": "removed if present, then created empty -- done BEFORE the guard arms, because shutil.rmtree is one of the escape classes the guard denies outright",
+      "after_failure": "KEPT for diagnosis and labelled EPHEMERAL_DO_NOT_READ_AS_EVIDENCE.txt",
+      "after_success": "REMOVED by the runner, walking and unlinking",
+      "before": "created empty by the launcher, then removed and recreated by the runner BEFORE the guard arms, because shutil.rmtree is one of the escape classes the guard denies outright",
       "during": "the only place temporary files may exist"
     },
-    "sealed_payload": "READ-ONLY to review execution. The guard now denies every mutating event inside the bundle that is not under return/, so tree/, authority/, probes/, environment/, MANIFEST.json and the runner itself cannot be written by the run that reads them."
+    "sealed_payload": "IMMUTABLE to review execution. The seat runs under a RESTRICTED Windows token and proved that the bundle path stays unwritable to it even with an ordinary Modify ACE present, so no in-bundle surface is declared writable and none is granted. The guard additionally denies every mutating event outside the resolved output root."
   }
 }

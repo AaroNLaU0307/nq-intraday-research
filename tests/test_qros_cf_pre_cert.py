@@ -401,6 +401,11 @@ ENTRY_CLASSIFICATION = {
     # system temp directory; it opens no dataset, names no real-run path
     # and starts nothing.
     "scripts/n14_round1_repro.py": "NON_REAL",
+    # ADDED 2026-09-11. Resolves and binds the reviewer OUTPUT root under
+    # the seat's own OS temporary directory. It reads the sealed
+    # MANIFEST, creates one directory and proves it is writable; it opens
+    # no dataset and names no real-run path.
+    "scripts/review_output.py": "NON_REAL",
 }
 
 #: Production functions that ARE the real-run entry for their lifecycle.

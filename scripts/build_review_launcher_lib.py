@@ -101,11 +101,20 @@ if errorlevel 1 (
   exit /b 93
 )
 
-rem -- the review itself, unchanged ------------------------------------
+rem -- the review itself -----------------------------------------------
+rem  The runner resolves, creates and PROVES its own seat-native output
+rem  root before it arms the guard, and prints where it is. Nothing is
+rem  written inside this delivery: if the output root cannot be
+rem  established the runner stops and says so.
 echo [runtime] OK -- starting the guarded review
 "%PY%" -s -B "%BUNDLE%\run_bundle_tests.py"
 set "RC=%ERRORLEVEL%"
 echo [review] run_bundle_tests.py exit code %RC%
+echo.
+echo Your INITIAL_FINDINGS.md, FREEZE.json and ATTESTATION.md go in the
+echo review output root printed above, NOT in this delivery, which is
+echo immutable. That directory is bound to this delivery by its own
+echo OUTPUT_BINDING.json.
 exit /b %RC%
 """
 

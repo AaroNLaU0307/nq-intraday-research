@@ -136,20 +136,12 @@ def _principal_rights(path: Path) -> list:
     return found
 
 
-def materialise_write_surfaces(root: Path) -> dict:
-    """Make the DECLARED writable surface actually writable for the seat.
-
-    Only `return/`. Nothing else is touched, so every sealed surface keeps the
-    read-only inheritance the principal already has -- which is why this is a
-    grant and not a matching set of denials.
-    """
-    code, out = _icacls(str(root / "return"), "/grant",
-                        "%s:%s" % (REVIEW_PRINCIPAL, REVIEW_SURFACE_RIGHTS))
-    if code != 0:
-        refuse("could not grant the review principal %r write access to "
-               "return/: %s" % (REVIEW_PRINCIPAL, out.strip()))
-    return {"principal": REVIEW_PRINCIPAL, "rights": REVIEW_SURFACE_RIGHTS,
-            "surface": "return/"}
+#: NO GRANT IS APPLIED ANY MORE, and that is the correction. The review seat
+#: runs under a RESTRICTED token and proved that the sealed-bundle path stays
+#: unwritable to it even with an ordinary Modify ACE present -- so three
+#: attempts to make a bundle-local directory writable were answering the wrong
+#: question. The bundle is now immutable to review execution and the reviewer
+#: writes to a seat-native root outside it. What remains here is the CHECK.
 
 
 def verify_write_surfaces(root: Path, profile: dict) -> dict:
@@ -169,28 +161,18 @@ def verify_write_surfaces(root: Path, profile: dict) -> dict:
     operations under the builder's own token, which is what proves the surface
     exists and is usable at all.
     """
-    writable = ["return"]
+    writable = list(profile["write_surfaces"].get("in_bundle_writable") or [])
     sealed = ["", "tree", "authority", "probes", "environment",
               "MANIFEST.json", "REVIEW.md", "run_review.cmd",
-              "run_bundle_tests.py", "code_review_bundle_guard.py"]
+              "run_bundle_tests.py", "code_review_bundle_guard.py",
+              "review_output.py"]
     report = {"principal": REVIEW_PRINCIPAL, "declared_writable": writable,
               "sealed_checked": sealed, "probes": [], "grants": {}}
 
-    for rel in writable:
-        rights = _principal_rights(root / rel)
-        explicit = [r for r in rights if "(I)" not in r]
-        report["grants"][rel] = explicit
-        if not explicit:
-            refuse("declared writable surface %r carries NO explicit grant for "
-                   "%r -- the declaration would be a comment, not a permission"
-                   % (rel, REVIEW_PRINCIPAL))
-        if not any(t in r for r in explicit for t in ("(M)", "(F)", "(W)")):
-            refuse("declared writable surface %r grants %r no write right: %s"
-                   % (rel, REVIEW_PRINCIPAL, explicit))
-        if not all("(OI)" in r and "(CI)" in r for r in explicit):
-            refuse("the grant on %r is not inheritable (%s); the scratch "
-                   "directory the runner creates under it would not inherit it"
-                   % (rel, explicit))
+    if writable:
+        refuse("the contract declares %s writable inside the bundle, but the "
+               "bundle is immutable to review execution under this contract; "
+               "reviewer output belongs in the external output root" % writable)
 
     for rel in sealed:
         target = root / rel if rel else root
@@ -200,22 +182,13 @@ def verify_write_surfaces(root: Path, profile: dict) -> dict:
                        "payload must be read-only to review execution"
                        % (rel or "<bundle root>", REVIEW_PRINCIPAL, r))
 
-    # Real filesystem operations, not ACL text. Create, write, rename, delete,
-    # and a NESTED directory, because the runner makes `return/.scratch`.
-    probe = root / "return" / ".write_surface_probe"
-    try:
-        probe.mkdir()
-        first = probe / "a.txt"
-        first.write_text("probe", encoding="utf-8")
-        first.replace(probe / "b.txt")
-        (probe / "b.txt").unlink()
-        probe.rmdir()
-        report["probes"].append("return/: mkdir, write, rename, delete OK")
-    except OSError as exc:
-        refuse("the declared writable surface is not writable even to the "
-               "builder: %s" % exc)
-    if probe.exists():
-        refuse("the write-surface probe left residue in return/")
+    # The reviewer's own surface is EXTERNAL and seat-native, so the capability
+    # that matters is proved there rather than here -- by `review_output.py`,
+    # at launch, in the seat, by doing it. What this function still owns is the
+    # other half: that nothing in the delivery is writable at all.
+    report["probes"].append(
+        "no in-bundle writable surface is declared; %d sealed surfaces carry "
+        "no mutation right for %s" % (len(sealed), REVIEW_PRINCIPAL))
     return report
 
 
@@ -428,6 +401,11 @@ def main(argv):
     # ---- the guard and the bundle-local runner ------------------------
     b.template("code_review_bundle_guard.py",
                (REPO / "scripts" / "code_review_bundle_guard.py").read_text(encoding="utf-8"))
+    # The output-root resolver travels WITH the delivery: the launcher runs it
+    # before the guard exists, and the runner re-derives the same path from it,
+    # so a mismatch is detectable instead of assumed.
+    b.template("review_output.py",
+               (REPO / "scripts" / "review_output.py").read_text(encoding="utf-8"))
     b.template("run_bundle_tests.py", runner_py(profile))
     # The reviewer's entrypoint. It is a TEMPLATE like the runner: authored for
     # the contract, not exported from the tree.
@@ -440,9 +418,10 @@ def main(argv):
     from o9_production_entry_probe_template import render as _probe9  # noqa: E402
     b.template("probes/test_o9_production_entry_refusals.py", _probe9())
 
-    # ---- return/: empty at dispatch, with its scaffolding -------------
-    (b.root / "return").mkdir()
-    (b.root / "return" / ".keep").write_bytes(b"")
+    # NO `return/` ANY MORE. The bundle is immutable to review execution, so a
+    # directory that exists only to be written into would be a promise the
+    # delivery cannot keep -- which is exactly the promise that stopped three
+    # seats. Reviewer returns live in the external output root.
 
     # ---- OBLIGATION_MAP + REVIEW ---------------------------------------
     omap = build_obligation_map(profile, b)
@@ -520,7 +499,7 @@ def main(argv):
         refuse("outcome restatement inside the bundle:"
                + "".join(
                    [chr(10) + "  " + h for h in hits[:10]]))
-    declared = {r["path"] for r in b.payload} | {"MANIFEST.json", "return/.keep"}
+    declared = {r["path"] for r in b.payload} | {"MANIFEST.json"}
     actual = {p.relative_to(b.root).as_posix()
               for p in b.root.rglob("*") if p.is_file()}
     if declared != actual:
@@ -533,17 +512,15 @@ def main(argv):
     # delivery STATE, not manifest bytes, so this disturbs neither the
     # digest nor determinism -- and it is exactly the state a reviewer
     # receives.
-    granted = materialise_write_surfaces(b.root)
     surfaces = verify_write_surfaces(b.root, profile)
 
     digest = sha256_bytes((b.root / "MANIFEST.json").read_bytes())
     print("bundle:          %s" % b.root)
     print("payload files:   %d" % len(b.payload))
     print("MANIFEST_SHA256: %s" % digest)
-    print("write surface:   %s granted %s on %s; %d sealed surfaces "
-          "verified non-writable for that principal"
-          % (granted["principal"], granted["rights"],
-             granted["surface"], len(surfaces["sealed_checked"])))
+    print("write surface:   NONE in the bundle; %d sealed surfaces verified "
+          "non-writable for %s"
+          % (len(surfaces["sealed_checked"]), surfaces["principal"]))
     for line in surfaces["probes"]:
         print("                 %s" % line)
     return digest
@@ -683,16 +660,34 @@ import ctypes                                             # noqa: E402,F401
 # ATTESTATION, and it is the only surface the seat has demonstrably been able to
 # write. Scratch is a DOT directory inside it so it can never be mistaken for a
 # reviewer artefact.
-RETURN = ROOT / "return"
-SCRATCH = RETURN / ".scratch"
-if not RETURN.is_dir():
-    sys.stderr.write(
-        "DELIVERY FAILURE: the reviewer surface " + str(RETURN)
-        + " is missing. Report this and stop.\\n")
-    raise SystemExit(94)
+# THE OUTPUT ROOT IS EXTERNAL AND IS FROZEN HERE, BEFORE THE GUARD ARMS.
+#
+# The bundle is immutable to review execution: the seat runs under a restricted
+# token that cannot write inside it whatever its ACL says. The launcher has
+# already resolved, created and PROVED a seat-native root; this re-derives the
+# same path from the sealed manifest and refuses if the two disagree, so the
+# env var cannot be used to point execution at an arbitrary directory.
+import review_output as RO
 
-# LIFECYCLE, step 1: absent or empty before execution. Done BEFORE the guard is
-# armed, because `shutil.rmtree` is one of the escape classes the guard denies
+# NO ENVIRONMENT CHANNEL. The root is DERIVED here from the sealed manifest and
+# created here, so there is no variable a caller could set to point execution at
+# a directory of their choosing.
+try:
+    RETURN = RO.prepare(ROOT).resolve()
+    BINDING = RO.binding_for(RO._manifest_with_digest(ROOT))
+    RO.check_binding(RETURN, BINDING)
+except Exception as exc:
+    sys.stderr.write(
+        "DELIVERY FAILURE: a review output root could not be established."
+        "\\n  " + str(exc) + "\\nReport this and stop. Do NOT try to "
+        "write inside the sealed bundle and do NOT change its permissions."
+        "\\n")
+    raise SystemExit(96)
+sys.stderr.write("\\n[output] review output root: " + str(RETURN) + "\\n")
+
+SCRATCH = RETURN / RO.SCRATCH_NAME
+# LIFECYCLE, step 1: empty before execution. Done BEFORE the guard is armed,
+# because `shutil.rmtree` is one of the escape classes the guard denies
 # outright and this must not become a reason to carve a hole in that.
 import shutil
 if SCRATCH.exists():
@@ -703,8 +698,8 @@ except OSError as exc:
     sys.stderr.write(
         "DELIVERY FAILURE: cannot create the review scratch directory "
         + str(SCRATCH) + " (" + type(exc).__name__ + ": " + str(exc) + ")."
-        "\\nThe reviewer surface return/ must be writable. Report this and "
-        "stop; do not make the sealed payload writable.\\n")
+        "\\nReport this and stop; do not try to write inside the sealed "
+        "bundle.\\n")
     raise SystemExit(95)
 
 for var in ("TMP", "TEMP", "TMPDIR"):
@@ -734,7 +729,10 @@ DESELECT = @@DESELECT@@
 # in OBLIGATION_MAP.json and the SOURCE is in tree/ for you to read.
 NOT_COLLECTED = @@NOT_COLLECTED@@
 
-guard = G.arm(ROOT, SCRATCH, listing_only_roots=LISTING_ONLY,
+# The ONLY writable region is the resolved external output root. The bundle,
+# the runtime, the repository, quant-data and the rest of the temp base are all
+# outside it and stay read-only or denied.
+guard = G.arm(ROOT, RETURN, listing_only_roots=LISTING_ONLY,
               writable_root=RETURN)
 
 TREE = ROOT / "tree"
@@ -773,11 +771,12 @@ report = {
     "in_bundle_path_ops": guard.allowed_path_ops,
     "admitted_listings": guard.admitted_listings,
     "denied": [[e, t] for e, t in guard.denials[:50]],
-    "scratch_root": str(SCRATCH.relative_to(ROOT)).replace(chr(92), "/"),
-    "writable_root": str(RETURN.relative_to(ROOT)).replace(chr(92), "/"),
+    "review_output_root": str(RETURN),
+    "scratch_root": str(SCRATCH),
     "sealed_payload_writable": False,
+    "output_binding": BINDING,
 }
-(ROOT / "return" / "GUARD_REPORT.json").write_text(
+(RETURN / "GUARD_REPORT.json").write_text(
     json.dumps(report, indent=2) + "\\n", encoding="utf-8")
 sys.stderr.write("\\n[guard] denials=" + str(len(guard.denials))
                  + "  in-bundle path ops=" + str(guard.allowed_path_ops)
@@ -822,8 +821,8 @@ else:
                 " that did not exit clean.\\n\\nIt is NOT a reviewer"
                 " artefact and is NOT evidence for O1-O13. The reviewer's"
                 " returns are INITIAL_FINDINGS.md, FREEZE.json and"
-                " ATTESTATION.md, which live in return/ itself and never"
-                " here.\\n\\nIt is kept only because the run failed and"
+                " ATTESTATION.md, which live in the output root itself and"
+                " never here.\\n\\nIt is kept only because the run failed and"
                 " the temporary state may help diagnose why. Delete it"
                 " freely.\\n")
     except OSError:
