@@ -47,7 +47,8 @@ __all__ = ["RegistrySnapshot", "MediatedResolution", "BoundaryError",
            "RUN_STARTED_TOKEN", "AppendRefused", "append_run_started",
            "append_owner_hold", "append_owner_release", "serialized_append",
            "serialized_start_append", "START_EQUIVALENT_TOKENS",
-           "is_start_equivalent"]
+           "is_start_equivalent", "PERMISSION_EVENT_TOKENS",
+           "is_permission_event"]
 #: `_physical_serialized_write` is deliberately NOT exported: it is the one
 #: physical write, and exporting it would restore the raw route Root B closed.
 
@@ -458,6 +459,76 @@ START_EQUIVALENT_TOKENS = ("SUPPLEMENT_RUN_STARTED", "RUN_STARTED",
                            "MC_RUN_STARTED")
 
 
+#: Events whose commit CREATES OR ADVANCES authorization / permission state.
+#:
+#: OWNER RULING, 2026-09-11, on the N14 Round-1 O9 finding. `serialized_append`
+#: is a GENERIC SERIALIZED WRITER and is NOT an authorization writer, so it must
+#: refuse any event whose semantic effect is to create or advance permission
+#: state. Reproduced before the ruling: the generic entry accepted, physically
+#: appended and made parser-visible both MC permission rows, and the supplement
+#: family's authorization row as well.
+#:
+#: THIS IS A WRITER-BOUNDARY RULE, NOT AN ACTOR RULE. `mc_contract`'s
+#: `AARON_ONLY_EVENTS` stays exactly what it is -- a parse-time check that the
+#: actor cell says Aaron -- and is deliberately NOT reused as the definition of
+#: this class. It cannot serve: it names one of the two MC events, and the
+#: reproduction satisfied it by writing `actor: Aaron` and was still accepted.
+#:
+#: SUPERSESSION EVENTS ARE DELIBERATELY ABSENT. `MC_RUN_AUTHORIZATION_SUPERSEDED`
+#: and the supplement `P2S` retire an authorization; they cannot create one --
+#: measured: a P1/P2/P2S chain resolves to ZERO live authorizations. The ruling's
+#: criterion is creation or advancement, and refusing a row that can only remove
+#: permission would be the broadening it warns against.
+_PERMISSION_MC_EVENTS = ("MC_READY_FOR_RUN_AUTHORIZATION", "MC_RUN_AUTHORIZED")
+#: The supplement family by SHORT id, so the token is read off the contract
+#: rather than typed here. `P2` is `SUPPLEMENT_EXECUTION_AUTHORIZED`.
+_PERMISSION_SUPPLEMENT_SHORTS = ("P2",)
+
+
+def _permission_event_tokens() -> tuple:
+    """The forbidden tokens, DERIVED from each family's own contract.
+
+    A rename in either contract must break this loudly rather than quietly
+    disarm the boundary, which is what the two refusals below are for: a
+    boundary that silently stops matching is worse than no boundary, because
+    the tests that pin it keep passing.
+    """
+    from . import mc_contract as _mcc
+    from . import supplement_contract as _sc
+
+    tokens = []
+    for name in _PERMISSION_MC_EVENTS:
+        if name not in _mcc.EVENTS:
+            raise BoundaryError(
+                "permission_event_not_in_mc_contract",
+                "%r is no longer an MC event; the generic-append permission "
+                "boundary cannot be armed against a token the contract does "
+                "not define" % name)
+        tokens.append(name)
+    for short in _PERMISSION_SUPPLEMENT_SHORTS:
+        spec = _sc.EVENTS.get(short)
+        if spec is None:
+            raise BoundaryError(
+                "permission_event_not_in_supplement_contract",
+                "supplement short id %r is no longer defined; the "
+                "generic-append permission boundary cannot be armed" % short)
+        tokens.append(spec.token)
+    return tuple(tokens)
+
+
+PERMISSION_EVENT_TOKENS = _permission_event_tokens()
+
+
+def is_permission_event(event: str) -> bool:
+    """Does committing `event` create or advance authorization state?
+
+    Bold-marked (`**TOKEN**`) and whitespace-padded spellings resolve to the
+    same answer, for the same reason `is_start_equivalent` does: the row
+    grammar admits both, and permission that hid behind an asterisk would be
+    exactly the bypass this exists to stop."""
+    return (event or "").strip().strip("*").strip() in PERMISSION_EVENT_TOKENS
+
+
 def is_start_equivalent(event: str) -> bool:
     """Does committing `event` mean governed execution has started?
 
@@ -655,6 +726,20 @@ def serialized_append(target: Path, addition: bytes, *,
             "event(s) %s; a start commits only through "
             "serialized_start_append, which applies the owner-control "
             "decision" % sorted(set(starts)))
+    # OWNER RULING, 2026-09-11 (N14 Round-1 finding B). Generic means
+    # non-authorization as well as non-start. The check sits HERE, above the
+    # one physical write, so a refusal leaves the ledger byte-identical --
+    # "refused after the bytes landed" would be a different and much weaker
+    # property, and it is the one the reviewer actually reproduced.
+    permissions = [r.event for r in _rows if is_permission_event(r.event)]
+    if permissions:
+        raise AppendRefused(
+            "generic_append_refuses_permission_event",
+            "the generic registry entry cannot create or advance "
+            "authorization state: event(s) %s. Authorization commits only "
+            "through the governed authorization path, which carries the "
+            "Owner's sentence; this entry is a serialized WRITER and is not "
+            "an authorization writer" % sorted(set(permissions)))
     _physical_serialized_write(target, addition, decided=decided)
 
 
