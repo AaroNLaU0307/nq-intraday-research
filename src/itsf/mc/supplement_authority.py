@@ -504,6 +504,68 @@ class SupplementAuthority:
         return binding
 
 
+def verify_supplement_binding(binding, prepared, *,
+                              identity: DayUniverseIdentity | None = None
+                              ) -> dict:
+    """EVERY field of a sealed supplement's binding header, checked against
+    the prepared input it claims to belong to.
+
+    WHY THIS IS HERE AND NOT AT THE CONSUMER. `verify_supplement_authority`
+    already performs exactly this comparison for the authority object, and a
+    second consumer writing its own version is how two checks that are meant
+    to be the same rule drift apart. The grid-replay authority was doing
+    precisely that: it verified rows, day-universe coverage and the
+    artifact's own hash, and never asked whether the binding named THIS
+    trial, THIS commit or THIS source input -- so a supplement built for a
+    different sealed run, whose day universe happened to match and whose
+    self-hash had been recomputed, was admitted.
+
+    A RECOMPUTED SELF-HASH PROVES ONLY INTERNAL CONSISTENCY. It says the
+    bytes hash to what the artifact claims; it says nothing about whose bytes
+    they are. Every check below compares a binding value against a value
+    DERIVED from the prepared input, which is the only thing that can.
+
+    `identity` is optional so a caller that has already enforced §D.2.2 does
+    not pay for it twice; omitted, it is re-derived here.
+    """
+    if not isinstance(prepared, _mcc.PreparedMCInput):
+        raise SupplementError(
+            "supplement_binding_prepared_input_required",
+            f"{type(prepared).__name__} is not a PreparedMCInput")
+    if not isinstance(binding, Mapping):
+        raise SupplementError(
+            "supplement_binding_schema",
+            f"binding is {type(binding).__name__}, not a mapping")
+    missing = set(_ds.BINDING_FIELDS) - set(binding)
+    if missing:
+        raise SupplementError(
+            "supplement_binding_schema",
+            f"missing={sorted(missing)} -- the binding must carry every "
+            "field the supplement contract defines")
+    if identity is None:
+        identity = enforce_day_universe_identity(prepared)
+    expected = {
+        "trial_id": str(prepared.trial_id),
+        "authorized_commit": str(prepared.authorized_commit),
+        "method_version": SUPPLEMENT_METHOD_VERSION,
+        "day_universe_digest": identity.day_universe_digest,
+        "source_input_sha256": _source_input_sha256(prepared),
+    }
+    if set(expected) != set(_ds.BINDING_FIELDS):
+        raise SupplementError(
+            "supplement_binding_field_drift",
+            f"{sorted(set(expected) ^ set(_ds.BINDING_FIELDS))} -- the "
+            "contract's field list moved and this check did not")
+    for name in _ds.BINDING_FIELDS:
+        got, want = binding[name], expected[name]
+        if got != want:
+            raise SupplementError(
+                f"supplement_binding_{name}_mismatch",
+                f"the binding declares {str(got)[:64]!r}, this prepared "
+                f"input's is {str(want)[:64]!r}")
+    return dict(binding)
+
+
 def _mint_authority(prepared, *, supplement_id: str,
                     identity: DayUniverseIdentity) -> SupplementAuthority:
     """THE only minter. Reached only from the two derivation entries,

@@ -571,7 +571,14 @@ def test_B4_supported_callers_of_the_one_write_are_registered():
                      if "_physical_serialized_write"
                      in {getattr(c.func, "attr", None) or getattr(c.func, "id", None)
                          for c in ast.walk(node) if isinstance(c, ast.Call)})
-    assert callers == ["serialized_append", "serialized_start_append"], (
+    # AMENDED 2026-09-12 (N14 Round-2 F06). `_compare_and_append` joins the
+    # registered set because the generic entry now refuses any event that
+    # creates, advances or RESTORES execution permission -- an owner release
+    # is one -- so the governed Owner-action path reaches the write directly
+    # instead of through a writer that carries no Owner sentence. Same lock,
+    # same single write, one registered caller more.
+    assert callers == ["_compare_and_append", "serialized_append",
+                       "serialized_start_append"], (
         "the one physical write gained an unregistered caller: %r" % callers)
 
 

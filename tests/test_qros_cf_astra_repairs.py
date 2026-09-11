@@ -603,9 +603,15 @@ def test_F06_the_cas_is_the_only_writer_and_it_compares_first():
     assert "_physical_serialized_write(" in generic
     assert "write_bytes" not in generic
     assert "now + addition" in body
-    # and the CAS half still hands its snapshot to the boundary
+    # and the CAS half still hands its snapshot to the boundary. AMENDED
+    # 2026-09-12 (N14 Round-2 F06): it hands it to the PHYSICAL write rather
+    # than to the generic entry, which now refuses any event that creates,
+    # advances or restores execution permission -- and an owner release, its
+    # one caller's event, is exactly that. The property under test is
+    # unchanged: the snapshot is passed rather than dropped, and the CAS
+    # writes no bytes of its own.
     cas = _code_only(rb._compare_and_append)
-    assert "serialized_append(target, addition, decided=decided)" in cas
+    assert "_physical_serialized_write(target, addition, decided=decided)"         in cas
     assert "write_bytes" not in cas
 
 

@@ -169,6 +169,14 @@ class RunnerResult:
     grid_seal_status: str
     may_support_h1_entry: bool
     published_region_by_kind: Mapping
+    #: THE CROSS-SEED GRID STANDING the two fields above are read from.
+    #: They used to come from the base seed's witness alone, which made the
+    #: other two seeds' doubled-scale results unable to affect the outcome.
+    grid_convergence: object
+    #: THE FULL PER-SEED GRID EVIDENCE: every governed seed, every cell, the
+    #: statistics where they exist and the absence metadata where they do
+    #: not. The merged maps above remain, and do not replace this.
+    grid_evidence_by_seed: Mapping
     arm_labels: tuple
     test_only: bool
 
@@ -258,7 +266,8 @@ def _witness(prepared, *, supplement: Mapping, sealed_artifact_sha256: str,
             # skip the check silently. So "all skipped" must be visible in the
             # evidence itself, and anything else is a refusal.
             sampled = sorted(
-                {key for pas in (at_k, at_2k) for key, cell in pas.items()
+                {key for pas in (at_k, at_2k)
+                 for key, cell in pas.cells.items()
                  if not _gr.is_infeasible(cell)})
             if sampled:
                 # Every offending cell is named, not a slice of them: this is a
@@ -317,18 +326,35 @@ def _execute(prepared, *, authorization: RunAuthorization,
         prepared, supplement=supplement,
         sealed_artifact_sha256=sealed_artifact_sha256,
         B=_mcc.B_WORLDS_FROZEN, cells=cells, production=production)
-    # the base arm's seed is what convergence binds the witness to
+    # the base arm's seed is what convergence binds the K ARM to; the grid
+    # SECTION's standing is the AND across every governed seed, minted here
+    # from all three witnesses rather than read off one of them
     witness = witnesses[base_seed]
+    grid_convergence = _gr.aggregate_k_replay_evidence(witnesses)
+    # THE TEST-ONLY BOUNDARY, at the one place that knows which path this is.
+    # A synthetic authority marks every witness it mints `test_only`, and a
+    # production run may not seal that evidence. The synthetic entry passes
+    # `production=False` and is unaffected.
+    if production and grid_convergence.test_only:
+        raise MCInputError(
+            "mc_run_grid_evidence_test_only",
+            "the grid evidence is test_only and this is a production run; "
+            "synthetic grid evidence may not cross the production seal "
+            "boundary")
 
     seal_candidate = _mcc.verdict_and_seal_from_evidence(
         prepared, base=base, doubled_by_axis=doubled, seed_runs=seed_runs,
-        k_witness=witness)
+        k_witness=witness, grid_convergence=grid_convergence)
 
-    # M10: publish the cross-seed region from all three seeds' maps.
+    # M10: publish the cross-seed region from all three seeds' maps -- the
+    # COMPARISON-ADJUSTED ones the witness carries, not a fresh `region_map`
+    # over the raw K pass. Rebuilding from the raw pass dropped every cell M8
+    # had relabelled `boundary_band`, so the third frozen class could be
+    # created by the comparison and never appear in the published result.
     published = {}
     for kind in _gr.REGION_KINDS:
         published[kind] = _gr.publish_region(kind, {
-            seed: _gr.region_map(grid_passes_by_seed[seed]["at_k"], kind)
+            seed: witnesses[seed].adjusted_map(kind)
             for seed in RESEARCH_BOOTSTRAP_SEEDS})
 
     return RunnerResult(
@@ -338,9 +364,12 @@ def _execute(prepared, *, authorization: RunAuthorization,
         seal_candidate=MappingProxyType(dict(seal_candidate)),
         # the seal's own shape: {"verdict": {"category", "reason"}}
         verdict=str(seal_candidate["verdict"]["category"]),
-        grid_seal_status=witness.grid_seal_status,
-        may_support_h1_entry=witness.may_support_h1_entry,
+        grid_seal_status=grid_convergence.grid_seal_status,
+        may_support_h1_entry=grid_convergence.may_support_h1_entry,
         published_region_by_kind=MappingProxyType(published),
+        grid_convergence=grid_convergence,
+        grid_evidence_by_seed=_gr.per_seed_grid_report(
+            grid_passes_by_seed, witnesses),
         arm_labels=ARM_LABELS, test_only=authorization.test_only)
 
 

@@ -588,8 +588,14 @@ def test_hand_built_verdict_inputs_have_no_callable_entry():
     # reopen the hand-built-evidence hole — the witness is factory-only
     # behind a module-private capability and carries a self-digest the
     # convergence entry re-verifies, so a caller cannot construct one.
+    # `grid_convergence` joins on the SAME argument: it is factory-only
+    # behind a module-private capability, it is re-verified against its own
+    # self-digest here, and the K witness it aggregates must be the one this
+    # call was given. It carries no caller conclusion -- it carries the AND
+    # across every governed seed's witness, which one seed's witness cannot.
     assert set(sig.parameters) == {"prepared", "base", "doubled_by_axis",
-                                   "seed_runs", "k_witness"}
+                                   "seed_runs", "k_witness",
+                                   "grid_convergence"}
     from itsf.mc import grid_replay as _gr
     with pytest.raises(mcc.MCInputError) as _ei:
         _gr.KReplayEvidence(
@@ -597,7 +603,8 @@ def test_hand_built_verdict_inputs_have_no_callable_entry():
             master_seed=7, k=200, k_doubled=400, prepared_digest="0" * 64,
             converged_by_kind={}, boundary_band_by_kind={},
             flipped_by_kind={}, drift_violations_by_kind={},
-            region_map_digest_by_kind={}, test_only=True,
+            region_map_digest_by_kind={}, adjusted_map_by_kind={},
+            test_only=True,
             evidence_digest="0" * 64)
     assert _ei.value.code == "k_replay_evidence_capability_required"
     conv = inspect.signature(mcc.convergence_from_evidence)
@@ -619,7 +626,8 @@ def test_hand_built_verdict_inputs_have_no_callable_entry():
             master_seed=7, k=200, k_doubled=400, prepared_digest="0" * 64,
             converged_by_kind={}, boundary_band_by_kind={},
             flipped_by_kind={}, drift_violations_by_kind={},
-            region_map_digest_by_kind={}, test_only=True,
+            region_map_digest_by_kind={}, adjusted_map_by_kind={},
+            test_only=True,
             evidence_digest="0" * 64)
     assert _ei.value.code == "k_replay_evidence_capability_required"
     # The seal now carries the witness too (N13). What still has no

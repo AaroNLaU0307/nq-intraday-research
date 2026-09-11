@@ -363,8 +363,17 @@ def test_case5_the_convergence_report_is_now_reachable(prepared, monkeypatch):
                                    stress_median={"c": 50.0},
                                    feasible={"c": True})
             for key in gr.GRID_CELL_KEYS}
+    def _pass(doublings):
+        # caller-supplied cells are admissible only as SYNTHETIC evidence,
+        # explicitly typed as such against a test-only authority
+        return gr.grid_pass_for_tests(
+            authority, prepared_digest=authority.prepared_digest,
+            master_seed=7, doublings=doublings, B=2,
+            channel=mcc.PRIMARY_THETA_CHANNEL, cells=grid)
+
     witness = gr.derive_k_replay_evidence(authority, master_seed=7,
-                                          cells_at_k=grid, cells_at_2k=grid)
+                                          cells_at_k=_pass(0),
+                                          cells_at_2k=_pass(1))
 
     base = CR._evidence(prepared)
     doubled = {"B": CR._evidence(prepared, run_label="double_B", axis="B",

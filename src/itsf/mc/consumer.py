@@ -2215,14 +2215,32 @@ def _assert_config_digest(result: "EpistemicResult", *, layer: str,
 
 @dataclass(frozen=True)
 class ConvergenceReport:
-    category_stable_under_doubling: bool     # rule (a) — B, M AND K each
+    category_stable_under_doubling: bool     # rule (a) — the B arm
     category_same_across_seeds: bool         # rule (b) — seeds 7/13/31
     quantile_drift_ok: bool                  # rule (c)
     mcse_ok: bool                            # rule (d)
     drift_by_axis: Mapping                   # axis -> {quantile: |delta|}
+    #: THE GRID SECTION'S OWN STANDING, reported BESIDE the four rules and
+    #: deliberately not inside them.
+    #:
+    #: It used to be ANDed into `category_stable_under_doubling`, which made
+    #: one boolean mean two incompatible things: a MAIN-channel condition
+    #: whose failure must withhold the judgment, and a GRID condition whose
+    #: failure M7 says must NOT (it seals the grid section NON_CONVERGED and
+    #: withdraws `deployable_region`'s right to support H1 entry, and nothing
+    #: more). Folded together, neither consequence could be applied without
+    #: applying the other -- so neither was applied at all, and a failed main
+    #: channel still produced an admissible category.
+    grid_converged: bool = True
 
     @property
     def converged(self) -> bool:
+        """THE MAIN CHANNEL, and only it. Rules (a)-(d) of MC SS5.
+
+        `grid_converged` is excluded on purpose: see the field above. A
+        reader that wants both facts reads both fields, which is what the
+        seal candidate now records.
+        """
         return (self.category_stable_under_doubling
                 and self.category_same_across_seeds
                 and self.quantile_drift_ok and self.mcse_ok)
@@ -2718,7 +2736,10 @@ def _convergence_rules_a_to_d(base: RunEvidence, doubled_by_axis: Mapping,
         frozen Appendix-A region maps, because the Checkpoint layer does
         not consume K and calling a K-blind category twice would be the
         empty verification the master plan prohibits. So K contributes
-        its region-map convergence instead.
+        its region-map convergence instead -- reported as `grid_converged`,
+        BESIDE rule (a) rather than multiplied into it, because M7 gives the
+        two failures different consequences and one boolean cannot carry
+        both.
     (b) the three master seeds agree on the category.
     (c) key-quantile drift within max($25, relative 5%), measured against
         the base run per combo and per scenario role.
@@ -2772,11 +2793,12 @@ def _convergence_rules_a_to_d(base: RunEvidence, doubled_by_axis: Mapping,
                 if not r.mcse_ok:
                     mcse_ok = False
     return ConvergenceReport(
-        category_stable_under_doubling=(category_stable and grid_converged),
+        category_stable_under_doubling=category_stable,
         category_same_across_seeds=same_across_seeds,
         quantile_drift_ok=drift_ok,
         mcse_ok=mcse_ok,
-        drift_by_axis=MappingProxyType(drift_by_axis))
+        drift_by_axis=MappingProxyType(drift_by_axis),
+        grid_converged=grid_converged)
 
 
 def _reduce_primary_from_base(base: RunEvidence, *,
@@ -3375,7 +3397,8 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
                                    base: RunEvidence,
                                    doubled_by_axis: Mapping,
                                    seed_runs: Mapping,
-                                   k_witness=None) -> dict:
+                                   k_witness=None,
+                                   grid_convergence=None) -> dict:
     """The ONLY path to a Checkpoint-0 verdict AND its seal candidate.
 
     N01 PHASE D3 — EVERY call, unconditionally:
@@ -3465,6 +3488,75 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
     convergence_report = convergence_from_evidence(
         base, doubled_by_axis, seed_runs, prepared=prepared,
         k_witness=k_witness)
+    # THE GRID'S STANDING IS A CROSS-SEED FACT, and it is verified here.
+    #
+    # `k_witness` binds the K ARM to the base run -- that is its job and it
+    # keeps it. But the grid section's status and `deployable_region`'s right
+    # to support H1 entry are properties of the region maps ACROSS the three
+    # research seeds, and taking them from one seed's witness let the other
+    # two seeds' doubled-scale results be computed and then discarded. When a
+    # K arm is supplied the cross-seed standing is REQUIRED, so a K-doubled
+    # seal cannot be produced from one seed again.
+    if k_witness is not None:
+        from itsf.mc import grid_replay as _gr
+        if grid_convergence is None:
+            raise MCInputError(
+                "grid_convergence_across_seeds_required",
+                "a K arm seals the grid section, and that section's standing "
+                "is the AND across every governed seed's witness. Mint it "
+                "with grid_replay.aggregate_k_replay_evidence; one seed's "
+                "witness is the K-arm binding, not the grid's standing")
+        _gr.verify_grid_convergence(grid_convergence)
+        if grid_convergence.witness_digest_by_seed.get(
+                k_witness.master_seed) != k_witness.evidence_digest:
+            raise MCInputError(
+                "grid_convergence_witness_not_in_aggregate",
+                f"the K-arm witness for seed {k_witness.master_seed} is not "
+                "the one the cross-seed standing aggregated")
+        if grid_convergence.prepared_digest != base.prepared_digest:
+            raise MCInputError("provenance_mismatch",
+                               "grid convergence vs base prepared digest")
+        # NO test_only COMPARISON AGAINST `prepared` HERE, and that is
+        # deliberate. The synthetic entry runs a PRODUCTION-shaped prepared
+        # input (`test_only=False`) against a test-only authority on purpose,
+        # so the two flags legitimately differ and comparing them would refuse
+        # the sanctioned harness. The flag that matters is whether the RUN is
+        # a production one, which only the runner knows; it refuses there.
+        # What rides into the seal is the fact itself, recorded below.
+    elif grid_convergence is not None:
+        raise MCInputError(
+            "grid_convergence_without_k_arm",
+            "a cross-seed grid standing was supplied with no K arm to bind "
+            "it to")
+    # M7 AND THE MAIN CHANNEL, and the difference between them is the point.
+    #
+    # A failed MAIN-channel condition -- rules (a)-(d) of MC SS5 -- means the
+    # evidence does not support a Checkpoint-0 judgment, so no judgment and no
+    # seal candidate is produced. This refusal used to be absent entirely: the
+    # four booleans were computed, recorded in the seal, and never consulted,
+    # so a run whose quantiles had not converged still returned an admissible
+    # GO/STOP category.
+    #
+    # THE GRID EXCEPTION IS UNCHANGED AND STAYS EXACTLY AS RATIFIED. A
+    # non-converged grid does NOT reach this refusal: it seals the grid
+    # section NON_CONVERGED and withdraws `deployable_region`'s right to
+    # support H1 entry (M7), and the Checkpoint-0 verdict is not withheld.
+    # That is why `grid_converged` is no longer multiplied into rule (a) --
+    # folded together, the grid's failure would now withhold the judgment,
+    # which is precisely what M7 forbids.
+    if not convergence_report.converged:
+        failed = sorted(name for name in (
+            "category_stable_under_doubling", "category_same_across_seeds",
+            "quantile_drift_ok", "mcse_ok")
+            if not getattr(convergence_report, name))
+        raise MCInputError(
+            "main_channel_not_converged",
+            "the MAIN channel has not converged (%s): MC SS5 rules (a)-(d) "
+            "are an admissibility precondition for a Checkpoint-0 judgment, "
+            "so no verdict and no seal candidate is produced. This is NOT "
+            "the grid exception -- a non-converged GRID seals its own "
+            "section NON_CONVERGED and withholds nothing (M7)"
+            % ", ".join(failed))
     verdict = apply_verdict(dict(reduction))
     digest_after = prepared_digest(prepared)
     if digest_before != digest_after:
@@ -3493,16 +3585,40 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
                 convergence_report.category_same_across_seeds,
             "quantile_drift_ok": convergence_report.quantile_drift_ok,
             "mcse_ok": convergence_report.mcse_ok,
-            "converged": convergence_report.converged},
+            # the MAIN channel, which is now a precondition: reaching this
+            # line at all means it is True
+            "converged": convergence_report.converged,
+            # the GRID's own standing, recorded beside it rather than folded
+            # into it, so a reader sees two facts instead of one ambiguous one
+            "grid_converged": convergence_report.grid_converged},
         "grid_section": ({"status": "NOT_SUPPLIED",
                           "may_support_h1_entry": False}
                          if k_witness is None else
-                         {"status": k_witness.grid_seal_status,
+                         {"status": grid_convergence.grid_seal_status,
                           "may_support_h1_entry":
-                              k_witness.may_support_h1_entry,
+                              grid_convergence.may_support_h1_entry,
                           "k": k_witness.k, "k_doubled": k_witness.k_doubled,
                           "authority_digest": k_witness.authority_digest,
-                          "evidence_digest": k_witness.evidence_digest}),
+                          "evidence_digest": k_witness.evidence_digest,
+                          # EVERY governed seed, named with its own standing,
+                          # so "the grid converged" can be checked per seed
+                          # rather than taken from one of them
+                          "seeds": list(grid_convergence.seeds),
+                          "converged_by_seed": {
+                              str(seed): bool(value) for seed, value
+                              in sorted(
+                                  grid_convergence.converged_by_seed.items())},
+                          "converged_by_kind": {
+                              str(kind): bool(value) for kind, value
+                              in sorted(
+                                  grid_convergence.converged_by_kind.items())},
+                          "doublings_executed":
+                              grid_convergence.doublings_executed,
+                          "max_doublings": grid_convergence.max_doublings,
+                          "convergence_digest":
+                              grid_convergence.convergence_digest,
+                          # synthetic evidence says so in the seal it produced
+                          "test_only": bool(grid_convergence.test_only)}),
         "bundle_file_sha256": dict(prepared.file_sha256),
         "seeds": list(prepared.seeds),
         "trace_digests": base.trace_digests(),

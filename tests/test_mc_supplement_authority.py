@@ -755,8 +755,12 @@ def test_a7_no_refusal_code_is_invented_outside_the_declared_sets():
     allowed = (set(sa.IDENTITY_REFUSAL_CODES)
                | set(sa.SUPPLEMENT_SPECIFIC_IDENTITY_CODES)
                | {sa.RECORD_SET_REFUSAL_CODE})
+    # `supplement_binding_*` is the BINDING contract's own vocabulary, which
+    # `day_strata_supplement._validate_binding` already raises; the binding
+    # verifier added here speaks it rather than inventing a parallel set.
     unexpected = {c for c in raised - allowed
-                  if not c.startswith("supplement_authority_")}
+                  if not c.startswith(("supplement_authority_",
+                                       "supplement_binding_"))}
     assert unexpected == set(), unexpected
     # and the reuse is not decorative: all eight are actually raised
     assert set(sa.IDENTITY_REFUSAL_CODES) <= raised

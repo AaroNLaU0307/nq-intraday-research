@@ -177,6 +177,10 @@ _KNOWN_TEST_CONSTRUCTIONS = {
     "tests/test_registry_path_single_construction.py": 2,
     "tests/test_registry_witness.py": 2,
     "tests/test_s0_runner.py": 5,
+    # ADDED 2026-09-12 with the N14 Round-2 repairs: the F06 tests build a
+    # synthetic ledger to prove that a generic OWNER_RELEASE leaves its bytes
+    # unchanged and that the governed Owner route still releases.
+    "tests/test_n14_round2_repairs.py": 4,
     "tests/test_the_writer_rulings_are_already_in_the_contract.py": 1,
     "tests/test_what_the_registry_append_unlocks.py": 1,
 }

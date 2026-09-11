@@ -221,7 +221,12 @@ def test_D_a_valid_applicable_release_lets_the_start_proceed(tmp_path):
     rb.serialized_append(path, _hold_row(seq=90).encode("utf-8"))
     with pytest.raises(rb.AppendRefused):
         _s0_start(path)
-    rb.serialized_append(path, _release_row(91, 90).encode("utf-8"))
+    # THE GOVERNED OWNER ROUTE, not the generic writer: a release restores
+    # execution eligibility, and `serialized_append` refuses that class
+    # outright. This is the positive path the repair preserves.
+    rb.append_owner_release(scope="GLOBAL", reason="resume",
+                            head_commit=C40, utc_stamp=UTC,
+                            releases_event_sequence=90, path=path)
     _s0_start(path)                                   # now permitted
     assert "RUN_STARTED" in _events(path)
     assert oc.holds_applicable_to_start(

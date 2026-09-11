@@ -85,6 +85,22 @@ def _grid(p5=100.0, median=50.0, **kw):
     return {key: _cell(p5, median, **kw) for key in gr.GRID_CELL_KEYS}
 
 
+def _pass(authority, cells, *, seed=7, doublings=0, B=2,
+          channel=mcc.PRIMARY_THETA_CHANNEL):
+    """Caller-supplied cells, wrapped as the SYNTHETIC pass they are.
+
+    `derive_k_replay_evidence` no longer admits a bare mapping: seal-admissible
+    grid evidence must come from the governed producer, or -- explicitly typed
+    as test-only, against a test-only authority -- from here. The `test_only`
+    flag rides into the witness and into the seal, and the runner refuses it on
+    the production path.
+    """
+    return gr.grid_pass_for_tests(
+        authority, prepared_digest=authority.prepared_digest,
+        master_seed=seed, doublings=doublings, B=B, channel=channel,
+        cells=cells)
+
+
 # ---------------------------------------------------------------------------
 # GridReplayAuthority — what makes a sealed supplement sufficient
 # ---------------------------------------------------------------------------
@@ -290,7 +306,9 @@ def test_the_grid_is_the_frozen_appendix_a_grid():
 
 def test_identical_passes_converge(authority):
     ev = gr.derive_k_replay_evidence(
-        authority, master_seed=7, cells_at_k=_grid(), cells_at_2k=_grid())
+        authority, master_seed=7,
+        cells_at_k=_pass(authority, _grid()),
+        cells_at_2k=_pass(authority, _grid(), doublings=1))
     assert ev.grid_converged is True
     assert ev.grid_seal_status == "CONVERGED"
     assert ev.may_support_h1_entry is True
@@ -330,7 +348,9 @@ def test_a_decisive_flip_is_not_converged(authority):
     assert comparison.converged is False
     assert (key, "conservative_p5[lucid|E1|P2]") in comparison.drift_violations
     ev = gr.derive_k_replay_evidence(
-        authority, master_seed=7, cells_at_k=at_k, cells_at_2k=at_2k)
+        authority, master_seed=7,
+        cells_at_k=_pass(authority, at_k),
+        cells_at_2k=_pass(authority, at_2k, doublings=1))
     assert ev.grid_converged is False
     assert ev.grid_seal_status == "NON_CONVERGED"
     # M7: a non-converged grid withdraws deployable_region's H1 standing
@@ -666,8 +686,10 @@ def test_cell_drift_beyond_the_frozen_tolerance_is_non_convergence(authority):
                                         k=200, k_doubled=400)
     assert comparison.converged is False        # (c) alone sinks it
     assert comparison.flipped_cells == ()       # ... with no class flip
-    ev = gr.derive_k_replay_evidence(authority, master_seed=7,
-                                     cells_at_k=at_k, cells_at_2k=at_2k)
+    ev = gr.derive_k_replay_evidence(
+        authority, master_seed=7,
+        cells_at_k=_pass(authority, at_k),
+        cells_at_2k=_pass(authority, at_2k, doublings=1))
     assert ev.grid_converged is False
 
 
@@ -696,8 +718,10 @@ def test_non_usd_identity_keys_must_be_identical_not_merely_close():
 # ---------------------------------------------------------------------------
 
 def test_the_evidence_is_factory_only_and_self_digested(authority):
-    ev = gr.derive_k_replay_evidence(authority, master_seed=7,
-                                     cells_at_k=_grid(), cells_at_2k=_grid())
+    ev = gr.derive_k_replay_evidence(
+        authority, master_seed=7,
+        cells_at_k=_pass(authority, _grid()),
+        cells_at_2k=_pass(authority, _grid(), doublings=1))
     gr.verify_k_replay_evidence(ev)
     with pytest.raises(mcc.MCInputError) as ei:
         dataclasses.replace(ev, master_seed=13)
@@ -712,26 +736,34 @@ def test_the_evidence_is_factory_only_and_self_digested(authority):
 
 
 def test_the_evidence_binds_to_its_authority_and_a_research_seed(authority):
-    ev = gr.derive_k_replay_evidence(authority, master_seed=7,
-                                     cells_at_k=_grid(), cells_at_2k=_grid())
+    ev = gr.derive_k_replay_evidence(
+        authority, master_seed=7,
+        cells_at_k=_pass(authority, _grid()),
+        cells_at_2k=_pass(authority, _grid(), doublings=1))
     assert ev.authority_digest == authority.authority_digest
     assert ev.prepared_digest == authority.prepared_digest
     assert ev.k == mcc.K_PER_SEED_FROZEN and ev.k_doubled == 400
     with pytest.raises(mcc.MCInputError) as ei:
-        gr.derive_k_replay_evidence(authority, master_seed=99,
-                                    cells_at_k=_grid(), cells_at_2k=_grid())
+        gr.derive_k_replay_evidence(
+            authority, master_seed=99,
+            cells_at_k=_pass(authority, _grid(), seed=99),
+            cells_at_2k=_pass(authority, _grid(), seed=99, doublings=1))
     assert ei.value.code == "k_replay_evidence_seed_not_research_seed"
 
 
 def test_an_off_frozen_k_refuses(authority):
     with pytest.raises(mcc.MCInputError) as ei:
-        gr.derive_k_replay_evidence(authority, master_seed=7, k=100,
-                                    cells_at_k=_grid(), cells_at_2k=_grid())
+        gr.derive_k_replay_evidence(
+            authority, master_seed=7, k=100,
+            cells_at_k=_pass(authority, _grid()),
+            cells_at_2k=_pass(authority, _grid(), doublings=1))
     assert ei.value.code == "grid_replay_k_per_seed_not_frozen"
 
 
 def test_evidence_cannot_be_minted_without_a_real_authority():
     with pytest.raises(mcc.MCInputError) as ei:
+        # the authority is refused before the arms are looked at, so plain
+        # mappings are enough to reach it
         gr.derive_k_replay_evidence(object(), master_seed=7,
                                     cells_at_k=_grid(), cells_at_2k=_grid())
     assert ei.value.code == "grid_replay_authority_required"
@@ -777,7 +809,9 @@ def _k_case(prepared, authority, **kw):
     base = CR._evidence(prepared)
     k_run = CR._evidence(prepared, run_label="double_K", axis="K", K=400)
     witness = gr.derive_k_replay_evidence(
-        authority, master_seed=7, cells_at_k=_grid(), cells_at_2k=_grid(),
+        authority, master_seed=7,
+        cells_at_k=_pass(authority, _grid()),
+        cells_at_2k=_pass(authority, _grid(), doublings=1),
         **kw)
     return base, {"B": CR._evidence(prepared, run_label="double_B", axis="B",
                                     B=4),
@@ -810,7 +844,9 @@ def test_the_outer_k_must_match_the_witness(prepared, authority, small_scale):
 def test_a_witness_from_another_seed_refuses(prepared, authority, small_scale):
     base, doubled, _ = _k_case(prepared, authority)
     other = gr.derive_k_replay_evidence(
-        authority, master_seed=13, cells_at_k=_grid(), cells_at_2k=_grid())
+        authority, master_seed=13,
+        cells_at_k=_pass(authority, _grid(), seed=13),
+        cells_at_2k=_pass(authority, _grid(), seed=13, doublings=1))
     with pytest.raises(mcc.MCInputError) as ei:
         mcc.convergence_from_evidence(base, doubled, CR._seed_runs(prepared),
                                       prepared=prepared, k_witness=other)

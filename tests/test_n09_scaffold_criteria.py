@@ -224,18 +224,25 @@ class TestCriterion1NoRegistryWritePath(unittest.TestCase):
                          "than the P3 seam inside this module")
         # THE REGISTERED CALLER SET for the exposed boundary. It knows no event
         # vocabulary, so an open door here would be a general registry writer.
-        # In-module there is exactly one caller; the cross-module caller
-        # (`s0/runner.append_registry_event_line`) is pinned by
-        # `tests/test_qros_cf_f06_writer_completeness.py`, which is the test
-        # that owns completeness across modules.
-        self.assertEqual(["_compare_and_append"],
-                         _callers_of("serialized_append"),
-                         "the generic entry gained an in-module caller outside "
-                         "the compare-and-swap")
-        self.assertEqual(["serialized_append", "serialized_start_append"],
+        # The cross-module caller (`s0/runner.append_registry_event_line`) is
+        # pinned by `tests/test_qros_cf_f06_writer_completeness.py`, which is
+        # the test that owns completeness across modules.
+        #
+        # AMENDED 2026-09-12 with the N14 Round-2 F06 repair. The generic entry
+        # now refuses any event that creates, ADVANCES or RESTORES execution
+        # permission, and an owner release is exactly such an event -- so the
+        # owner path could no longer reach the write through it. The CAS was
+        # routed to the physical write directly, which is what it had always
+        # claimed to be ("the compare-and-swap half"), and the generic entry
+        # lost its only in-module caller. Three appenders, one serialized
+        # write; the seam is unchanged and no new writer appeared.
+        self.assertEqual([], _callers_of("serialized_append"),
+                         "the generic entry gained an in-module caller")
+        self.assertEqual(["_compare_and_append", "serialized_append",
+                          "serialized_start_append"],
                          _callers_of("_physical_serialized_write"),
                          "the one physical write gained a caller outside the "
-                         "two public entries")
+                         "three registered entries")
         del rb, inspect
 
     def test_the_seam_is_the_only_exported_writer_and_writes_one_token(self):

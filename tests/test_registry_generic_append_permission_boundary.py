@@ -244,9 +244,17 @@ def test_the_forbidden_set_is_derived_from_the_contracts_not_typed_twice():
     and the supplement token is read off `supplement_contract`, so a rename
     in either contract breaks the boundary loudly instead of quietly
     disarming it."""
+    from itsf.mc import owner_control as oc
+    # OWNER_RELEASE joined when the criterion was restated as its EFFECT
+    # rather than its shape: creation, advancement AND RESTORATION of
+    # execution permission. A release creates no authorization and advances
+    # no chain -- it retires a hold, and a start the ledger was refusing
+    # becomes admissible. OWNER_HOLD stays outside: it only ever makes the
+    # ledger less permissive.
     assert rb.PERMISSION_EVENT_TOKENS == (
         "MC_READY_FOR_RUN_AUTHORIZATION", "MC_RUN_AUTHORIZED",
-        sc.EVENTS["P2"].token)
+        sc.EVENTS["P2"].token, oc.OWNER_RELEASE)
+    assert oc.OWNER_HOLD not in rb.PERMISSION_EVENT_TOKENS
     for name in ("MC_READY_FOR_RUN_AUTHORIZATION", "MC_RUN_AUTHORIZED"):
         assert name in mcc.EVENTS
     # The set is disjoint from the start class: two boundaries, two reasons.

@@ -476,13 +476,32 @@ START_EQUIVALENT_TOKENS = ("SUPPLEMENT_RUN_STARTED", "RUN_STARTED",
 #:
 #: SUPERSESSION EVENTS ARE DELIBERATELY ABSENT. `MC_RUN_AUTHORIZATION_SUPERSEDED`
 #: and the supplement `P2S` retire an authorization; they cannot create one --
-#: measured: a P1/P2/P2S chain resolves to ZERO live authorizations. The ruling's
-#: criterion is creation or advancement, and refusing a row that can only remove
-#: permission would be the broadening it warns against.
+#: measured: a P1/P2/P2S chain resolves to ZERO live authorizations. Refusing a
+#: row that can only REMOVE permission would be the broadening the ruling warns
+#: against.
+#:
+#: THE CRITERION IS EFFECT ON EXECUTION ELIGIBILITY, and the first repair stated
+#: it too narrowly. "Creates or advances" admitted a third shape nobody had
+#: enumerated: an event that RESTORES eligibility a governed decision had taken
+#: away. `OWNER_RELEASE` is exactly that -- it names a live `OWNER_HOLD` and
+#: retires it, after which `_live_holds` stops returning the hold and a start
+#: the ledger was refusing becomes admissible again. The reviewer reproduced it
+#: through this entry while the two authorization families were correctly
+#: refused, which is what a class defined by enumeration rather than by effect
+#: gets you.
+#:
+#: So the class is the three things that can leave the ledger MORE permissive
+#: than it was: creation, advancement, and restoration. A row that only removes
+#: permission is still outside it.
 _PERMISSION_MC_EVENTS = ("MC_READY_FOR_RUN_AUTHORIZATION", "MC_RUN_AUTHORIZED")
 #: The supplement family by SHORT id, so the token is read off the contract
 #: rather than typed here. `P2` is `SUPPLEMENT_EXECUTION_AUTHORIZED`.
 _PERMISSION_SUPPLEMENT_SHORTS = ("P2",)
+#: The OWNER family by ATTRIBUTE, read off `owner_control` -- the module that
+#: owns owner-action semantics -- rather than spelled here. `OWNER_HOLD` is
+#: absent for the same reason the supersession events are: a hold only ever
+#: makes the ledger less permissive.
+_PERMISSION_OWNER_ATTRS = ("OWNER_RELEASE",)
 
 
 def _permission_event_tokens() -> tuple:
@@ -494,6 +513,7 @@ def _permission_event_tokens() -> tuple:
     the tests that pin it keep passing.
     """
     from . import mc_contract as _mcc
+    from . import owner_control as _oc
     from . import supplement_contract as _sc
 
     tokens = []
@@ -513,6 +533,15 @@ def _permission_event_tokens() -> tuple:
                 "supplement short id %r is no longer defined; the "
                 "generic-append permission boundary cannot be armed" % short)
         tokens.append(spec.token)
+    for attr in _PERMISSION_OWNER_ATTRS:
+        token = getattr(_oc, attr, None)
+        if not token:
+            raise BoundaryError(
+                "permission_event_not_in_owner_contract",
+                "owner_control no longer defines %r; the generic-append "
+                "permission boundary cannot be armed against a token the "
+                "owner-action module does not define" % attr)
+        tokens.append(token)
     return tuple(tokens)
 
 
@@ -520,7 +549,14 @@ PERMISSION_EVENT_TOKENS = _permission_event_tokens()
 
 
 def is_permission_event(event: str) -> bool:
-    """Does committing `event` create or advance authorization state?
+    """Does committing `event` CREATE, ADVANCE or RESTORE execution
+    permission?
+
+    All three leave the ledger more permissive than it was, which is the one
+    criterion this boundary has. Restoration was the shape the first repair
+    missed: `OWNER_RELEASE` creates no authorization and advances no chain --
+    it retires a hold, and a start the ledger was refusing becomes admissible.
+    The effect is the same and so is the rule.
 
     Bold-marked (`**TOKEN**`) and whitespace-padded spellings resolve to the
     same answer, for the same reason `is_start_equivalent` does: the row
@@ -735,11 +771,12 @@ def serialized_append(target: Path, addition: bytes, *,
     if permissions:
         raise AppendRefused(
             "generic_append_refuses_permission_event",
-            "the generic registry entry cannot create or advance "
-            "authorization state: event(s) %s. Authorization commits only "
-            "through the governed authorization path, which carries the "
-            "Owner's sentence; this entry is a serialized WRITER and is not "
-            "an authorization writer" % sorted(set(permissions)))
+            "the generic registry entry cannot create, advance or restore "
+            "execution permission: event(s) %s. Each commits only through its "
+            "own governed path, which carries the Owner's sentence -- "
+            "authorization through the authorization path, an owner release "
+            "through append_owner_release; this entry is a serialized WRITER "
+            "and is not a permission writer" % sorted(set(permissions)))
     _physical_serialized_write(target, addition, decided=decided)
 
 
@@ -763,11 +800,23 @@ def _compare_and_append(target: Path, decided: bytes, addition: bytes) -> None:
                                  it and does not retroactively unauthorize a
                                  start that was already legal.
 
-    It performs no write of its own any more: the lock and the physical write
-    moved into `serialized_append` so a supported writer in another module can
-    reach them. Same lock, same single write.
+    It performs no write of its own: the lock and the physical write live in
+    `_physical_serialized_write`. Same lock, same single write.
+
+    IT REACHES THAT WRITE DIRECTLY, AND NOT THROUGH `serialized_append`.
+    Routing it through the generic entry was a shortcut, and the OWNER_RELEASE
+    repair made the collision visible: the generic entry now refuses any event
+    that creates, advances or RESTORES execution permission, and an owner
+    release is exactly such an event. Its one caller is `_append_owner_row` --
+    the explicitly governed Owner-action boundary, which has already checked
+    the token against `owner_control.OWNER_TOKENS`, the scope against the
+    authoritative run-id grammars, the commit, the stamp and the reason, and
+    which verifies after the write that the row does what it claims. That is
+    the Owner's sentence; the generic writer carries none, which is why it may
+    not commit one. Both paths still take the same lock and the same
+    compare-and-swap.
     """
-    serialized_append(target, addition, decided=decided)
+    _physical_serialized_write(target, addition, decided=decided)
 
 
 def _next_global_sequence(rows) -> int:

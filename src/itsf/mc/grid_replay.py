@@ -144,6 +144,10 @@ __all__ = (
     "GRID_REPLAY_AUTHORITY_SCHEMA", "K_REPLAY_EVIDENCE_SCHEMA",
     "POSITIVE_EV_REGION", "DEPLOYABLE_REGION", "REGION_KINDS",
     "IN_REGION", "OUT_OF_REGION", "BOUNDARY_BAND",
+    "GRID_CONVERGENCE_SCHEMA", "GridConvergenceAcrossSeeds",
+    "aggregate_k_replay_evidence", "verify_grid_convergence",
+    "per_seed_grid_report", "MARKED_CELL_FIELDS", "SAMPLED_CELL_FIELDS",
+    "GRID_PASS_SCHEMA", "GridPass", "verify_grid_pass", "grid_pass_for_tests",
     "GRID_CELL_KEYS", "frozen_tolerance", "CellStatistics",
     "cell_category", "satisfying_combos",
     "GridReplayAuthority", "derive_grid_replay_authority",
@@ -353,18 +357,38 @@ def _mint_authority(prepared, supplement, *, sealed_artifact_sha256: str,
             f" — the per-day stratum table must cover the frozen day universe"
             f" exactly ({len(universe)} days)")
 
-    # (2) The supplement's own binding header must name the same universe.
+    # (2) THE BINDING HEADER MUST NAME THIS PREPARED INPUT -- every field.
+    #
+    # It used to check one: the day-universe digest. That admitted a
+    # supplement built for a DIFFERENT sealed run whose day universe happened
+    # to match -- a foreign trial id, a foreign authorized commit and a
+    # foreign source-input digest rode straight into the authority, and
+    # recomputing the artifact's own hash over the foreign values made it
+    # look consistent. A self-hash proves the bytes hash to what they claim;
+    # it cannot prove whose bytes they are.
+    #
+    # The comparison is `supplement_authority`'s, not a second copy of it:
+    # that module already performs exactly this check for its own authority
+    # object, and two implementations of one rule drift.
     binding = supplement.get("binding")
     if not isinstance(binding, Mapping):
         raise MCInputError("grid_replay_supplement_binding_absent",
                            "the sealed supplement carries no binding header")
-    declared_digest = binding.get("day_universe_digest")
     recomputed = _sa.day_universe_digest(identity.day_universe)
+    declared_digest = binding.get("day_universe_digest")
     if declared_digest != recomputed:
+        # kept ahead of the general check so this one field keeps its own
+        # refusal code: it is the coverage question, and it is worth naming
         raise MCInputError(
             "grid_replay_supplement_day_universe_digest_mismatch",
             f"binding declares {str(declared_digest)[:12]}, the prepared "
             f"input's universe hashes to {recomputed[:12]}")
+    try:
+        _sa.verify_supplement_binding(binding, prepared, identity=identity)
+    except _sa.SupplementError as exc:
+        raise MCInputError(
+            "grid_replay_supplement_binding_mismatch",
+            "%s: %s" % (exc.code, exc)) from exc
 
     # (3) Identity of the artifact itself: rows digest and sealed bytes.
     rows_digest = _ds.canonical_rows_digest(rows)
@@ -887,7 +911,7 @@ K_EVIDENCE_PAYLOAD_FIELDS = (
     "schema", "authority_digest", "master_seed", "k", "k_doubled",
     "prepared_digest", "converged_by_kind", "boundary_band_by_kind",
     "flipped_by_kind", "drift_violations_by_kind",
-    "region_map_digest_by_kind", "test_only")
+    "region_map_digest_by_kind", "adjusted_map_by_kind", "test_only")
 
 
 @dataclass(frozen=True, slots=True)
@@ -922,6 +946,18 @@ class KReplayEvidence:
     flipped_by_kind: Mapping
     drift_violations_by_kind: Mapping
     region_map_digest_by_kind: Mapping
+    #: THE COMPARISON-ADJUSTED MAP AT K, per kind, as an ordered tuple of
+    #: ((q_mil, r_mil), class) pairs.
+    #:
+    #: M8 relabels a boundary-band cell in BOTH maps and re-compares; that
+    #: relabelling is the comparison's product and it used to live only inside
+    #: `region_map_digest_by_kind`, where nothing could read it. Publication
+    #: therefore rebuilt its own maps from the raw K pass and silently dropped
+    #: every band cell -- the third frozen class vanished between the
+    #: comparison that created it and the result that reports it. Carrying the
+    #: adjusted map here is what lets publication consume the comparison
+    #: instead of re-deriving something else.
+    adjusted_map_by_kind: Mapping
     test_only: bool
     evidence_digest: str
 
@@ -934,9 +970,23 @@ class KReplayEvidence:
         object.__setattr__(self, "capability", None)
         for name in ("converged_by_kind", "boundary_band_by_kind",
                      "flipped_by_kind", "drift_violations_by_kind",
-                     "region_map_digest_by_kind"):
+                     "region_map_digest_by_kind", "adjusted_map_by_kind"):
             object.__setattr__(self, name,
                                MappingProxyType(dict(getattr(self, name))))
+
+    def adjusted_map(self, kind: str) -> Mapping:
+        """The comparison-adjusted map for `kind`, keyed by cell.
+
+        Stored as ordered pairs so the payload stays JSON-shaped for the
+        self-digest, and rebuilt here so a consumer never has to know that.
+        """
+        _require_kind(kind)
+        rows = self.adjusted_map_by_kind.get(kind)
+        if not rows:
+            raise MCInputError(
+                "k_replay_evidence_adjusted_map_absent",
+                f"the witness carries no adjusted map for {kind!r}")
+        return MappingProxyType({tuple(key): cls for key, cls in rows})
 
     @property
     def grid_converged(self) -> bool:
@@ -964,24 +1014,31 @@ def _k_evidence_payload(evidence) -> dict:
     for name in K_EVIDENCE_PAYLOAD_FIELDS:
         value = getattr(evidence, name)
         if isinstance(value, Mapping):
-            payload[name] = {str(k): (list(v) if isinstance(v, tuple) else v)
+            payload[name] = {str(k): _jsonable(v)
                              for k, v in sorted(value.items())}
-        elif isinstance(value, tuple):
-            payload[name] = list(value)
         else:
-            payload[name] = value
+            payload[name] = _jsonable(value)
     return payload
 
 
 def derive_k_replay_evidence(authority, *, master_seed: int,
-                             cells_at_k: Mapping, cells_at_2k: Mapping,
+                             cells_at_k, cells_at_2k,
                              k: int | None = None,
                              k_doubled: int | None = None) -> KReplayEvidence:
     """THE only minter: compare the two grid passes and certify the result.
 
-    The comparison is performed HERE, from the supplied cells, so an
+    The comparison is performed HERE, from the supplied passes, so an
     evidence object cannot carry a convergence claim that was never computed.
     `k` defaults to the authority's frozen `k_per_seed`.
+
+    THE ARMS ARE `GridPass` OBJECTS, not mappings of cells, and that is the
+    F04 repair. A mapping could be built by hand: `CellStatistics` is public
+    and validates only shape and finiteness, so invented statistics used to
+    mint a witness that verified perfectly and sealed CONVERGED. A pass can
+    only come from the governed producer, carries the authority and prepared
+    input it was produced under, and re-verifies its digest against its own
+    live cells here -- so neither the identity nor the statistics can be
+    substituted after production.
     """
     verify_grid_replay_authority(authority)
     if master_seed not in RESEARCH_BOOTSTRAP_SEEDS:
@@ -994,7 +1051,43 @@ def derive_k_replay_evidence(authority, *, master_seed: int,
                            f"k={k}, frozen is {_mcc.K_PER_SEED_FROZEN}")
     k_doubled = int(2 * k if k_doubled is None else k_doubled)
 
+    # THE ARMS MUST BE THE GOVERNED PRODUCER'S. Placed after the seed and k
+    # refusals above so every existing refusal keeps its code and its order;
+    # what is new is that a mapping of cells is no longer admissible at all.
+    at_k = verify_grid_pass(cells_at_k)
+    at_2k = verify_grid_pass(cells_at_2k)
+    for arm, pass_ in (("K", at_k), ("2K", at_2k)):
+        if pass_.authority_digest != authority.authority_digest:
+            raise MCInputError(
+                "k_replay_evidence_pass_authority_mismatch",
+                f"the {arm} pass was produced under authority "
+                f"{pass_.authority_digest[:12]}, not {authority.authority_digest[:12]}")
+        if pass_.master_seed != int(master_seed):
+            raise MCInputError(
+                "k_replay_evidence_pass_seed_mismatch",
+                f"the {arm} pass carries master_seed={pass_.master_seed}, "
+                f"the witness is being minted for {master_seed}")
+        if pass_.test_only is not bool(authority.test_only):
+            raise MCInputError(
+                "k_replay_evidence_pass_test_only_mismatch",
+                f"the {arm} pass is test_only={pass_.test_only} and the "
+                f"authority is test_only={authority.test_only}")
+    if at_2k.doublings != at_k.doublings + 1:
+        raise MCInputError(
+            "k_replay_evidence_pass_doubling_mismatch",
+            f"the arms are at doublings={at_k.doublings} and "
+            f"{at_2k.doublings}; the doubled arm is exactly one doubling "
+            "above the base arm")
+    if at_k.B != at_2k.B or at_k.channel != at_2k.channel:
+        raise MCInputError(
+            "k_replay_evidence_pass_scale_mismatch",
+            "K is grid-analysis only: B and the theta channel may not move "
+            f"between the arms (B {at_k.B} -> {at_2k.B}, channel "
+            f"{at_k.channel!r} -> {at_2k.channel!r})")
+    cells_at_k, cells_at_2k = at_k.cells, at_2k.cells
+
     converged, band, flipped, drift, digests = {}, {}, {}, {}, {}
+    adjusted = {}
     for kind in REGION_KINDS:
         comparison = compare_region_maps(kind, cells_at_k, cells_at_2k,
                                          k=k, k_doubled=k_doubled)
@@ -1002,6 +1095,11 @@ def derive_k_replay_evidence(authority, *, master_seed: int,
         band[kind] = comparison.boundary_band_cells
         flipped[kind] = comparison.flipped_cells
         drift[kind] = comparison.drift_violations
+        # the RELABELLED map, in the frozen cell order, so publication
+        # consumes what the comparison decided rather than re-deriving a map
+        # the comparison never saw
+        adjusted[kind] = tuple(
+            (tuple(key), comparison.map_at_k[key]) for key in GRID_CELL_KEYS)
         digests[kind] = _digest(
             "mc_region_map.v1",
             {"kind": kind,
@@ -1022,22 +1120,32 @@ def derive_k_replay_evidence(authority, *, master_seed: int,
         "flipped_by_kind": flipped,
         "drift_violations_by_kind": drift,
         "region_map_digest_by_kind": digests,
+        "adjusted_map_by_kind": adjusted,
         "test_only": bool(authority.test_only),
     }
     preimage = {}
     for name in K_EVIDENCE_PAYLOAD_FIELDS:
         value = payload[name]
         if isinstance(value, dict):
-            preimage[name] = {
-                str(kk): ([list(x) for x in vv] if isinstance(vv, tuple)
-                          else vv)
-                for kk, vv in sorted(value.items())}
+            preimage[name] = {str(kk): _jsonable(vv)
+                              for kk, vv in sorted(value.items())}
         else:
-            preimage[name] = value
+            preimage[name] = _jsonable(value)
     return KReplayEvidence(
         capability=_K_EVIDENCE_CAPABILITY,
         evidence_digest=_digest(_EVIDENCE_DIGEST_SCHEMA, preimage),
         **payload)
+
+
+def _jsonable(value):
+    """Tuples -> lists, recursively. One helper for both preimage builders,
+    so a nested shape cannot hash one way when minted and another when
+    verified -- which would make every witness refuse itself."""
+    if isinstance(value, tuple):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, list):
+        return [_jsonable(v) for v in value]
+    return value
 
 
 def verify_k_replay_evidence(evidence) -> KReplayEvidence:
@@ -1053,6 +1161,520 @@ def verify_k_replay_evidence(evidence) -> KReplayEvidence:
             f"carries {evidence.evidence_digest[:12]}, its own fields hash to "
             f"{expect[:12]}")
     return evidence
+
+
+# ---------------------------------------------------------------------------
+# GridPass — the governed producer's product, and the only admissible cells
+# ---------------------------------------------------------------------------
+
+GRID_PASS_SCHEMA = "mc_grid_pass.v1"
+_GRID_PASS_DIGEST_SCHEMA = "mc_grid_pass_digest.v1"
+
+
+class _GridPassCapability:
+    """Factory-only construction, the same capability the authority and the
+    witness use. `_mint_grid_pass` is the one call site and the governed
+    producer is its one caller."""
+    __slots__ = ()
+
+
+_GRID_PASS_CAPABILITY = _GridPassCapability()
+
+GRID_PASS_PAYLOAD_FIELDS = (
+    "schema", "authority_digest", "prepared_digest", "master_seed",
+    "doublings", "B", "channel", "cell_keys", "cell_payloads", "test_only")
+
+
+def _cell_payload(cell) -> dict:
+    """One cell, as digestible structure. A MARKED cell digests its mark and
+    its arithmetic; a sampled one digests its statistics. Neither borrows the
+    other's shape, which is what keeps `marked` from being forgeable by
+    supplying zeros."""
+    if is_infeasible(cell):
+        return {"marked": True,
+                "reason": cell.reason, "detail": cell.detail,
+                "q_mil": int(cell.q_mil), "r_mil": int(cell.r_mil),
+                "master_seed": int(cell.master_seed),
+                "doublings": int(cell.doublings),
+                "n_tp": int(cell.n_tp), "n_fp": int(cell.n_fp),
+                "fp_available": int(cell.fp_available)}
+    if type(cell) is not CellStatistics:
+        raise MCInputError(
+            "grid_pass_cell_type_unknown",
+            f"{type(cell).__name__} is neither CellStatistics nor "
+            "InfeasibleCell")
+    return {"marked": False,
+            "conservative_p5": {str(k): float(v) for k, v
+                                in sorted(cell.conservative_p5.items())},
+            "stress_median": {str(k): float(v) for k, v
+                              in sorted(cell.stress_median.items())},
+            "feasible": {str(k): cell.feasible[k]
+                         for k in sorted(cell.feasible)},
+            "identity": {str(k): cell.identity[k]
+                         for k in sorted(cell.identity)}}
+
+
+@dataclass(frozen=True, slots=True)
+class GridPass:
+    """ONE seed's grid pass AT ONE SCALE, as produced by the governed path.
+
+    WHAT THIS EXISTS TO STOP, exactly. `derive_k_replay_evidence` took two
+    plain mappings of cells. A caller could build `CellStatistics` by hand --
+    the dataclass is public, and it validates only that the numbers are finite
+    and the combination sets agree -- hand them in, and receive a
+    `KReplayEvidence` that verified perfectly and sealed as CONVERGED with
+    `may_support_h1_entry` True. Nothing anywhere established that the
+    governed grid producer had made those statistics. The witness's
+    self-digest could not: it hashed the caller's own values, so it certified
+    internal consistency and called it provenance.
+
+    So the admissible unit is no longer a mapping of cells but a PASS, and a
+    pass can only be minted by `grid_channel.run_grid_pass` through
+    `_mint_grid_pass`. It carries the production identity the cells came out
+    of -- which authority licensed it, which prepared input, which seed, which
+    doubling scale, which B and which theta channel -- and a digest over that
+    identity TOGETHER WITH every cell, so neither the cells nor the identity
+    can be changed afterwards without the digest saying so.
+
+    THIS IS NOT A `producer=True` FLAG. There is no field a caller can set to
+    claim provenance; the capability object is the claim, it exists once at
+    import time, and it is dropped the moment it is checked.
+
+    TEST PATHWAY. `grid_pass_for_tests` mints one from caller-supplied cells
+    and refuses unless the authority is already `test_only` -- so synthetic
+    cells are explicitly typed as synthetic and ride that flag into the
+    witness, the cross-seed standing and the seal, where the runner refuses
+    them on the production path.
+    """
+    capability: object
+    schema: str
+    authority_digest: str
+    prepared_digest: str
+    master_seed: int
+    doublings: int
+    B: int
+    channel: str
+    cell_keys: tuple
+    cell_payloads: tuple
+    test_only: bool
+    pass_digest: str
+    cells: Mapping
+
+    def __post_init__(self):
+        if self.capability is not _GRID_PASS_CAPABILITY:
+            raise MCInputError(
+                "grid_pass_capability_required",
+                "GridPass is factory-only -- it is minted by the governed "
+                "grid producer (grid_channel.run_grid_pass), or by "
+                "grid_pass_for_tests against a test_only authority. A "
+                "direct constructor call or dataclasses.replace cannot mint "
+                "one")
+        object.__setattr__(self, "capability", None)
+        object.__setattr__(self, "cells",
+                           MappingProxyType(dict(self.cells)))
+
+
+def _grid_pass_payload(pass_) -> dict:
+    declared = {fld.name for fld in _dc_fields(pass_)} - {
+        "capability", "pass_digest", "cells"}
+    if declared != set(GRID_PASS_PAYLOAD_FIELDS):
+        raise MCInputError(
+            "grid_pass_payload_field_drift",
+            f"{sorted(declared ^ set(GRID_PASS_PAYLOAD_FIELDS))}")
+    return {name: _jsonable(getattr(pass_, name))
+            for name in GRID_PASS_PAYLOAD_FIELDS}
+
+
+def _mint_grid_pass(authority, *, prepared_digest: str, master_seed: int,
+                    doublings: int, B: int, channel: str,
+                    cells: Mapping) -> GridPass:
+    """THE only minter. Private on purpose: the governed producer calls it,
+    and `grid_pass_for_tests` calls it for explicitly synthetic evidence."""
+    verify_grid_replay_authority(authority)
+    if authority.prepared_digest != str(prepared_digest):
+        raise MCInputError(
+            "grid_pass_prepared_mismatch",
+            f"the authority binds {authority.prepared_digest[:12]}, the pass "
+            f"was produced from {str(prepared_digest)[:12]}")
+    keys = tuple(tuple(k) for k in sorted(cells))
+    payloads = tuple(_cell_payload(cells[key]) for key in keys)
+    payload = {
+        "schema": GRID_PASS_SCHEMA,
+        "authority_digest": authority.authority_digest,
+        "prepared_digest": str(prepared_digest),
+        "master_seed": int(master_seed),
+        "doublings": int(doublings),
+        "B": int(B),
+        "channel": str(channel),
+        "cell_keys": keys,
+        "cell_payloads": payloads,
+        "test_only": bool(authority.test_only),
+    }
+    if set(payload) != set(GRID_PASS_PAYLOAD_FIELDS):
+        raise MCInputError(
+            "grid_pass_payload_field_drift",
+            f"{sorted(set(payload) ^ set(GRID_PASS_PAYLOAD_FIELDS))}")
+    preimage = {k: _jsonable(v) for k, v in payload.items()}
+    return GridPass(capability=_GRID_PASS_CAPABILITY,
+                    pass_digest=_digest(_GRID_PASS_DIGEST_SCHEMA, preimage),
+                    cells=dict(cells), **payload)
+
+
+def verify_grid_pass(pass_) -> GridPass:
+    """Re-derive the digest from the pass's own identity AND its live cells.
+
+    Re-deriving the cell payloads rather than reusing the stored ones is the
+    point: a mutated `cells` mapping would otherwise hash to the value the
+    pass was minted with and verify clean.
+    """
+    if type(pass_) is not GridPass:
+        raise MCInputError(
+            "grid_pass_required",
+            f"{type(pass_).__name__} is not a GridPass -- seal-admissible "
+            "grid evidence comes from the governed producer, never from a "
+            "caller-assembled mapping of cells")
+    payload = _grid_pass_payload(pass_)
+    keys = tuple(tuple(k) for k in sorted(pass_.cells))
+    live = {"cell_keys": _jsonable(keys),
+            "cell_payloads": _jsonable(
+                tuple(_cell_payload(pass_.cells[key]) for key in keys))}
+    for name, value in live.items():
+        if payload[name] != value:
+            raise MCInputError(
+                "grid_pass_cells_mutated",
+                f"the pass's {name} no longer match the cells it carries")
+    expect = _digest(_GRID_PASS_DIGEST_SCHEMA, payload)
+    if pass_.pass_digest != expect:
+        raise MCInputError(
+            "grid_pass_digest_mismatch",
+            f"carries {pass_.pass_digest[:12]}, its own fields hash to "
+            f"{expect[:12]}")
+    return pass_
+
+
+def grid_pass_for_tests(authority, *, prepared_digest: str, master_seed: int,
+                        doublings: int, B: int, channel: str,
+                        cells: Mapping) -> GridPass:
+    """A pass over CALLER-SUPPLIED cells, admissible only as synthetic.
+
+    Refuses unless the authority is already `test_only`, so this cannot be
+    the route by which hand-built statistics acquire production standing: the
+    flag rides into the witness, into the cross-seed standing and into the
+    seal candidate, and the runner refuses test-only grid evidence on the
+    production path.
+    """
+    verify_grid_replay_authority(authority)
+    if not authority.test_only:
+        raise MCInputError(
+            "grid_pass_for_tests_requires_test_authority",
+            "caller-supplied cells are synthetic evidence and may only be "
+            "minted against a test_only authority; a production authority's "
+            "passes come from grid_channel.run_grid_pass")
+    return _mint_grid_pass(authority, prepared_digest=prepared_digest,
+                           master_seed=master_seed, doublings=doublings,
+                           B=B, channel=channel, cells=cells)
+
+
+# ---------------------------------------------------------------------------
+# The full per-seed report
+# ---------------------------------------------------------------------------
+
+#: The absence metadata a MARKED cell reports, read off `InfeasibleCell`'s own
+#: fields so the report cannot drift from the type. `reason` and `detail` say
+#: WHY; the three counts are the frozen arithmetic that decided it.
+MARKED_CELL_FIELDS = ("reason", "detail", "n_tp", "n_fp", "fp_available")
+
+#: What a SAMPLED cell reports. Statistics only -- no class, no verdict.
+SAMPLED_CELL_FIELDS = ("conservative_p5", "stress_median", "feasible",
+                       "identity")
+
+
+def per_seed_grid_report(passes_by_seed: Mapping,
+                         witness_by_seed: Mapping) -> Mapping:
+    """EVERY governed seed, EVERY cell, with absence stated as absence.
+
+    WHAT THIS EXISTS TO STOP. The producer held all of it -- three seeds, 63
+    cells each, every marked cell's reason and counts -- and the returned
+    object kept merged region maps and base-seed summaries. A reader could
+    see that a published cell was BOUNDARY_BAND and could not see which seed
+    marked it, why, or against what arithmetic. "Mark, skip and REPORT IN
+    FULL" is the sealed rule; the first two were implemented and the third
+    stopped at the return statement.
+
+    A MARKED CELL CARRIES NO STATISTICS. Not zeros, not None, not an empty
+    mapping: the keys are absent, and `marked` is True. `CellStatistics`
+    cannot express "never sampleable" without inventing a P5, a median or a
+    feasibility verdict, and neither can this report.
+
+    The per-kind class comes from the COMPARISON-ADJUSTED map, so a cell the
+    comparison relabelled `boundary_band` reads as that here too, rather than
+    as whatever the raw pass said before the comparison ran.
+    """
+    if set(passes_by_seed) != set(RESEARCH_BOOTSTRAP_SEEDS):
+        raise MCInputError(
+            "grid_report_seed_set_incomplete",
+            f"{sorted(passes_by_seed)} != {list(RESEARCH_BOOTSTRAP_SEEDS)}")
+    if set(witness_by_seed) != set(passes_by_seed):
+        raise MCInputError(
+            "grid_report_witness_set_mismatch",
+            f"{sorted(witness_by_seed)} != {sorted(passes_by_seed)}")
+    report = {}
+    for seed in RESEARCH_BOOTSTRAP_SEEDS:
+        at_k = verify_grid_pass(passes_by_seed[seed]["at_k"])
+        cells_at_k = at_k.cells
+        witness = verify_k_replay_evidence(witness_by_seed[seed])
+        if at_k.master_seed != seed:
+            raise MCInputError(
+                "grid_report_pass_seed_mismatch",
+                f"the pass filed under seed {seed} was produced for "
+                f"{at_k.master_seed}")
+        adjusted = {kind: witness.adjusted_map(kind) for kind in REGION_KINDS}
+        cells, marked, sampled = {}, [], []
+        for key in GRID_CELL_KEYS:
+            cell = cells_at_k[tuple(key)]
+            entry = {"class_by_kind": MappingProxyType(
+                {kind: adjusted[kind][tuple(key)] for kind in REGION_KINDS})}
+            if is_infeasible(cell):
+                entry["marked"] = True
+                for name in MARKED_CELL_FIELDS:
+                    entry[name] = getattr(cell, name)
+                marked.append(tuple(key))
+            else:
+                entry["marked"] = False
+                for name in SAMPLED_CELL_FIELDS:
+                    entry[name] = MappingProxyType(
+                        dict(getattr(cell, name)))
+                sampled.append(tuple(key))
+            cells[tuple(key)] = MappingProxyType(entry)
+        report[seed] = MappingProxyType({
+            "master_seed": int(seed),
+            "k": witness.k,
+            "k_doubled": witness.k_doubled,
+            "converged_by_kind": MappingProxyType(
+                dict(witness.converged_by_kind)),
+            "marked_cells": tuple(marked),
+            "sampled_cells": tuple(sampled),
+            "cells": MappingProxyType(cells),
+        })
+    return MappingProxyType(report)
+
+
+# ---------------------------------------------------------------------------
+# The cross-seed grid standing
+# ---------------------------------------------------------------------------
+
+GRID_CONVERGENCE_SCHEMA = "mc_grid_convergence_across_seeds.v1"
+_GRID_CONVERGENCE_DIGEST_SCHEMA = "mc_grid_convergence_digest.v1"
+
+
+class _GridConvergenceCapability:
+    """The same factory-only capability the authority and the witness use."""
+    __slots__ = ()
+
+
+_GRID_CONVERGENCE_CAPABILITY = _GridConvergenceCapability()
+
+GRID_CONVERGENCE_PAYLOAD_FIELDS = (
+    "schema", "authority_digest", "prepared_digest", "k", "k_doubled",
+    "seeds", "converged_by_kind", "converged_by_seed",
+    "witness_digest_by_seed", "doublings_executed", "max_doublings",
+    "test_only")
+
+
+@dataclass(frozen=True, slots=True)
+class GridConvergenceAcrossSeeds:
+    """THE grid section's standing, over EVERY governed seed.
+
+    WHAT THIS EXISTS TO STOP. Three witnesses were being built -- one per
+    research seed, each from its own K and 2K pass -- and exactly one of them
+    reached the final grid status and the H1-entry eligibility. The other two
+    seeds' doubled-scale results were computed and then dropped, so a seed
+    whose region map failed to converge could not move the outcome, and rule
+    (b)'s cross-seed requirement was satisfied in the arithmetic and lost at
+    integration.
+
+    THE RULE IS CONJUNCTIVE, and it has to be: M10 publishes the INTERSECTION
+    across seeds and M7 gives a non-converged region its consequence, so a
+    region that converged for one seed and not another has not converged. Any
+    other aggregation would publish a region no single seed's evidence
+    supports.
+
+    THE BOUND RIDES ALONG rather than being re-derived downstream. (e) doubles
+    K while a region has not converged, bounded by the ruled
+    `GridRepeatPolicy.max_doublings`; `doublings_executed` records how many
+    doublings the evidence actually spans so a reader can check the bound was
+    honoured instead of assuming it.
+
+    It carries DIGESTS of the witnesses, never a second copy of their maps: a
+    standing that restated the evidence could disagree with it.
+    """
+    capability: object
+    schema: str
+    authority_digest: str
+    prepared_digest: str
+    k: int
+    k_doubled: int
+    seeds: tuple
+    converged_by_kind: Mapping
+    converged_by_seed: Mapping
+    witness_digest_by_seed: Mapping
+    doublings_executed: int
+    max_doublings: int
+    test_only: bool
+    convergence_digest: str
+
+    def __post_init__(self):
+        if self.capability is not _GRID_CONVERGENCE_CAPABILITY:
+            raise MCInputError(
+                "grid_convergence_capability_required",
+                "GridConvergenceAcrossSeeds is factory-only -- use "
+                "aggregate_k_replay_evidence()")
+        object.__setattr__(self, "capability", None)
+        for name in ("converged_by_kind", "converged_by_seed",
+                     "witness_digest_by_seed"):
+            object.__setattr__(self, name,
+                               MappingProxyType(dict(getattr(self, name))))
+
+    @property
+    def grid_converged(self) -> bool:
+        """Both frozen regions, across every governed seed."""
+        return all(bool(v) for v in self.converged_by_kind.values())
+
+    @property
+    def grid_seal_status(self) -> str:
+        return "CONVERGED" if self.grid_converged else "NON_CONVERGED"
+
+    @property
+    def may_support_h1_entry(self) -> bool:
+        """M7, across seeds: only a converged `deployable_region` may."""
+        return bool(self.converged_by_kind.get(DEPLOYABLE_REGION))
+
+
+def _grid_convergence_payload(standing) -> dict:
+    declared = {fld.name for fld in _dc_fields(standing)} - {
+        "capability", "convergence_digest"}
+    if declared != set(GRID_CONVERGENCE_PAYLOAD_FIELDS):
+        raise MCInputError(
+            "grid_convergence_payload_field_drift",
+            f"{sorted(declared ^ set(GRID_CONVERGENCE_PAYLOAD_FIELDS))}")
+    payload = {}
+    for name in GRID_CONVERGENCE_PAYLOAD_FIELDS:
+        value = getattr(standing, name)
+        if isinstance(value, Mapping):
+            payload[name] = {str(k): _jsonable(v)
+                             for k, v in sorted(value.items())}
+        else:
+            payload[name] = _jsonable(value)
+    return payload
+
+
+def aggregate_k_replay_evidence(witness_by_seed: Mapping
+                                ) -> GridConvergenceAcrossSeeds:
+    """THE only minter: every governed seed's witness, verified, then ANDed.
+
+    Requires exactly `RESEARCH_BOOTSTRAP_SEEDS`. A two-seed aggregation would
+    quietly weaken rule (b) in the same way publishing from two maps would
+    weaken M10, and the seed set is an identity requirement rather than a
+    convenience.
+    """
+    if set(witness_by_seed) != set(RESEARCH_BOOTSTRAP_SEEDS):
+        raise MCInputError(
+            "grid_convergence_seed_set_incomplete",
+            f"{sorted(witness_by_seed)} != {list(RESEARCH_BOOTSTRAP_SEEDS)}")
+    seeds = tuple(RESEARCH_BOOTSTRAP_SEEDS)
+    witnesses = {}
+    for seed in seeds:
+        witnesses[seed] = verify_k_replay_evidence(witness_by_seed[seed])
+        if witnesses[seed].master_seed != seed:
+            raise MCInputError(
+                "grid_convergence_witness_seed_mismatch",
+                f"the witness filed under seed {seed} carries master_seed="
+                f"{witnesses[seed].master_seed}")
+    first = witnesses[seeds[0]]
+    for seed in seeds[1:]:
+        other = witnesses[seed]
+        for field, code in (("authority_digest",
+                             "grid_convergence_authority_mismatch"),
+                            ("prepared_digest",
+                             "grid_convergence_prepared_mismatch"),
+                            ("k", "grid_convergence_k_mismatch"),
+                            ("k_doubled", "grid_convergence_k_mismatch"),
+                            ("test_only",
+                             "grid_convergence_test_only_mismatch")):
+            if getattr(other, field) != getattr(first, field):
+                raise MCInputError(
+                    code,
+                    f"seed {seed} witness {field}={getattr(other, field)!r} "
+                    f"!= seed {seeds[0]}'s {getattr(first, field)!r}")
+    converged_by_kind = {
+        kind: all(bool(witnesses[seed].converged_by_kind.get(kind))
+                  for seed in seeds)
+        for kind in REGION_KINDS}
+    # (e)'s bound, read off the ruled policy rather than written here, and
+    # DERIVED from the evidence: how many doublings does k -> k_doubled span?
+    from itsf import contracts as _contracts
+    policy = _contracts.aaron_ruled_methods().grid_policy
+    executed = 0
+    span = int(first.k_doubled)
+    while span > int(first.k):
+        span //= 2
+        executed += 1
+    if executed < 1 or span != int(first.k):
+        raise MCInputError(
+            "grid_convergence_doubling_span_invalid",
+            f"k={first.k} -> k_doubled={first.k_doubled} is not a whole "
+            "number of doublings")
+    if executed > int(policy.max_doublings):
+        raise MCInputError(
+            "grid_convergence_doublings_exceed_bound",
+            f"{executed} doubling(s) executed, the ruled bound is "
+            f"{policy.max_doublings}")
+    payload = {
+        "schema": GRID_CONVERGENCE_SCHEMA,
+        "authority_digest": first.authority_digest,
+        "prepared_digest": first.prepared_digest,
+        "k": int(first.k),
+        "k_doubled": int(first.k_doubled),
+        "seeds": seeds,
+        "converged_by_kind": converged_by_kind,
+        "converged_by_seed": {
+            seed: witnesses[seed].grid_converged for seed in seeds},
+        "witness_digest_by_seed": {
+            seed: witnesses[seed].evidence_digest for seed in seeds},
+        "doublings_executed": executed,
+        "max_doublings": int(policy.max_doublings),
+        "test_only": bool(first.test_only),
+    }
+    if set(payload) != set(GRID_CONVERGENCE_PAYLOAD_FIELDS):
+        raise MCInputError(
+            "grid_convergence_payload_field_drift",
+            f"{sorted(set(payload) ^ set(GRID_CONVERGENCE_PAYLOAD_FIELDS))}")
+    preimage = {}
+    for name in GRID_CONVERGENCE_PAYLOAD_FIELDS:
+        value = payload[name]
+        preimage[name] = ({str(k): _jsonable(v)
+                           for k, v in sorted(value.items())}
+                          if isinstance(value, dict) else _jsonable(value))
+    return GridConvergenceAcrossSeeds(
+        capability=_GRID_CONVERGENCE_CAPABILITY,
+        convergence_digest=_digest(_GRID_CONVERGENCE_DIGEST_SCHEMA, preimage),
+        **payload)
+
+
+def verify_grid_convergence(standing) -> GridConvergenceAcrossSeeds:
+    """Re-check the standing's self-digest, so a mutated one refuses."""
+    if type(standing) is not GridConvergenceAcrossSeeds:
+        raise MCInputError(
+            "grid_convergence_required",
+            f"{type(standing).__name__} is not a GridConvergenceAcrossSeeds")
+    expect = _digest(_GRID_CONVERGENCE_DIGEST_SCHEMA,
+                     _grid_convergence_payload(standing))
+    if standing.convergence_digest != expect:
+        raise MCInputError(
+            "grid_convergence_digest_mismatch",
+            f"carries {standing.convergence_digest[:12]}, its own fields hash "
+            f"to {expect[:12]}")
+    return standing
 
 
 # ---------------------------------------------------------------------------

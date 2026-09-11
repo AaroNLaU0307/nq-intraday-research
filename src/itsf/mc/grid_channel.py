@@ -544,8 +544,16 @@ def run_grid_cell(prepared, authority, supplement: Mapping, *,
 def run_grid_pass(prepared, authority, supplement: Mapping, *,
                   master_seed: int, B: int, doublings: int = 0,
                   cells: tuple = _gr.GRID_CELL_KEYS,
-                  channel: str = _mcc.PRIMARY_THETA_CHANNEL) -> dict:
-    """One seed's grid pass: `{(q_mil, r_mil): CellStatistics | InfeasibleCell}`.
+                  channel: str = _mcc.PRIMARY_THETA_CHANNEL):
+    """One seed's grid pass, as a governed `grid_replay.GridPass`.
+
+    `pass_.cells` is `{(q_mil, r_mil): CellStatistics | InfeasibleCell}` --
+    the same mapping this used to return. What is new is the envelope: the
+    pass carries the authority, the prepared input, the seed, the doubling
+    scale, B and the channel it was produced under, and a digest over all of
+    that together with every cell. That envelope is what
+    `derive_k_replay_evidence` now requires, so hand-built statistics can no
+    longer become seal-admitted grid evidence.
 
     `cells` defaults to the frozen Appendix-A grid; a caller may narrow it
     only for a bounded exercise, and `grid_replay.region_map` still requires
@@ -559,10 +567,14 @@ def run_grid_pass(prepared, authority, supplement: Mapping, *,
     completeness check keeps doing the work the seal's "report in full" asks
     of it: a skipped cell cannot quietly become a missing one.
     """
-    return {tuple(cell): run_grid_cell(
+    produced = {tuple(cell): run_grid_cell(
         prepared, authority, supplement, q_mil=int(cell[0]),
         r_mil=int(cell[1]), master_seed=master_seed, B=B,
         doublings=doublings, channel=channel) for cell in cells}
+    return _gr._mint_grid_pass(
+        authority, prepared_digest=_mcc.prepared_digest(prepared),
+        master_seed=master_seed, doublings=doublings, B=B, channel=channel,
+        cells=produced)
 
 
 def drawn_count(prepared, authority, supplement: Mapping, *,

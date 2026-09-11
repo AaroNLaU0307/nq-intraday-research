@@ -604,7 +604,7 @@ def test_H_the_runner_produces_the_witness_itself_and_reaches_the_seal(
     assert seal["verdict"]["category"] in {"STOP", "GO", "beta", "alpha"}
     assert set(seal["convergence"]) == {
         "category_stable_under_doubling", "category_same_across_seeds",
-        "quantile_drift_ok", "mcse_ok", "converged"}
+        "quantile_drift_ok", "mcse_ok", "converged", "grid_converged"}
     assert seal["grid_section"]["status"] in {"CONVERGED", "NON_CONVERGED"}
     assert seal["grid_section"]["k"] == K_SMALL == wide.k_per_seed
     assert seal["grid_section"]["k_doubled"] == 2 * K_SMALL
@@ -704,9 +704,13 @@ def narrow_authority(narrow, narrow_supplement):
 def _full(partial):
     """The narrow pass covers three cells; `region_map` requires all 63. The
     rest are filled from a SAMPLED cell of the same pass, so the padding is
-    real output rather than a fabricated statistic."""
-    donor = partial[FEASIBLE_CELL]
-    return {tuple(key): partial.get(tuple(key), donor)
+    real output rather than a fabricated statistic.
+
+    Takes a governed `GridPass` or a bare mapping: the pass is the envelope
+    the producer now returns and `.cells` is the mapping it used to be."""
+    cells = getattr(partial, "cells", partial)
+    donor = cells[FEASIBLE_CELL]
+    return {tuple(key): cells.get(tuple(key), donor)
             for key in gr.GRID_CELL_KEYS}
 
 
@@ -756,11 +760,11 @@ def test_F1_B_the_pass_continues_past_the_infeasible_cell(
     passed = gc.run_grid_pass(
         narrow, narrow_authority, narrow_supplement, master_seed=7,
         B=B_SMALL, cells=MIXED_CELLS)
-    assert set(passed) == set(MIXED_CELLS)
-    assert gr.is_infeasible(passed[INFEASIBLE_CELL])
+    assert set(passed.cells) == set(MIXED_CELLS)
+    assert gr.is_infeasible(passed.cells[INFEASIBLE_CELL])
     for cell in (FEASIBLE_CELL, OTHER_FEASIBLE_CELL):
-        assert type(passed[cell]) is gr.CellStatistics
-        assert passed[cell].conservative_p5
+        assert type(passed.cells[cell]) is gr.CellStatistics
+        assert passed.cells[cell].conservative_p5
 
 
 def test_F1_C_the_infeasible_cell_is_reported_in_full(
@@ -771,7 +775,7 @@ def test_F1_C_the_infeasible_cell_is_reported_in_full(
     passed = gc.run_grid_pass(
         narrow, narrow_authority, narrow_supplement, master_seed=13,
         B=B_SMALL, cells=MIXED_CELLS)
-    rec = passed[INFEASIBLE_CELL]
+    rec = passed.cells[INFEASIBLE_CELL]
     assert rec.reason == gr.INFEASIBLE_BY_SAMPLE == "infeasible_by_sample"
     assert (rec.q_mil, rec.r_mil) == INFEASIBLE_CELL
     assert rec.master_seed == 13 and rec.doublings == 0
@@ -840,11 +844,11 @@ def test_F1_E_and_F_K_and_2K_both_mark_skip_report(
                              cells=MIXED_CELLS)
     n_2k = len(calls) - n_after_k
     for passed, doublings in ((at_k, 0), (at_2k, 1)):
-        rec = passed[INFEASIBLE_CELL]
+        rec = passed.cells[INFEASIBLE_CELL]
         assert gr.is_infeasible(rec) and rec.reason == gr.INFEASIBLE_BY_SAMPLE
         assert rec.doublings == doublings
         for cell in (FEASIBLE_CELL, OTHER_FEASIBLE_CELL):
-            assert type(passed[cell]) is gr.CellStatistics
+            assert type(passed.cells[cell]) is gr.CellStatistics
     # the 2K pass ran exactly twice the lifecycles of K -- the two feasible
     # cells doubled and the marked cell contributed zero to both
     assert n_after_k > 0 and n_2k == 2 * n_after_k
@@ -1048,16 +1052,16 @@ def test_F1R2_A_every_cell_is_marked_in_both_passes(
             passed = gc.run_grid_pass(
                 allmarked, allmarked_authority, allmarked_supplement,
                 master_seed=seed, B=B_SMALL, doublings=doublings)
-            assert set(passed) == set(gr.GRID_CELL_KEYS)
-            assert len(passed) == 63
-            for key, cell in passed.items():
+            assert set(passed.cells) == set(gr.GRID_CELL_KEYS)
+            assert len(passed.cells) == 63
+            for key, cell in passed.cells.items():
                 assert gr.is_infeasible(cell), f"seed {seed} {key} is not marked"
                 assert cell.reason == gr.INFEASIBLE_BY_SAMPLE
                 assert cell.doublings == doublings
                 assert cell.master_seed == seed
                 assert cell.n_fp > cell.fp_available   # the sealed condition
             for kind in gr.REGION_KINDS:
-                m = gr.region_map(passed, kind)
+                m = gr.region_map(passed.cells, kind)
                 assert set(m) == set(gr.GRID_CELL_KEYS)
                 assert set(m.values()) == {gr.INFEASIBLE_BY_SAMPLE}
             seen += 1
@@ -1128,7 +1132,7 @@ def test_F1R2_E_no_statistic_is_fabricated_anywhere_on_the_all_marked_path(
     no draw metadata and no lifecycle atom is invented for any cell."""
     passed = gc.run_grid_pass(allmarked, allmarked_authority,
                               allmarked_supplement, master_seed=7, B=B_SMALL)
-    for cell in passed.values():
+    for cell in passed.cells.values():
         assert type(cell) is not gr.CellStatistics
         for attr in ("conservative_p5", "stress_median", "feasible",
                      "identity", "classifying_values", "draw_digests",
@@ -1145,9 +1149,10 @@ def test_F1R2_E_no_statistic_is_fabricated_anywhere_on_the_all_marked_path(
         at_2k = gc.run_grid_pass(allmarked, allmarked_authority,
                                  allmarked_supplement, master_seed=7,
                                  B=B_SMALL, doublings=1)
-        assert gr.cell_drift_violations(kind, passed, at_2k) == ()
-        cmp_ = gr.compare_region_maps(kind, passed, at_2k, k=K_SMALL,
-                                      k_doubled=2 * K_SMALL)
+        assert gr.cell_drift_violations(
+            kind, passed.cells, at_2k.cells) == ()
+        cmp_ = gr.compare_region_maps(kind, passed.cells, at_2k.cells,
+                                      k=K_SMALL, k_doubled=2 * K_SMALL)
         assert cmp_.boundary_band_cells == () and cmp_.flipped_cells == ()
         assert cmp_.converged is True
 
