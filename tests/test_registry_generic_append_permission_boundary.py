@@ -1,25 +1,22 @@
 """The generic serialized writer cannot create or advance authorization state.
 
-THE DEFECT THIS CLOSES, reproduced before it was repaired. The N14 Round-1
-independent review found that `registry_boundary.serialized_append` -- the
-exported GENERIC entry -- refused start-equivalent rows and nothing else, so a
-caller could append `MC_READY_FOR_RUN_AUTHORIZATION` or `MC_RUN_AUTHORIZED`
-through it. Measured on the reviewed bytes: accepted, physically appended, and
-returned by `mc_registry.parse_mc_events` with no refusal. Looking for a
-precedent in the sibling lifecycle turned up the same hole there -- a supplement
-`P2` authorization row went through the same entry.
+THE DEFECT THIS CLOSES, measured before it was closed.
+`registry_boundary.serialized_append` -- the exported GENERIC entry -- refused
+start-equivalent rows and nothing else, so a caller could append
+`MC_READY_FOR_RUN_AUTHORIZATION` or `MC_RUN_AUTHORIZED` through it: accepted,
+physically appended, and returned by `mc_registry.parse_mc_events` with no
+refusal. The sibling lifecycle had the same hole -- a supplement `P2`
+authorization row went through the same entry.
 
-THE OWNER RULING, 2026-09-11. `serialized_append` is a generic serialized
-WRITER and is not an authorization writer, so it must refuse any event whose
-semantic effect is to create or advance permission state, consistently across
-both affected families.
+THE RULE. `serialized_append` is a generic serialized WRITER and is not an
+authorization writer, so it refuses any event whose semantic effect is to
+create or advance permission state, consistently across both affected families.
 
-WHY THIS IS NOT AN ACTOR RULE, which is the distinction that took the longest to
-establish and matters most. `mc_contract.AARON_ONLY_EVENTS` is a parse-time
-check that the actor CELL says Aaron. It cannot serve as this class: it names
-one of the two MC events, and the reproduction satisfied it -- the row said
-`actor: Aaron` -- and was accepted anyway. The two rules answer different
-questions and both remain.
+WHY THIS IS NOT AN ACTOR RULE, which is the distinction that matters most.
+`mc_contract.AARON_ONLY_EVENTS` is a parse-time check that the actor CELL says
+Aaron. It cannot serve as this class: it names one of the two MC events, and a
+row saying `actor: Aaron` satisfied it and was accepted anyway. The two rules
+answer different questions and both remain.
 
 Every ledger here is synthetic and lives in `tmp_path`. Nothing in this file
 can reach the governed registry: no test names its path, and the boundary's own
@@ -105,7 +102,8 @@ def test_an_mc_permission_row_is_refused_and_writes_nothing(ledger, token):
     assert ei.value.code == "generic_append_refuses_permission_event"
     assert token in str(ei.value)
     # REFUSED BEFORE WRITE, not detected afterwards. Byte identity is the
-    # only form of that claim worth making.
+    # only form of that claim worth making: "refused after the bytes landed"
+    # is a different and much weaker property.
     assert ledger.read_bytes() == before
     # And the downstream parser cannot observe what was never committed.
     events, refusal = mr.parse_mc_events(ledger.read_text(encoding="utf-8"))
@@ -211,10 +209,10 @@ def test_the_start_boundary_is_unchanged(ledger):
 
 
 def test_supersession_events_are_deliberately_not_in_the_class():
-    """The ruling's criterion is CREATE OR ADVANCE. A supersession retires an
+    """The criterion is CREATE OR ADVANCE. A supersession retires an
     authorization and cannot mint one -- measured: a P1/P2/P2S chain resolves
-    to zero live authorizations -- so refusing it here would be the
-    broadening the ruling warns against."""
+    to zero live authorizations -- so refusing it here
+    would broaden the rule past its own criterion."""
     for token in ("MC_RUN_AUTHORIZATION_SUPERSEDED",
                   sc.EVENTS["P2S"].token):
         assert rb.is_permission_event(token) is False

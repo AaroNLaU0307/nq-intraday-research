@@ -461,7 +461,7 @@ START_EQUIVALENT_TOKENS = ("SUPPLEMENT_RUN_STARTED", "RUN_STARTED",
 
 #: Events whose commit CREATES OR ADVANCES authorization / permission state.
 #:
-#: OWNER RULING, 2026-09-11, on the N14 Round-1 O9 finding. `serialized_append`
+#: OWNER RULING, 2026-09-11. `serialized_append`
 #: is a GENERIC SERIALIZED WRITER and is NOT an authorization writer, so it must
 #: refuse any event whose semantic effect is to create or advance permission
 #: state. Reproduced before the ruling: the generic entry accepted, physically
@@ -726,11 +726,11 @@ def serialized_append(target: Path, addition: bytes, *,
             "event(s) %s; a start commits only through "
             "serialized_start_append, which applies the owner-control "
             "decision" % sorted(set(starts)))
-    # OWNER RULING, 2026-09-11 (N14 Round-1 finding B). Generic means
+    # OWNER RULING, 2026-09-11. Generic means
     # non-authorization as well as non-start. The check sits HERE, above the
     # one physical write, so a refusal leaves the ledger byte-identical --
     # "refused after the bytes landed" would be a different and much weaker
-    # property, and it is the one the reviewer actually reproduced.
+    # property, and it is the one that was actually reproduced.
     permissions = [r.event for r in _rows if is_permission_event(r.event)]
     if permissions:
         raise AppendRefused(

@@ -1,29 +1,27 @@
-"""What the K/2K comparison ACTUALLY does with a mixed infeasible/statistics cell.
+"""What the K/2K comparison does with a MIXED infeasible/statistics cell.
 
-WHY THIS FILE EXISTS, and what it is not. The N14 Round-1 independent review
-raised a blocking O7/O12 finding: that `compare_region_maps` could silently skip
-a cell whose class is `InfeasibleCell` on one side and `CellStatistics` on the
-other, so the disagreement would vanish and convergence could be reported True
-while another cell remained sampleable.
+A cell can be `InfeasibleCell` on one side of the doubling and `CellStatistics`
+on the other. That should be unreachable -- the sealed infeasibility test is
+`n_fp > sum(fp_available)`, whose terms do not depend on k, so a cell marked at
+K is marked at 2K -- which is exactly why it is worth pinning rather than
+assuming: an unreachable state that arrives anyway must not be able to leave
+quietly.
 
-Reproduced on the exact reviewed bytes, that failure path did not occur. Every
-mixed arrangement, both frozen region kinds, reported `converged=False` with the
-mixed key in `flipped_cells`. The Owner ruled on 2026-09-11 that NO source
-repair is authorised for the stated defect, and that the behaviour be frozen as
-evidence instead. So these tests change nothing and prove nothing about who was
-right -- they pin what the implementation does, so Round 2 can check it for
-itself rather than re-deriving it from an argument.
+THE PROPERTY. A mixed pair must not vanish from the comparison, and must not
+let it report convergence as though the classes agreed. The mechanism is
+`cell_category`: an `InfeasibleCell` labels `infeasible_by_sample` and a
+`CellStatistics` labels `in` or `out`, so the two region maps differ at that
+key, `residual` is non-empty after band relabelling -- which a mixed cell never
+enters -- and `converged` is `not residual and not drift`, so it is False
+before drift is even consulted.
 
-THEY DO NOT ERASE THE ROUND-1 FINDING. A review finding and a mechanically
-reproduced defect are different things, and the Round-1 HOLD stands exactly as
-issued. What these add is the measurement the finding lacked.
+Every case below keeps an ORDINARY sampleable cell in the grid that agrees on
+both sides, so a False convergence is attributable to the mixed cell and to
+nothing else. The same-class behaviours are pinned alongside, because a change
+that fixed the mixed case by making infeasible/infeasible non-convergent would
+be a regression wearing a fix's clothes.
 
-The mechanism, for a reader who wants to check the claim rather than the test:
-`cell_category` labels an `InfeasibleCell` `infeasible_by_sample` and a
-`CellStatistics` `in` or `out`. Those are different labels, so the two region
-maps differ at that key, and `residual` -- computed AFTER band relabelling, which
-a mixed cell never enters -- is non-empty. `converged` is
-`not residual and not drift`, so it is False before drift is even consulted.
+Nothing here changes implementation; these are synthetic typed objects only.
 """
 from __future__ import annotations
 
@@ -61,7 +59,7 @@ def _compare(kind, cell_k, cell_2k):
     """One mixed cell against a grid that is otherwise ordinary.
 
     `ORDINARY` is left sampleable and identical on both sides on purpose: the
-    finding was that a mixed cell disappears WHILE another cell remains
+    property is that a mixed cell cannot disappear WHILE another cell remains
     sampleable, so the other cell has to actually be there.
     """
     at_k, at_2k = _grid(), _grid()
@@ -127,7 +125,7 @@ def test_a_mixed_cell_survives_alongside_a_real_boundary_band_cell():
 
 
 # ---------------------------------------------------------------------------
-# The same-class behaviours the Owner ruling requires to stay put
+# The same-class behaviours that must stay exactly as they are
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("kind", gr.REGION_KINDS)
@@ -183,16 +181,16 @@ def test_the_k_witness_carries_the_non_convergence_out():
 # ---------------------------------------------------------------------------
 
 def test_cell_drift_violations_reports_nothing_for_a_mixed_cell():
-    """RECORDED AS NON-BLOCKING, NOT REPAIRED (Owner ruling, 2026-09-11).
+    """The public drift function returns NOTHING for a mixed cell.
 
-    The public `cell_drift_violations` shares the same `continue` branch and
-    returns no entry for a mixed cell. That is silence, and it was found while
-    reproducing the Round-1 finding -- but it cannot produce a false
-    convergence, because `compare_region_maps` computes
+    `cell_drift_violations` shares the same `continue` branch and reports no
+    entry for a mixed pair -- a cell with no statistic on one side has nothing
+    that could drift. Taken alone that is silence; it cannot produce a false
+    convergence, because the comparison that consults it computes
     `not residual and not drift` and residual has already fired.
 
-    This test pins the CURRENT behaviour so a future change to it is a
-    deliberate decision with a visible diff, not a side effect. It asserts no
+    This pins the CURRENT behaviour so that changing it is a deliberate
+    decision with a visible diff rather than a side effect. It asserts no
     opinion about whether the silence should stay.
     """
     at_k, at_2k = _grid(), _grid()
