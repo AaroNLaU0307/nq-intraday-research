@@ -417,6 +417,8 @@ def main(argv):
     b.template("probes/test_o13_path_refusals.py", _probe13())
     from o9_production_entry_probe_template import render as _probe9  # noqa: E402
     b.template("probes/test_o9_production_entry_refusals.py", _probe9())
+    from runtime_init_probe_template import render as _probeinit   # noqa: E402
+    b.template("probes/test_runtime_init_boundary.py", _probeinit())
 
     # NO `return/` ANY MORE. The bundle is immutable to review execution, so a
     # directory that exists only to be written into would be a promise the
@@ -449,6 +451,12 @@ def main(argv):
         # where the run may WRITE, so the runner helped itself to the sealed
         # payload root and a seat without that permission stopped on it.
         "write_surfaces": profile["write_surfaces"],
+        # GUARD ADMISSION. v1 shipped a flat denial list, and a reviewer who
+        # could not attribute one entry in it stopped before reading any code
+        # -- correctly. What the run may refuse, what a refusal means, and
+        # which refusals are PRESCRIBED are declared here and reconciled
+        # mechanically in GUARD_REPORT.json.
+        "guard_admission": profile["guard_admission"],
         "delivery_identity": {
             "id": review_id,
             "lineage": profile["lineage"],
@@ -629,28 +637,25 @@ import code_review_bundle_guard as G
 
 G.block_colorama()
 
-# CTYPES IS IMPORTED HERE, BEFORE THE BOUNDARY GOES UP, AND THE REASON IS A
-# CORRECTION WORTH READING.
+# THERE IS NO PRE-BOOTSTRAP HERE, AND THAT IS THE POINT.
 #
-# The guard denies the whole `ctypes.*` audit family. On the builder's host that
-# looked survivable, and it was -- by accident. An unpinned `.pth` in that
-# machine's USER site-packages (`pip_system_certs`, reaching
-# `pip._vendor.truststore._windows`) imported `ctypes` during interpreter
-# startup, before any project code ran, so `windll.kernel32` was already bound
-# and nothing tripped the denial. On a clean interpreter -- which is exactly
-# what the portable review runtime is -- `numpy._core._internal` imports
-# `ctypes`, `ctypes/__init__.py` binds `windll.kernel32.GetLastError`, the
-# denial fires, and pandas cannot be imported at all. Measured: 3 denials, 2
-# collection errors, nothing ran.
+# An earlier runner imported `ctypes` before arming, because the family denial
+# otherwise fired while `ctypes/__init__.py` bound `windll.kernel32` and pandas
+# could not be imported at all. That worked, and it hid a second case it did
+# not cover: during pandas' own initialisation, dateutil's Windows timezone
+# backend loads `user32` to resolve localized names. That denial was NOT hidden
+# -- it was SWALLOWED. `BundleEscapeDenied` is a `PermissionError` is an
+# `OSError` is a `WindowsError`, dateutil catches exactly that, and the review
+# silently ran against a different timezone backend while every test passed.
 #
-# WHAT THIS DOES AND DOES NOT PERMIT. Importing the stdlib module binds
-# kernel32 at import time. Every LATER `ctypes.dlopen` -- loading any other
-# native library, which is the escape the reservation names -- is still denied
-# in full, and the guard report counts the refusals. So the family denial is
-# unchanged for everything the review does; what changed is that a stdlib
-# import numpy requires no longer depends on an accident of the builder's
-# machine. That accident was masking the dependency, not satisfying it.
-import ctypes                                             # noqa: E402,F401
+# So nothing is pre-imported now. No pandas, no dateutil, no timezone module,
+# no lockfile, no arbitrary package -- not even the stdlib `ctypes` this file
+# used to reach for. The entry point keeps its normal lazy initialisation
+# order, and the guard instead recognises WHEN a pinned runtime module is
+# running its first normal initialisation, permitting a native resolution only
+# inside that extent, only with runtime code on the stack, and only to a
+# library that resolves into the runtime tree or a protected system location.
+# Everything else in the `ctypes.*` family is denied exactly as before.
 
 # THE WORKSPACE IS SUPPLIED, NOT DISCOVERED, AND IT IS FROZEN BEFORE THE GUARD.
 #
@@ -768,11 +773,32 @@ pcode = pytest.main(BASE + [str(ROOT / "probes"),
                             "--basetemp", str(SCRATCH / "pytest-probes")])
 code = code or pcode
 
+# EVERY REFUSAL IS ATTRIBUTED, OR THE RUN FAILS.
+#
+# A sealed negative control DECLARES the refusal it is about to cause, so a
+# reviewer can tell a prescribed control from an accident without taking anyone
+# 's word for it. Two things then fail the run: a refusal no control declared,
+# and a declared refusal that never happened -- the second means the control
+# stopped controlling, which is the quieter of the two failures.
+#
+# This is also the answer to a third-party library swallowing an exception. The
+# pytest session can report success while the guard has recorded an
+# unattributed refusal; the exit code below does not.
+code, reconciled = G.admission_exit_code(guard, code)
+unexpected = reconciled["unexpected_denials"]
+missing = reconciled["missing_prescribed_denials"]
+
 report = {
     "denials": len(guard.denials),
     "in_bundle_path_ops": guard.allowed_path_ops,
     "admitted_listings": guard.admitted_listings,
     "denied": [[e, t] for e, t in guard.denials[:50]],
+    "expected_denials": reconciled["expected_denials"],
+    "unexpected_denials": unexpected,
+    "missing_prescribed_denials": missing,
+    "prescribed_negative_controls": reconciled["prescribed"],
+    "runtime_initialization_events":
+        reconciled["runtime_initialization_events"],
     "workspace_authority": "EXPLICIT_DISPATCH_PARAMETER",
     "supplied_workspace_base": SUPPLIED_CANON,
     "review_output_root": str(RETURN),
@@ -783,8 +809,24 @@ report = {
 (RETURN / "GUARD_REPORT.json").write_text(
     json.dumps(report, indent=2) + "\\n", encoding="utf-8")
 sys.stderr.write("\\n[guard] denials=" + str(len(guard.denials))
+                 + " (expected " + str(len(reconciled["expected_denials"]))
+                 + ", UNEXPECTED " + str(len(unexpected)) + ")"
+                 + "  runtime-init native resolutions="
+                 + str(len(reconciled["runtime_initialization_events"]))
                  + "  in-bundle path ops=" + str(guard.allowed_path_ops)
                  + "  admitted listings=" + str(guard.admitted_listings) + "\\n")
+if unexpected or missing:
+    for row in unexpected:
+        sys.stderr.write("[guard] UNEXPECTED REFUSAL: " + str(row) + "\\n")
+    for row in missing:
+        sys.stderr.write("[guard] PRESCRIBED REFUSAL DID NOT HAPPEN: "
+                         + str(row) + "\\n")
+    sys.stderr.write(
+        "\\nDELIVERY FAILURE: the guard recorded a refusal no sealed "
+        "negative control prescribes, or a prescribed one that never "
+        "happened. A library can swallow a refusal and let the session report "
+        "success, so this is checked here rather than inferred from the test "
+        "result. Report the lines above and stop.\\n")
 # LIFECYCLE, steps 3 and 4. On success the scratch is REMOVED, so nothing
 # ephemeral survives to be mistaken for evidence. On failure it is kept for
 # diagnosis and labelled, because a stopped review is exactly when the

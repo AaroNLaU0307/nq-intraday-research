@@ -44,14 +44,28 @@ def _guard():
 
 
 def test_o4d_a_write_outside_the_bundle_is_denied_at_the_attempt():
-    """Not 'a write was detected afterwards' -- denied when attempted."""
+    """Not 'a write was detected afterwards' -- denied when attempted.
+
+    The refusal is DECLARED before it is caused. A reviewer reading a flat
+    denial list cannot tell a control from an accident; a declaration makes
+    this one attributable to the line that asks for it, and leaves every
+    undeclared refusal standing out as what it is.
+    """
     guard = _guard()
-    before = len(guard.denials)
     target = BUNDLE.parent / "o4d_escape_probe.tmp"
+    guard.expect("open", contains=target.name,
+                 prescribed_by="probes/test_o4d_write_boundary.py::"
+                               "test_o4d_a_write_outside_the_bundle_is_denied"
+                               "_at_the_attempt",
+                 why="a write outside the sealed bundle must be refused at "
+                     "the attempt, not detected afterwards")
+    before = len(guard.denials)
     with pytest.raises(G.BundleEscapeDenied):
         open(target, "wb").write(b"x")
     assert not target.exists(), "the write was not prevented, only reported"
     assert len(guard.denials) == before + 1
+    assert guard.denial_records[-1]["prescribed_by"], (
+        "the refusal this control caused was not attributed to it")
 
 
 def test_o4d_b_production_entry_executes_and_reaches_its_refusal():

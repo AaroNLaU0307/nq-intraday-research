@@ -53,6 +53,18 @@
     "ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md": "CLAIM_BLIND REFUSAL. Carries prior independent-review HOLD verdicts on this implementation, numbered reviewer findings, and measured mutation results. Five independent claim-blind signals, 24 matches. It also self-declares NOTHING_HEREIN_IS_APPROVED=YES. The four tests that read it are deselected; measured coverage cost: zero statements.",
     "ops/S0_T001_POST_RUN_ATTESTATION.md": "An attestation RECORD of a real executed run, refused by the builder's own path pattern. Reading it is an actual-artifact identity claim, which ops/REVIEWER_CONTRACT.md section 3 assigns to RUN-IDENTITY VERIFICATION rather than to this node. The two tests that read it are deselected; measured coverage cost: zero statements."
   },
+  "guard_admission": {
+    "enforced_by": "code_review_bundle_guard.admission_exit_code, called by the runner AFTER the test session and INDEPENDENTLY of its result. A library can catch a refusal, substitute a fallback and let every test pass -- which is what retired N14-BUNDLE-010 -- so the exit code is not inferred from the test outcome.",
+    "first_initialization_tracking": "ATTEMPTED at lifecycle START, not on completion. A module key is marked the moment its first eligible extent begins, so the extent that ends by RAISING has still spent the module's one chance. Reload, re-import, a retry after a failed initialisation, and any later call into an initialised module are all outside the extent.",
+    "native_resolution_extent": "ctypes.* stays denied as a family, with one extent carved out: ctypes.dlopen and ctypes.dlsym are permitted only while a pinned RUNTIME module runs its FIRST normal initialisation on this thread, only when every Python frame between the call and that initialisation is runtime code or the interpreter's own import machinery, and only when the library resolves into the runtime tree or a protected system location.",
+    "not_claimed": "co_filename is writable by code that builds its own code objects, so in-process adversarial code can forge RUNTIME provenance. That is the boundary the project already ratified (L6 R18) and this does not move it. What it does defend against is a refusal that changes execution semantics and is then absorbed by the caller.",
+    "prescribed_negative_controls": "each sealed control DECLARES the refusal it is about to cause, before causing it, through guard.expect(event, contains, prescribed_by, why). The guard attributes every refusal against those declarations; anything unmatched is UNEXPECTED.",
+    "protected_system_locations": "System32 and SysWOW64 under the SystemRoot read from HKLM through winreg -- not from the SystemRoot environment variable, for the same reason the review workspace stopped reading TMP.",
+    "provenance_source": "WHERE CODE WAS LOADED FROM. A name supplied by executing code is not provenance, and generated or unregistered code -- anything without a real load location -- acquires none.",
+    "runtime_tree_untouched": "the loader wrapping is an in-process wrapper on three importlib loader classes. No file in N14-RUNTIME-001 changes, and the runtime still re-hashes all 12002 of its own files at launch.",
+    "stop_condition": "NOT 'a guard denial exists'. STOP on a launcher/runtime refusal, on a non-empty unexpected_denials, on a non-empty missing_prescribed_denials, or on an expected denial whose declaration does not match what happened.",
+    "thread_scope": "extents are thread-local; a new thread inherits none. The attempted set is process-wide, because sys.modules is."
+  },
   "lineage": "N14",
   "obligations": {
     "O1": {
@@ -561,9 +573,21 @@
       "round_consumed": false,
       "substantive_verdict": "ABSENT",
       "why_retired": "delivered and failed BEFORE substantive inspection. It resolved the reviewer workspace itself, through SHGetKnownFolderPath -- which closed the TMP/TEMP/TMPDIR channel but was still DISCOVERY: the sealed object guessing, from profile structure, at something only the dispatcher knows. The adopted architecture makes the workspace an explicit dispatch-supplied capability, which changes a sealed payload file, so the identity is retired rather than reused. Preserved unmutated as failed-delivery evidence."
+    },
+    "N14-BUNDLE-010": {
+      "dispatched": true,
+      "manifests": [
+        "6577f829b6bed98eb1de183468dc40dfb67b34eef5864ebaa9ed37650637ee6b"
+      ],
+      "on_disk_as": [
+        "N14-BUNDLE-010"
+      ],
+      "round_consumed": false,
+      "substantive_verdict": "ABSENT",
+      "why_retired": "delivered and STOPPED before substantive inspection. It passed manifest admission, all 134 payload hashes, runtime verification, the explicit workspace binding, 1324 tests, 30 probes and exit 0, and then recorded a guard denial the reviewer could not attribute: ['ctypes.dlopen', null]. Traced afterwards to pandas' import-time dateutil timezone lookup reaching ctypes.WinDLL('user32') -- a pinned runtime initialising normally, refused, and the refusal swallowed by dateutil as a WindowsError, which silently substituted a different timezone backend while every test passed. Preserved unmutated as failed-delivery evidence."
     }
   },
-  "review_id": "N14-BUNDLE-010",
+  "review_id": "N14-BUNDLE-011",
   "review_runtime": {
     "bytes": 424900000,
     "entrypoint": "run_review.cmd (cmd.exe; no PATH lookup, no py launcher, no network, no App Execution Alias)",
