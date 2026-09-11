@@ -9,11 +9,17 @@ answering the wrong question. The bundle is now IMMUTABLE to review execution,
 full stop, and everything the reviewer produces lives in a seat-native
 directory the seat has already proved it can write.
 
-THE RESOLUTION IS OS-NATIVE, NOT A PATH. `tempfile.gettempdir()` honours
-TMP/TEMP/TMPDIR and falls back to the platform temporary directory, so the same
-code resolves to the seat's own workspace in the seat and to the builder's in
-the builder. No username is hardcoded and no absolute path is written into the
-contract.
+THE RESOLUTION IS OS-NATIVE AND THE ENVIRONMENT HAS NO SAY IN IT. The base is
+`<FOLDERID_LocalAppData>/Temp`, read through `SHGetKnownFolderPath`, which
+resolves from the user's token and the profile registry. `tempfile.gettempdir()`
+would NOT do: it consults TMPDIR, TEMP and TMP first, and with those pointed
+elsewhere the output root followed -- measured, before this was fixed. Neither
+would `GetTempPathW` or `GetTempPath2W`, whose documented order is TMP, TEMP,
+USERPROFILE, Windows directory; being a Windows API does not make a function
+environment-independent. No username is hardcoded, no absolute path is written
+into the contract, and there is deliberately no fallback: a fallback to the
+environment-directed path would reintroduce the channel exactly when the
+OS-native route failed.
 
 THE ROOT IS BOUND TO ONE DELIVERY. Its name carries the review id and a prefix
 of the manifest digest, and it holds an `OUTPUT_BINDING.json` naming the review
@@ -29,10 +35,10 @@ temp included.
 """
 from __future__ import annotations
 
+import ctypes
 import json
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 #: The one fixed segment, so every delivery's work lands together and nothing
@@ -55,9 +61,89 @@ class OutputRootRefused(RuntimeError):
     """The output root cannot be established. Always a DELIVERY FAILURE."""
 
 
+#: Windows KNOWNFOLDERID values. `SHGetKnownFolderPath` resolves these from the
+#: user's own token and the profile registry -- NOT from the environment.
+_FOLDERID_LOCAL_APPDATA = "{F1B32785-6FBA-4FCF-9D55-7B8E7F157091}"
+_FOLDERID_PROFILE = "{5E6C858F-0E22-4760-9AFE-EA3317B67173}"
+
+
+class _GUID(ctypes.Structure):
+    _fields_ = [("Data1", ctypes.c_uint32), ("Data2", ctypes.c_uint16),
+                ("Data3", ctypes.c_uint16), ("Data4", ctypes.c_ubyte * 8)]
+
+
+def _known_folder(folder_id: str) -> Path:
+    """One known folder, straight from the OS.
+
+    `OleDLL` raises on a failed HRESULT, so a folder that cannot be resolved
+    becomes an exception rather than a silently wrong path.
+    """
+    ole32 = ctypes.OleDLL("ole32")
+    shell32 = ctypes.OleDLL("shell32")
+    guid = _GUID()
+    ole32.CLSIDFromString(ctypes.c_wchar_p(folder_id), ctypes.byref(guid))
+    out = ctypes.c_wchar_p()
+    shell32.SHGetKnownFolderPath(ctypes.byref(guid), 0, None,
+                                 ctypes.byref(out))
+    try:
+        if not out.value:
+            raise OutputRootRefused(
+                "SHGetKnownFolderPath returned no path for %s" % folder_id)
+        return Path(out.value)
+    finally:
+        ctypes.windll.ole32.CoTaskMemFree(out)
+
+
 def seat_temp_base() -> Path:
-    """The seat's own temporary workspace, resolved by the OS, not by us."""
-    return Path(tempfile.gettempdir()).resolve()
+    """The seat's own temporary workspace, resolved WITHOUT the environment.
+
+    WHY NOT `tempfile.gettempdir()`, which is what this used to call. It
+    consults TMPDIR, then TEMP, then TMP, and only then falls back. Measured:
+    with those three pointed at a directory of one's choosing, the review
+    output root moved there -- so the previous claim that there was no
+    environment channel was simply wrong, and a containment check against "the
+    resolved temp base" proves nothing when the base is what moved.
+
+    WHY NOT `GetTempPathW` OR `GetTempPath2W` EITHER, which is the correction
+    worth recording: their documented resolution order is TMP, then TEMP, then
+    USERPROFILE, then the Windows directory. Being a Windows API does not make
+    a function environment-independent, and for a non-SYSTEM process both of
+    those are environment-directed in exactly the way this must not be.
+
+    So the base is `<FOLDERID_LocalAppData>/Temp`. `SHGetKnownFolderPath`
+    resolves from the user's token and the profile registry; TMP, TEMP and
+    TMPDIR have no bearing on it. It is cross-checked against
+    `FOLDERID_Profile` from the same API, so a LocalAppData that does not lie
+    under the seat's own profile refuses rather than being used.
+
+    There is NO FALLBACK. A fallback to the environment-directed path would
+    reintroduce the channel precisely when the OS-native route failed, which is
+    the worst moment to take the reviewer's word for where to write.
+    """
+    if os.name != "nt":
+        raise OutputRootRefused(
+            "this contract resolves its output root through a Windows-native "
+            "known folder; os.name is %r, and falling back to the "
+            "environment-directed temporary directory would reintroduce the "
+            "redirection this exists to close" % os.name)
+    try:
+        local = _known_folder(_FOLDERID_LOCAL_APPDATA)
+        profile = _known_folder(_FOLDERID_PROFILE)
+    except OSError as exc:
+        raise OutputRootRefused(
+            "the OS-native local application data folder could not be "
+            "resolved (%s). There is deliberately no environment fallback"
+            % exc)
+    local, profile = local.resolve(), profile.resolve()
+    if local != profile and profile not in local.parents:
+        raise OutputRootRefused(
+            "the resolved local application data folder %s does not lie under "
+            "the seat's own profile %s" % (local, profile))
+    base = (local / "Temp").resolve()
+    if not base.is_dir():
+        raise OutputRootRefused(
+            "the OS-native temporary base %s does not exist" % base)
+    return base
 
 
 def _safe_segment(text: str) -> str:

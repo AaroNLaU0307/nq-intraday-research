@@ -196,3 +196,79 @@ def test_the_retained_returns_are_named_and_are_not_scratch():
                                      "ATTESTATION.md")
     assert ro.SCRATCH_NAME.startswith(".")
     assert ro.SCRATCH_NAME not in ro.RETAINED_ARTIFACTS
+
+
+# --------------------------------------------------- the environment has no say
+
+def test_the_temp_base_ignores_hostile_tmp_temp_and_tmpdir(tmp_path,
+                                                           monkeypatch):
+    """The property, and the CONTROL that makes it mean something.
+
+    An earlier version resolved the base with `tempfile.gettempdir()`, which
+    consults TMPDIR, then TEMP, then TMP. Measured with those three pointed at
+    a directory of one's choosing, the output root followed them there.
+
+    The control matters as much as the assertion: the same hostile values are
+    shown to actually move `tempfile.gettempdir()`. Without that, a test like
+    this passes just as happily when the variables were never effective.
+    """
+    hostile = tmp_path / "hostile-but-writable"
+    hostile.mkdir()
+    for var in ("TMP", "TEMP", "TMPDIR"):
+        monkeypatch.setenv(var, str(hostile))
+
+    # CONTROL: the environment-directed resolver really does move.
+    import importlib
+    import tempfile as _tf
+    monkeypatch.setattr(_tf, "tempdir", None)
+    importlib.reload(_tf)
+    assert Path(_tf.gettempdir()).resolve() == hostile.resolve(), (
+        "the hostile values did not take effect, so this test would prove "
+        "nothing about the resolver under test")
+
+    # THE PROPERTY: the OS-native resolver does not.
+    base = ro.seat_temp_base()
+    assert hostile.resolve() != base
+    assert hostile.resolve() not in base.parents
+    root = ro.output_root_for(REVIEW_ID, MANIFEST)
+    assert hostile.resolve() not in root.parents
+
+
+def test_the_temp_base_is_the_os_native_local_appdata_temp():
+    """Resolved from the user's token and profile registry, and cross-checked
+    against the profile folder from the same API."""
+    base = ro.seat_temp_base()
+    local = ro._known_folder(ro._FOLDERID_LOCAL_APPDATA).resolve()
+    profile = ro._known_folder(ro._FOLDERID_PROFILE).resolve()
+    assert base == (local / "Temp").resolve()
+    assert profile in local.parents or profile == local
+
+
+def test_the_os_native_base_is_actually_writable():
+    """The normal seat case: not just resolvable, usable. Exercised, then
+    cleaned up, in a uniquely named child so nothing else is touched."""
+    import uuid
+    probe = ro.seat_temp_base() / ("itsf-review-selftest-" + uuid.uuid4().hex)
+    probe.mkdir()
+    try:
+        one = probe / "a"
+        one.write_text("probe", encoding="utf-8")
+        one.replace(probe / "b")
+        assert (probe / "b").read_text(encoding="utf-8") == "probe"
+        (probe / "b").unlink()
+    finally:
+        probe.rmdir()
+    assert not probe.exists()
+
+
+def test_there_is_no_environment_fallback_when_the_os_route_fails(monkeypatch):
+    """A fallback would reintroduce the channel exactly when the OS-native
+    route failed, which is the worst moment to take a caller's word for where
+    to write. So the failure is a refusal."""
+    def boom(_folder_id):
+        raise OSError("simulated SHGetKnownFolderPath failure")
+
+    monkeypatch.setattr(ro, "_known_folder", boom)
+    with pytest.raises(ro.OutputRootRefused) as ei:
+        ro.seat_temp_base()
+    assert "no environment fallback" in str(ei.value)

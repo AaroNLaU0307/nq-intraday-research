@@ -537,9 +537,21 @@
       "round_consumed": false,
       "substantive_verdict": "ABSENT",
       "why_retired": "delivered and failed BEFORE substantive inspection: the seat proved that the sealed-bundle path is not writable under its RESTRICTED token even with an ordinary Modify ACE present, so the bundle-local return surface could never have worked. Preserved unmutated as failed-delivery evidence."
+    },
+    "N14-BUNDLE-008": {
+      "dispatched": false,
+      "manifests": [
+        "1642ed3f78a2447b61219ccdffdf4a8cfd0b4ebb3bbaad655d6abd18512115fb"
+      ],
+      "on_disk_as": [
+        "N14-BUNDLE-008"
+      ],
+      "round_consumed": false,
+      "substantive_verdict": "ABSENT",
+      "why_retired": "NEVER DISPATCHED. Its output root was resolved with tempfile.gettempdir(), which consults TMPDIR, TEMP and TMP -- measured: with those pointed elsewhere the root followed them, so the claim that there was no environment channel was wrong. The resolver now uses SHGetKnownFolderPath, which changes a sealed payload file, so the identity is retired rather than reused."
     }
   },
-  "review_id": "N14-BUNDLE-008",
+  "review_id": "N14-BUNDLE-009",
   "review_runtime": {
     "bytes": 424900000,
     "entrypoint": "run_review.cmd (cmd.exe; no PATH lookup, no py launcher, no network, no App Execution Alias)",
@@ -796,7 +808,7 @@
       "FREEZE.json",
       "ATTESTATION.md"
     ],
-    "review_output_root": "EXTERNAL and seat-native: <os temp base>/itsf-review/<REVIEW_ID>-<first 12 of MANIFEST_SHA256>. Resolved by tempfile.gettempdir(), which honours TMP/TEMP/TMPDIR and falls back to the platform temporary directory -- no username and no absolute path is written into the contract.",
+    "review_output_root": "EXTERNAL and seat-native: <LocalAppData>/Temp/itsf-review/<REVIEW_ID>-<first 12 of MANIFEST_SHA256>. The base is read through SHGetKnownFolderPath (FOLDERID_LocalAppData), cross-checked against FOLDERID_Profile -- resolved from the user token and the profile registry, NOT from TMP/TEMP/TMPDIR, and with no environment fallback. No username and no absolute path enters the contract.",
     "scratch_is_evidence": false,
     "scratch_lifecycle": {
       "after_failure": "KEPT for diagnosis and labelled EPHEMERAL_DO_NOT_READ_AS_EVIDENCE.txt",
