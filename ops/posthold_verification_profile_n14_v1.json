@@ -1,0 +1,580 @@
+{
+  "authority_payload": [
+    "ops/REVIEWER_CONTRACT.md",
+    "ops/templates/ATTESTATION_HEADER_TEMPLATE.md",
+    "ops/templates/VERIFICATION_BRIEF_TEMPLATE.md",
+    "MC_METHOD_SPEC.md",
+    "STUDY_0_PREREGISTRATION.md"
+  ],
+  "bounded_admission": {
+    "authorized_by": "Aaron, 2026-09-10, on DEC-CRB-HOLD-1 / B-34",
+    "file_contents_readable_under_those_roots": false,
+    "grant_record": "travels as tree/ops/DIRECTORY_CREATION_GRANTS.md, a Git export, so no live ops/ read occurs at runtime",
+    "listing_only_roots": [
+      "C:\\Users\\Aaron\\quant-data\\itsf-runs",
+      "C:\\Users\\Aaron\\quant-data\\itsf-runs-archive"
+    ],
+    "listing_only_validation": {
+      "entry_names_observed": 5,
+      "file_content_reads": 0,
+      "outcome_scan_hits": 0,
+      "provenance": "3 names match the generated supplement/trial shapes; 'runs' and 'attempts' are fixed structural directory constants defined by the code under review (contracts.py:951, day_strata_dryrun.py:153 and :222, supplement_runner.py:243). No observed name carries a statistic, classification, verdict token or exposure count.",
+      "roots_enumerated": 2
+    },
+    "scope": "N14 code-review profile only; NOT a generic shared-workflow permission"
+  },
+  "builder_reported_measurements": [
+    "focused F01-F07 tests   33 passed   (tree/tests/test_n14_round2_repairs.py)",
+    "affected subsystem A   122 passed   grid_channel_b27 + grid_replay_n11 +",
+    "                                    mc_runner_n13 + b26_reduction_feasibility",
+    "                                    + grid_mixed_class_evidence",
+    "affected subsystem B   103 passed   qros_cf_astra_repairs + qros_cf_final_closure",
+    "                                    + n09_scaffold_criteria",
+    "full repository suite 5706 passed, 1 xfailed, 0 failed, 5707 collected",
+    "",
+    "CORRECTION, stated rather than quietly fixed: the builder's repair report",
+    "gave the full suite as 5705 passed. That figure came from a run that also",
+    "had 1 FAILED test (a dangling ledger citation), which was then fixed; the",
+    "pass count from before the fix was combined with the zero-failure status",
+    "from after it. Measured at this exact repair commit: 5707 collected,",
+    "5706 passed, 1 xfailed, 0 failed. No production file changed between the",
+    "two runs."
+  ],
+  "claim_blind_exempt": {},
+  "claim_blind_posture": "NO EXEMPTION IS DECLARED, because none is needed -- and that is a fact about the SCANNER rather than about the contents. The frozen returns do carry prior judgement of the implementation, deliberately; the CLAIM_BLIND patterns simply do not match their phrasing. The exemption mechanism exists and the cut now refuses a declared exemption nothing used, so this is recorded rather than left as a dead allowlist entry. Outcome blindness is unchanged and the outcome scan runs over every byte.",
+  "contract_version": "CODE_REVIEW_BUNDLE_CONTRACT v1",
+  "delivery_namespace_note": "N14-POSTHOLD-VERIFY is a NEW namespace, deliberately outside N14-BUNDLE-*, so a citation of this package can never be mistaken for a substantive round. The ordinal 001 is the first unused one in it; no N14-BUNDLE identity is reused and N14-BUNDLE-011 is untouched.",
+  "execution_selection_equivalence": {
+    "claimed": false,
+    "why": "The reviewed delivery carried a measured statement-coverage equivalence for the O1-O13 selection against a three-probe bundle. That measurement describes a different selection and a different probe set, so repeating it here would be a stale number wearing a current date. This delivery makes no coverage-equivalence claim: it carries the focused F01-F07 evidence and the repaired source, and asks for closure of seven named findings rather than coverage of an obligation surface."
+  },
+  "focused_test_file": "tree/tests/test_n14_round2_repairs.py",
+  "framework_commit": "b5f2cc25b7b61d6318fd9ea34926081e42c3b61d",
+  "frozen_baseline": {
+    "artifacts": [
+      {
+        "byte_count": 30493,
+        "name": "INITIAL_FINDINGS.md",
+        "sha256": "e4bc37a273d6b9b10731df737e861683dfd97182e1d556e404f61323796f3912"
+      },
+      {
+        "byte_count": 737,
+        "name": "FREEZE.json",
+        "sha256": "368cc92039a7cc82e257f56e65bb758120a57e46176ae69866e788fea9bdd0c3"
+      },
+      {
+        "byte_count": 12800,
+        "name": "ATTESTATION.md",
+        "sha256": "e42002c6f8ac8098ca9377e9b319832c1ef37a82c35f92d4e6b5d676ee4cf8a2"
+      },
+      {
+        "byte_count": 7715,
+        "name": "REVIEWER_PROBES.py",
+        "sha256": "52a342677332c9ecec6c8d73e5b7c8fa84d72738a604fde369a6ee7154aa71dd"
+      },
+      {
+        "byte_count": 32311,
+        "name": "REVIEWER_PROBE_RESULTS.json",
+        "sha256": "1640348a9bf250de41493799d0143a41b106364cd980fc5b7076de28a8da2f89"
+      },
+      {
+        "byte_count": 6296,
+        "name": "REVIEWER_EXTRA_PROBES.py",
+        "sha256": "14ed46777b35cc1a2f3818db784dc67aee6ef4bb79701caa0ba96c2cf994d9b1"
+      },
+      {
+        "byte_count": 3882,
+        "name": "REVIEWER_EXTRA_RESULTS.json",
+        "sha256": "869ff16979686a26eca25830ce9c41175b9a010d8ab6b2a2b725f2f3ed6c4a07"
+      },
+      {
+        "byte_count": 4710,
+        "name": "GUARD_REPORT.json",
+        "sha256": "9df873d3e1be11ec227e1bb5a005908f5f24501176c39e0cfa7ff8b94bdceb91"
+      }
+    ],
+    "frozen_at_utc": "2026-09-11T17:44:17.7672594Z",
+    "initial_findings_sha256": "e4bc37a273d6b9b10731df737e861683dfd97182e1d556e404f61323796f3912",
+    "manifest_sha256": "b9eeb02b4b34a7b8d89171717c957e613a9b40d164993e95263333eab1e8dbcc",
+    "produced_by": "GPT-6 Astra / Codex; same top-level reviewer session explicitly continued by Aaron after pre-substantive delivery stops; not builder; not subagent",
+    "proposed_overall_verdict": "HOLD",
+    "review_id": "N14-BUNDLE-011",
+    "source_root": "C:\\Users\\Aaron\\AppData\\Local\\Temp\\itsf-review\\N14-BUNDLE-011-b9eeb02b4b34"
+  },
+  "governance_admissions": {
+    "MC_METHOD_SPEC.md": "The MC method specification. Normative authority for O4-O13. FROZEN_HASH dependency of execution_identity.",
+    "PROJECT_CHARTER.md": "Frozen charter clause 14 (data-role isolation) is a FROZEN_HASH dependency of execution_identity and is read by src/itsf/guards.py. Claim-blind scan: clean.",
+    "STUDY_0_PREREGISTRATION.md": "Sealed preregistration. The normative authority O1-O3 and O13.a/d are judged against. FROZEN_HASH dependency of execution_identity.",
+    "gate1/evidence_registry.yaml": "A FROZEN_HASH dependency of execution_identity and part of the gate1 identity. Claim-blind and outcome scans clean.",
+    "gate1/platform_params.yaml": "Frozen platform parameters. A FROZEN_HASH dependency digested by guards.FROZEN_HASHES; 256 collection errors in the first sealed run traced to its absence. Claim-blind scan: clean. Carries no verdict, no acceptance and no prior result.",
+    "gate1/snapshots/2026-07-28/snapshot_manifest_v5.json": "A FROZEN_HASH dependency of execution_identity. A snapshot MANIFEST -- names and digests, no measurement. Claim-blind and outcome scans clean.",
+    "ops/DECISION_PACKET_N00_AND_ND1.md": "The ratified N00/ND1 design packet: the normative grammar the supplement event vocabulary must conform to, and the document whose bytes APPROVED_PROFILE_SHA256 binds. Its PASS/CLOSED tokens are FIELD ENUMERATIONS (STAGE_ENUM=CLOSED, headline_replay_identity(PASS|FAIL)) and its APPROVED_* tokens are grammar keys -- design vocabulary, not judgements of the implementation. Claim-blind scan: clean.",
+    "ops/DIRECTORY_CREATION_GRANTS.md": "FIELD-SELECTED EXTRACT, not the document. Owner bounded admission of 2026-09-10; tests/_governed_subtrees.py asserts one marker in it and parses nothing else. Its retrospective correction sections state prior measured results about the implementation under review and are excluded, counted in the extract's own banner.",
+    "ops/ND1_PROFILE_RATIFICATION.md": "Aaron's ratification of the DESIGN PROFILE, issued before the implementation existed. Its C1-C10 PASS cells are the profile's own internal cross-field consistency, not an assessment of any code. That is the distinction the Owner drew on 2026-09-10: a normative Owner ruling is admissible; an Owner decision about the CORRECTNESS OR ACCEPTANCE OF THE IMPLEMENTATION UNDER REVIEW is not. Claim-blind scan: clean.",
+    "ops/TRIAL_REGISTRY.md": "The repository TOMBSTONE left by migration Route A, not a registry. registry_boundary.REGISTRY_TOMBSTONE_MARKER is asserted against it, which is precisely how a test proves it is NOT reading a real ledger. 2.6 KB, zero rows, claim-blind scan clean.",
+    "ops/requirements.lock.txt": "Environment identity. The LOCKFILE_GATE's reference and a GOVERNED_IDENTITY dependency.",
+    "purchase_plan.yaml": "A FROZEN_HASH dependency of execution_identity, digested by guards.FROZEN_HASHES. It is a data-purchase plan, not a result: claim-blind and outcome scans both clean."
+  },
+  "governance_refused": {
+    "ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md": "CLAIM_BLIND REFUSAL. Carries prior independent-review HOLD verdicts on this implementation, numbered reviewer findings, and measured mutation results. Five independent claim-blind signals, 24 matches. It also self-declares NOTHING_HEREIN_IS_APPROVED=YES. The four tests that read it are deselected; measured coverage cost: zero statements.",
+    "ops/S0_T001_POST_RUN_ATTESTATION.md": "An attestation RECORD of a real executed run, refused by the builder's own path pattern. Reading it is an actual-artifact identity claim, which ops/REVIEWER_CONTRACT.md section 3 assigns to RUN-IDENTITY VERIFICATION rather than to this node. The two tests that read it are deselected; measured coverage cost: zero statements."
+  },
+  "guard_admission": {
+    "enforced_by": "code_review_bundle_guard.admission_exit_code, called by the runner AFTER the test session and INDEPENDENTLY of its result. A library can catch a refusal, substitute a fallback and let every test pass -- which is what retired N14-BUNDLE-010 -- so the exit code is not inferred from the test outcome.",
+    "first_initialization_tracking": "ATTEMPTED at lifecycle START, not on completion. A module key is marked the moment its first eligible extent begins, so the extent that ends by RAISING has still spent the module's one chance. Reload, re-import, a retry after a failed initialisation, and any later call into an initialised module are all outside the extent.",
+    "native_resolution_extent": "ctypes.* stays denied as a family, with one extent carved out: ctypes.dlopen and ctypes.dlsym are permitted only while a pinned RUNTIME module runs its FIRST normal initialisation on this thread, only when every Python frame between the call and that initialisation is runtime code or the interpreter's own import machinery, and only when the library resolves into the runtime tree or a protected system location.",
+    "not_claimed": "co_filename is writable by code that builds its own code objects, so in-process adversarial code can forge RUNTIME provenance. That is the boundary the project already ratified (L6 R18) and this does not move it. What it does defend against is a refusal that changes execution semantics and is then absorbed by the caller.",
+    "prescribed_negative_controls": "each sealed control DECLARES the refusal it is about to cause, before causing it, through guard.expect(event, contains, prescribed_by, why). The guard attributes every refusal against those declarations; anything unmatched is UNEXPECTED.",
+    "protected_system_locations": "System32 and SysWOW64 under the SystemRoot read from HKLM through winreg -- not from the SystemRoot environment variable, for the same reason the review workspace stopped reading TMP.",
+    "provenance_source": "WHERE CODE WAS LOADED FROM. A name supplied by executing code is not provenance, and generated or unregistered code -- anything without a real load location -- acquires none.",
+    "runtime_tree_untouched": "the loader wrapping is an in-process wrapper on three importlib loader classes. No file in N14-RUNTIME-001 changes, and the runtime still re-hashes all 12002 of its own files at launch.",
+    "stop_condition": "NOT 'a guard denial exists'. STOP on a launcher/runtime refusal, on a non-empty unexpected_denials, on a non-empty missing_prescribed_denials, or on an expected denial whose declaration does not match what happened.",
+    "thread_scope": "extents are thread-local; a new thread inherits none. The attempted set is process-wide, because sys.modules is."
+  },
+  "lineage": "N14",
+  "mode": "POSTHOLD_VERIFICATION",
+  "probe_selection_reason": "EXECUTION-BOUNDARY controls only. The O13 path-refusal and O9 production-entry probes adjudicate O1-O13 obligations, and this delivery is not a substantive round. Both surviving probes prescribe their own denial, so the runner's expected/unexpected reconciliation still has something to reconcile.",
+  "probes": [
+    "probes/test_o4d_write_boundary.py",
+    "probes/test_runtime_init_boundary.py"
+  ],
+  "profile_version": "N14-POSTHOLD-VERIFICATION-PROFILE v1",
+  "repaired_target": {
+    "itsf_src_tree": "ac2cefba2c2b23751c0fec521ba8f8d823fa36b7",
+    "mc_subtree_tree": "bda8954e44a8116321ff4df9836a5eb9132eee20",
+    "production_files_changed": [
+      "src/itsf/mc/consumer.py",
+      "src/itsf/mc/grid_channel.py",
+      "src/itsf/mc/grid_replay.py",
+      "src/itsf/mc/mc_runner.py",
+      "src/itsf/mc/registry_boundary.py",
+      "src/itsf/mc/supplement_authority.py"
+    ],
+    "repair_commit": "b5f2cc25b7b61d6318fd9ea34926081e42c3b61d",
+    "root_tree": "3d29e6cebc23fee7590a4f671b8169cca12bd204"
+  },
+  "retired_delivery_identities": {},
+  "review_id": "N14-POSTHOLD-VERIFY-001",
+  "review_runtime": {
+    "bytes": 424900000,
+    "entrypoint": "run_review.cmd (cmd.exe; no PATH lookup, no py launcher, no network, no App Execution Alias)",
+    "files": 12002,
+    "identity_checks_at_launch": [
+      "certutil -hashfile RUNTIME_MANIFEST.json SHA256 == the digest fixed in this bundle at cut time (an independent hasher: it is not provided by the runtime being checked)",
+      "the runtime re-hashes all 12002 of its own files against RUNTIME_MANIFEST.json",
+      "sys.version_info[:3] == 3.13.14 and sys.platform == win32",
+      "all 49 lockfile pins present at exactly the pinned version"
+    ],
+    "is_evidence": false,
+    "is_evidence_reason": "execution infrastructure only. It carries no project code, no authority, no test and no probe, and it is cited by no obligation cell. REVIEWER_CONTRACT.md section 4.2 already classes executing a dependency as EXECUTION rather than inspection.",
+    "location": "a SIBLING directory of this bundle, resolved by one relative path from run_review.cmd",
+    "pinned_packages": 49,
+    "platform": "win32",
+    "provenance": "copied from the interpreter already shown to satisfy the bound environment identity (DEC-CRB-ENV-2/3). Nothing downloaded, nothing installed, no pin changed: the identity is unchanged, only its reachability is.",
+    "python_version": "3.13.14",
+    "python_version_major_minor": "3.13",
+    "runtime_id": "N14-RUNTIME-001",
+    "runtime_manifest_sha256": "293f460242614eb83a0281a74bc3da8532e8dc039badc1f92fb37b07cb9c27ce",
+    "startup_injection": "NONE -- every .pth is removed from the runtime and the omission is declared in RUNTIME_MANIFEST.json",
+    "unchanged_by_the_scratch_correction": true,
+    "unchanged_reason": "the write-permission defect was in the bundle's runner and guard, not in the runtime. The runtime's 12002 files and 49 pins are byte-identical and its RUNTIME_MANIFEST_SHA256 is unchanged."
+  },
+  "round_accounting": {
+    "ordinary_budget": "EXHAUSTED",
+    "round_1": "HOLD / CONSUMED",
+    "round_2": "HOLD / CONSUMED",
+    "this_delivery": "NOT a round; closure verification of frozen F01-F07",
+    "unchanged_by_this_delivery": true
+  },
+  "rounds_consumed_before": "YES (2 of 2) -- and this delivery adds none",
+  "rules_extract_sources": [
+    "ops/outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md (OFF-LIMITS; field-selected: ITEM_ID/TIER/RULING/POST_FREEZE_DEFINITION only)",
+    "ops/DECISIONS.md row DEC-N11-B25-1, verdict cell only"
+  ],
+  "substantive_round": "NONE -- this is a post-HOLD remediation verification and consumes no review round",
+  "tests_deselected": [
+    "tests/test_mc_supplement_integration.py::test_exercising_the_supplement_surface_writes_nothing_protected",
+    "tests/test_mc_supplement_runner.py::test_production_entry_writes_nothing_anywhere",
+    "tests/test_mc_r2_2_integration.py::test_codex_ce3_real_attestation_still_loads",
+    "tests/test_mc_supplement_integration.py::test_the_runner_discovers_the_registry_resolver_through_its_seam",
+    "tests/test_mc_supplement_integration.py::test_the_real_registry_resolves_cleanly_and_authorizes_at_most_once",
+    "tests/test_mc_supplement_integration.py::test_every_event_token_is_re_derived_from_the_ratified_document",
+    "tests/test_mc_supplement_integration.py::test_every_short_id_in_the_contract_appears_in_the_document",
+    "tests/test_mc_supplement_integration.py::test_the_two_terminals_and_the_three_traps_match_the_documents",
+    "tests/test_mc_supplement_integration.py::test_the_cr1_spec_matches_its_approved_grammar_field_for_field",
+    "tests/test_mc_custody_calendar.py::test_load_custody_authority_from_real_attestation",
+    "tests/test_mc_custody_calendar.py::test_attestation_source_pins_refuse_tamper_and_wrong_path",
+    "tests/test_mc_bprov_seal_provenance.py::test_bprov_path2_direct_construction_cannot_reach_the_seal",
+    "tests/test_mc_bprov_seal_provenance.py::test_bprov_seal_trial_commit_must_equal_the_attestation_parse",
+    "tests/test_mc_consumer.py::test_public_real_runner_refuses_deterministically",
+    "tests/test_mc_consumer.py::test_public_real_runner_ALSO_refuses_outside_the_trusted_launch",
+    "tests/test_mc_consumer.py::test_production_prepare_caller_is_gate_first",
+    "tests/test_mc_day_strata_supplement.py::test_production_entry_deterministic_refusal",
+    "tests/test_mc_runner_n13.py::test_the_production_entry_is_gate_first_and_the_gate_still_refuses",
+    "tests/test_mc_supplement_authority.py::test_a10_holding_an_authority_does_not_authorize_a_supplement",
+    "tests/test_mc_supplement_integration.py::test_the_production_entry_refuses_when_nothing_authorises_it",
+    "tests/test_mc_supplement_runner.py::test_the_guards_are_already_satisfied_so_authorization_is_the_real_defence",
+    "tests/test_mc_supplement_runner.py::test_production_entry_refuses_even_with_the_guards_satisfied",
+    "tests/test_mc_supplement_runner.py::test_production_entry_refuses_a_defective_chain_whole",
+    "tests/test_mc_supplement_runner.py::test_a_missing_registry_resolver_refuses_rather_than_proceeding",
+    "tests/test_no_public_mc_function_is_unreached.py::TestEveryPublicFunctionHasACaller::test_nothing_in_the_mc_package_is_an_unreached_island"
+  ],
+  "tests_deselected_reasons": {
+    "tests/test_mc_bprov_seal_provenance.py::test_bprov_path2_direct_construction_cannot_reach_the_seal": "Reads the real ops/S0_T001_POST_RUN_ATTESTATION.md, an attestation record of an executed run. That is an actual-artifact identity claim, assigned by ops/REVIEWER_CONTRACT.md section 3 to RUN-IDENTITY VERIFICATION rather than to this node -- the same partition as O13.e. The loader's refusal semantics are exercised outcome-blind on synthetic input by tests that DO run. Measured coverage cost: ZERO statements.",
+    "tests/test_mc_bprov_seal_provenance.py::test_bprov_seal_trial_commit_must_equal_the_attestation_parse": "Reads the real ops/S0_T001_POST_RUN_ATTESTATION.md, an attestation record of an executed run. That is an actual-artifact identity claim, assigned by ops/REVIEWER_CONTRACT.md section 3 to RUN-IDENTITY VERIFICATION rather than to this node -- the same partition as O13.e. The loader's refusal semantics are exercised outcome-blind on synthetic input by tests that DO run. Measured coverage cost: ZERO statements.",
+    "tests/test_mc_consumer.py::test_production_prepare_caller_is_gate_first": "Reaches a production entry that calls registry_boundary.read_snapshot() or resolve_registry() with no argument, which defaults to the frozen absolute path registry_boundary.py:75 declares NOT OVERRIDABLE FROM THE ENVIRONMENT. That path exists on no machine but the Owner's, so the sealed boundary denies it. probes/test_o9_production_entry_refusals.py exercises the SAME entries against a synthetic registry written inside the bundle, using the boundary's own optional-path parameter so its read, digest and mediation code all still run. That is stronger evidence, not weaker: these tests refuse partly because the real ledger happens to carry no MC authorization, whereas the probe's refusal is attributable to the gate alone.",
+    "tests/test_mc_consumer.py::test_public_real_runner_ALSO_refuses_outside_the_trusted_launch": "Reaches a production entry that calls registry_boundary.read_snapshot() or resolve_registry() with no argument, which defaults to the frozen absolute path registry_boundary.py:75 declares NOT OVERRIDABLE FROM THE ENVIRONMENT. That path exists on no machine but the Owner's, so the sealed boundary denies it. probes/test_o9_production_entry_refusals.py exercises the SAME entries against a synthetic registry written inside the bundle, using the boundary's own optional-path parameter so its read, digest and mediation code all still run. That is stronger evidence, not weaker: these tests refuse partly because the real ledger happens to carry no MC authorization, whereas the probe's refusal is attributable to the gate alone.",
+    "tests/test_mc_consumer.py::test_public_real_runner_refuses_deterministically": "Reaches a production entry that calls registry_boundary.read_snapshot() or resolve_registry() with no argument, which defaults to the frozen absolute path registry_boundary.py:75 declares NOT OVERRIDABLE FROM THE ENVIRONMENT. That path exists on no machine but the Owner's, so the sealed boundary denies it. probes/test_o9_production_entry_refusals.py exercises the SAME entries against a synthetic registry written inside the bundle, using the boundary's own optional-path parameter so its read, digest and mediation code all still run. That is stronger evidence, not weaker: these tests refuse partly because the real ledger happens to carry no MC authorization, whereas the probe's refusal is attributable to the gate alone.",
+    "tests/test_mc_custody_calendar.py::test_attestation_source_pins_refuse_tamper_and_wrong_path": "Reads the real ops/S0_T001_POST_RUN_ATTESTATION.md, an attestation record of an executed run. That is an actual-artifact identity claim, assigned by ops/REVIEWER_CONTRACT.md section 3 to RUN-IDENTITY VERIFICATION rather than to this node -- the same partition as O13.e. The loader's refusal semantics are exercised outcome-blind on synthetic input by tests that DO run. Measured coverage cost: ZERO statements.",
+    "tests/test_mc_custody_calendar.py::test_load_custody_authority_from_real_attestation": "Reads the real ops/S0_T001_POST_RUN_ATTESTATION.md, an attestation record of an executed run. That is an actual-artifact identity claim, assigned by ops/REVIEWER_CONTRACT.md section 3 to RUN-IDENTITY VERIFICATION rather than to this node -- the same partition as O13.e. The loader's refusal semantics are exercised outcome-blind on synthetic input by tests that DO run. Measured coverage cost: ZERO statements.",
+    "tests/test_mc_day_strata_supplement.py::test_production_entry_deterministic_refusal": "Reaches a production entry that calls registry_boundary.read_snapshot() or resolve_registry() with no argument, which defaults to the frozen absolute path registry_boundary.py:75 declares NOT OVERRIDABLE FROM THE ENVIRONMENT. That path exists on no machine but the Owner's, so the sealed boundary denies it. probes/test_o9_production_entry_refusals.py exercises the SAME entries against a synthetic registry written inside the bundle, using the boundary's own optional-path parameter so its read, digest and mediation code all still run. That is stronger evidence, not weaker: these tests refuse partly because the real ledger happens to carry no MC authorization, whereas the probe's refusal is attributable to the gate alone.",
+    "tests/test_mc_r2_2_integration.py::test_codex_ce3_real_attestation_still_loads": "Loads the REAL historical attestation and compares it to pinned constants -- an actual-artifact identity claim (O13.e), not an implementation claim. Bound to N15. The loader's refusal semantics are already exercised outcome-blind on a synthetic fake_attestation in the test immediately above it, which DOES execute. Source is in the bundle.",
+    "tests/test_mc_runner_n13.py::test_the_production_entry_is_gate_first_and_the_gate_still_refuses": "Reaches a production entry that calls registry_boundary.read_snapshot() or resolve_registry() with no argument, which defaults to the frozen absolute path registry_boundary.py:75 declares NOT OVERRIDABLE FROM THE ENVIRONMENT. That path exists on no machine but the Owner's, so the sealed boundary denies it. probes/test_o9_production_entry_refusals.py exercises the SAME entries against a synthetic registry written inside the bundle, using the boundary's own optional-path parameter so its read, digest and mediation code all still run. That is stronger evidence, not weaker: these tests refuse partly because the real ledger happens to carry no MC authorization, whereas the probe's refusal is attributable to the gate alone.",
+    "tests/test_mc_supplement_authority.py::test_a10_holding_an_authority_does_not_authorize_a_supplement": "Reaches a production entry that calls registry_boundary.read_snapshot() or resolve_registry() with no argument, which defaults to the frozen absolute path registry_boundary.py:75 declares NOT OVERRIDABLE FROM THE ENVIRONMENT. That path exists on no machine but the Owner's, so the sealed boundary denies it. probes/test_o9_production_entry_refusals.py exercises the SAME entries against a synthetic registry written inside the bundle, using the boundary's own optional-path parameter so its read, digest and mediation code all still run. That is stronger evidence, not weaker: these tests refuse partly because the real ledger happens to carry no MC authorization, whereas the probe's refusal is attributable to the gate alone.",
+    "tests/test_mc_supplement_integration.py::test_every_event_token_is_re_derived_from_the_ratified_document": "Reads ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md, which is refused on CLAIM_BLIND grounds: it carries prior independent-review HOLD verdicts on this implementation, numbered reviewer findings and measured mutation results. The CR1 grammar it ratifies is normative and would be admissible; the surrounding review history is not, and the two cannot be separated without changing the bytes that CR1_GRAMMAR_SHA256 binds. Measured coverage cost of deselecting all four such tests: ZERO statements of src/itsf/mc.",
+    "tests/test_mc_supplement_integration.py::test_every_short_id_in_the_contract_appears_in_the_document": "Reads ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md, which is refused on CLAIM_BLIND grounds: it carries prior independent-review HOLD verdicts on this implementation, numbered reviewer findings and measured mutation results. The CR1 grammar it ratifies is normative and would be admissible; the surrounding review history is not, and the two cannot be separated without changing the bytes that CR1_GRAMMAR_SHA256 binds. Measured coverage cost of deselecting all four such tests: ZERO statements of src/itsf/mc.",
+    "tests/test_mc_supplement_integration.py::test_exercising_the_supplement_surface_writes_nothing_protected": "Digests real protected artifacts before/after, one of which is outcome-carrying. Hygiene only -- no field or value is inspected. Its property is covered, more strongly, by probes/test_o4d_write_boundary.py, which proves the write is denied AT THE ATTEMPT. Source is in the bundle.",
+    "tests/test_mc_supplement_integration.py::test_the_cr1_spec_matches_its_approved_grammar_field_for_field": "Reads ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md, which is refused on CLAIM_BLIND grounds: it carries prior independent-review HOLD verdicts on this implementation, numbered reviewer findings and measured mutation results. The CR1 grammar it ratifies is normative and would be admissible; the surrounding review history is not, and the two cannot be separated without changing the bytes that CR1_GRAMMAR_SHA256 binds. Measured coverage cost of deselecting all four such tests: ZERO statements of src/itsf/mc.",
+    "tests/test_mc_supplement_integration.py::test_the_production_entry_refuses_when_nothing_authorises_it": "Reaches a production entry that calls registry_boundary.read_snapshot() or resolve_registry() with no argument, which defaults to the frozen absolute path registry_boundary.py:75 declares NOT OVERRIDABLE FROM THE ENVIRONMENT. That path exists on no machine but the Owner's, so the sealed boundary denies it. probes/test_o9_production_entry_refusals.py exercises the SAME entries against a synthetic registry written inside the bundle, using the boundary's own optional-path parameter so its read, digest and mediation code all still run. That is stronger evidence, not weaker: these tests refuse partly because the real ledger happens to carry no MC authorization, whereas the probe's refusal is attributable to the gate alone.",
+    "tests/test_mc_supplement_integration.py::test_the_real_registry_resolves_cleanly_and_authorizes_at_most_once": "Asserts that the REAL ledger parses without defect and carries at most one live authorization. That is an actual-artifact claim about a historical governed document, which is exactly what the DAG's N15 row (N15_REVIEW=REGISTRY_CHAIN_REVIEW_ON_SAME_REVIEWED_HEAD) exists to do -- O13.e, not O13.b/c. No synthetic input can establish it and this seat must not pretend otherwise. Source is in the bundle.",
+    "tests/test_mc_supplement_integration.py::test_the_runner_discovers_the_registry_resolver_through_its_seam": "Feeds the REAL registry's bytes to runner._default_resolver. The property it closes -- that the runner discovers a callable resolver on the N05 seam -- is content-agnostic, and probes/test_o13_path_refusals.py::test_o13_n exercises the same entry point on a synthetic registry. Reading the real ledger is what is withheld, not the seam. Source is in the bundle.",
+    "tests/test_mc_supplement_integration.py::test_the_two_terminals_and_the_three_traps_match_the_documents": "Reads ops/PREP_ITEM6_ND1_R3_AMENDMENT_PROPOSAL.md, which is refused on CLAIM_BLIND grounds: it carries prior independent-review HOLD verdicts on this implementation, numbered reviewer findings and measured mutation results. The CR1 grammar it ratifies is normative and would be admissible; the surrounding review history is not, and the two cannot be separated without changing the bytes that CR1_GRAMMAR_SHA256 binds. Measured coverage cost of deselecting all four such tests: ZERO statements of src/itsf/mc.",
+    "tests/test_mc_supplement_runner.py::test_a_missing_registry_resolver_refuses_rather_than_proceeding": "Reaches a production entry that calls registry_boundary.read_snapshot() or resolve_registry() with no argument, which defaults to the frozen absolute path registry_boundary.py:75 declares NOT OVERRIDABLE FROM THE ENVIRONMENT. That path exists on no machine but the Owner's, so the sealed boundary denies it. probes/test_o9_production_entry_refusals.py exercises the SAME entries against a synthetic registry written inside the bundle, using the boundary's own optional-path parameter so its read, digest and mediation code all still run. That is stronger evidence, not weaker: these tests refuse partly because the real ledger happens to carry no MC authorization, whereas the probe's refusal is attributable to the gate alone.",
+    "tests/test_mc_supplement_runner.py::test_production_entry_refuses_a_defective_chain_whole": "Reaches a production entry that calls registry_boundary.read_snapshot() or resolve_registry() with no argument, which defaults to the frozen absolute path registry_boundary.py:75 declares NOT OVERRIDABLE FROM THE ENVIRONMENT. That path exists on no machine but the Owner's, so the sealed boundary denies it. probes/test_o9_production_entry_refusals.py exercises the SAME entries against a synthetic registry written inside the bundle, using the boundary's own optional-path parameter so its read, digest and mediation code all still run. That is stronger evidence, not weaker: these tests refuse partly because the real ledger happens to carry no MC authorization, whereas the probe's refusal is attributable to the gate alone.",
+    "tests/test_mc_supplement_runner.py::test_production_entry_refuses_even_with_the_guards_satisfied": "Reaches a production entry that calls registry_boundary.read_snapshot() or resolve_registry() with no argument, which defaults to the frozen absolute path registry_boundary.py:75 declares NOT OVERRIDABLE FROM THE ENVIRONMENT. That path exists on no machine but the Owner's, so the sealed boundary denies it. probes/test_o9_production_entry_refusals.py exercises the SAME entries against a synthetic registry written inside the bundle, using the boundary's own optional-path parameter so its read, digest and mediation code all still run. That is stronger evidence, not weaker: these tests refuse partly because the real ledger happens to carry no MC authorization, whereas the probe's refusal is attributable to the gate alone.",
+    "tests/test_mc_supplement_runner.py::test_production_entry_writes_nothing_anywhere": "Same shape, same replacement. Source is in the bundle.",
+    "tests/test_mc_supplement_runner.py::test_the_guards_are_already_satisfied_so_authorization_is_the_real_defence": "Reaches a production entry that calls registry_boundary.read_snapshot() or resolve_registry() with no argument, which defaults to the frozen absolute path registry_boundary.py:75 declares NOT OVERRIDABLE FROM THE ENVIRONMENT. That path exists on no machine but the Owner's, so the sealed boundary denies it. probes/test_o9_production_entry_refusals.py exercises the SAME entries against a synthetic registry written inside the bundle, using the boundary's own optional-path parameter so its read, digest and mediation code all still run. That is stronger evidence, not weaker: these tests refuse partly because the real ledger happens to carry no MC authorization, whereas the probe's refusal is attributable to the gate alone.",
+    "tests/test_no_public_mc_function_is_unreached.py::TestEveryPublicFunctionHasACaller::test_nothing_in_the_mc_package_is_an_unreached_island": "A REPOSITORY-WIDE static scan: it walks src/ and tests/ and reports any public mc/ function nothing references. An exact-tree bundle carries a SUBSET of tests/, so callers that live outside the payload are absent and the scan reports false orphans -- measured, it did. The property is about the whole repository and a subset tree cannot establish it either way. Reading the file is still worthwhile and it is in tree/."
+  },
+  "tests_not_collected": [
+    "tests/test_mc_supplement_paths_battery.py"
+  ],
+  "tests_not_collected_reasons": {
+    "tests/test_mc_supplement_paths_battery.py": "MODULE-LEVEL, so no deselection can reach it: at its line 321 the file reads C:\\Users\\Aaron\\quant-data\\itsf-registry\\ops\\TRIAL_REGISTRY.md while being imported. src/itsf/mc/registry_boundary.py:75 freezes that root as an exact string and its own comment records the ruling -- 'FROZEN AND NOT OVERRIDABLE FROM THE ENVIRONMENT, as the route requires' (migration Route A, step S6). There is no seam, the frozen implementation may not be edited, and the path exists on no machine but the Owner's, so the read cannot be satisfied inside a sealed bundle by any means. MEASURED CONSEQUENCE: coverage of src/itsf/mc was taken over the full local selection and again over the bundle's selection. With probes/test_o13_path_refusals.py present the two are IDENTICAL -- zero statements lost. The battery's own docstring states the read's purpose: 'opened READ-ONLY, once, at import, purely to learn the highest sequence'."
+  },
+  "tests_selected": [
+    "tests/test_mc_atoms.py",
+    "tests/test_mc_b26_reduction_feasibility.py",
+    "tests/test_mc_battery_boundary.py",
+    "tests/test_mc_bprov_seal_provenance.py",
+    "tests/test_mc_bundle_precheck.py",
+    "tests/test_mc_cold_replay.py",
+    "tests/test_mc_consumer.py",
+    "tests/test_mc_convergence_provenance.py",
+    "tests/test_mc_custody_calendar.py",
+    "tests/test_mc_day_strata_supplement.py",
+    "tests/test_mc_feasibility_composition.py",
+    "tests/test_mc_feasibility_gates.py",
+    "tests/test_mc_fixed_world_selection.py",
+    "tests/test_mc_grid_channel_b27.py",
+    "tests/test_mc_grid_mixed_class_evidence.py",
+    "tests/test_mc_grid_replay_n11.py",
+    "tests/test_mc_n01_repairs.py",
+    "tests/test_mc_node_integration.py",
+    "tests/test_mc_over_budget_predicate.py",
+    "tests/test_mc_r2_2_integration.py",
+    "tests/test_mc_r2_3_evidence.py",
+    "tests/test_mc_registry_contract.py",
+    "tests/test_mc_registry_parser.py",
+    "tests/test_mc_runner_n13.py",
+    "tests/test_mc_supplement_authority.py",
+    "tests/test_mc_supplement_coercion_census.py",
+    "tests/test_mc_supplement_integration.py",
+    "tests/test_mc_supplement_paths_battery.py",
+    "tests/test_mc_supplement_provenance_battery.py",
+    "tests/test_mc_supplement_registry.py",
+    "tests/test_mc_supplement_runner.py",
+    "tests/test_n14_round2_repairs.py",
+    "tests/test_no_public_mc_function_is_unreached.py",
+    "tests/test_registry_generic_append_permission_boundary.py"
+  ],
+  "tree_payload": [
+    ".python-version",
+    "MC_METHOD_SPEC.md",
+    "PROJECT_CHARTER.md",
+    "STUDY_0_PREREGISTRATION.md",
+    "gate1/evidence_registry.yaml",
+    "gate1/platform_params.yaml",
+    "gate1/snapshots/2026-07-28/snapshot_manifest_v5.json",
+    "ops/DECISION_PACKET_N00_AND_ND1.md",
+    "ops/DIRECTORY_CREATION_GRANTS.md",
+    "ops/ND1_PROFILE_RATIFICATION.md",
+    "ops/TRIAL_REGISTRY.md",
+    "ops/requirements.lock.txt",
+    "purchase_plan.yaml",
+    "src/itsf/__init__.py",
+    "src/itsf/contracts.py",
+    "src/itsf/data/__init__.py",
+    "src/itsf/data/calendar.py",
+    "src/itsf/data/dbn_loader.py",
+    "src/itsf/data/manifests.py",
+    "src/itsf/data/roles.py",
+    "src/itsf/data/validation.py",
+    "src/itsf/execution_identity.py",
+    "src/itsf/guards.py",
+    "src/itsf/mc/__init__.py",
+    "src/itsf/mc/account.py",
+    "src/itsf/mc/atoms.py",
+    "src/itsf/mc/bootstrap.py",
+    "src/itsf/mc/bundle_precheck.py",
+    "src/itsf/mc/cold_reducer.py",
+    "src/itsf/mc/consumer.py",
+    "src/itsf/mc/day_strata_classify.py",
+    "src/itsf/mc/day_strata_context.py",
+    "src/itsf/mc/day_strata_dryrun.py",
+    "src/itsf/mc/day_strata_failure.py",
+    "src/itsf/mc/day_strata_pipeline.py",
+    "src/itsf/mc/day_strata_rows.py",
+    "src/itsf/mc/day_strata_supplement.py",
+    "src/itsf/mc/feasibility.py",
+    "src/itsf/mc/fixed_world.py",
+    "src/itsf/mc/grid_channel.py",
+    "src/itsf/mc/grid_replay.py",
+    "src/itsf/mc/mc_contract.py",
+    "src/itsf/mc/mc_registry.py",
+    "src/itsf/mc/mc_runner.py",
+    "src/itsf/mc/orchestrator.py",
+    "src/itsf/mc/over_budget.py",
+    "src/itsf/mc/owner_control.py",
+    "src/itsf/mc/platforms/__init__.py",
+    "src/itsf/mc/platforms/authoritative.py",
+    "src/itsf/mc/platforms/base.py",
+    "src/itsf/mc/platforms/lucid.py",
+    "src/itsf/mc/platforms/topstep.py",
+    "src/itsf/mc/production_inputs.py",
+    "src/itsf/mc/real_input.py",
+    "src/itsf/mc/registry_boundary.py",
+    "src/itsf/mc/registry_integrity.py",
+    "src/itsf/mc/supplement_authority.py",
+    "src/itsf/mc/supplement_build.py",
+    "src/itsf/mc/supplement_chain.py",
+    "src/itsf/mc/supplement_contract.py",
+    "src/itsf/mc/supplement_derive.py",
+    "src/itsf/mc/supplement_inputs.py",
+    "src/itsf/mc/supplement_precheck.py",
+    "src/itsf/mc/supplement_production.py",
+    "src/itsf/mc/supplement_registry.py",
+    "src/itsf/mc/supplement_runner.py",
+    "src/itsf/mc/verdict.py",
+    "src/itsf/s0/__init__.py",
+    "src/itsf/s0/context.py",
+    "src/itsf/s0/costs.py",
+    "src/itsf/s0/dataset.py",
+    "src/itsf/s0/features.py",
+    "src/itsf/s0/gridmix.py",
+    "src/itsf/s0/handoff.py",
+    "src/itsf/s0/labels.py",
+    "src/itsf/s0/oracle.py",
+    "src/itsf/s0/paths.py",
+    "src/itsf/s0/report.py",
+    "src/itsf/s0/runinfra.py",
+    "src/itsf/s0/stability.py",
+    "src/itsf/s0/stats.py",
+    "src/itsf/s0/study.py",
+    "tests/_governed_subtrees.py",
+    "tests/conftest.py",
+    "tests/test_mc_atoms.py",
+    "tests/test_mc_b26_reduction_feasibility.py",
+    "tests/test_mc_battery_boundary.py",
+    "tests/test_mc_bprov_seal_provenance.py",
+    "tests/test_mc_bundle_precheck.py",
+    "tests/test_mc_cold_replay.py",
+    "tests/test_mc_consumer.py",
+    "tests/test_mc_convergence_provenance.py",
+    "tests/test_mc_custody_calendar.py",
+    "tests/test_mc_day_strata_supplement.py",
+    "tests/test_mc_feasibility_composition.py",
+    "tests/test_mc_feasibility_gates.py",
+    "tests/test_mc_fixed_world_selection.py",
+    "tests/test_mc_grid_channel_b27.py",
+    "tests/test_mc_grid_mixed_class_evidence.py",
+    "tests/test_mc_grid_replay_n11.py",
+    "tests/test_mc_n01_repairs.py",
+    "tests/test_mc_node_integration.py",
+    "tests/test_mc_over_budget_predicate.py",
+    "tests/test_mc_r2_2_integration.py",
+    "tests/test_mc_r2_3_evidence.py",
+    "tests/test_mc_registry_contract.py",
+    "tests/test_mc_registry_parser.py",
+    "tests/test_mc_runner_n13.py",
+    "tests/test_mc_supplement_authority.py",
+    "tests/test_mc_supplement_coercion_census.py",
+    "tests/test_mc_supplement_integration.py",
+    "tests/test_mc_supplement_paths_battery.py",
+    "tests/test_mc_supplement_provenance_battery.py",
+    "tests/test_mc_supplement_registry.py",
+    "tests/test_mc_supplement_runner.py",
+    "tests/test_n14_round2_repairs.py",
+    "tests/test_no_public_mc_function_is_unreached.py",
+    "tests/test_registry_generic_append_permission_boundary.py",
+    "tests/tiers.py"
+  ],
+  "verification_targets": [
+    {
+      "builder_claim": "`grid_converged` was multiplied into rule (a), so one boolean carried both consequences and neither could be applied; they are now separate fields and the seal refuses `main_channel_not_converged` before `apply_verdict` runs.",
+      "closure_requires": "A failed MAIN convergence condition must PREVENT an admissible judgment and seal, while the already-ratified GRID-only exception remains exactly scoped: grid nonconvergence keeps its ratified treatment and main-channel failure must not inherit it. Check BOTH halves -- a repair that withholds on grid failure has broken M7.",
+      "focused_tests": [
+        "tree/tests/test_n14_round2_repairs.py::test_F01_a_failed_main_convergence_yields_NO_judgment_and_NO_seal",
+        "tree/tests/test_n14_round2_repairs.py::test_F01_the_GRID_only_exception_still_withholds_nothing",
+        "tree/tests/test_n14_round2_repairs.py::test_F01_rule_a_no_longer_carries_the_grid"
+      ],
+      "frozen_finding": "Main quantile convergence can fail while `verdict_and_seal_from_evidence` still returns an admissible GO/STOP category and a seal candidate.",
+      "id": "F01",
+      "loci": [
+        "tree/src/itsf/mc/consumer.py::ConvergenceReport",
+        "tree/src/itsf/mc/consumer.py::_convergence_rules_a_to_d",
+        "tree/src/itsf/mc/consumer.py::verdict_and_seal_from_evidence"
+      ],
+      "title": "Main-channel nonconvergence does not withhold judgment/seal"
+    },
+    {
+      "builder_claim": "A capability-minted cross-seed standing ANDs every governed seed's verified witness and the runner reads both grid fields from it; the ruled `max_doublings` bound is recorded and reconciled with the span the evidence actually covers. The builder ALSO states that escalation beyond one doubling is not expressible without changing frozen rules -- that statement is a verification target, not a given.",
+      "closure_requires": "Every required seed and scale must affect final convergence/eligibility exactly as the governing rules require. See VERIFY.md section 4A: the bounded doubling/escalation semantics are to be compared against the frozen authority DIRECTLY, not against the builder's reading of it.",
+      "focused_tests": [
+        "tree/tests/test_n14_round2_repairs.py::test_F02_the_final_grid_status_is_the_AND_across_every_seed",
+        "tree/tests/test_n14_round2_repairs.py::test_F02_a_non_converged_seed_is_conjunctive_for_every_seed",
+        "tree/tests/test_n14_round2_repairs.py::test_F02_the_seal_refuses_a_K_arm_with_no_cross_seed_standing",
+        "tree/tests/test_n14_round2_repairs.py::test_F02_the_ruled_doubling_bound_rides_with_the_standing"
+      ],
+      "frozen_finding": "All seed witnesses are constructed, but runner integration effectively consumes only the base seed for final grid status/eligibility and does not execute the required doubled-scale checks/retry policy across every required seed.",
+      "id": "F02",
+      "loci": [
+        "tree/src/itsf/mc/mc_runner.py::_execute",
+        "tree/src/itsf/mc/mc_runner.py::_witness",
+        "tree/src/itsf/mc/grid_replay.py::aggregate_k_replay_evidence",
+        "tree/src/itsf/mc/consumer.py::verdict_and_seal_from_evidence"
+      ],
+      "title": "Required cross-seed / doubled-scale convergence is lost at runner integration"
+    },
+    {
+      "builder_claim": "The witness now carries `adjusted_map_by_kind` and the runner publishes from it instead of re-deriving `region_map` over the raw K pass.",
+      "closure_requires": "Final publication must consume the comparison-adjusted maps and preserve the required per-seed boundary result.",
+      "focused_tests": [
+        "tree/tests/test_n14_round2_repairs.py::test_F03_a_boundary_band_relabelling_survives_into_publication",
+        "tree/tests/test_n14_round2_repairs.py::test_F03_the_witness_carries_the_adjusted_map_it_computed"
+      ],
+      "frozen_finding": "Comparison-adjusted maps correctly produce `boundary_band`, but publication reconstructs from raw K maps and loses that relabelling.",
+      "id": "F03",
+      "loci": [
+        "tree/src/itsf/mc/grid_replay.py::compare_region_maps",
+        "tree/src/itsf/mc/grid_replay.py::derive_k_replay_evidence",
+        "tree/src/itsf/mc/grid_replay.py::KReplayEvidence.adjusted_map",
+        "tree/src/itsf/mc/grid_replay.py::publish_region",
+        "tree/src/itsf/mc/mc_runner.py::_execute"
+      ],
+      "title": "Publication drops comparison-adjusted boundary_band classification"
+    },
+    {
+      "builder_claim": "The admissible unit is a capability-minted `GridPass` carrying its production identity, whose digest is re-derived from its live cells at verification; synthetic cells are admissible only through `grid_pass_for_tests` against a test-only authority, and the runner refuses test-only grid evidence on the production path.",
+      "closure_requires": "Seal-admissible grid evidence must be bound to the governed grid production path with independently verifiable provenance. A self-digest of caller-supplied values is NOT sufficient provenance, and a forgeable `producer=true` field would not be either. Synthetic pathways may survive only where explicitly typed test-only AND unable to cross the production seal boundary -- check that second half.",
+      "focused_tests": [
+        "tree/tests/test_n14_round2_repairs.py::test_F04_hand_built_cells_cannot_become_seal_admitted_evidence",
+        "tree/tests/test_n14_round2_repairs.py::test_F04_a_pass_cannot_be_constructed_or_replaced",
+        "tree/tests/test_n14_round2_repairs.py::test_F04_substituted_statistics_are_caught_by_the_pass_digest",
+        "tree/tests/test_n14_round2_repairs.py::test_F04_the_test_pathway_is_typed_test_only_and_stays_that_way"
+      ],
+      "frozen_finding": "Public evidence factories accept hand-constructed CellStatistics/maps and can produce non-test grid evidence accepted by the seal without independently establishing that the governed grid producer created those statistics.",
+      "id": "F04",
+      "loci": [
+        "tree/src/itsf/mc/grid_replay.py::GridPass",
+        "tree/src/itsf/mc/grid_replay.py::verify_grid_pass",
+        "tree/src/itsf/mc/grid_replay.py::grid_pass_for_tests",
+        "tree/src/itsf/mc/grid_replay.py::derive_k_replay_evidence",
+        "tree/src/itsf/mc/grid_replay.py::CellStatistics",
+        "tree/src/itsf/mc/grid_channel.py::run_grid_pass",
+        "tree/src/itsf/mc/mc_runner.py::_execute"
+      ],
+      "title": "Caller-constructed grid statistics can become seal-admitted evidence without governed grid provenance"
+    },
+    {
+      "builder_claim": "Grid admission calls `supplement_authority.verify_supplement_binding`, which compares every `BINDING_FIELDS` value against a value derived from the prepared input, rather than a second copy of a rule that module already owns.",
+      "closure_requires": "Consumer-side admission must verify EVERY required supplement binding against the prepared/source identity and governed artifact provenance, and a recomputed self-hash over foreign binding values must not make the artifact admissible.",
+      "focused_tests": [
+        "tree/tests/test_n14_round2_repairs.py::test_F05_a_foreign_binding_is_refused_even_with_a_recomputed_hash",
+        "tree/tests/test_n14_round2_repairs.py::test_F05_the_honest_binding_is_still_admitted",
+        "tree/tests/test_n14_round2_repairs.py::test_F05_the_binding_check_is_the_governed_one_not_a_second_copy"
+      ],
+      "frozen_finding": "Grid-side supplement consumption verifies rows/day-universe/self-hash but does not independently bind all required trial / commit / source identity fields to the admitted prepared input.",
+      "id": "F05",
+      "loci": [
+        "tree/src/itsf/mc/grid_replay.py::_mint_authority",
+        "tree/src/itsf/mc/supplement_authority.py::verify_supplement_binding",
+        "tree/src/itsf/mc/supplement_authority.py::verify_supplement_authority",
+        "tree/src/itsf/mc/day_strata_supplement.py::BINDING_FIELDS"
+      ],
+      "title": "Grid consumption accepts a supplement carrying foreign binding identity"
+    },
+    {
+      "builder_claim": "The class is now creation, advancement AND restoration, with the token derived from `owner_control`; OWNER_HOLD stays outside. The governed route was preserved by sending the compare-and-swap straight to the physical write, which added a registered caller to the one-write set.",
+      "closure_requires": "Any event whose semantic effect RESTORES execution eligibility must not be mintable through the generic writer, and OWNER_RELEASE must pass through an explicitly governed Owner-action boundary. See VERIFY.md section 4B: establish that the rerouted write preserves the actor/Owner boundary, hold identity, the compare-and-swap condition, serialization/integrity, and downstream hold-state semantics.",
+      "focused_tests": [
+        "tree/tests/test_n14_round2_repairs.py::test_F06_generic_OWNER_RELEASE_leaves_the_ledger_byte_identical",
+        "tree/tests/test_n14_round2_repairs.py::test_F06_the_hold_remains_in_force_afterwards",
+        "tree/tests/test_n14_round2_repairs.py::test_F06_the_governed_owner_route_still_releases",
+        "tree/tests/test_n14_round2_repairs.py::test_F06_the_class_is_effect_on_eligibility_not_a_token_list"
+      ],
+      "frozen_finding": "`serialized_append` rejects the previously repaired explicit permission tokens but still accepts OWNER_RELEASE, and downstream hold resolution then changes from blocked to accepted.",
+      "id": "F06",
+      "loci": [
+        "tree/src/itsf/mc/registry_boundary.py::serialized_append",
+        "tree/src/itsf/mc/registry_boundary.py::is_permission_event",
+        "tree/src/itsf/mc/registry_boundary.py::_compare_and_append",
+        "tree/src/itsf/mc/registry_boundary.py::_append_owner_row",
+        "tree/src/itsf/mc/registry_boundary.py::append_owner_release",
+        "tree/src/itsf/mc/registry_boundary.py::_physical_serialized_write",
+        "tree/src/itsf/mc/owner_control.py::OWNER_TOKENS",
+        "tree/src/itsf/mc/owner_control.py::_live_holds"
+      ],
+      "title": "Generic OWNER_RELEASE can restore execution eligibility"
+    },
+    {
+      "builder_claim": "`RunnerResult.grid_evidence_by_seed` carries every governed seed and every cell; a marked cell carries reason, detail and the frozen counts and carries no statistics keys at all.",
+      "closure_requires": "Final output must retain/report the full required per-seed grid evidence, including marked-cell absence metadata and the reason/detail the governed reporting contract requires, with NO invented values for marked cells, and merged region maps must remain available without replacing the per-seed report.",
+      "focused_tests": [
+        "tree/tests/test_n14_round2_repairs.py::test_F07_every_seed_and_every_cell_survives_the_final_return",
+        "tree/tests/test_n14_round2_repairs.py::test_F07_the_merged_maps_remain_and_do_not_replace_the_report",
+        "tree/tests/test_n14_round2_repairs.py::test_F07_absence_is_reported_as_absence_with_no_invented_values"
+      ],
+      "frozen_finding": "Producer objects contain the complete per-seed/cell marked and absence metadata, but the final RunnerResult/return path discards that detail and retains only merged/base summaries.",
+      "id": "F07",
+      "loci": [
+        "tree/src/itsf/mc/grid_replay.py::per_seed_grid_report",
+        "tree/src/itsf/mc/grid_replay.py::InfeasibleCell",
+        "tree/src/itsf/mc/mc_runner.py::RunnerResult",
+        "tree/src/itsf/mc/mc_runner.py::_execute"
+      ],
+      "title": "Final runner output drops required full per-seed grid reporting"
+    }
+  ],
+  "write_surfaces": {
+    "base_is_not_a_read_root": "the guard admits the frozen CHILD and nothing else outside the bundle and the runtime. The supplied base is stat'd, never listed: no sibling enumeration, no unrelated read, no part of it usable as review input.",
+    "bytecode": "sys.dont_write_bytecode is set by the runner itself, so nothing is written into the sealed tree or the runtime even if the runner is invoked without the launcher's -B.",
+    "child_is_fresh": "the child must not exist. It is refused even if it exists EMPTY, is never reused, and is never deleted by the runner: an empty directory is not evidence that it is unused, and removing another attempt's directory is worse than refusing.",
+    "ephemeral_scratch": "<review output root>/.scratch/ -- a dot directory beside the returns, never inside them. pytest's basetemp is pinned into it.",
+    "forbidden_workspace_roots": {
+      "C:\\Users\\Aaron\\OneDrive\\Desktop\\Quant trade": "the live repository workspace",
+      "C:\\Users\\Aaron\\OneDrive\\Desktop\\Quant trade\\Intraday Trend Strategy Framework\\ops\\outcome_quarantine": "the outcome-quarantine surface",
+      "C:\\Users\\Aaron\\quant-data": "the research-data roots",
+      "C:\\Users\\Aaron\\quant-data\\review": "the review-delivery roots"
+    },
+    "forbidden_workspace_roots_note": "DECLARED here because a sealed object cannot derive them from its own location. The sealed delivery, the review-delivery directory it sits in and the portable runtime beside it are DERIVED at runtime instead, so they stay correct if the delivery moves. Overlap is refused in both directions: a base inside one of these would put reviewer output in a governed place, and a base containing one would put a governed place inside the writable surface.",
+    "in_bundle_writable": [],
+    "output_binding": "OUTPUT_BINDING.json in the child names REVIEW_ID, MANIFEST_SHA256, RUNTIME_MANIFEST_SHA256 and the substantive round. The runner refuses a workspace bound to any other review object, so one delivery's artifacts cannot be read as another's. The absolute path is execution provenance and is deliberately NOT part of the review identity: two seats may run this delivery at different paths and review the same bytes.",
+    "read_boundary": "the output root is an OUTPUT surface only. The guard admits that one directory and nothing else outside the bundle and the runtime, so temp siblings cannot be enumerated, read, or used as an input source.",
+    "retained_returns": [
+      "INITIAL_FINDINGS.md",
+      "FREEZE.json",
+      "ATTESTATION.md"
+    ],
+    "review_output_root": "EXPLICITLY SUPPLIED BY THE DISPATCHER, never discovered. run_review.cmd requires --review-output-base <authorized writable base> and passes it to the runner, which canonicalises it, proves it is disjoint in BOTH directions from every forbidden root, creates exactly one FRESH child <base>/itsf-review/<REVIEW_ID>-<first 12 of MANIFEST_SHA256>, and proves CREATE/WRITE/RENAME/DELETE there by performing them. No default, no fallback, no environment read, no known folder, no profile inference: a missing parameter is a DELIVERY FAILURE before the guard arms. No username and no absolute workspace path enters the contract.",
+    "scratch_is_evidence": false,
+    "scratch_lifecycle": {
+      "after_failure": "KEPT for diagnosis and labelled EPHEMERAL_DO_NOT_READ_AS_EVIDENCE.txt",
+      "after_success": "REMOVED by the runner, walking and unlinking",
+      "before": "created empty by the runner inside the fresh child, before the guard arms. Nothing pre-exists it, because the child itself is new.",
+      "during": "the only place temporary files may exist"
+    },
+    "sealed_payload": "IMMUTABLE to review execution. The seat runs under a RESTRICTED Windows token and proved that the bundle path stays unwritable to it even with an ordinary Modify ACE present, so no in-bundle surface is declared writable and none is granted. The guard additionally denies every mutating event outside the resolved output root.",
+    "workspace_authority": "EXPLICIT_DISPATCH_PARAMETER. TMP, TEMP and TMPDIR are SET by the runner to the validated child after it is frozen -- output routing -- and are never READ to select authority."
+  }
+}

@@ -163,9 +163,13 @@ def verify_write_surfaces(root: Path, profile: dict) -> dict:
     """
     writable = list(profile["write_surfaces"].get("in_bundle_writable") or [])
     sealed = ["", "tree", "authority", "probes", "environment",
-              "MANIFEST.json", "REVIEW.md", "run_review.cmd",
+              "MANIFEST.json", "run_review.cmd",
               "run_bundle_tests.py", "code_review_bundle_guard.py",
               "review_output.py"]
+    sealed.append("VERIFY.md" if _mode(profile) == "POSTHOLD_VERIFICATION"
+                  else "REVIEW.md")
+    if _mode(profile) == "POSTHOLD_VERIFICATION":
+        sealed.append("frozen")
     report = {"principal": REVIEW_PRINCIPAL, "declared_writable": writable,
               "sealed_checked": sealed, "probes": [], "grants": {}}
 
@@ -238,6 +242,15 @@ class Bundle:
         self.profile = profile
         self.commit = profile["framework_commit"]
         self.payload = []          # manifest rows, in insertion order
+        #: bundle-relative path -> the REASON it may carry prior judgement.
+        #: Empty for an ordinary review; a remediation verification declares
+        #: exactly the files whose content IS the prior judgement.
+        self.claim_blind_exempt = dict(
+            profile.get("claim_blind_exempt") or {})
+        #: which of them a file actually needed. An exemption nothing used is
+        #: a dead allowlist entry, and the cut refuses one: it implies a live
+        #: exception where there is none.
+        self.claim_blind_exempt_used = set()
 
     # -- the only way bytes ever enter the bundle -----------------------
     def _write(self, rel: str, data: bytes, provenance: dict):
@@ -246,7 +259,8 @@ class Bundle:
                 refuse("refused content class: %s (%s)"
                        % (rel, provenance.get("source_path", "")))
         cls = provenance["class"]
-        if cls not in ("GIT_EXPORT", "GENERATED", "TEMPLATE", "ENVIRONMENT"):
+        if cls not in ("GIT_EXPORT", "GENERATED", "TEMPLATE", "ENVIRONMENT",
+                       "FROZEN_REVIEW_RETURN"):
             refuse("unknown admission class %r for %s" % (cls, rel))
         # ADDED 2026-09-11 after a shipped runner failed to parse: RUNNER_BODY
         # is a non-raw triple-quoted string, so an unescaped newline escape in
@@ -271,9 +285,21 @@ class Bundle:
             except UnicodeDecodeError:
                 text = ""
             hits = claim_blind_hits(text)
-            if hits:
+            reason = self.claim_blind_exempt.get(rel.replace("\\", "/"))
+            if hits and not reason:
                 refuse("CLAIM_BLIND: %s carries prior judgement of the "
                        "implementation under review -- %s" % (rel, hits))
+            if hits:
+                # DECLARED, NOT WAIVED. An exemption exists only where the
+                # prior judgement IS the object the delivery hands over -- a
+                # remediation verification cannot withhold the findings it
+                # asks the verifier to check closure of. The reason rides
+                # into the manifest beside the file, so the exemption is
+                # readable rather than implicit.
+                provenance = dict(provenance)
+                provenance["claim_blind_exempt"] = reason
+                provenance["claim_blind_hits"] = sorted(hits)
+                self.claim_blind_exempt_used.add(rel.replace("\\", "/"))
         dest = self.root / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
@@ -304,8 +330,40 @@ class Bundle:
         self._write(rel, data, {"class": "ENVIRONMENT", "source_path": rel,
                                 "detail": detail})
 
+    def frozen_return(self, rel: str, data: bytes, *, source: str,
+                      produced_by: str, review_id: str):
+        """BYTES A PRIOR INDEPENDENT REVIEWER RETURNED, carried unmodified.
+
+        The fifth positive admission class, and it exists for exactly one
+        situation: a delivery whose purpose is to verify that a named set of
+        frozen findings is closed cannot withhold those findings from the
+        verifier. Nothing here is edited, excerpted or reformatted -- the
+        digest in the manifest is the digest of the bytes that seat wrote, so
+        a restatement anywhere else in the package can be checked against
+        them rather than trusted.
+        """
+        self._write(rel, data, {"class": "FROZEN_REVIEW_RETURN",
+                                "source_path": source,
+                                "produced_by": produced_by,
+                                "returned_against_review_id": review_id})
+
 
 # ---------------------------------------------------------------- checks
+def _mode(profile: dict) -> str:
+    """REVIEW (the O1-O13 adjudication) or POSTHOLD_VERIFICATION.
+
+    One builder, because the parts that must not differ -- positive
+    admission, the link and outcome refusals, the inventory closure, the
+    write-surface verification, the guard, the runner, the launcher and the
+    explicit workspace -- are the parts that took five deliveries to get
+    right. What the mode switches is the DOCUMENT and the target map.
+    """
+    mode = profile.get("mode", "REVIEW")
+    if mode not in ("REVIEW", "POSTHOLD_VERIFICATION"):
+        refuse("unknown delivery mode %r" % mode)
+    return mode
+
+
 def no_links_anywhere(root: Path):
     bad = [p for p in root.rglob("*") if p.is_symlink()]
     if bad:
@@ -346,6 +404,7 @@ def main(argv):
     profile_path = Path(argv[1])
     out_dir = Path(argv[2])
     profile = json.loads(profile_path.read_text(encoding="utf-8"))
+    mode = _mode(profile)
     review_id = profile["review_id"]
     b = Bundle(out_dir, review_id, profile)
     if b.root.exists():
@@ -411,30 +470,75 @@ def main(argv):
     # the contract, not exported from the tree.
     from build_review_launcher_lib import render as _launcher      # noqa: E402
     b.template("run_review.cmd", _launcher(profile))
-    from o4d_probe_template import render as _probe          # noqa: E402
-    b.template("probes/test_o4d_write_boundary.py", _probe())
-    from o13_path_refusal_probe_template import render as _probe13   # noqa: E402
-    b.template("probes/test_o13_path_refusals.py", _probe13())
-    from o9_production_entry_probe_template import render as _probe9  # noqa: E402
-    b.template("probes/test_o9_production_entry_refusals.py", _probe9())
-    from runtime_init_probe_template import render as _probeinit   # noqa: E402
-    b.template("probes/test_runtime_init_boundary.py", _probeinit())
+    # THE PROBE SET IS DECLARED, not fixed. An ordinary review ships all four;
+    # a bounded remediation verification ships only the two EXECUTION-BOUNDARY
+    # controls, because the other two adjudicate O1-O13 obligations and that
+    # is not what a closure verification is for. Both surviving probes
+    # prescribe their own denial, so the runner's admission rule still has
+    # something to reconcile.
+    _PROBES = {
+        "probes/test_o4d_write_boundary.py":
+            ("o4d_probe_template", "render"),
+        "probes/test_o13_path_refusals.py":
+            ("o13_path_refusal_probe_template", "render"),
+        "probes/test_o9_production_entry_refusals.py":
+            ("o9_production_entry_probe_template", "render"),
+        "probes/test_runtime_init_boundary.py":
+            ("runtime_init_probe_template", "render"),
+    }
+    wanted = profile.get("probes") or sorted(_PROBES)
+    unknown = [p for p in wanted if p not in _PROBES]
+    if unknown:
+        refuse("profile names probes this builder cannot emit: %s" % unknown)
+    for rel in wanted:
+        module_name, entry = _PROBES[rel]
+        module = __import__(module_name)
+        b.template(rel, getattr(module, entry)())
 
     # NO `return/` ANY MORE. The bundle is immutable to review execution, so a
     # directory that exists only to be written into would be a promise the
     # delivery cannot keep -- which is exactly the promise that stopped three
     # seats. Reviewer returns live in the external output root.
 
-    # ---- OBLIGATION_MAP + REVIEW ---------------------------------------
-    omap = build_obligation_map(profile, b)
-    b.generated("OBLIGATION_MAP.json", canonical(omap),
-                generator="scripts/build_code_review_bundle.py:build_obligation_map",
-                sources=[str(profile_path.name)])
-    b.template("REVIEW.md", review_md(profile))
+    # ---- the delivery's own document and target map ---------------------
+    if mode == "POSTHOLD_VERIFICATION":
+        # THE FROZEN RETURNS, byte-exact. Carried because a closure
+        # verification cannot be performed against a baseline the verifier is
+        # not allowed to read, and digest-pinned so a restatement anywhere
+        # else in this package can be checked against them.
+        frozen = profile["frozen_baseline"]
+        source_root = Path(frozen["source_root"])
+        for row in frozen["artifacts"]:
+            data = (source_root / row["name"]).read_bytes()
+            got = sha256_bytes(data)
+            if got != row["sha256"] or len(data) != row["byte_count"]:
+                refuse("frozen return %s is not the declared bytes "
+                       "(%s/%d declared, %s/%d found)"
+                       % (row["name"], row["sha256"][:12], row["byte_count"],
+                          got[:12], len(data)))
+            b.frozen_return("frozen/" + row["name"], data,
+                            source=str(source_root / row["name"]),
+                            produced_by=frozen["produced_by"],
+                            review_id=frozen["review_id"])
+        targets = build_verification_targets(profile, b)
+        b.generated("VERIFICATION_TARGETS.json", canonical(targets),
+                    generator="scripts/build_code_review_bundle.py"
+                              ":build_verification_targets",
+                    sources=[str(profile_path.name),
+                             "frozen/INITIAL_FINDINGS.md"])
+        from build_verification_md_lib import render as _verify   # noqa: E402
+        b.template("VERIFY.md", _verify(profile))
+    else:
+        omap = build_obligation_map(profile, b)
+        b.generated("OBLIGATION_MAP.json", canonical(omap),
+                    generator="scripts/build_code_review_bundle.py:build_obligation_map",
+                    sources=[str(profile_path.name)])
+        b.template("REVIEW.md", review_md(profile))
 
     # ---- MANIFEST last: it binds everything above ----------------------
     manifest = {
         "review_id": review_id,
+        "mode": mode,
         "lineage": profile["lineage"],
         "substantive_round": profile["substantive_round"],
         "round_consumed": False,
@@ -463,6 +567,14 @@ def main(argv):
             "maps_to_manifests": 1,
             "retired_identities": profile.get("retired_delivery_identities", {}),
         },
+        # WHAT THIS DELIVERY IS FOR. Present only in verification mode, and it
+        # names the frozen baseline and the repaired target by digest so the
+        # package cannot be mistaken for a substantive round.
+        "verification_of": (profile["repaired_target"]
+                            if mode == "POSTHOLD_VERIFICATION" else None),
+        "frozen_baseline": ({k: v for k, v in profile["frozen_baseline"].items()
+                             if k != "source_root"}
+                            if mode == "POSTHOLD_VERIFICATION" else None),
         "framework_commit": b.commit,
         "repository_root_tree": git("rev-parse", "%s^{tree}" % b.commit),
         "itsf_src_tree": git("rev-parse", "%s:src/itsf" % b.commit),
@@ -502,6 +614,12 @@ def main(argv):
     if stale:
         refuse("governance_admissions names a file that is not admitted: %s"
                % stale)
+    unused = sorted(set(b.claim_blind_exempt) - b.claim_blind_exempt_used)
+    if unused:
+        refuse("declared claim-blind exemptions that nothing used: %s. A dead "
+               "allowlist entry implies a live exception where there is none "
+               "-- remove them, or find out why the scan stopped matching"
+               % unused)
     hits = outcome_scan(b.root)
     if hits:
         refuse("outcome restatement inside the bundle:"
@@ -549,6 +667,56 @@ def build_rules_extract(profile: dict) -> bytes:
     artifact had to be retired."""
     from build_rules_extract_lib import render          # noqa: E402
     return render(REPO, profile)
+
+
+def build_verification_targets(profile: dict, b: Bundle) -> dict:
+    """F01-F07 as a MAP, with every locus resolved to a pinned payload file.
+
+    The same discipline as the obligation map, for the same reason: a target
+    that names a file the delivery does not carry is a target the verifier
+    cannot adjudicate, and it must break the CUT rather than surface as a
+    missing-file error on the reviewer's first command.
+    """
+    inb = {r["path"] for r in b.payload}
+    digests = {r["path"]: r["sha256"] for r in b.payload}
+    rows, unresolved = {}, []
+    for target in profile["verification_targets"]:
+        loci = {}
+        for locus in target["loci"]:
+            path = locus.split("::", 1)[0]
+            if path not in inb:
+                unresolved.append("%s names %s, which this delivery does not "
+                                  "carry" % (target["id"], path))
+                continue
+            loci[locus] = digests[path]
+        for name in ("frozen_finding", "closure_requires", "builder_claim"):
+            if not (target.get(name) or "").strip():
+                unresolved.append("%s.%s is empty" % (target["id"], name))
+        rows[target["id"]] = {
+            "title": target["title"],
+            "frozen_finding": target["frozen_finding"],
+            "closure_requires": target["closure_requires"],
+            "builder_claim_SELF_REPORTED": target["builder_claim"],
+            "loci_sha256": loci,
+            "frozen_probe_refs": target.get("frozen_probe_refs", []),
+            "focused_tests": target.get("focused_tests", []),
+        }
+    if unresolved:
+        refuse("verification targets do not resolve:"
+               + "".join(chr(10) + "  " + u for u in unresolved))
+    missing = {"F01", "F02", "F03", "F04", "F05", "F06", "F07"} - set(rows)
+    if missing:
+        refuse("the frozen finding set is incomplete: %s" % sorted(missing))
+    return {
+        "schema": "n14_posthold_verification_targets.v1",
+        "verification_id": profile["review_id"],
+        "not_a_substantive_round": True,
+        "round_accounting_unchanged": profile["round_accounting"],
+        "frozen_baseline_sha256":
+            profile["frozen_baseline"]["initial_findings_sha256"],
+        "repaired_target": profile["repaired_target"],
+        "targets": rows,
+    }
 
 
 def build_obligation_map(profile: dict, b: Bundle) -> dict:
