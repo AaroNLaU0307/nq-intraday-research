@@ -549,9 +549,21 @@
       "round_consumed": false,
       "substantive_verdict": "ABSENT",
       "why_retired": "NEVER DISPATCHED. Its output root was resolved with tempfile.gettempdir(), which consults TMPDIR, TEMP and TMP -- measured: with those pointed elsewhere the root followed them, so the claim that there was no environment channel was wrong. The resolver now uses SHGetKnownFolderPath, which changes a sealed payload file, so the identity is retired rather than reused."
+    },
+    "N14-BUNDLE-009": {
+      "dispatched": true,
+      "manifests": [
+        "c365de5095e47d712e68ee5d834a19fbb23a3aabe2f3e124e746c2adeadfe82c"
+      ],
+      "on_disk_as": [
+        "N14-BUNDLE-009"
+      ],
+      "round_consumed": false,
+      "substantive_verdict": "ABSENT",
+      "why_retired": "delivered and failed BEFORE substantive inspection. It resolved the reviewer workspace itself, through SHGetKnownFolderPath -- which closed the TMP/TEMP/TMPDIR channel but was still DISCOVERY: the sealed object guessing, from profile structure, at something only the dispatcher knows. The adopted architecture makes the workspace an explicit dispatch-supplied capability, which changes a sealed payload file, so the identity is retired rather than reused. Preserved unmutated as failed-delivery evidence."
     }
   },
-  "review_id": "N14-BUNDLE-009",
+  "review_id": "N14-BUNDLE-010",
   "review_runtime": {
     "bytes": 424900000,
     "entrypoint": "run_review.cmd (cmd.exe; no PATH lookup, no py launcher, no network, no App Execution Alias)",
@@ -798,24 +810,34 @@
     "tests/tiers.py"
   ],
   "write_surfaces": {
+    "base_is_not_a_read_root": "the guard admits the frozen CHILD and nothing else outside the bundle and the runtime. The supplied base is stat'd, never listed: no sibling enumeration, no unrelated read, no part of it usable as review input.",
     "bytecode": "sys.dont_write_bytecode is set by the runner itself, so nothing is written into the sealed tree or the runtime even if the runner is invoked without the launcher's -B.",
+    "child_is_fresh": "the child must not exist. It is refused even if it exists EMPTY, is never reused, and is never deleted by the runner: an empty directory is not evidence that it is unused, and removing another attempt's directory is worse than refusing.",
     "ephemeral_scratch": "<review output root>/.scratch/ -- a dot directory beside the returns, never inside them. pytest's basetemp is pinned into it.",
+    "forbidden_workspace_roots": {
+      "C:\\Users\\Aaron\\OneDrive\\Desktop\\Quant trade": "the live repository workspace",
+      "C:\\Users\\Aaron\\OneDrive\\Desktop\\Quant trade\\Intraday Trend Strategy Framework\\ops\\outcome_quarantine": "the outcome-quarantine surface",
+      "C:\\Users\\Aaron\\quant-data": "the research-data roots",
+      "C:\\Users\\Aaron\\quant-data\\review": "the review-delivery roots"
+    },
+    "forbidden_workspace_roots_note": "DECLARED here because a sealed object cannot derive them from its own location. The sealed delivery, the review-delivery directory it sits in and the portable runtime beside it are DERIVED at runtime instead, so they stay correct if the delivery moves. Overlap is refused in both directions: a base inside one of these would put reviewer output in a governed place, and a base containing one would put a governed place inside the writable surface.",
     "in_bundle_writable": [],
-    "output_binding": "OUTPUT_BINDING.json in the root names REVIEW_ID, MANIFEST_SHA256, RUNTIME_MANIFEST_SHA256 and the substantive round. The runner re-derives the path from the sealed manifest and refuses a root bound to any other review object, so one delivery's artifacts cannot be read as another's.",
+    "output_binding": "OUTPUT_BINDING.json in the child names REVIEW_ID, MANIFEST_SHA256, RUNTIME_MANIFEST_SHA256 and the substantive round. The runner refuses a workspace bound to any other review object, so one delivery's artifacts cannot be read as another's. The absolute path is execution provenance and is deliberately NOT part of the review identity: two seats may run this delivery at different paths and review the same bytes.",
     "read_boundary": "the output root is an OUTPUT surface only. The guard admits that one directory and nothing else outside the bundle and the runtime, so temp siblings cannot be enumerated, read, or used as an input source.",
     "retained_returns": [
       "INITIAL_FINDINGS.md",
       "FREEZE.json",
       "ATTESTATION.md"
     ],
-    "review_output_root": "EXTERNAL and seat-native: <LocalAppData>/Temp/itsf-review/<REVIEW_ID>-<first 12 of MANIFEST_SHA256>. The base is read through SHGetKnownFolderPath (FOLDERID_LocalAppData), cross-checked against FOLDERID_Profile -- resolved from the user token and the profile registry, NOT from TMP/TEMP/TMPDIR, and with no environment fallback. No username and no absolute path enters the contract.",
+    "review_output_root": "EXPLICITLY SUPPLIED BY THE DISPATCHER, never discovered. run_review.cmd requires --review-output-base <authorized writable base> and passes it to the runner, which canonicalises it, proves it is disjoint in BOTH directions from every forbidden root, creates exactly one FRESH child <base>/itsf-review/<REVIEW_ID>-<first 12 of MANIFEST_SHA256>, and proves CREATE/WRITE/RENAME/DELETE there by performing them. No default, no fallback, no environment read, no known folder, no profile inference: a missing parameter is a DELIVERY FAILURE before the guard arms. No username and no absolute workspace path enters the contract.",
     "scratch_is_evidence": false,
     "scratch_lifecycle": {
       "after_failure": "KEPT for diagnosis and labelled EPHEMERAL_DO_NOT_READ_AS_EVIDENCE.txt",
       "after_success": "REMOVED by the runner, walking and unlinking",
-      "before": "created empty by the launcher, then removed and recreated by the runner BEFORE the guard arms, because shutil.rmtree is one of the escape classes the guard denies outright",
+      "before": "created empty by the runner inside the fresh child, before the guard arms. Nothing pre-exists it, because the child itself is new.",
       "during": "the only place temporary files may exist"
     },
-    "sealed_payload": "IMMUTABLE to review execution. The seat runs under a RESTRICTED Windows token and proved that the bundle path stays unwritable to it even with an ordinary Modify ACE present, so no in-bundle surface is declared writable and none is granted. The guard additionally denies every mutating event outside the resolved output root."
+    "sealed_payload": "IMMUTABLE to review execution. The seat runs under a RESTRICTED Windows token and proved that the bundle path stays unwritable to it even with an ordinary Modify ACE present, so no in-bundle surface is declared writable and none is granted. The guard additionally denies every mutating event outside the resolved output root.",
+    "workspace_authority": "EXPLICIT_DISPATCH_PARAMETER. TMP, TEMP and TMPDIR are SET by the runner to the validated child after it is frozen -- output routing -- and are never READ to select authority."
   }
 }

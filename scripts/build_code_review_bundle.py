@@ -652,56 +652,56 @@ G.block_colorama()
 # machine. That accident was masking the dependency, not satisfying it.
 import ctypes                                             # noqa: E402,F401
 
-# EPHEMERAL SCRATCH LIVES UNDER THE REVIEWER SURFACE, NOT AT THE BUNDLE ROOT.
-# The previous runner created `<bundle_root>/_tmp`, and the review seat got
-# WinError 5 there before the guard was even armed -- which was correct of the
-# seat: a sealed input directory has no business being writable. `return/` is
-# where the review contract already sends INITIAL_FINDINGS, FREEZE and
-# ATTESTATION, and it is the only surface the seat has demonstrably been able to
-# write. Scratch is a DOT directory inside it so it can never be mistaken for a
-# reviewer artefact.
-# THE OUTPUT ROOT IS EXTERNAL AND IS FROZEN HERE, BEFORE THE GUARD ARMS.
+# THE WORKSPACE IS SUPPLIED, NOT DISCOVERED, AND IT IS FROZEN BEFORE THE GUARD.
 #
 # The bundle is immutable to review execution: the seat runs under a restricted
-# token that cannot write inside it whatever its ACL says. The launcher has
-# already resolved, created and PROVED a seat-native root; this re-derives the
-# same path from the sealed manifest and refuses if the two disagree, so the
-# env var cannot be used to point execution at an arbitrary directory.
+# token that cannot write inside it whatever its ACL says. Four earlier attempts
+# went looking for a writable directory instead -- one inside the bundle, then
+# `tempfile.gettempdir()`, then a known-folder lookup -- and each was the same
+# mistake wearing a different API: a sealed object guessing at something only
+# the dispatcher knows. So the base arrives as ONE explicit launch argument,
+# and nothing here reads TMP, TEMP, TMPDIR, a known folder or a profile to
+# obtain it.
 import review_output as RO
 
-# NO ENVIRONMENT CHANNEL. The root is DERIVED here from the sealed manifest and
-# created here, so there is no variable a caller could set to point execution at
-# a directory of their choosing.
 try:
-    RETURN = RO.prepare(ROOT).resolve()
+    SUPPLIED = RO.parse_workspace_base(sys.argv[1:])
+except RO.OutputRootRefused as exc:
+    sys.stderr.write(
+        "DELIVERY FAILURE: " + str(exc) + "\\nLaunch through "
+        "run_review.cmd, which passes it. Report this and stop.\\n")
+    raise SystemExit(94)
+
+# CANONICALISE, PROVE DISJOINT IN BOTH DIRECTIONS, TAKE ONE FRESH CHILD,
+# EXERCISE IT, BIND IT -- all before the guard arms. Every refusal here is a
+# delivery failure rather than something to work around: the authority for this
+# path is the dispatch, not this runner and not the seat.
+try:
+    RETURN = RO.prepare(ROOT, SUPPLIED).resolve()
     BINDING = RO.binding_for(RO._manifest_with_digest(ROOT))
     RO.check_binding(RETURN, BINDING)
+    SUPPLIED_CANON = str(RO.canonical(SUPPLIED))
 except Exception as exc:
     sys.stderr.write(
-        "DELIVERY FAILURE: a review output root could not be established."
-        "\\n  " + str(exc) + "\\nReport this and stop. Do NOT try to "
-        "write inside the sealed bundle and do NOT change its permissions."
-        "\\n")
+        "DELIVERY FAILURE: the supplied review workspace could not be "
+        "established.\\n  " + str(exc) + "\\nReport this and stop. Do "
+        "NOT try to write inside the sealed bundle and do NOT change its "
+        "permissions.\\n")
     raise SystemExit(96)
-sys.stderr.write("\\n[output] review output root: " + str(RETURN) + "\\n")
+sys.stderr.write("\\n[workspace] review workspace: " + str(RETURN) + "\\n")
 
+# `prepare` created the scratch directory inside the fresh child, so there is
+# nothing to clear here. A pre-existing child is refused rather than emptied,
+# which is also why `shutil.rmtree` -- an escape class the guard denies
+# outright -- is no longer needed at all.
 SCRATCH = RETURN / RO.SCRATCH_NAME
-# LIFECYCLE, step 1: empty before execution. Done BEFORE the guard is armed,
-# because `shutil.rmtree` is one of the escape classes the guard denies
-# outright and this must not become a reason to carve a hole in that.
-import shutil
-if SCRATCH.exists():
-    shutil.rmtree(SCRATCH, ignore_errors=True)
-try:
-    SCRATCH.mkdir(parents=True)
-except OSError as exc:
-    sys.stderr.write(
-        "DELIVERY FAILURE: cannot create the review scratch directory "
-        + str(SCRATCH) + " (" + type(exc).__name__ + ": " + str(exc) + ")."
-        "\\nReport this and stop; do not try to write inside the sealed "
-        "bundle.\\n")
-    raise SystemExit(95)
 
+# OUTPUT ROUTING, NOT AUTHORITY DISCOVERY, and the distinction is the whole
+# architecture. These three are SET, after the workspace has been validated and
+# frozen, so that pytest's temporary tree and anything else that asks the
+# platform for a temp directory lands inside the one writable surface rather
+# than somewhere the guard will deny. They are never READ to choose that
+# surface: that is what the explicit parameter above is for.
 for var in ("TMP", "TEMP", "TMPDIR"):
     os.environ[var] = str(SCRATCH)
 import tempfile
@@ -729,9 +729,11 @@ DESELECT = @@DESELECT@@
 # in OBLIGATION_MAP.json and the SOURCE is in tree/ for you to read.
 NOT_COLLECTED = @@NOT_COLLECTED@@
 
-# The ONLY writable region is the resolved external output root. The bundle,
-# the runtime, the repository, quant-data and the rest of the temp base are all
-# outside it and stay read-only or denied.
+# The ONLY writable region is the frozen child. The bundle, the runtime, the
+# repository, quant-data -- and the supplied workspace BASE itself, with
+# everything else under it -- are all outside it and stay read-only or denied.
+# The base is deliberately not admitted: it was authority to create one
+# directory, not a licence to read the seat's other work.
 guard = G.arm(ROOT, RETURN, listing_only_roots=LISTING_ONLY,
               writable_root=RETURN)
 
@@ -771,6 +773,8 @@ report = {
     "in_bundle_path_ops": guard.allowed_path_ops,
     "admitted_listings": guard.admitted_listings,
     "denied": [[e, t] for e, t in guard.denials[:50]],
+    "workspace_authority": "EXPLICIT_DISPATCH_PARAMETER",
+    "supplied_workspace_base": SUPPLIED_CANON,
     "review_output_root": str(RETURN),
     "scratch_root": str(SCRATCH),
     "sealed_payload_writable": False,
