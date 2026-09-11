@@ -337,6 +337,10 @@ def main(argv):
         # WITHOUT any verdict -- there is none to record; neither cut was ever
         # dispatched -- so the property can be checked rather than trusted.
         "review_runtime": profile["review_runtime"],
+        # WRITE SURFACES. v1 declared what may be READ and said nothing about
+        # where the run may WRITE, so the runner helped itself to the sealed
+        # payload root and a seat without that permission stopped on it.
+        "write_surfaces": profile["write_surfaces"],
         "delivery_identity": {
             "id": review_id,
             "lineage": profile["lineage"],

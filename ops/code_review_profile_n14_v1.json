@@ -485,9 +485,21 @@
       "round_consumed": false,
       "substantive_verdict": "ABSENT",
       "why_retired": "delivered, and STOPPED pre-substantively on a WRITE-PERMISSION failure: the runner created its scratch directory at the SEALED BUNDLE ROOT and the review seat got WinError 5 there, before the guard was armed. Correct of the seat -- a sealed input directory has no business being writable. Retired because moving scratch onto the reviewer surface changes the runner and the guard, hence the bytes."
+    },
+    "N14-BUNDLE-004": {
+      "dispatched": false,
+      "manifests": [
+        "f83de6e3062d1f84a796a3bf4b179020fea37f46ad526cb4cc0d031f85b852c7"
+      ],
+      "on_disk_as": [
+        "N14-BUNDLE-004.RETIRED_INCOMPLETE_DECLARATION_DO_NOT_DISPATCH"
+      ],
+      "round_consumed": false,
+      "substantive_verdict": "ABSENT",
+      "why_retired": "NEVER DISPATCHED, retired by the builder's own identity discipline. Its write surfaces were declared in the build profile but not in the MANIFEST, so the reviewer could not see where ephemeral scratch appears or that it is not their artefact. Its digest had already been recorded in ops/DECISIONS.md, and re-cutting under the same id would make a committed citation resolve to a different manifest -- the exact defect DEC-CRB-ID-2 exists to prevent. So the id is retired instead."
     }
   },
-  "review_id": "N14-BUNDLE-004",
+  "review_id": "N14-BUNDLE-005",
   "review_runtime": {
     "bytes": 424900000,
     "entrypoint": "run_review.cmd (cmd.exe; no PATH lookup, no py launcher, no network, no App Execution Alias)",
