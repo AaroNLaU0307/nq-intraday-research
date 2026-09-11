@@ -34,7 +34,7 @@
     "tests_A": 1478,
     "tests_B": 1322
   },
-  "framework_commit": "b2e7a3c9bdc15e085ba80c2ba9194116c6cb811d",
+  "framework_commit": "3cac2b32cb78a9cd86da08da8b00e09f40ce094c",
   "governance_admissions": {
     "MC_METHOD_SPEC.md": "The MC method specification. Normative authority for O4-O13. FROZEN_HASH dependency of execution_identity.",
     "PROJECT_CHARTER.md": "Frozen charter clause 14 (data-role isolation) is a FROZEN_HASH dependency of execution_identity and is read by src/itsf/guards.py. Claim-blind scan: clean.",
@@ -131,7 +131,8 @@
         "authority/RULES_EXTRACT.md"
       ],
       "test_or_probe": [
-        "tree/tests/test_mc_grid_replay_n11.py"
+        "tree/tests/test_mc_grid_replay_n11.py",
+        "tree/tests/test_mc_grid_mixed_class_evidence.py"
       ]
     },
     "O13.a": {
@@ -399,7 +400,8 @@
       ],
       "test_or_probe": [
         "tree/tests/test_mc_runner_n13.py",
-        "tree/tests/test_mc_grid_channel_b27.py"
+        "tree/tests/test_mc_grid_channel_b27.py",
+        "tree/tests/test_mc_grid_mixed_class_evidence.py"
       ]
     },
     "O8": {
@@ -443,6 +445,7 @@
         "tree/tests/test_mc_registry_contract.py",
         "tree/tests/test_mc_registry_parser.py",
         "tree/tests/test_mc_supplement_registry.py",
+        "tree/tests/test_registry_generic_append_permission_boundary.py",
         "probes/test_o9_production_entry_refusals.py"
       ]
     }
@@ -497,9 +500,22 @@
       "round_consumed": false,
       "substantive_verdict": "ABSENT",
       "why_retired": "NEVER DISPATCHED, retired by the builder's own identity discipline. Its write surfaces were declared in the build profile but not in the MANIFEST, so the reviewer could not see where ephemeral scratch appears or that it is not their artefact. Its digest had already been recorded in ops/DECISIONS.md, and re-cutting under the same id would make a committed citation resolve to a different manifest -- the exact defect DEC-CRB-ID-2 exists to prevent. So the id is retired instead."
+    },
+    "N14-BUNDLE-005": {
+      "dispatched": true,
+      "manifests": [
+        "7c6d712b6e3573db0d41c15e6fb7fb2af353a6b6fb8677465950d10a7ad8c115"
+      ],
+      "on_disk_as": [
+        "N14-BUNDLE-005"
+      ],
+      "on_disk_note": "still under its original name: the retirement rename was DENIED because a process holds an open handle on the directory, most likely the seat that reviewed it. Not forced. The identity discipline does not depend on the name -- 005 maps to exactly one manifest, its round is consumed, and the dispatchable identity is 006.",
+      "round_consumed": true,
+      "substantive_verdict": "RETURNED",
+      "why_retired": "completed a valid independent SUBSTANTIVE review and returned a verdict, which consumed round 1 of 2. It is retired because the implementation target moved: round 2 is cut against the repaired commit, not the reviewed one."
     }
   },
-  "review_id": "N14-BUNDLE-005",
+  "review_id": "N14-BUNDLE-006",
   "review_runtime": {
     "bytes": 424900000,
     "entrypoint": "run_review.cmd (cmd.exe; no PATH lookup, no py launcher, no network, no App Execution Alias)",
@@ -524,11 +540,12 @@
     "unchanged_by_the_scratch_correction": true,
     "unchanged_reason": "the write-permission defect was in the bundle's runner and guard, not in the runtime. The runtime's 12002 files and 49 pins are byte-identical and its RUNTIME_MANIFEST_SHA256 is unchanged."
   },
+  "rounds_consumed_before": "YES (1 of 2)",
   "rules_extract_sources": [
     "ops/outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md (OFF-LIMITS; field-selected: ITEM_ID/TIER/RULING/POST_FREEZE_DEFINITION only)",
     "ops/DECISIONS.md row DEC-N11-B25-1, verdict cell only"
   ],
-  "substantive_round": "1 of at most 2",
+  "substantive_round": "2 of 2 (the final ordinary round)",
   "tests_deselected": [
     "tests/test_mc_supplement_integration.py::test_exercising_the_supplement_surface_writes_nothing_protected",
     "tests/test_mc_supplement_runner.py::test_production_entry_writes_nothing_anywhere",
@@ -604,6 +621,7 @@
     "tests/test_mc_feasibility_gates.py",
     "tests/test_mc_fixed_world_selection.py",
     "tests/test_mc_grid_channel_b27.py",
+    "tests/test_mc_grid_mixed_class_evidence.py",
     "tests/test_mc_grid_replay_n11.py",
     "tests/test_mc_n01_repairs.py",
     "tests/test_mc_node_integration.py",
@@ -620,7 +638,8 @@
     "tests/test_mc_supplement_provenance_battery.py",
     "tests/test_mc_supplement_registry.py",
     "tests/test_mc_supplement_runner.py",
-    "tests/test_no_public_mc_function_is_unreached.py"
+    "tests/test_no_public_mc_function_is_unreached.py",
+    "tests/test_registry_generic_append_permission_boundary.py"
   ],
   "tree_payload": [
     ".python-version",
@@ -721,6 +740,7 @@
     "tests/test_mc_feasibility_gates.py",
     "tests/test_mc_fixed_world_selection.py",
     "tests/test_mc_grid_channel_b27.py",
+    "tests/test_mc_grid_mixed_class_evidence.py",
     "tests/test_mc_grid_replay_n11.py",
     "tests/test_mc_n01_repairs.py",
     "tests/test_mc_node_integration.py",
@@ -738,6 +758,7 @@
     "tests/test_mc_supplement_registry.py",
     "tests/test_mc_supplement_runner.py",
     "tests/test_no_public_mc_function_is_unreached.py",
+    "tests/test_registry_generic_append_permission_boundary.py",
     "tests/tiers.py"
   ],
   "write_surfaces": {

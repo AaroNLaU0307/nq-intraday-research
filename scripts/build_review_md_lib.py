@@ -47,7 +47,9 @@ def render(profile: dict) -> str:
     a("```")
     a("REVIEW_ID          = %s" % profile["review_id"])
     a("LINEAGE            = %s" % profile["lineage"])
-    a("SUBSTANTIVE_ROUND  = %s   ROUND_CONSUMED_BEFORE_THIS = NO" % profile["substantive_round"])
+    a("SUBSTANTIVE_ROUND  = %s" % profile["substantive_round"])
+    a("ROUND_CONSUMED_BEFORE_THIS = %s"
+      % profile.get("rounds_consumed_before", "NO"))
     a("CONTRACT           = %s" % profile["contract_version"])
     a("PROFILE            = %s" % profile["profile_version"])
     a("BLINDNESS          = OUTCOME_BLIND + JUDGMENT_FIRST")
