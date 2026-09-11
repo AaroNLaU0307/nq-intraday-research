@@ -396,6 +396,11 @@ ENTRY_CLASSIFICATION = {
     # blobs at a pinned commit and writes a review package; it touches no
     # dataset, opens no real-run path and starts nothing.
     "scripts/build_code_review_bundle.py": "NON_REAL",
+    # ADDED 2026-09-11. The N14 Round-1 finding reproduction harness. It
+    # builds synthetic typed cells and a throwaway registry under the
+    # system temp directory; it opens no dataset, names no real-run path
+    # and starts nothing.
+    "scripts/n14_round1_repro.py": "NON_REAL",
 }
 
 #: Production functions that ARE the real-run entry for their lifecycle.
