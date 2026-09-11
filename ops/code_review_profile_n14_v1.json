@@ -461,9 +461,43 @@
       ],
       "substantive_verdict": "ABSENT",
       "why_retired": "one identity came to name TWO different manifests, which is what the contract forbids: dd2b9c26... (the invalid cut) and ecd95c69... (a valid but identity-defective cut). Neither was dispatched."
+    },
+    "N14-BUNDLE-002": {
+      "dispatched": true,
+      "manifests": [
+        "171d953c18bcbc7f3dc6e40a85fb1a845285ce390dffb17d54454a1dfdec5f43"
+      ],
+      "on_disk_as": [
+        "N14-BUNDLE-002.RETIRED_RUNTIME_PORTABILITY_DO_NOT_DISPATCH"
+      ],
+      "round_consumed": false,
+      "substantive_verdict": "ABSENT",
+      "why_retired": "presented to a review seat and STOPPED TWICE on an execution-environment delivery failure, never on its content: the seat verified 130/130 payload hashes and then could not start Python. Retired when the review runtime became part of the delivery identity, which changes ENVIRONMENT.json and the manifest."
     }
   },
-  "review_id": "N14-BUNDLE-002",
+  "review_id": "N14-BUNDLE-003",
+  "review_runtime": {
+    "bytes": 424900000,
+    "entrypoint": "run_review.cmd (cmd.exe; no PATH lookup, no py launcher, no network, no App Execution Alias)",
+    "files": 12002,
+    "identity_checks_at_launch": [
+      "certutil -hashfile RUNTIME_MANIFEST.json SHA256 == the digest fixed in this bundle at cut time (an independent hasher: it is not provided by the runtime being checked)",
+      "the runtime re-hashes all 12002 of its own files against RUNTIME_MANIFEST.json",
+      "sys.version_info[:3] == 3.13.14 and sys.platform == win32",
+      "all 49 lockfile pins present at exactly the pinned version"
+    ],
+    "is_evidence": false,
+    "is_evidence_reason": "execution infrastructure only. It carries no project code, no authority, no test and no probe, and it is cited by no obligation cell. REVIEWER_CONTRACT.md section 4.2 already classes executing a dependency as EXECUTION rather than inspection.",
+    "location": "a SIBLING directory of this bundle, resolved by one relative path from run_review.cmd",
+    "pinned_packages": 49,
+    "platform": "win32",
+    "provenance": "copied from the interpreter already shown to satisfy the bound environment identity (DEC-CRB-ENV-2/3). Nothing downloaded, nothing installed, no pin changed: the identity is unchanged, only its reachability is.",
+    "python_version": "3.13.14",
+    "python_version_major_minor": "3.13",
+    "runtime_id": "N14-RUNTIME-001",
+    "runtime_manifest_sha256": "293f460242614eb83a0281a74bc3da8532e8dc039badc1f92fb37b07cb9c27ce",
+    "startup_injection": "NONE -- every .pth is removed from the runtime and the omission is declared in RUNTIME_MANIFEST.json"
+  },
   "rules_extract_sources": [
     "ops/outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md (OFF-LIMITS; field-selected: ITEM_ID/TIER/RULING/POST_FREEZE_DEFINITION only)",
     "ops/DECISIONS.md row DEC-N11-B25-1, verdict cell only"

@@ -283,6 +283,10 @@ def main(argv):
         "pytest_version": _pytest_version(),
         "lockfile": "tree/ops/requirements.lock.txt"
         if "ops/requirements.lock.txt" in profile["tree_payload"] else None,
+        # PORTABLE RUNTIME IDENTITY. Recorded here because a version+package
+        # lock identifies an interpreter on ONE machine and says nothing about
+        # whether a review seat can reach it -- which is how two seats stopped.
+        "review_runtime": profile["review_runtime"],
         "note": ("Third-party packages are RUNTIME DEPENDENCIES, not project code "
                  "under review. ops/REVIEWER_CONTRACT.md section 4.2 already makes "
                  "executing an allowlisted module's dependencies EXECUTION rather "
@@ -296,6 +300,10 @@ def main(argv):
     b.template("code_review_bundle_guard.py",
                (REPO / "scripts" / "code_review_bundle_guard.py").read_text(encoding="utf-8"))
     b.template("run_bundle_tests.py", runner_py(profile))
+    # The reviewer's entrypoint. It is a TEMPLATE like the runner: authored for
+    # the contract, not exported from the tree.
+    from build_review_launcher_lib import render as _launcher      # noqa: E402
+    b.template("run_review.cmd", _launcher(profile))
     from o4d_probe_template import render as _probe          # noqa: E402
     b.template("probes/test_o4d_write_boundary.py", _probe())
     from o13_path_refusal_probe_template import render as _probe13   # noqa: E402
@@ -328,6 +336,7 @@ def main(argv):
         # points at two different packages. The retired identity is recorded here
         # WITHOUT any verdict -- there is none to record; neither cut was ever
         # dispatched -- so the property can be checked rather than trusted.
+        "review_runtime": profile["review_runtime"],
         "delivery_identity": {
             "id": review_id,
             "lineage": profile["lineage"],
@@ -496,6 +505,30 @@ sys.path.insert(0, str(ROOT))
 import code_review_bundle_guard as G
 
 G.block_colorama()
+
+# CTYPES IS IMPORTED HERE, BEFORE THE BOUNDARY GOES UP, AND THE REASON IS A
+# CORRECTION WORTH READING.
+#
+# The guard denies the whole `ctypes.*` audit family. On the builder's host that
+# looked survivable, and it was -- by accident. An unpinned `.pth` in that
+# machine's USER site-packages (`pip_system_certs`, reaching
+# `pip._vendor.truststore._windows`) imported `ctypes` during interpreter
+# startup, before any project code ran, so `windll.kernel32` was already bound
+# and nothing tripped the denial. On a clean interpreter -- which is exactly
+# what the portable review runtime is -- `numpy._core._internal` imports
+# `ctypes`, `ctypes/__init__.py` binds `windll.kernel32.GetLastError`, the
+# denial fires, and pandas cannot be imported at all. Measured: 3 denials, 2
+# collection errors, nothing ran.
+#
+# WHAT THIS DOES AND DOES NOT PERMIT. Importing the stdlib module binds
+# kernel32 at import time. Every LATER `ctypes.dlopen` -- loading any other
+# native library, which is the escape the reservation names -- is still denied
+# in full, and the guard report counts the refusals. So the family denial is
+# unchanged for everything the review does; what changed is that a stdlib
+# import numpy requires no longer depends on an accident of the builder's
+# machine. That accident was masking the dependency, not satisfying it.
+import ctypes                                             # noqa: E402,F401
+
 TMP = ROOT / "_tmp"
 TMP.mkdir(exist_ok=True)
 for var in ("TMP", "TEMP", "TMPDIR"):

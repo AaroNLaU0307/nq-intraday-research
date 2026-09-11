@@ -66,6 +66,15 @@
       "why": "PRE-DISPATCH DELIVERY-IDENTITY DEFECT, not a content defect. The valid re-cut reused the logical identity of the earlier invalid cut, so `N14-BUNDLE-001` came to name TWO different manifests (dd2b9c26... and ecd95c69...). CODE_REVIEW_BUNDLE_CONTRACT v1 requires a corrected delivery to carry a UNIQUE identity, because a citation of one id must resolve to one package. Both cuts are retained on disk, both marked DO_NOT_DISPATCH, and neither carries a substantive verdict: SUBSTANTIVE_VERDICT=ABSENT.",
       "entries_withdrawn": 0,
       "reissue": "the SAME accepted payload is re-cut under the next unused BUNDLE-v1 identity, N14-BUNDLE-002 (MANIFEST_SHA256 = 171d953c18bcbc7f3dc6e40a85fb1a845285ce390dffb17d54454a1dfdec5f43). 130 of 130 payload files are BYTE-IDENTICAL to the retired cut; only REVIEW.md's two id strings and the manifest differ. NOT a substantive round: LINEAGE=N14, ROUND=1 of at most 2, ROUND_CONSUMED=NO."
+    },
+    {
+      "review_id": "N14-BUNDLE-002",
+      "packet": "sealed bundle at C:\\Users\\Aaron\\quant-data\\review\\bundles (BUNDLE-v1 transport; no repository path was handed to a seat, so this register was never armed for it)",
+      "withdrawn_at": "2026-09-11",
+      "was_dispatched": true,
+      "why": "REVIEW-RUNTIME PORTABILITY DEFECT in the contract, not a content defect. The seat verified 130/130 payload hashes and then could not start Python -- twice, the second time on the exact host-local interpreter path, because the only invocable route to it is a Windows App Execution Alias. Making the runtime portable changes ENVIRONMENT.json, the manifest and the launch entrypoint, so this delivery is retired rather than mutated. Both STOP attestations are preserved with it. SUBSTANTIVE_VERDICT=ABSENT; O1-O13 UNASSESSED.",
+      "entries_withdrawn": 0,
+      "reissue": "the SAME accepted payload is re-cut as N14-BUNDLE-003 (MANIFEST_SHA256 = 7e1a16f5784a32c518b222989db193871d3ce7aa7b83022df31a60538c9ab362) beside a portable review runtime N14-RUNTIME-001 (RUNTIME_MANIFEST_SHA256 = 293f460242614eb83a0281a74bc3da8532e8dc039badc1f92fb37b07cb9c27ce). No test, probe, admission, authority or obligation-map semantics changed. NOT a substantive round: LINEAGE=N14, ROUND=1 of at most 2, ROUND_CONSUMED=NO."
     }
   ],
   "_last_returned_review": {
