@@ -448,7 +448,22 @@
     }
   },
   "profile_version": "N14-CODE-REVIEW-PROFILE v1",
-  "review_id": "N14-BUNDLE-001",
+  "retired_delivery_identities": {
+    "N14-BUNDLE-001": {
+      "dispatched": false,
+      "manifests": [
+        "dd2b9c2624cd7a2fa483df73e4a084a53db20570df7f0ad054b1940483dd811a",
+        "ecd95c6927f0d6a08ee84f18591066b8445e47ed8f26756e185567d027a94c74"
+      ],
+      "on_disk_as": [
+        "N14-BUNDLE-001.INVALID_DO_NOT_DISPATCH",
+        "N14-BUNDLE-001.RETIRED_ID_REUSE_DO_NOT_DISPATCH"
+      ],
+      "substantive_verdict": "ABSENT",
+      "why_retired": "one identity came to name TWO different manifests, which is what the contract forbids: dd2b9c26... (the invalid cut) and ecd95c69... (a valid but identity-defective cut). Neither was dispatched."
+    }
+  },
+  "review_id": "N14-BUNDLE-002",
   "rules_extract_sources": [
     "ops/outcome_quarantine/RULING_PROPOSAL_ND2_ND3_FABLE_2026-08-24.md (OFF-LIMITS; field-selected: ITEM_ID/TIER/RULING/POST_FREEZE_DEFINITION only)",
     "ops/DECISIONS.md row DEC-N11-B25-1, verdict cell only"

@@ -323,6 +323,17 @@ def main(argv):
         "transport_version": TRANSPORT_VERSION,
         "contract_version": CONTRACT_VERSION,
         "profile_version": profile["profile_version"],
+        # DELIVERY IDENTITY. Added 2026-09-11: one identity had come to name two
+        # different manifests, which the contract forbids because a citation then
+        # points at two different packages. The retired identity is recorded here
+        # WITHOUT any verdict -- there is none to record; neither cut was ever
+        # dispatched -- so the property can be checked rather than trusted.
+        "delivery_identity": {
+            "id": review_id,
+            "lineage": profile["lineage"],
+            "maps_to_manifests": 1,
+            "retired_identities": profile.get("retired_delivery_identities", {}),
+        },
         "framework_commit": b.commit,
         "repository_root_tree": git("rev-parse", "%s^{tree}" % b.commit),
         "itsf_src_tree": git("rev-parse", "%s:src/itsf" % b.commit),
