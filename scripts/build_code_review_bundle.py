@@ -90,6 +90,135 @@ CLAIM_BLIND_PATTERNS = (
 )
 
 
+#: THE PRINCIPAL THE REVIEW SEAT RUNS AS, and why this exists at all.
+#:
+#: A delivery declared `return/` writable in three places -- the manifest, the
+#: guard and REVIEW.md -- and materialised that permission nowhere. The builder
+#: runs as the repository owner, who holds FullControl by inheritance, so every
+#: builder-side check passed. The review seat runs as a DIFFERENT account that
+#: inherits ReadAndExecute only, and its launcher died creating the scratch
+#: directory with WinError 5 before the guard ever armed.
+#:
+#: Resolved BY NAME at cut time rather than by a hardcoded SID, and never the
+#: owner's own account: the grant belongs to the review seat, not to whoever
+#: happened to build the bundle.
+REVIEW_PRINCIPAL = "CodexSandboxUsers"
+#: `icacls` right set: Modify, inherited by files and subdirectories, so the
+#: scratch directory the runner creates under `return/` inherits it. This is
+#: the exact shape of the grant on the one delivery a seat demonstrably wrote
+#: into -- replicated rather than invented.
+REVIEW_SURFACE_RIGHTS = "(OI)(CI)(M)"
+#: Rights letters that confer any mutation. Anything else on a sealed surface
+#: is fine; any of these is the defect this check exists to catch.
+_WRITE_RIGHT_TOKENS = ("(F)", "(M)", "(W)", "(WD)", "(AD)", "(WA)", "(WEA)",
+                       "(D)", "(DE)", "(DC)")
+
+
+def _icacls(*args) -> tuple:
+    r = subprocess.run(["icacls", *args], capture_output=True,
+                       encoding="utf-8", errors="replace")
+    return r.returncode, (r.stdout or "") + (r.stderr or "")
+
+
+def _principal_rights(path: Path) -> list:
+    """Every rights string `icacls` reports for the review principal."""
+    code, out = _icacls(str(path))
+    if code != 0:
+        refuse("icacls could not read the ACL of %s: %s" % (path, out.strip()))
+    found = []
+    for line in out.splitlines():
+        line = line.strip()
+        if not line or ":" not in line:
+            continue
+        who, _, rights = line.rpartition(":")
+        if who.split(chr(92))[-1].strip() == REVIEW_PRINCIPAL:
+            found.append(rights.strip())
+    return found
+
+
+def materialise_write_surfaces(root: Path) -> dict:
+    """Make the DECLARED writable surface actually writable for the seat.
+
+    Only `return/`. Nothing else is touched, so every sealed surface keeps the
+    read-only inheritance the principal already has -- which is why this is a
+    grant and not a matching set of denials.
+    """
+    code, out = _icacls(str(root / "return"), "/grant",
+                        "%s:%s" % (REVIEW_PRINCIPAL, REVIEW_SURFACE_RIGHTS))
+    if code != 0:
+        refuse("could not grant the review principal %r write access to "
+               "return/: %s" % (REVIEW_PRINCIPAL, out.strip()))
+    return {"principal": REVIEW_PRINCIPAL, "rights": REVIEW_SURFACE_RIGHTS,
+            "surface": "return/"}
+
+
+def verify_write_surfaces(root: Path, profile: dict) -> dict:
+    """DECLARED write surfaces == MEASURED effective write surfaces.
+
+    Generic, not attempt-specific: it reads what is DECLARED writable and
+    checks the filesystem agrees, for the principal that will actually run the
+    review. Two halves, and both are needed --
+
+      * the declared surface must carry an explicit INHERITABLE grant, and a
+        real create/write/rename/delete must succeed there;
+      * every sealed surface must give that principal NO mutation right.
+
+    The builder cannot impersonate the review principal, so the seat-side half
+    is established structurally -- the grant and its inheritance flags -- not
+    by performing a write as that user. The probes are real filesystem
+    operations under the builder's own token, which is what proves the surface
+    exists and is usable at all.
+    """
+    writable = ["return"]
+    sealed = ["", "tree", "authority", "probes", "environment",
+              "MANIFEST.json", "REVIEW.md", "run_review.cmd",
+              "run_bundle_tests.py", "code_review_bundle_guard.py"]
+    report = {"principal": REVIEW_PRINCIPAL, "declared_writable": writable,
+              "sealed_checked": sealed, "probes": [], "grants": {}}
+
+    for rel in writable:
+        rights = _principal_rights(root / rel)
+        explicit = [r for r in rights if "(I)" not in r]
+        report["grants"][rel] = explicit
+        if not explicit:
+            refuse("declared writable surface %r carries NO explicit grant for "
+                   "%r -- the declaration would be a comment, not a permission"
+                   % (rel, REVIEW_PRINCIPAL))
+        if not any(t in r for r in explicit for t in ("(M)", "(F)", "(W)")):
+            refuse("declared writable surface %r grants %r no write right: %s"
+                   % (rel, REVIEW_PRINCIPAL, explicit))
+        if not all("(OI)" in r and "(CI)" in r for r in explicit):
+            refuse("the grant on %r is not inheritable (%s); the scratch "
+                   "directory the runner creates under it would not inherit it"
+                   % (rel, explicit))
+
+    for rel in sealed:
+        target = root / rel if rel else root
+        for r in _principal_rights(target):
+            if any(t in r for t in _WRITE_RIGHT_TOKENS):
+                refuse("sealed surface %r grants %r a mutation right (%s); the "
+                       "payload must be read-only to review execution"
+                       % (rel or "<bundle root>", REVIEW_PRINCIPAL, r))
+
+    # Real filesystem operations, not ACL text. Create, write, rename, delete,
+    # and a NESTED directory, because the runner makes `return/.scratch`.
+    probe = root / "return" / ".write_surface_probe"
+    try:
+        probe.mkdir()
+        first = probe / "a.txt"
+        first.write_text("probe", encoding="utf-8")
+        first.replace(probe / "b.txt")
+        (probe / "b.txt").unlink()
+        probe.rmdir()
+        report["probes"].append("return/: mkdir, write, rename, delete OK")
+    except OSError as exc:
+        refuse("the declared writable surface is not writable even to the "
+               "builder: %s" % exc)
+    if probe.exists():
+        refuse("the write-surface probe left residue in return/")
+    return report
+
+
 def claim_blind_hits(text: str) -> dict:
     return {name: len(pat.findall(text))
             for name, pat in CLAIM_BLIND_PATTERNS if pat.search(text)}
@@ -400,10 +529,23 @@ def main(argv):
     if (b.root / "comparand").exists():
         refuse("comparand/ must be absent at initial cut")
 
+    # WRITE SURFACES LAST, and VERIFIED rather than declared. The ACL is
+    # delivery STATE, not manifest bytes, so this disturbs neither the
+    # digest nor determinism -- and it is exactly the state a reviewer
+    # receives.
+    granted = materialise_write_surfaces(b.root)
+    surfaces = verify_write_surfaces(b.root, profile)
+
     digest = sha256_bytes((b.root / "MANIFEST.json").read_bytes())
     print("bundle:          %s" % b.root)
     print("payload files:   %d" % len(b.payload))
     print("MANIFEST_SHA256: %s" % digest)
+    print("write surface:   %s granted %s on %s; %d sealed surfaces "
+          "verified non-writable for that principal"
+          % (granted["principal"], granted["rights"],
+             granted["surface"], len(surfaces["sealed_checked"])))
+    for line in surfaces["probes"]:
+        print("                 %s" % line)
     return digest
 
 

@@ -513,9 +513,21 @@
       "round_consumed": true,
       "substantive_verdict": "RETURNED",
       "why_retired": "completed a valid independent SUBSTANTIVE review and returned a verdict, which consumed round 1 of 2. It is retired because the implementation target moved: round 2 is cut against the repaired commit, not the reviewed one."
+    },
+    "N14-BUNDLE-006": {
+      "dispatched": true,
+      "manifests": [
+        "1342191cefd1c05f9e270f9c4c7a0a1699a577e383b4bfb7bf678c3db6639011"
+      ],
+      "on_disk_as": [
+        "N14-BUNDLE-006"
+      ],
+      "round_consumed": false,
+      "substantive_verdict": "ABSENT",
+      "why_retired": "delivered to a fresh round-2 seat and STOPPED pre-substantively: it verified the manifest, all 133 payload hashes, the runtime, the interpreter and all 49 pins, then failed creating return/.scratch with WinError 5. The bundle DECLARED return/ writable and never materialised a permission for the review principal, which is a different account inheriting ReadAndExecute only. Preserved unmutated: its permission state is part of what that seat actually received."
     }
   },
-  "review_id": "N14-BUNDLE-006",
+  "review_id": "N14-BUNDLE-007",
   "review_runtime": {
     "bytes": 424900000,
     "entrypoint": "run_review.cmd (cmd.exe; no PATH lookup, no py launcher, no network, no App Execution Alias)",
