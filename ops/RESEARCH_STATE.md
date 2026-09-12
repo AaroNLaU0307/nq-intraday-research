@@ -1,5 +1,13 @@
 # RESEARCH_STATE — ITSF (the ITSF stage authority under QROS-CF v2, per OD-CF-3)
 
+> **PRE-CUTOVER (2026-09-12) — superseded as stage authority.** The current state
+> authority for ITSF is `PROJECT_STATE.md` at the repository root, under
+> `Quant trade/QUANT_WORKFLOW_VNEXT.md`. This page is retained unrewritten as the
+> QROS-CF v2 record: read it to interpret or reproduce pre-cutover work. **N14 is
+> CLOSED** (DEC-N14-CLOSE-1) and N15 is now the S3 mechanical run gate — see
+> `PROJECT_STATE.md`. The sealed preregistration, outcome blinding, the exposure
+> ledger and every Owner gate below remain in force.
+
 ```
 RECORD_TYPE     = RESEARCH_STATE (QROS-CF v2 §2.2; one page; rewritten in place, history in git)
 OUTCOME_CLEAN   = YES — never quarantined; restates no verdict, exposure count or revealed value
