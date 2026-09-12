@@ -154,7 +154,7 @@
     "root_tree": "3d29e6cebc23fee7590a4f671b8169cca12bd204"
   },
   "retired_delivery_identities": {},
-  "review_id": "N14-POSTHOLD-VERIFY-001",
+  "review_id": "N14-POSTHOLD-VERIFY-002",
   "review_runtime": {
     "bytes": 424900000,
     "entrypoint": "run_review.cmd (cmd.exe; no PATH lookup, no py launcher, no network, no App Execution Alias)",
@@ -192,6 +192,13 @@
     "ops/DECISIONS.md row DEC-N11-B25-1, verdict cell only"
   ],
   "substantive_round": "NONE -- this is a post-HOLD remediation verification and consumes no review round",
+  "supersedes": {
+    "N14-POSTHOLD-VERIFY-001": {
+      "dispatched": false,
+      "manifest_sha256": "5a7f487c1f1589ea84ace9b81fab2addb8a4dcc9516e02036c4843726019507f",
+      "why_superseded": "VERIFICATION-CONTRACT WORDING ONLY. Its VERIFY.md section 0 sent everything outside the literal seven findings to a separated section that could not affect closure, and section 6 defined the overall result purely from the seven closure values -- so a concrete repair-induced blocker in a seam the repair itself changed had no path to the outcome. The Owner-authorized scope requires that such a blocker PREVENT overall verification. Nothing else differs: the repaired tree, the tests, the runtime, the methodology, the round accounting and the F01-F07 definitions are byte-identical."
+    }
+  },
   "tests_deselected": [
     "tests/test_mc_supplement_integration.py::test_exercising_the_supplement_surface_writes_nothing_protected",
     "tests/test_mc_supplement_runner.py::test_production_entry_writes_nothing_anywhere",
