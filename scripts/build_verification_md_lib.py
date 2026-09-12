@@ -172,7 +172,18 @@ def render(profile: dict) -> str:
     a("row against the file it names. `MANIFEST.json` does not contain its own")
     a("hash -- a document that certifies itself certifies nothing.")
     a("")
-    a("**The %s production files the repair touched:**"
+    if target.get("changed_since_commit"):
+        a("**What \"changed\" is measured against, so the scope is not a**")
+        a("**judgement call.** The seams below are the files that moved")
+        a("between `%s` -- %s -- and the commit above."
+          % (target["changed_since_commit"][:12],
+             target.get("changed_since_reason", "your last verified target")))
+        a("")
+        for row in target.get("repair_commits_in_order", []):
+            a("* `%s` -- %s" % (row["commit"][:12], row["what"]))
+            a("  (%s)" % ", ".join("`%s`" % p for p in row["production_files"]))
+        a("")
+    a("**The %s production files the repairs touched:**"
       % _count(len(profile["repaired_target"]["production_files_changed"])))
     a("")
     for path in profile["repaired_target"]["production_files_changed"]:
@@ -182,6 +193,13 @@ def render(profile: dict) -> str:
     a("tree digests above pin it, and `git` is not needed to check them because")
     a("every payload row carries its blob id.")
     a("")
+    if target.get("production_files_NOT_changed_by_either_repair"):
+        a("**And these did NOT move**, which several of the controls below")
+        a("turn on:")
+        a("")
+        for path in target["production_files_NOT_changed_by_either_repair"]:
+            a("* `%s`" % path)
+        a("")
 
     a("## 2. The frozen baseline, carried byte-exact")
     a("")
