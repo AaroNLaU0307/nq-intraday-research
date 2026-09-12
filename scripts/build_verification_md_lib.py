@@ -113,6 +113,18 @@ def render(profile: dict) -> str:
     a("```")
     a("")
 
+    # THE READ BOUNDARY COMES BEFORE EVERYTHING ELSE, and it is unnumbered on
+    # purpose: it governs the reviewer's FIRST action, and numbering it would
+    # renumber every section the prose already cites. A delivery that states
+    # what may be read only in an authority document written for a DIFFERENT
+    # verification shape is a delivery that has not stated it.
+    if profile.get("read_boundary"):
+        a("## READ BOUNDARY -- read this before your first command")
+        a("")
+        for line in profile["read_boundary"]:
+            a(line)
+        a("")
+
     a("## 0. What you are being asked, and what you are not")
     a("")
     controls = profile.get("non_regression_controls") or []
