@@ -3,11 +3,14 @@ proves the formal prepare path consumes the EXTERNAL custody authority).
 
 Order is the whole point:
   1. guards (G9 + second-copy attestations);
-  2. for the REAL MC only, the real-MC authorization gate — which refuses
-     DETERMINISTICALLY today, so the sealed bundle bytes are NEVER read on
-     that path. N09's supplement path carries the real-data guards and NOT
-     that gate, per Aaron's 2026-09-05 ruling: the MC is downstream of N09,
-     so gating N09 on it inverted the approved order;
+  2. for the REAL MC only, the real-MC authorization gate. It refuses on
+     THIS module's real-MC path -- `prepare_real_mc_input` cannot supply
+     the bindings the gate now requires -- so the sealed bundle bytes are
+     never read there. The real run goes through `scripts/mc_real_run.py`,
+     which supplies them and then calls the assembly below. N09's
+     supplement path carries the real-data guards and NOT that gate, per
+     Aaron's 2026-09-05 ruling: the MC is downstream of N09, so gating N09
+     on it inverted the approved order;
   3. only then: load the typed custody authority from the blind post-run
      attestation (outside the bundle under review) and prepare.
 
@@ -48,9 +51,14 @@ def _assemble_from_sealed_run() -> "mcc.PreparedMCInput":
 
 
 def prepare_real_mc_input() -> "mcc.PreparedMCInput":
-    """Gate-first production prepare FOR THE REAL MC. Unreachable past the
-    authorization gate until Aaron + Codex introduce the MC registry
-    vocabulary.
+    """Gate-first production prepare FOR THE REAL MC.
+
+    SUPERSEDED AS THE RUN PATH, 2026-09-13. `scripts/mc_real_run.py` is the
+    production entry now: the gate takes the run id, both commits, the
+    sealed supplement and the bundle digest, and this function has none of
+    them to give. It therefore refuses here on every call -- safely, and for
+    the right reason -- and is kept because `_assemble_from_sealed_run`
+    below is still THE assembly and this is still its gated wrapper.
 
     UNCHANGED by the 2026-09-05 ruling, deliberately: that ruling was about
     where the gate does NOT belong, not about weakening it where it does.

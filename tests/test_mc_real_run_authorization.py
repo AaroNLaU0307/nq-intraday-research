@@ -133,8 +133,9 @@ def test_the_production_entrypoint_refuses_before_reading_anything(
     monkeypatch.setattr(bp, "precheck_bundle_on_disk", explode)
     monkeypatch.setattr(mcc, "prepare_mc_input", explode)
 
+    from itsf.mc import real_input as ri
     with pytest.raises((McConsumerAbsent, RunBlockedError)):
-        entry.main(bundle_root=str(entry.REPO))
+        entry.main(bundle_root=str(ri.SEALED_RUN_DIR))
     assert opened == [], "something was read before the entry refused"
 
 
@@ -472,6 +473,123 @@ def test_the_synthetic_entry_is_unaffected_by_the_gate():
     body = inspect.getsource(run.execute_full_mc_for_tests)
     assert "authorize_real_mc" not in body
     assert "authorize_real_mc" in inspect.getsource(run.execute_full_mc)
+
+
+# == 4b. the whole post-gate wiring, exercised ===========================
+
+def test_main_reaches_execute_full_mc_with_the_right_arguments(
+        authorized, monkeypatch):
+    """THE test that was missing, and whose absence cost two launches.
+
+    `main()` past the gate was never executed by anything: the tests called
+    the gate directly and the launcher could not import the module. So the
+    glue between gate, precheck, assembly and runner was never run, and it
+    was wrong twice -- once passing the REGISTRY snapshot where an
+    authorization mapping was required, once not being importable at all.
+
+    This drives `main()` end to end with the two heavy ends replaced: the
+    bundle precheck and the production assembly. Everything between them --
+    the gate, both phases, the commit re-check, the arguments handed to the
+    runner -- is the real code. No data is read, no MC is computed, nothing
+    is written.
+
+    IT DOES NOT, BY ITSELF, CATCH A WRONG ASSEMBLY: the assembly is the
+    stub here. What forbids a second one is
+    `test_the_assembly_is_real_inputs_and_this_file_does_not_hand_roll_it`
+    below, and the pair is the property -- one assembly, and this glue
+    reaches it.
+    """
+    import scripts.mc_real_run as entry
+    from itsf.mc import real_input as ri
+    from itsf.mc import mc_runner as run
+
+    rel = _write(authorized, _authorization())
+    monkeypatch.setattr(mcc, "MC_AUTHORIZATION_PATH", rel)
+    monkeypatch.setattr(entry, "RUN_ID", RUN_ID)
+    monkeypatch.setattr(entry, "_sealed_supplement",
+                        lambda: ({"schema": "x"}, SUPPLEMENT))
+    # The git measurement is the one seam: `execution_checkout` is a DEFAULT
+    # ARGUMENT, bound when the gate was defined, so setting the module
+    # attribute would change nothing. The gate itself still runs for real --
+    # only "what is the checkout at" is answered by the fixture.
+    _gate = mcc.authorize_real_mc
+    monkeypatch.setattr(
+        mcc, "authorize_real_mc",
+        lambda *a, **k: _gate(*a, execution_checkout=_checkout(), **k))
+
+    import itsf.guards as guards
+    monkeypatch.setattr(guards, "assert_real_run_allowed", lambda *a, **k: None)
+
+    class _PC:
+        summary_digest = BUNDLE
+    import itsf.mc.bundle_precheck as bp
+    monkeypatch.setattr(bp, "precheck_bundle_on_disk", lambda *_a, **_k: _PC())
+
+    class _Prepared:
+        authorized_commit = COMMIT
+    monkeypatch.setattr(ri, "_assemble_from_sealed_run", lambda: _Prepared())
+
+    seen = {}
+
+    class _Result:
+        run_id = RUN_ID
+
+    def _exec(prepared, **kw):
+        seen.update(kw)
+        seen["prepared"] = prepared
+        return _Result()
+
+    monkeypatch.setattr(run, "execute_full_mc", _exec)
+
+    rc = entry.main(bundle_root=str(ri.SEALED_RUN_DIR))
+    assert rc == 0, rc
+    assert seen["run_id"] == RUN_ID
+    assert seen["sealed_artifact_sha256"] == SUPPLEMENT
+    assert seen["bundle_summary_digest"] == BUNDLE
+    assert seen["prepared"].authorized_commit == COMMIT
+
+
+def test_the_assembly_is_real_inputs_and_this_file_does_not_hand_roll_it():
+    """ONE assembly, and this is not it.
+
+    The second failed launch was a duplicate: this entry built its own
+    `prepare_mc_input` call, passed the REGISTRY snapshot where a
+    `{trial_id, authorized_commit}` mapping was required, and was refused
+    `authorization_snapshot_missing` -- after the bundle had been read.
+    `real_input._assemble_from_sealed_run` had been the production assembly
+    since R2.1 and already did it correctly.
+
+    So the rule is structural, not stylistic: this file calls the assembly,
+    it does not contain one. A future edit that reintroduces a local
+    `prepare_mc_input` call reintroduces exactly the defect.
+    """
+    import ast
+    import inspect
+    import scripts.mc_real_run as entry
+    from itsf.mc import real_input as ri
+
+    # A CALL, parsed -- not a substring. The comment above the delegation
+    # names the function it is warning about, and a substring check would
+    # fire on the warning itself.
+    tree = ast.parse(inspect.getsource(entry))
+    called = {
+        node.func.attr if isinstance(node.func, ast.Attribute)
+        else getattr(node.func, "id", "")
+        for node in ast.walk(tree) if isinstance(node, ast.Call)}
+    assert "prepare_mc_input" not in called, (
+        "this entry builds a prepared input itself again; there is one "
+        "assembly and it lives in real_input._assemble_from_sealed_run")
+    assert "_assemble_from_sealed_run()" in inspect.getsource(entry.main)
+    # and the assembly it delegates to supplies what the battery requires
+    snapshot_src = inspect.getsource(ri._assemble_from_sealed_run)
+    assert "trial_id" in snapshot_src and "authorized_commit" in snapshot_src
+
+
+def test_a_bundle_root_that_is_not_the_pinned_one_refuses():
+    """The root is pinned in code; the argument states it and a
+    disagreement refuses rather than silently preferring one."""
+    import scripts.mc_real_run as entry
+    assert entry.main(bundle_root="C:" + chr(92) + "nope") == 4
 
 
 # == 5. nothing real was created ==========================================

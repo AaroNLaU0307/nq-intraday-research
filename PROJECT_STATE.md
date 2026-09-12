@@ -37,8 +37,11 @@ OPEN_MATERIAL_BLOCKERS = NONE mechanical. The sealed bundle is identified,
                       standing authorization — authorize against the HEAD in
                       the block above and commit nothing before the run.
                       Non-blocking rows carried: B-35, NB1, B-29, B-30.
-NEXT_OWNER_DECISION = write `ops/MC_RUN_AUTHORIZATION.json`. REAL_MC =
-                      NOT AUTHORIZED. N16 NOT EXECUTED.
+NEXT_OWNER_DECISION = write `ops/MC_RUN_AUTHORIZATION.json` against the
+                      HEAD measured at that moment. REAL_MC = NOT
+                      AUTHORIZED. N16 NOT EXECUTED. MC-R001 UNUSED —
+                      twice authorized, twice stopped by mechanical
+                      infrastructure BEFORE the run began, never started.
 ```
 
 ## The authorization's two commits, separated 2026-09-13
@@ -71,6 +74,54 @@ Two consequences worth knowing before writing the authorization:
 * `ops/MC_RUN_AUTHORIZATION.json` is NOT in the governed set
   (`covering_mechanism` returns None for it), so writing it does not dirty
   the governed checkout and cannot invalidate the gate it feeds.
+
+## MC-R001: two non-executions and the repair — 2026-09-13
+
+The Owner authorized MC-R001 twice. **It has never started.** Both launches
+failed in this session's own launch/entry plumbing, before any bundle byte
+was consumed by a run, and both authorizations are voided by rename:
+
+```
+ae964754…  ModuleNotFoundError: No module named 'scripts'
+           `run_governed.py` launched the child with `-P`, which keeps the
+           launcher's own directory off `sys.path`, so a `scripts.*` target
+           could not be imported. Nothing ran. Repaired by appending the
+           repository root after `src`; pinned by a regression test.
+           VOID file: ops/MC_RUN_AUTHORIZATION.VOID_ae964754_never_executed.json
+
+27fe40f3…  MCInputError: authorization_snapshot_missing
+           THE GATE PASSED. The entry then built its own prepared input and
+           handed `prepare_mc_input` the REGISTRY snapshot where a
+           `{trial_id, authorized_commit}` mapping is required. Nothing ran.
+           VOID file: ops/MC_RUN_AUTHORIZATION.VOID_27fe40f3_never_executed.json
+```
+
+EVIDENCE OF NON-EXECUTION, measured after the second failure: `runs/`
+contains only `S0-T001_20260813T170432Z`; `attempts/` only
+`S0-T001-A20260813T170432Z`; zero registry rows mention MC-R001; registry
+sha256 `b964b19a6b788bf9f47d1d24018dfc93836f74cbfd7ef69e4680471368d11fe9`.
+
+ROOT CAUSE OF THE SECOND, stated plainly because it was a builder error and
+not a design gap: **the assembly already existed.**
+`real_input._assemble_from_sealed_run` has been the production prepare
+caller since R2.1 and already pins the Owner-bound bundle root as
+`SEALED_RUN_DIR`. `scripts/mc_real_run.py` duplicated it and got it wrong.
+An earlier builder statement on this page's lineage — "no pinned governed
+bundle root exists in code" — was **wrong**, and that error is what made the
+duplicate look necessary.
+
+REPAIR (engineering only; no methodology, threshold, input, sample or
+authority changed):
+
+* the entry calls `real_input._assemble_from_sealed_run()` and contains no
+  assembly of its own — enforced by an AST test that fails on any local
+  `prepare_mc_input(` call;
+* the bundle-root argument is checked against `SEALED_RUN_DIR` and refuses
+  (exit 4) on disagreement, rather than silently preferring either;
+* the gate's authorization path is passed explicitly, so the module constant
+  and the file actually read cannot diverge through a def-time default;
+* `main()` is now exercised end to end past the gate — the testability gap
+  that allowed both failures. Previously nothing had ever executed it.
 
 ## The sealed bundle, Owner-bound 2026-09-13
 

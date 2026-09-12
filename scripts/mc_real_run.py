@@ -33,11 +33,18 @@ OWNER_DECISION row. Under `QUANT_WORKFLOW_VNEXT` §0 that is level-4 project
 history. What IS current is vNext §10: a real Monte Carlo run is Owner-only,
 and `consumer.authorize_real_mc` is where that is enforced.
 
-BUNDLE ROOT IS A REQUIRED ARGUMENT WITH NO DEFAULT, deliberately. No pinned
-governed bundle root exists in code -- `AUTHORIZED_JOB_DIR` pins the vendor
-job directory, not the 14-file sealed bundle -- and inventing one would be a
-builder choosing a data root. That is Aaron's, exactly as the job directory
-was.
+THE BUNDLE ROOT IS PINNED IN CODE, and this file does not pin it.
+`real_input.SEALED_RUN_DIR` has named the Owner-bound sealed run directory
+since R2.1. (An earlier version of this docstring said no pinned root
+existed; that was wrong, and duplicating what `real_input` already owned is
+what broke the second launch.) The argument is still required, with no
+default: it makes the caller STATE which root it believes it is running, and
+a disagreement with the pinned one refuses.
+
+ONE ASSEMBLY. The prepared input is built by
+`real_input._assemble_from_sealed_run` and by nothing here -- see the
+comment at the call site, and
+`test_the_assembly_is_real_inputs_and_this_file_does_not_hand_roll_it`.
 """
 from __future__ import annotations
 
@@ -134,14 +141,23 @@ def main(bundle_root: str = "", output_root: str = "") -> int:
     """The real run. Refuses before reading anything without the Owner."""
     from itsf.mc import consumer as mcc
     from itsf.mc import mc_runner as run
+    from itsf.mc import real_input as _real_input
     from itsf.mc.registry_boundary import resolve_registry
 
+    # THE BUNDLE ROOT IS PINNED IN CODE as `real_input.SEALED_RUN_DIR`, and
+    # has been since R2.1. The argument exists so the caller STATES which
+    # root it believes it is running; a disagreement refuses rather than
+    # silently preferring one of them.
+    if bundle_root and Path(bundle_root) != _real_input.SEALED_RUN_DIR:
+        sys.stderr.write(
+            "mc_real_run: REFUSING — the supplied bundle root %s is not the "
+            "pinned sealed run directory %s"
+            % (bundle_root, _real_input.SEALED_RUN_DIR) + chr(10))
+        return 4
     if not bundle_root:
         sys.stderr.write(
-            "mc_real_run: REFUSING — no bundle root supplied. There is no "
-            "pinned governed bundle root in code and this entrypoint will "
-            "not invent one; the sealed 14-file bundle's location is the "
-            "Owner's to name, as the vendor job directory was.\n")
+            "mc_real_run: REFUSING — no bundle root supplied. It is pinned "
+            "as real_input.SEALED_RUN_DIR and the argument must state it.\n")
         return 2
 
     # THE TRUSTED-LAUNCH GATE, with the production defaults. Every sanctioned
@@ -161,11 +177,18 @@ def main(bundle_root: str = "", output_root: str = "") -> int:
     # from the authorization itself and re-checked against the prepared
     # input below: the gate refuses an unauthorized call at zero cost, and
     # a mismatched one before the run starts.
+    #
+    # `path=` is passed EXPLICITLY. The gate takes it as a default argument,
+    # which binds at definition time, so `MC_AUTHORIZATION_PATH` and the path
+    # actually consulted could silently differ -- and `_declared_commit` below
+    # reads the module constant. Passing it keeps one authority for where the
+    # authorization lives, and makes the two reads provably the same file.
     mcc.authorize_real_mc(
         resolution.snapshot.text,
         run_id=RUN_ID,
         input_bundle_commit=_declared_commit(mcc),
-        sealed_supplement_sha256=supplement_sha)
+        sealed_supplement_sha256=supplement_sha,
+        path=mcc.MC_AUTHORIZATION_PATH)
 
     # ---- only now is anything read -----------------------------------
     #
@@ -181,14 +204,21 @@ def main(bundle_root: str = "", output_root: str = "") -> int:
         run_id=RUN_ID,
         input_bundle_commit=_declared_commit(mcc),
         sealed_supplement_sha256=supplement_sha,
-        bundle_summary_digest=precheck.summary_digest)
+        bundle_summary_digest=precheck.summary_digest,
+        path=mcc.MC_AUTHORIZATION_PATH)
     commit = str(authorization["input_bundle_commit"])
-    bundle = {e.name: (Path(bundle_root) / e.name).read_bytes()
-              for e in precheck.recomputed}
-    attestation = (REPO / mcc.ATTESTATION_PATH).read_bytes()
-    prepared = mcc.prepare_mc_input(
-        bundle, authorization_snapshot=resolution.snapshot,
-        attestation_bytes=attestation)
+    # THE ASSEMBLY IS `real_input`'s, NOT THIS FILE'S.
+    #
+    # `_assemble_from_sealed_run` has been the production prepare caller
+    # since R2.1 PHASE F: it reads the attestation, constructs the custody
+    # authority INSIDE `prepare_mc_input`, and builds the authorization
+    # snapshot as the `{trial_id, authorized_commit}` mapping that function
+    # requires. This file hand-rolled that and got it wrong -- it passed the
+    # REGISTRY snapshot, an object carrying none of those keys, and
+    # `prepare_mc_input` refused `authorization_snapshot_missing` after the
+    # bundle had already been read. There is one assembly, and this was
+    # never it.
+    prepared = _real_input._assemble_from_sealed_run()
     if prepared.authorized_commit != commit:
         sys.stderr.write(
             "mc_real_run: REFUSING — the authorization names commit %s and "
