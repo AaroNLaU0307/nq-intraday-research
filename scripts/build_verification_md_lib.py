@@ -16,7 +16,11 @@ builder sentence is worth nothing here that it was not worth before.
 
 def _targets_section(profile: dict, add) -> None:
     for target in profile["verification_targets"]:
-        add("### %s -- %s" % (target["id"], target["title"]))
+        title = target["title"]
+        head = (title if title.startswith(target["id"] + " ")
+                or title.startswith(target["id"] + " -")
+                else "%s -- %s" % (target["id"], title))
+        add("### %s" % head)
         add("")
         add("**FROZEN FINDING (the claim under verification).** %s"
             % target["frozen_finding"])
@@ -113,17 +117,14 @@ def render(profile: dict) -> str:
     a("")
     controls = profile.get("non_regression_controls") or []
     if controls:
-        a("**ASKED, PRIMARY:** for %s -- the findings you left NOT_CLOSED, and"
-          % ids)
-        a("the consequential blocker you raised -- determine independently")
-        a("whether the stated failure path still exists in the exact repaired")
-        a("tree carried in `tree/`.")
+        for line in _wrap("**ASKED, PRIMARY:** for %s -- %s"
+                          % (ids, profile["asked_primary"])):
+            a(line)
         a("")
-        a("**ASKED, CONTROL ONLY:** for %s -- which you already verified CLOSED"
-          % ", ".join(control_ids))
-        a("-- determine whether this residual repair REOPENED any of them. That")
-        a("is a non-regression question and nothing more: do not re-derive their")
-        a("closure and do not treat them as fresh substantive review.")
+        for line in _wrap("**ASKED, CONTROL ONLY:** for %s -- %s"
+                          % (", ".join(control_ids),
+                             profile["asked_control"])):
+            a(line)
         a("")
     else:
         a("**ASKED:** for each of the %s frozen findings %s, determine"
@@ -138,9 +139,11 @@ def render(profile: dict) -> str:
     a("footnote would be asking you to certify closure you do not believe in.")
     a("")
     a("**THE SEAMS THAT ARE IN SCOPE ARE MECHANICAL, not a judgement call.**")
-    a("They are the %s production files listed in section 1, and the call"
-      % _count(len(profile["repaired_target"]["production_files_changed"])))
-    a("sites the repair itself altered inside them. Anything reachable only by")
+    n = len(profile["repaired_target"]["production_files_changed"])
+    a("They are the %s production file%s listed in section 1, and the call"
+      % (_count(n), "" if n == 1 else "s"))
+    a("sites the repair itself altered inside %s. Anything reachable only by"
+      % ("it" if n == 1 else "them"))
     a("going further afield is out of scope.")
     a("")
     a("**NOT ASKED:** to re-adjudicate O1-O13, to audit the repository, to")
@@ -183,8 +186,11 @@ def render(profile: dict) -> str:
             a("* `%s` -- %s" % (row["commit"][:12], row["what"]))
             a("  (%s)" % ", ".join("`%s`" % p for p in row["production_files"]))
         a("")
-    a("**The %s production files the repairs touched:**"
-      % _count(len(profile["repaired_target"]["production_files_changed"])))
+    n = len(profile["repaired_target"]["production_files_changed"])
+    a("**The %s production file%s the repair%s touched:**"
+      % (_count(n), "" if n == 1 else "s",
+         "" if len(target.get("repair_commits_in_order") or [1]) == 1
+         else "s"))
     a("")
     for path in profile["repaired_target"]["production_files_changed"]:
         a("* `%s`" % path)
@@ -233,10 +239,12 @@ def render(profile: dict) -> str:
     a("scan is unchanged and did run over every byte.")
     a("")
 
-    a("## 3. The %s verification targets"
-      % _count(len(profile["verification_targets"])))
+    many = len(profile["verification_targets"]) != 1
+    a("## 3. The %s verification target%s"
+      % (_count(len(profile["verification_targets"])), "s" if many else ""))
     a("")
-    a("Each is stated as the FROZEN claim, the repaired loci, and what closure")
+    a("%s stated as the FROZEN claim, the repaired loci, and what closure"
+      % ("Each is" if many else "It is"))
     a("requires. The closure criterion is the finding's own required repair")
     a("intent -- not a criterion invented to be satisfiable.")
     a("")
@@ -245,12 +253,8 @@ def render(profile: dict) -> str:
     if profile.get("non_regression_controls"):
         a("## 3.1 The non-regression controls")
         a("")
-        a("You verified these CLOSED against the previous repair. The only")
-        a("question here is whether the residual repair reopened one. A repair")
-        a("that closes its own findings by reopening an earlier one has not")
-        a("produced a remediation, which is why they are in the package at all")
-        a("-- and equally, re-adjudicating them would be the broad review this")
-        a("delivery is not.")
+        for line in _wrap(profile["controls_preamble"]):
+            a(line)
         a("")
         for control in profile["non_regression_controls"]:
             a("**%s -- %s.** %s" % (control["id"], control["title"],
@@ -326,7 +330,8 @@ def render(profile: dict) -> str:
     a("<review workspace>\\VERIFICATION_ATTESTATION.md")
     a("```")
     a("")
-    a("`VERIFICATION_FINDINGS.md` must give, for EACH of %s:" % ids)
+    a("`VERIFICATION_FINDINGS.md` must give, for %s%s:"
+      % ("EACH of " if len(profile["verification_targets"]) != 1 else "", ids))
     a("")
     a("```")
     a("CLOSURE          CLOSED | NOT_CLOSED | CLOSED_WITH_RESERVATION")
@@ -344,9 +349,10 @@ def render(profile: dict) -> str:
         a("**Then a section `NON_REGRESSION`**, one line per control:")
         a("")
         a("```")
+        width = max(len(c) for c in control_ids)
         for index, cid in enumerate(control_ids):
-            a("%-5s NO_REGRESSION | REGRESSED%s"
-              % (cid, "   + what you ran or read" if not index else ""))
+            a("%-*s  NO_REGRESSION | REGRESSED%s"
+              % (width, cid, "   + what you ran or read" if not index else ""))
         a("```")
         a("")
     a("**Then a section `CONSEQUENTIAL_REGRESSIONS`**, for anything the repair")
