@@ -3873,25 +3873,140 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
 # Real-MC authorization (default refuse; no vocabulary exists yet)
 # ---------------------------------------------------------------------------
 
-MC_AUTHORIZATION_EVENT = "MC_RUN_AUTHORIZED"     # future registry vocabulary
+MC_AUTHORIZATION_EVENT = "MC_RUN_AUTHORIZED"     # historical registry vocabulary
+
+#: WHERE AARON'S AUTHORIZATION LIVES. One file, in the repository, written by
+#: the Owner and by nobody else. It is deliberately NOT a registry row: the
+#: five-event MC chain
+#: (`MC_PACKET_DRAFTED -> ... -> MC_RUN_AUTHORIZED`) and the `SMOKE-001`
+#: prerequisite come from `ops/DELEGATED_RULINGS_2026-08-24.md`, whose own
+#: header records `RECORD_TYPE=DELEGATED_RULING` and `DELEGATED=YES -- this is
+#: a delegated ruling, NOT Aaron's own judgement`. Neither appears in the
+#: sealed preregistration, in the FROZEN `MC_METHOD_SPEC`, in the charter, or
+#: in any Aaron OWNER_DECISION row. Under `QUANT_WORKFLOW_VNEXT` §0 that is
+#: level-4 project history, not a level-1 or level-2 obligation, so this gate
+#: does not require it and does not rebuild it.
+#:
+#: What IS current, and what this gate enforces: vNext §10 makes a real Monte
+#: Carlo run Owner-only. The form below mirrors the Owner's own established
+#: idiom -- the S0 packet §10 sentence Aaron approved -- rather than inventing
+#: a governance vocabulary.
+MC_AUTHORIZATION_PATH = "ops/MC_RUN_AUTHORIZATION.json"
+
+#: Rebuilt from the run id and the commit and compared to the file's own
+#: `sentence`, so a transported string is never trusted. Same discipline as
+#: the S0 runner's §10 check.
+MC_AUTHORIZATION_SENTENCE = (
+    "启动第一次真实MC，授权run_id: {run_id}，使用commit: {commit}")
+
+MC_AUTHORIZATION_ACTOR = "Aaron"
+
+#: Every fact the sentence's commit does not already carry. Each is compared
+#: against what the RUNNER was handed, so an authorization for one design
+#: cannot start a run over another.
+MC_AUTHORIZATION_BINDINGS = ("run_id", "authorized_commit",
+                             "sealed_supplement_sha256", "prereg_sha256")
 
 
-def authorize_real_mc(registry_text: str) -> "NoReturn":
-    """Deterministic refusal today: the registry vocabulary contains no
-    MC_RUN_AUTHORIZED event type, and this gate does NOT best-effort parse
-    one into existence. A future real-MC round must extend the registry
-    grammar + this gate DELIBERATELY (reviewed change), mirroring the S0
-    SS10 discipline. Grid replay (source matrix R12) must also land before
-    the deployable_region layer may run."""
+def _prereg_sha256() -> str:
+    """The sealed preregistration's digest, read from disk at call time."""
+    import hashlib
+    from itsf import guards
+    path = Path(getattr(guards, "PREREG_PATH", "")) if getattr(
+        guards, "PREREG_PATH", None) else (
+        Path(__file__).resolve().parents[3] / "STUDY_0_PREREGISTRATION.md")
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def authorize_real_mc(registry_text: str = "", *,
+                      run_id: str = "",
+                      authorized_commit: str = "",
+                      sealed_supplement_sha256: str = "",
+                      path: str = MC_AUTHORIZATION_PATH) -> Mapping:
+    """THE real-MC authorization boundary. Default: refuse.
+
+    Returns the validated authorization, or raises `McConsumerAbsent`. It
+    never returns for an unauthorized call, and it never best-effort parses
+    an authorization into existence.
+
+    WHAT IT CHECKS, and nothing else:
+
+      1. `ops/MC_RUN_AUTHORIZATION.json` exists and parses;
+      2. its actor is Aaron;
+      3. its `run_id` is the run the caller is about to start;
+      4. its `authorized_commit` is 40-hex and is the commit the PREPARED
+         INPUT is bound to -- so an authorization cannot be carried across
+         to a differently-built input;
+      5. its `sealed_supplement_sha256` is the supplement the caller was
+         handed;
+      6. its `prereg_sha256` is the sealed preregistration on disk, so an
+         authorization cannot outlive the research design it was given for;
+      7. its `sentence` equals the sentence REBUILT from (3) and (4). The
+         transported string is never trusted -- the N06 round-3 lesson.
+
+    A caller that supplies no bindings (the historical one-argument shape)
+    refuses, because a gate that cannot see what it is authorizing is not a
+    gate.
+    """
+    import json as _json
     from itsf.s0.handoff import McConsumerAbsent
-    marker = f"**{MC_AUTHORIZATION_EVENT}**"
-    raise McConsumerAbsent(
-        "real MC remains NOT authorized: registry grammar has no "
-        f"{MC_AUTHORIZATION_EVENT} vocabulary"
-        + (" (a lookalike token appears in the registry text but no "
-           "parser/grammar accepts it — refusal stands)"
-           if marker in registry_text else "")
-        + "; Aaron + Codex must gate the first real MC explicitly")
+
+    def refuse(why: str) -> "NoReturn":
+        marker = f"**{MC_AUTHORIZATION_EVENT}**"
+        raise McConsumerAbsent(
+            "real MC remains NOT authorized: " + why
+            + (" (a lookalike token appears in the registry text but no "
+               "parser/grammar accepts it — refusal stands)"
+               if marker in (registry_text or "") else ""))
+
+    if not (run_id and authorized_commit and sealed_supplement_sha256):
+        refuse(f"the caller supplied no run identity, commit binding or "
+               f"supplement digest, so there is nothing to check "
+               f"{MC_AUTHORIZATION_PATH} against; a gate that cannot see "
+               f"what it is authorizing is not a gate")
+    here = Path(__file__).resolve().parents[3] / path
+    if not here.is_file():
+        refuse(f"no Owner authorization on disk at {path}")
+    try:
+        row = _json.loads(here.read_text(encoding="utf-8"))
+    except Exception as exc:                                # noqa: BLE001
+        refuse(f"{path} does not parse as JSON: {exc}")
+    if not isinstance(row, dict):
+        refuse(f"{path} is not a JSON object")
+    missing = [k for k in MC_AUTHORIZATION_BINDINGS + ("sentence",
+                                                       "authorized_by")
+               if not str(row.get(k, "")).strip()]
+    if missing:
+        refuse(f"{path} is missing {missing}")
+    if str(row["authorized_by"]).strip() != MC_AUTHORIZATION_ACTOR:
+        refuse(f"the authorization names actor "
+               f"{row['authorized_by']!r}; only {MC_AUTHORIZATION_ACTOR} "
+               "authorizes a real MC run")
+    if str(row["run_id"]).strip() != str(run_id):
+        refuse(f"the authorization is for run id {row['run_id']!r}, and "
+               f"this call is starting {run_id!r}")
+    commit = str(row["authorized_commit"]).strip()
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        refuse("`authorized_commit` is not a 40-character lowercase hex "
+               "commit")
+    if commit != str(authorized_commit):
+        refuse(f"the authorization names commit {commit[:12]} and the "
+               f"prepared input is bound to {str(authorized_commit)[:12]}")
+    if (str(row["sealed_supplement_sha256"]).strip()
+            != str(sealed_supplement_sha256)):
+        refuse("the authorization names a different sealed supplement than "
+               "the one this run was handed")
+    want_prereg = _prereg_sha256()
+    if str(row["prereg_sha256"]).strip() != want_prereg:
+        refuse(f"the authorization was issued against preregistration "
+               f"{str(row['prereg_sha256'])[:12]} and the sealed "
+               f"preregistration on disk is {want_prereg[:12]}")
+    rebuilt = MC_AUTHORIZATION_SENTENCE.format(run_id=run_id, commit=commit)
+    if str(row["sentence"]).strip() != rebuilt:
+        refuse("the authorization sentence does not equal the sentence "
+               "rebuilt from this run id and this commit; the transported "
+               "string is never trusted")
+    return MappingProxyType(dict(row))
 
 
 def run_real_mc(*_args, **_kwargs) -> "NoReturn":

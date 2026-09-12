@@ -381,6 +381,12 @@ ENTRY_CLASSIFICATION = {
     "scripts/qa_addendum_a1.py": "SANCTIONED_REAL_RUN_ENTRY",
     "scripts/qa_addendum_a2.py": "SANCTIONED_REAL_RUN_ENTRY",
     "scripts/s0_input_preflight.py": "SANCTIONED_REAL_RUN_ENTRY",
+    # ADDED 2026-09-13. The production MC entrypoint. It is gate-first --
+    # `consumer.authorize_real_mc` is asked before any bundle byte, any
+    # attestation byte or any bar is read -- but past that gate it reaches
+    # real market bytes and starts the governed run, so the trusted-launch
+    # requirement applies to it exactly as it does to `s0_real_run.py`.
+    "scripts/mc_real_run.py": "SANCTIONED_REAL_RUN_ENTRY",
     # the launcher itself: it starts governed runs and performs none
     "scripts/run_governed.py": "INTERNAL_ONLY",
     # prose renderers and builders: the real-data names in them are docstrings

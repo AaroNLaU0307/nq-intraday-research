@@ -49,7 +49,8 @@ from itsf.mc import grid_replay as _gr
 from itsf.mc import mc_contract as _mcx
 from itsf.mc.atoms import MCInputError
 
-__all__ = ("RunAuthorization", "bind_run_authorization", "RunnerResult",
+__all__ = ("RunAuthorization", "bind_run_authorization",
+           "bind_owner_authorization", "RunnerResult",
            "execute_full_mc", "execute_full_mc_for_tests",
            "ARM_LABELS", "runner_readycheck")
 
@@ -88,6 +89,63 @@ class RunAuthorization:
     branch_policy: str
     registry_detail: str
     test_only: bool
+
+
+def bind_owner_authorization(authorization: Mapping, *, run_id: str,
+                             expected_commit: str,
+                             output_root: str) -> RunAuthorization:
+    """Bind the OWNER's authorization -- the current one -- or refuse.
+
+    `bind_run_authorization` below binds a live `MC_RUN_AUTHORIZED` row in
+    the registry. That row is the last link of the five-event MC chain, and
+    the chain's only authority is `ops/DELEGATED_RULINGS_2026-08-24.md`,
+    whose header records `DELEGATED=YES -- this is a delegated ruling, NOT
+    Aaron's own judgement`. It appears in no sealed contract and in no Aaron
+    OWNER_DECISION row, so under `QUANT_WORKFLOW_VNEXT` §0 it is level-4
+    history and is not a required condition for a run.
+    
+    What IS required is vNext §10: the run is Owner-only. So the production
+    path binds the authorization `consumer.authorize_real_mc` validated,
+    and the registry path below is kept UNCHANGED for the synthetic harness
+    that exercises it -- neither replaces the other, and nothing historical
+    was rewritten to reach this.
+
+    This takes an ALREADY-VALIDATED mapping. It re-checks the two bindings
+    it is about to freeze into the `RunAuthorization` rather than trusting
+    the caller to have checked them, because a binder that assumes its input
+    was validated is a binder that can be handed anything.
+    """
+    if not _mcx.RUN_ID_RE.match(str(run_id)):
+        raise MCInputError("mc_run_id_not_canonical",
+                           f"{run_id!r} is not a canonical MC run id")
+    if not _mcx.COMMIT_RE.match(str(expected_commit)):
+        raise MCInputError("mc_run_commit_not_canonical",
+                           f"{expected_commit!r} is not a 40-hex commit")
+    if not str(output_root).strip():
+        raise MCInputError(
+            "mc_run_output_root_absent",
+            "the authorization binds an output root; an empty one would let "
+            "the run write anywhere")
+    commit = str((authorization or {}).get("authorized_commit", "")).strip()
+    if str((authorization or {}).get("run_id", "")).strip() != str(run_id):
+        raise MCInputError(
+            "mc_run_not_authorized",
+            f"the Owner authorization is for run id "
+            f"{(authorization or {}).get('run_id')!r}, not {run_id!r}")
+    if commit != str(expected_commit):
+        raise MCInputError(
+            "mc_run_authorization_commit_mismatch",
+            f"{run_id}: the Owner authorization binds commit {commit[:12]}, "
+            f"the runner is at {str(expected_commit)[:12]} — an "
+            "authorization for a different tree authorizes a different run")
+    return RunAuthorization(
+        run_id=str(run_id), authorized_commit=commit,
+        output_root=str(output_root),
+        branch_policy=_mcx.BRANCH_POLICY_TOKEN,
+        registry_detail="Owner authorization at %s, validated by "
+                        "consumer.authorize_real_mc"
+                        % _mcc.MC_AUTHORIZATION_PATH,
+        test_only=False)
 
 
 def bind_run_authorization(resolution, *, run_id: str,
@@ -472,22 +530,31 @@ def _execute(prepared, *, authorization: RunAuthorization,
 def execute_full_mc(prepared, *, run_id: str, output_root: str,
                     supplement: Mapping, sealed_artifact_sha256: str,
                     cells: tuple = _gr.GRID_CELL_KEYS) -> RunnerResult:
-    """PRODUCTION entry. GATE-FIRST, and the gate is untouched.
+    """PRODUCTION entry. GATE-FIRST.
 
-    The first call is `consumer.authorize_real_mc`, which refuses
-    unconditionally today — the same discipline
-    `day_strata_supplement.run_supplement_production` uses. Nothing below
-    the gate can be reached until Aaron issues the authorization sentence,
-    and this function does not weaken, parse around, or best-effort satisfy
-    it. The binding beneath it is the same code the synthetic entry runs, so
-    it is exercised rather than merely present.
+    The first call is `consumer.authorize_real_mc`. It refuses unless the
+    Owner's authorization on disk names THIS run id, THIS prepared input's
+    commit and THIS sealed supplement, and carries the sentence rebuilt from
+    them. Nothing below the gate is reachable otherwise, and this function
+    does not weaken, parse around, or best-effort satisfy it. The binding
+    beneath it is the same code the synthetic entry runs, so it is exercised
+    rather than merely present.
     """
     from .registry_boundary import resolve_registry
     resolution = resolve_registry()
-    _mcc.authorize_real_mc(resolution.snapshot.text)
-    # --- unreachable today (authorize_real_mc always raises) -------------
-    authorization = bind_run_authorization(
-        resolution, run_id=run_id,
+    # THE AUTHORIZATION BOUNDARY, and it sees what it is authorizing. The
+    # gate used to take the registry text alone and refuse unconditionally;
+    # it now validates the Owner's authorization against THIS run id, THIS
+    # prepared input's commit and THIS sealed supplement, and still refuses
+    # by default when no authorization exists.
+    owner = _mcc.authorize_real_mc(
+        resolution.snapshot.text,
+        run_id=run_id,
+        authorized_commit=prepared.authorized_commit,
+        sealed_supplement_sha256=sealed_artifact_sha256)
+    # --- reachable ONLY behind a valid Owner authorization ---------------
+    authorization = bind_owner_authorization(
+        owner, run_id=run_id,
         expected_commit=prepared.authorized_commit, output_root=output_root)
     return _execute(prepared, authorization=authorization,
                     supplement=supplement,

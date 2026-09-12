@@ -111,7 +111,9 @@ class TestTheMcGateWasNotWeakened(unittest.TestCase):
             with self.assertRaises(Exception) as caught:
                 real_input.prepare_real_mc_input()
         self.assertNotIsInstance(caught.exception, AssertionError)
-        self.assertIn("MC_RUN_AUTHORIZED", str(caught.exception))
+        # 2026-09-13: the gate names the Owner authorization it could
+        # not find, not the historical registry event.
+        self.assertIn("MC_RUN_AUTHORIZATION", str(caught.exception))
 
     def test_the_real_entry_ALSO_refuses_outside_the_trusted_launch(self):
         """The new outer refusal, asserted rather than merely worked around."""

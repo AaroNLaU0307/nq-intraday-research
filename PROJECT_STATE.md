@@ -12,10 +12,10 @@ RESEARCH_QUESTION   = NQ opening-drive (09:30-10:00) continuation: base rate and
                       the Oracle's daily USD P&L distribution (Q3).
                       Verbatim and binding: STUDY_0_PREREGISTRATION.md (SEALED).
 RESEARCH_ID · LANE  = ITSF-S0 · FULL
-STAGE               = S3 RUN — mechanical gate (N15) RUN 2026-09-13: HOLD.
-                      Code, data, prereg, environment, runner safety and
-                      reproducibility are green; three Owner-gated
-                      prerequisites remain. N16 not executed.
+STAGE               = S3 RUN — mechanical gate (N15). Two of the three
+                      2026-09-13 blockers RETIRED as historical under vNext
+                      §0; the third is REPAIRED. One Owner data pin and the
+                      authorization itself remain. N16 not executed.
 ACTIVE_HYPOTHESIS   = sealed Study-0 contract; MC pipeline must produce the
                       Checkpoint-0 statistic the sealed §10.4 decision table reads
 DATA_GRANT          = the existing ITSF S0 grant only. No new grant. Protected
@@ -24,19 +24,43 @@ TRIAL_ACCOUNTING    = ops/TRIAL_REGISTRY.md
 OUTCOME_EXPOSURE    = tracked — ops/EXPOSURE_LEDGER.md. RETAINED: this project has a
                       sealed preregistration and an unrevealed statistic, so
                       blinding is materially required (vNext §11).
-OPEN_MATERIAL_BLOCKERS = THREE, all Owner-gated, none a code defect and none
-                      repairable by the builder (see "N15 as it measured"):
-                      (1) no MC event chain exists for run id MC-R001;
-                      (2) SMOKE-001 (the E3 production-scale smoke) has never
-                          been run, and READY requires its PASS record;
-                      (3) `consumer.authorize_real_mc` refuses unconditionally
-                          by construction and its own docstring requires a
-                          deliberate reviewed change to make it conditional.
+OPEN_MATERIAL_BLOCKERS = ONE, plus the authorization itself:
+                      (1) the governed 14-file sealed-bundle root is not
+                          pinned anywhere in code. `AUTHORIZED_JOB_DIR` pins
+                          the VENDOR job directory, not the bundle. Naming a
+                          data root is an Owner act, exactly as the job
+                          directory was on 2026-09-05, so the entrypoint
+                          takes it as a required argument with no default
+                          and refuses without it.
+                      (2) `ops/MC_RUN_AUTHORIZATION.json` does not exist —
+                          which is not a defect. It is the authorization.
                       Non-blocking rows carried: B-35, NB1, B-29, B-30.
-NEXT_OWNER_DECISION = resolve the three N15 prerequisites above, in that order.
-                      Each is Aaron's; none is a builder repair. REAL_MC =
+NEXT_OWNER_DECISION = pin the governed bundle root, then write
+                      `ops/MC_RUN_AUTHORIZATION.json`. REAL_MC =
                       NOT AUTHORIZED. N16 NOT EXECUTED.
 ```
+
+## Two legacy obligations, reclassified 2026-09-13
+
+Under vNext §0 the MC five-event registry chain
+(`MC_PACKET_DRAFTED → … → MC_RUN_AUTHORIZED`) and the `SMOKE-001` / E3
+production-scale smoke are **HISTORICAL_WORKFLOW_OBLIGATION**, not current
+research obligations. Their only authority is
+`ops/DELEGATED_RULINGS_2026-08-24.md` (G1, G8), whose own header records
+`RECORD_TYPE=DELEGATED_RULING`, `DECIDED_BY=Codex GPT-5.6 Sol` and
+`DELEGATED=YES —— 这是委托裁定，不是 Aaron 本人的判断`, and which instructs
+that it never be recorded as Aaron's judgement. Neither obligation appears in
+the sealed `STUDY_0_PREREGISTRATION.md`, in the FROZEN `MC_METHOD_SPEC.md`, in
+`PROJECT_CHARTER.md`, or in any Aaron `OWNER_DECISION` row. That is vNext
+level 4 — generic project history — and level 4 cannot add an obligation vNext
+does not carry.
+
+What survives, and is enforced: vNext §10 makes a real MC Owner-only, and
+DEC-N14-R1-7 (Aaron, level 1) keeps the writer boundary — a generic serialized
+writer may never create or advance authorization state. The retired chain and
+smoke were **not** rebuilt, **not** executed for compatibility, and **no**
+replacement governance mechanism was created. `mc_contract`'s ratified grammar
+is untouched: historical artifacts are not rewritten.
 
 ## N15 as it measured — 2026-09-13
 

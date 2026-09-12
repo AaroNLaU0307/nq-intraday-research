@@ -143,20 +143,25 @@ def small_scale(monkeypatch):
 
 def test_the_production_entry_is_gate_first_and_the_gate_still_refuses(
         prepared, supplement, grid_passes):
-    """No arrangement of arguments reaches a real run. The refusal is the
-    existing tier-B gate, untouched by N13."""
+    """No arrangement of arguments reaches a real run.
+
+    The gate now VALIDATES rather than refusing unconditionally, so the
+    message names the missing Owner authorization instead of the historical
+    registry vocabulary. The property under test is unchanged and is the one
+    that matters: the production entry refuses, and it refuses FIRST.
+    """
     from itsf.s0.handoff import McConsumerAbsent
     with pytest.raises((McConsumerAbsent, mcc.MCInputError)) as ei:
         run.execute_full_mc(
             prepared, run_id=mcx.FIRST_RUN_ID, output_root=OUT_ROOT,
             supplement=supplement,
             sealed_artifact_sha256=_sha(supplement))
-    assert "MC_RUN_AUTHORIZED" in str(ei.value)
+    assert "NOT authorized" in str(ei.value)
     # and the gate is reached BEFORE anything else — it is the first call
     import inspect
     body = inspect.getsource(run.execute_full_mc)
     gate = body.index("authorize_real_mc")
-    for later in ("bind_run_authorization", "_execute("):
+    for later in ("bind_owner_authorization", "_execute("):
         assert body.index(later) > gate, later
 
 

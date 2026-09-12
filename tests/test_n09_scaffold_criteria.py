@@ -36,6 +36,18 @@ SRC = REPO / "src" / "itsf"
 #: The eight effect-boundary fields of `ops/ND1_PROFILE_RATIFICATION.md` §4,
 #: every one of them NO. R3 §6 quotes them as the reason the scaffold branch
 #: was taken at all.
+#: The current MC authorization blocker's name, COMPUTED from the production
+#: constant so that this file cannot invent it: editing this line cannot make
+#: a refusal name something `consumer` does not.
+def _mc_authorization_token() -> str:
+    from pathlib import Path as _P
+    from itsf.mc import consumer as _c
+    return _P(_c.MC_AUTHORIZATION_PATH).stem
+
+
+_MC_AUTHORIZATION_TOKEN = _mc_authorization_token()
+
+
 _ND1_FIELDS = (
     "SUPPLEMENT_EXECUTION_AUTHORIZED", "REAL_DATA_READ_AUTHORIZED",
     "DIRECTORY_CREATION_AUTHORIZED", "WRITE_PROBE_AUTHORIZED",
@@ -389,8 +401,8 @@ class TestCriterion3TheRefusalNamesItsBlocker(unittest.TestCase):
 
         run_supplement_production  -> SUPPLEMENT_EXECUTION_AUTHORIZED
                                       (an ND1 effect-boundary field)
-        run_real_mc                -> MC_RUN_AUTHORIZED
-        prepare_real_mc_input      -> MC_RUN_AUTHORIZED
+        run_real_mc                -> MC_RUN_AUTHORIZATION
+        prepare_real_mc_input      -> MC_RUN_AUTHORIZATION
                                       (a registry-grammar vocabulary item)
 
     Both are true and they are different facts: one says Aaron has not
@@ -403,8 +415,14 @@ class TestCriterion3TheRefusalNamesItsBlocker(unittest.TestCase):
     #: token -> the entries whose refusal must name it.
     _EXPECTED = {
         "run_supplement_production": "SUPPLEMENT_EXECUTION_AUTHORIZED",
-        "run_real_mc": "MC_RUN_AUTHORIZED",
-        "prepare_real_mc_input": "MC_RUN_AUTHORIZED",
+        # RENAMED 2026-09-13: the MC gate no longer refuses on the
+        # historical registry vocabulary. It names the Owner
+        # authorization it could not find, which is the current blocker.
+        # The token is COMPUTED from the production constant rather than
+        # written here, so this file still cannot invent one -- which is
+        # the property the companion test below defends.
+        "run_real_mc": _MC_AUTHORIZATION_TOKEN,
+        "prepare_real_mc_input": _MC_AUTHORIZATION_TOKEN,
     }
 
     def _entries(self):
@@ -453,8 +471,11 @@ class TestCriterion3TheRefusalNamesItsBlocker(unittest.TestCase):
 
     def test_the_expected_tokens_are_not_invented(self):
         """A token this file made up would be satisfiable by editing this
-        file. Each must be either an ND1 effect-boundary field or a real
-        registry-grammar name."""
+        file. Each must be an ND1 effect-boundary field, a real
+        registry-grammar name, or -- since 2026-09-13 -- the stem of a
+        production constant in `consumer`, resolved by attribute lookup
+        rather than by matching source text. All three sources live outside
+        this file, which is the whole of the defence."""
         from itsf.mc import mc_contract
         #: The MC grammar's own declared vocabulary — checked against the
         #: closed enum rather than against the file's words, because a
@@ -467,7 +488,8 @@ class TestCriterion3TheRefusalNamesItsBlocker(unittest.TestCase):
                            "count this proves nothing" % len(declared))
         for token in sorted(set(self._EXPECTED.values())):
             self.assertTrue(
-                token in _ND1_FIELDS or token in declared,
+                token in _ND1_FIELDS or token in declared
+                or token == _MC_AUTHORIZATION_TOKEN,
                 "%r is neither an ND1 effect-boundary field nor a declared "
                 "event name in the MC grammar, so this file invented it and "
                 "could satisfy itself by editing itself" % token)
