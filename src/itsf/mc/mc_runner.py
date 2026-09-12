@@ -53,11 +53,20 @@ __all__ = ("RunAuthorization", "bind_run_authorization", "RunnerResult",
            "execute_full_mc", "execute_full_mc_for_tests",
            "ARM_LABELS", "runner_readycheck")
 
-#: The six arms rule (a)/(b) and M10 require. `double_K` reruns only the grid
+#: The arms rule (a)/(b) and M10 require. `double_K` reruns only the grid
 #: channel, so its Oracle statistics must equal the base run's bit for bit --
 #: convergence enforces that, this module only labels the arms.
+#:
+#: M10 (b) IS A PER-SEED QUANTIFIER: "B 加倍同样三 seeds 各做（3×{B,2B}
+#: 全量）". Only the base seed had a doubled-B arm, so the other two governed
+#: seeds ran base B alone and rule (b)'s doubled-scale half had no evidence to
+#: evaluate. Their arms are named here; the base seed's doubled-B arm is the
+#: ratified `double_B` and is NOT recomputed under a second label, because
+#: M10's compute form is 3 x (base full + 2B full) and an extra arm would
+#: overstate it.
 ARM_LABELS = ("base", "double_B", "double_K",
-              "seed_7", "seed_13", "seed_31")
+              "seed_7", "seed_13", "seed_31",
+              "seed_13_double_B", "seed_31_double_B")
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +186,12 @@ class RunnerResult:
     #: statistics where they exist and the absence metadata where they do
     #: not. The merged maps above remain, and do not replace this.
     grid_evidence_by_seed: Mapping
+    #: M10 (b) COVERAGE AS A FINAL OBSERVABLE: master_seed -> the B scales
+    #: that seed actually ran a FULL arm at, taken from the RunEvidence the
+    #: seal consumed rather than from the labels it was asked for. The
+    #: missing doubled-B arms were invisible at this boundary, which is
+    #: part of why they survived two repairs and a green suite.
+    b_scales_by_seed: Mapping
     arm_labels: tuple
     test_only: bool
 
@@ -365,6 +380,32 @@ def _execute(prepared, *, authorization: RunAuthorization,
                             B=_mcc.B_WORLDS_FROZEN, K=prepared.k_per_seed,
                             seed=seed)
                  for seed in RESEARCH_BOOTSTRAP_SEEDS}
+    # M10 (b) -- EVERY GOVERNED SEED GETS ITS OWN DOUBLED-B ARM.
+    #
+    # The base seed's already exists: `doubled["B"]` is a full run at 2B on
+    # exactly this seed, and rule (a) binds it to the base run. Filing it
+    # here as that seed's doubled-B evidence costs nothing and keeps M10's
+    # stated compute form -- 3 seeds x (base full + 2B full) -- exact. The
+    # other governed seeds get a new arm each, at 2B and at nothing else:
+    # {B, 2B} is the whole of the frozen B quantifier and there is no 4B.
+    #
+    # Each arm carries its OWN master seed, which is what convergence
+    # checks: a map that satisfied the seed set by repeating one seed's
+    # evidence would leave the other seeds unmeasured just as surely as
+    # omitting them did.
+    if doubled["B"].master_seed != base_seed:
+        raise MCInputError(
+            "mc_run_doubled_b_base_seed_mismatch",
+            f"the double_B arm carries master_seed="
+            f"{doubled['B'].master_seed}, not the base seed {base_seed}")
+    seed_doubled_runs = {}
+    for seed in RESEARCH_BOOTSTRAP_SEEDS:
+        if seed == base_seed:
+            seed_doubled_runs[seed] = doubled["B"]
+            continue
+        seed_doubled_runs[seed] = _arm(
+            prepared, run_label=f"seed_{seed}_double_B", axis="seed_B",
+            B=2 * _mcc.B_WORLDS_FROZEN, K=prepared.k_per_seed, seed=seed)
 
     authority, chains, grid_passes_by_seed = _witness(
         prepared, supplement=supplement,
@@ -392,6 +433,7 @@ def _execute(prepared, *, authorization: RunAuthorization,
 
     seal_candidate = _mcc.verdict_and_seal_from_evidence(
         prepared, base=base, doubled_by_axis=doubled, seed_runs=seed_runs,
+        seed_doubled_runs=seed_doubled_runs,
         k_witness=witness, grid_convergence=grid_convergence)
 
     # M10: publish the cross-seed region from all three seeds' maps -- the
@@ -420,6 +462,10 @@ def _execute(prepared, *, authorization: RunAuthorization,
         grid_convergence=grid_convergence,
         grid_evidence_by_seed=_gr.per_seed_grid_report(
             grid_passes_by_seed, chains),
+        b_scales_by_seed=MappingProxyType({
+            seed: (int(seed_runs[seed].B),
+                   int(seed_doubled_runs[seed].B))
+            for seed in RESEARCH_BOOTSTRAP_SEEDS}),
         arm_labels=ARM_LABELS, test_only=authorization.test_only)
 
 

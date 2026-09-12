@@ -382,6 +382,7 @@ def test_case5_the_convergence_report_is_now_reachable(prepared, monkeypatch):
                                  K=400)}
     report = mcc.convergence_from_evidence(
         base, doubled, CR._seed_runs(prepared), prepared=prepared,
+        seed_doubled_runs=CR._seed_doubled_runs(prepared),
         k_witness=witness)
 
     assert type(report) is mcc.ConvergenceReport
@@ -389,8 +390,11 @@ def test_case5_the_convergence_report_is_now_reachable(prepared, monkeypatch):
                  report.category_same_across_seeds,
                  report.quantile_drift_ok, report.mcse_ok):
         assert isinstance(flag, bool)
-    assert set(report.drift_by_axis) == {"double_B", "double_K", "seed_7",
-                                         "seed_13", "seed_31"}
+    # M10 (b): every governed seed's DOUBLED-B arm owes rule (c) too, so
+    # each appears here beside its base-scale arm.
+    assert set(report.drift_by_axis) == {
+        "double_B", "double_K", "seed_7", "seed_13", "seed_31",
+        "seed_7_double_B", "seed_13_double_B", "seed_31_double_B"}
     assert isinstance(report.converged, bool)
 
 
@@ -406,7 +410,8 @@ def test_case5_the_seal_path_is_no_longer_blocked_by_feasibility(prepared):
             doubled_by_axis={"B": CR._evidence(prepared,
                                                run_label="double_B",
                                                axis="B", B=4)},
-            seed_runs=CR._seed_runs(prepared))
+            seed_runs=CR._seed_runs(prepared),
+            seed_doubled_runs=CR._seed_doubled_runs(prepared))
     assert ei.value.code == "seal_test_only_prepared_input"
     assert "feasibility" not in ei.value.code
     # the same reduction the seal calls, on the same prepared input, works
@@ -432,6 +437,7 @@ def test_the_seal_path_now_threads_the_k_witness_n13(prepared, monkeypatch):
                                 B=4)}
     with pytest.raises(mcc.MCInputError) as ei:
         mcc.convergence_from_evidence(base, b_only, CR._seed_runs(prepared),
+                                      seed_doubled_runs=CR._seed_doubled_runs(prepared),
                                       prepared=prepared)
     assert ei.value.code == "doubling_axes_violation"
 
@@ -440,6 +446,7 @@ def test_the_seal_path_now_threads_the_k_witness_n13(prepared, monkeypatch):
                                  K=400))
     with pytest.raises(mcc.MCInputError) as ei:
         mcc.convergence_from_evidence(base, with_k, CR._seed_runs(prepared),
+                                      seed_doubled_runs=CR._seed_doubled_runs(prepared),
                                       prepared=prepared)
     assert ei.value.code == "k_axis_evidence_blocked_grid_replay"
 

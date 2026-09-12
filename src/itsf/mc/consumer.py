@@ -2216,6 +2216,14 @@ def _assert_config_digest(result: "EpistemicResult", *, layer: str,
 @dataclass(frozen=True)
 class ConvergenceReport:
     category_stable_under_doubling: bool     # rule (a) — the B arm
+    #: RULE (b) — AND IT IS TWO FACTS, NOT ONE. M10 quantifier (b) reads
+    #: "B 加倍同样三 seeds 各做（3×{B,2B} 全量）… (b) 跨 seed 判定类别一致
+    #: 在基础档与加倍档都成立": the three research seeds must agree on the
+    #: category at the BASE scale and again at the DOUBLED scale. Only the
+    #: base-scale half was ever computed, because only the base seed ever
+    #: ran a doubled-B arm; the other two seeds' doubled evidence did not
+    #: exist to disagree with. This field is the conjunction, so rule (b)
+    #: keeps its identity, and the halves are reported beside it.
     category_same_across_seeds: bool         # rule (b) — seeds 7/13/31
     quantile_drift_ok: bool                  # rule (c)
     mcse_ok: bool                            # rule (d)
@@ -2232,6 +2240,19 @@ class ConvergenceReport:
     #: applying the other -- so neither was applied at all, and a failed main
     #: channel still produced an admissible category.
     grid_converged: bool = True
+    #: {"base": bool, "doubled": bool} — which half of rule (b) held. A
+    #: REPORT item: `category_same_across_seeds` above is the gate, and a
+    #: reader that wants to know which scale disagreed reads this.
+    seeds_agree_by_scale: Mapping = None
+
+    def __post_init__(self):
+        if self.seeds_agree_by_scale is None:
+            object.__setattr__(self, "seeds_agree_by_scale",
+                               MappingProxyType({}))
+        else:
+            object.__setattr__(
+                self, "seeds_agree_by_scale",
+                MappingProxyType(dict(self.seeds_agree_by_scale)))
 
     @property
     def converged(self) -> bool:
@@ -2548,6 +2569,7 @@ def convergence_from_evidence(base: RunEvidence,
                               seed_runs: Mapping, *,
                               prepared: "PreparedMCInput",
                               k_witness=None,
+                              seed_doubled_runs: Mapping = None,
                               ) -> ConvergenceReport:
     """Compute MC SS5 rules (a)-(d) FROM run evidence. Validation order
     (so every violation surfaces with its OWN code):
@@ -2570,7 +2592,14 @@ def convergence_from_evidence(base: RunEvidence,
        (N-D2 M6), and this is where the outer K is bound to it. A K pass
        must also leave the Oracle main channel bit-identical, because K
        is inner random source (2), "grid analysis ONLY";
-    6. rules (a)-(d) are then computed and returned.
+    6. the DOUBLED-B SEED SET (M10 quantifier (b), 3 x {B, 2B} full):
+       required, complete over the governed seeds, each arm carrying its
+       OWN master seed, at exactly twice that seed's base B and no
+       further, and satisfying the same world-prefix witness the base
+       seed's doubling has always owed. Checked LAST among the
+       validations so that no pre-existing refusal loses its precedence
+       to it;
+    7. rules (a)-(d) are then computed and returned.
 
     WHAT THE K ARM DOES *NOT* DO (N-D2 M7): a non-converged grid does not
     withhold the Checkpoint-0 verdict. The two regions are report items
@@ -2705,9 +2734,76 @@ def convergence_from_evidence(base: RunEvidence,
         raise MCInputError("doubling_axes_violation",
                            f"need exactly {sorted(DOUBLING_AXES)}, got "
                            f"{sorted(doubled_by_axis)}")
+    # (6) THE DOUBLED-B SEED SET — M10 quantifier (b), 3 x {B, 2B} FULL.
+    #
+    # This is the half of frozen F02 that survived the first two repairs.
+    # The runner built a `double_B` arm for the base seed alone, so seeds
+    # 13 and 31 contributed base-scale evidence only and rule (b)'s
+    # doubled-scale half had nothing to evaluate. It could not fail, so it
+    # never did -- the quietest possible way for a required check to be
+    # absent.
+    #
+    # The evidence is REQUIRED, not optional. An optional parameter would
+    # reproduce exactly the defect being repaired: a missing arm that
+    # changes no outcome. Absence and incompleteness each refuse with
+    # their own code, before the rules are computed.
+    if seed_doubled_runs is None:
+        raise MCInputError(
+            "seed_doubled_b_evidence_absent",
+            "M10 requires a DOUBLED-B arm for every governed research "
+            "seed (3 x {B, 2B} full runs). None was supplied; convergence "
+            "cannot report rule (b) at the doubled scale from evidence "
+            "that does not exist")
+    if not isinstance(seed_doubled_runs, Mapping):
+        raise MCInputError(
+            "seed_doubled_b_evidence_absent",
+            f"{type(seed_doubled_runs).__name__} is not a mapping of "
+            "master_seed -> doubled-B RunEvidence")
+    if set(seed_doubled_runs) != set(RESEARCH_BOOTSTRAP_SEEDS):
+        raise MCInputError(
+            "seed_doubled_b_set_violation",
+            f"need a doubled-B arm for exactly "
+            f"{tuple(RESEARCH_BOOTSTRAP_SEEDS)}, got "
+            f"{sorted(seed_doubled_runs)} -- no governed seed may be "
+            "omitted and none may inherit another seed's 2B result")
+    for seed in sorted(seed_doubled_runs):
+        run = seed_doubled_runs[seed]
+        run.validate_inner_binding()
+        if run.prepared_digest != base.prepared_digest:
+            raise MCInputError("provenance_mismatch",
+                               f"doubled-B arm for seed {seed}")
+        # THE ARM IS THIS SEED'S OWN. Inheriting another seed's doubled
+        # result would satisfy the set check while leaving the seed
+        # unmeasured, which is the same absence wearing a different shape.
+        if run.master_seed != seed:
+            raise MCInputError(
+                "seed_doubled_b_seed_mismatch",
+                f"the doubled-B arm filed under seed {seed} carries "
+                f"master_seed={run.master_seed}: a seed may not inherit "
+                "another seed's 2B evidence")
+        at_base = seed_runs[seed]
+        # EXACTLY ONE DOUBLING. M10 (b) names {B, 2B}; there is no 4B and
+        # no further B escalation anywhere in the frozen authority, so a
+        # 4B arm is refused here rather than tolerated as generosity.
+        if run.B != 2 * at_base.B:
+            raise MCInputError(
+                "seed_doubled_b_scale_violation",
+                f"seed {seed}: doubled-B arm runs B={run.B}, expected "
+                f"exactly {2 * at_base.B} -- M10 names {{B, 2B}} and no "
+                "further B doubling exists in the frozen authority")
+        for field in ("M", "K"):
+            if getattr(run, field) != getattr(at_base, field):
+                raise MCInputError(
+                    "seed_doubled_b_scale_violation",
+                    f"seed {seed}: {field} moved on a B-doubling run")
+        # ...and the CONTENT witness, the same one the base seed's arm has
+        # always had to satisfy: a genuine B doubling extends that seed's
+        # own world table, it does not redraw it.
+        _check_b_doubling_world_prefix(at_base, run)
     return _convergence_rules_a_to_d(base, doubled_by_axis, seed_runs,
                                      k_witness=admitted_witness,
-                                     prepared=prepared)
+                                     prepared=prepared,
+                                     seed_doubled_runs=seed_doubled_runs)
 
 
 def _run_category(run: RunEvidence, *, prepared) -> str:
@@ -2727,7 +2823,8 @@ KEY_QUANTILE_FIELDS = ("p5", "median", "p95")
 
 
 def _convergence_rules_a_to_d(base: RunEvidence, doubled_by_axis: Mapping,
-                              seed_runs: Mapping, *, k_witness, prepared
+                              seed_runs: Mapping, *, k_witness, prepared,
+                              seed_doubled_runs: Mapping,
                               ) -> ConvergenceReport:
     """Rules (a)-(d) of MC SS5, computed from the supplied evidence.
 
@@ -2740,7 +2837,11 @@ def _convergence_rules_a_to_d(base: RunEvidence, doubled_by_axis: Mapping,
         BESIDE rule (a) rather than multiplied into it, because M7 gives the
         two failures different consequences and one boolean cannot carry
         both.
-    (b) the three master seeds agree on the category.
+    (b) the three master seeds agree on the category -- AT BOTH SCALES.
+        M10 quantifier (b) runs 3 x {B, 2B} full and requires the
+        cross-seed agreement to hold in the base tier and in the doubled
+        tier. The doubled half is a genuine second question: two seeds
+        can agree at B and disagree once each has twice the worlds.
     (c) key-quantile drift within max($25, relative 5%), measured against
         the base run per combo and per scenario role.
     (d) within-world MCSE <= 10% of the between-world SD — already
@@ -2759,14 +2860,34 @@ def _convergence_rules_a_to_d(base: RunEvidence, doubled_by_axis: Mapping,
             category_stable = False
     grid_converged = True if k_witness is None else k_witness.grid_converged
     # --- (b) ----------------------------------------------------------
-    same_across_seeds = all(
+    seeds = sorted(seed_runs)
+    agree_at_base = all(
         _run_category(seed_runs[s], prepared=prepared) == base_category
-        for s in sorted(seed_runs))
+        for s in seeds)
+    # AT THE DOUBLED SCALE the question is agreement among the seeds
+    # themselves, stated without privileging one of them: the three
+    # doubled-B categories must be a single value. Rule (a) separately
+    # ties the doubled-B category to the base category, so the two
+    # together give M10 (b) in full without either standing in for the
+    # other -- and a formulation that measured the other two seeds
+    # against the base seed's doubled arm would rebuild the very
+    # asymmetry this repair removes.
+    doubled_categories = {
+        _run_category(seed_doubled_runs[s], prepared=prepared)
+        for s in seeds}
+    agree_at_doubled = len(doubled_categories) == 1
+    same_across_seeds = agree_at_base and agree_at_doubled
     # --- (c) ----------------------------------------------------------
     drift_by_axis, drift_ok = {}, True
     arms = [(f"double_{axis}", doubled_by_axis[axis])
             for axis in sorted(doubled_by_axis)]
-    arms += [(f"seed_{seed}", seed_runs[seed]) for seed in sorted(seed_runs)]
+    arms += [(f"seed_{seed}", seed_runs[seed]) for seed in seeds]
+    # every seed's doubled-B arm owes (c) and (d) too: M10's convergence
+    # requirement is "每 seed 各自满足 (a)/(c)/(d)", per seed, and an arm
+    # that is exempt from the drift and MCSE checks is an arm whose
+    # numbers nobody looked at.
+    arms += [(f"seed_{seed}_double_B", seed_doubled_runs[seed])
+             for seed in seeds]
     for label, run in arms:
         per_arm = {}
         for cid in sorted(base.results):
@@ -2798,7 +2919,10 @@ def _convergence_rules_a_to_d(base: RunEvidence, doubled_by_axis: Mapping,
         quantile_drift_ok=drift_ok,
         mcse_ok=mcse_ok,
         drift_by_axis=MappingProxyType(drift_by_axis),
-        grid_converged=grid_converged)
+        grid_converged=grid_converged,
+        seeds_agree_by_scale=MappingProxyType(
+            {"base": bool(agree_at_base),
+             "doubled": bool(agree_at_doubled)}))
 
 
 def _reduce_primary_from_base(base: RunEvidence, *,
@@ -3397,6 +3521,7 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
                                    base: RunEvidence,
                                    doubled_by_axis: Mapping,
                                    seed_runs: Mapping,
+                                   seed_doubled_runs: Mapping = None,
                                    k_witness=None,
                                    grid_convergence=None) -> dict:
     """The ONLY path to a Checkpoint-0 verdict AND its seal candidate.
@@ -3454,6 +3579,14 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
     for _seed, run in sorted(seed_runs.items()):
         run.validate_inner_binding()
         runs.append(run)
+    # THE DOUBLED-B SEED ARMS ARE EVIDENCE LIKE ANY OTHER. They go through
+    # the same unconditional cold replay and the same seal-layer config
+    # equality as every other arm -- an arm that reached the seal without
+    # being replayed would be an arm the seal never actually checked.
+    if isinstance(seed_doubled_runs, Mapping):
+        for _seed, run in sorted(seed_doubled_runs.items()):
+            run.validate_inner_binding()
+            runs.append(run)
     # (1)-(7) UNCONDITIONAL cold replay, before anything is reduced.
     replay_receipt = cold_replay_evidence(prepared, runs)
     # LAYER 4 of the four-layer config equality: the seal boundary.
@@ -3487,7 +3620,7 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
     # and convergence re-verifies its digest and binds it to this run.
     convergence_report = convergence_from_evidence(
         base, doubled_by_axis, seed_runs, prepared=prepared,
-        k_witness=k_witness)
+        k_witness=k_witness, seed_doubled_runs=seed_doubled_runs)
     # THE GRID'S STANDING IS A CROSS-SEED FACT, and it is verified here.
     #
     # `k_witness` binds the K ARM to the base run -- that is its job and it
@@ -3678,7 +3811,16 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
         "convergence_evidence": {
             "base_run": base.run_label,
             "doubled_axes": sorted(doubled_by_axis),
-            "seed_runs": sorted(seed_runs)},
+            "seed_runs": sorted(seed_runs),
+            # M10 (b): the doubled-B arm each governed seed ran, by its
+            # own label and scale, so the seal RECORDS the coverage
+            # instead of implying it.
+            "seed_doubled_b_runs": {
+                str(seed): {"run_label": run.run_label, "B": int(run.B),
+                            "master_seed": int(run.master_seed)}
+                for seed, run in sorted((seed_doubled_runs or {}).items())},
+            "seeds_agree_by_scale": dict(
+                convergence_report.seeds_agree_by_scale)},
         "verdict": {"category": verdict.verdict, "reason": verdict.reason},
     }
 

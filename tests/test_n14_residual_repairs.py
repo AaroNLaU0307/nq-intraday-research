@@ -333,9 +333,19 @@ def test_F04_a_test_only_standing_is_refused_at_the_public_seal(
     seeds = {s: run._arm(wide, run_label="seed_%d" % s, axis="seed",
                          B=mcc.B_WORLDS_FROZEN, K=wide.k_per_seed, seed=s)
              for s in RESEARCH_BOOTSTRAP_SEEDS}
+    # M10 (b) -- the doubled-B arm every governed seed owes. Supplied in full
+    # so the refusal under test is the F04 one, and not an incomplete arm set
+    # standing in for it. The base seed's doubled arm is the ratified
+    # `double_B`, filed exactly as the runner files it.
+    seeds_doubled = {
+        s: (doubled["B"] if s == mcc.BASE_MASTER_SEED else
+            run._arm(wide, run_label="seed_%d_double_B" % s, axis="seed_B",
+                     B=2 * mcc.B_WORLDS_FROZEN, K=wide.k_per_seed, seed=s))
+        for s in RESEARCH_BOOTSTRAP_SEEDS}
     with pytest.raises(mcc.MCInputError) as ei:
         mcc.verdict_and_seal_from_evidence(
             wide, base=base, doubled_by_axis=doubled, seed_runs=seeds,
+            seed_doubled_runs=seeds_doubled,
             k_witness=chains[mcc.BASE_MASTER_SEED][0],
             grid_convergence=standing)
     assert ei.value.code == "grid_evidence_test_only_at_production_seal"

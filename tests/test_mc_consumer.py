@@ -593,9 +593,16 @@ def test_hand_built_verdict_inputs_have_no_callable_entry():
     # self-digest here, and the K witness it aggregates must be the one this
     # call was given. It carries no caller conclusion -- it carries the AND
     # across every governed seed's witness, which one seed's witness cannot.
+    # `seed_doubled_runs` joins for the plainest reason of the three: it is
+    # ARM EVIDENCE, the same kind of object as `seed_runs`, produced by the
+    # same `_arm` path, cold-replayed here with everything else and validated
+    # by convergence against the base-scale arm it doubles. M10 (b) requires
+    # 3 x {B, 2B} and only the base seed had its doubled arm, so rule (b)'s
+    # doubled-scale half had nothing to evaluate. It is not a conclusion and
+    # it cannot be defaulted away: omitting it refuses.
     assert set(sig.parameters) == {"prepared", "base", "doubled_by_axis",
-                                   "seed_runs", "k_witness",
-                                   "grid_convergence"}
+                                   "seed_runs", "seed_doubled_runs",
+                                   "k_witness", "grid_convergence"}
     from itsf.mc import grid_replay as _gr
     with pytest.raises(mcc.MCInputError) as _ei:
         _gr.KReplayEvidence(
@@ -618,7 +625,8 @@ def test_hand_built_verdict_inputs_have_no_callable_entry():
     # unavoidable because the two grid passes it certifies exist nowhere
     # in `prepared` or `RunEvidence` for convergence to derive them from.
     assert set(conv.parameters) == {"base", "doubled_by_axis", "seed_runs",
-                                    "prepared", "k_witness"}
+                                    "prepared", "k_witness",
+                                    "seed_doubled_runs"}
     assert conv.parameters["prepared"].default is inspect.Parameter.empty
     from itsf.mc import grid_replay as _gr
     with pytest.raises(mcc.MCInputError) as _ei:

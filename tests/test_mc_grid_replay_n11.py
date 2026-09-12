@@ -825,6 +825,7 @@ def test_a_k_entry_without_its_witness_still_refuses(prepared, authority, small_
     base, doubled, _ = _k_case(prepared, authority)
     with pytest.raises(mcc.MCInputError) as ei:
         mcc.convergence_from_evidence(base, doubled, CR._seed_runs(prepared),
+                                      seed_doubled_runs=CR._seed_doubled_runs(prepared),
                                       prepared=prepared)
     assert ei.value.code == "k_axis_evidence_blocked_grid_replay"
 
@@ -837,6 +838,7 @@ def test_the_outer_k_must_match_the_witness(prepared, authority, small_scale):
     liar["K"] = CR._evidence(prepared, run_label="double_K", axis="K", K=800)
     with pytest.raises(mcc.MCInputError) as ei:
         mcc.convergence_from_evidence(base, liar, CR._seed_runs(prepared),
+                                      seed_doubled_runs=CR._seed_doubled_runs(prepared),
                                       prepared=prepared, k_witness=witness)
     assert ei.value.code == "doubling_scale_violation"
 
@@ -849,6 +851,7 @@ def test_a_witness_from_another_seed_refuses(prepared, authority, small_scale):
         cells_at_2k=_pass(authority, _grid(), seed=13, doublings=1))
     with pytest.raises(mcc.MCInputError) as ei:
         mcc.convergence_from_evidence(base, doubled, CR._seed_runs(prepared),
+                                      seed_doubled_runs=CR._seed_doubled_runs(prepared),
                                       prepared=prepared, k_witness=other)
     assert ei.value.code == "k_replay_inner_mismatch:master_seed"
 
@@ -871,6 +874,7 @@ def test_a_forged_witness_refuses(prepared, authority, small_scale):
     object.__setattr__(forged, "master_seed", witness.master_seed + 6)
     with pytest.raises(mcc.MCInputError) as ei:
         mcc.convergence_from_evidence(base, doubled, CR._seed_runs(prepared),
+                                      seed_doubled_runs=CR._seed_doubled_runs(prepared),
                                       prepared=prepared, k_witness=forged)
     assert ei.value.code == "k_replay_evidence_digest_mismatch"
 
@@ -889,6 +893,7 @@ def test_a_k_pass_may_not_move_the_oracle_main_channel(prepared, authority, smal
     object.__setattr__(cons, "p5", cons.p5 + 1.0)
     with pytest.raises(mcc.MCInputError) as ei:
         mcc.convergence_from_evidence(base, moved, CR._seed_runs(prepared),
+                                      seed_doubled_runs=CR._seed_doubled_runs(prepared),
                                       prepared=prepared, k_witness=witness)
     assert ei.value.code == "k_axis_main_channel_not_invariant"
 
@@ -910,10 +915,14 @@ def test_the_k_axis_is_no_longer_the_blocker(prepared, authority,
     base, doubled, witness = _k_case(prepared, authority)
     report = mcc.convergence_from_evidence(
         base, doubled, CR._seed_runs(prepared), prepared=prepared,
+        seed_doubled_runs=CR._seed_doubled_runs(prepared),
         k_witness=witness)
     assert type(report) is mcc.ConvergenceReport
-    assert set(report.drift_by_axis) == {"double_B", "double_K", "seed_7",
-                                        "seed_13", "seed_31"}
+    # M10 (b): every governed seed's DOUBLED-B arm owes rule (c) too, so
+    # each appears here beside its base-scale arm.
+    assert set(report.drift_by_axis) == {
+        "double_B", "double_K", "seed_7", "seed_13", "seed_31",
+        "seed_7_double_B", "seed_13_double_B", "seed_31_double_B"}
     for flag in (report.category_stable_under_doubling,
                  report.category_same_across_seeds,
                  report.quantile_drift_ok, report.mcse_ok,
@@ -923,5 +932,6 @@ def test_the_k_axis_is_no_longer_the_blocker(prepared, authority,
     # on outer metadata (N11), and B-26 did not relax that.
     with pytest.raises(mcc.MCInputError) as ei:
         mcc.convergence_from_evidence(base, doubled, CR._seed_runs(prepared),
+                                      seed_doubled_runs=CR._seed_doubled_runs(prepared),
                                       prepared=prepared)
     assert ei.value.code == "k_axis_evidence_blocked_grid_replay"

@@ -783,6 +783,13 @@ def _seed_runs(prepared, B=2):
                          B=B, seed=s) for s in RESEARCH_BOOTSTRAP_SEEDS}
 
 
+def _seed_doubled_runs(prepared, B=2):
+    """M10 (b): the doubled-B arm EVERY governed seed owes, 3 x {B, 2B}."""
+    return {s: _evidence(prepared, run_label=f"seed_{s}_double_B",
+                         axis="seed_B", B=2 * B, seed=s)
+            for s in RESEARCH_BOOTSTRAP_SEEDS}
+
+
 def test_frozen_scale_violation_still_guards_small_runs(prepared):
     """The production scale seal is unmoved: B=1000 / K=200 / seed 7."""
     assert mcc.B_WORLDS_FROZEN == 1000
@@ -793,7 +800,8 @@ def test_frozen_scale_violation_still_guards_small_runs(prepared):
             _evidence(prepared),
             {"B": _evidence(prepared, run_label="double_B", axis="B",
                             B=4)},
-            _seed_runs(prepared), prepared=prepared)
+            _seed_runs(prepared), prepared=prepared,
+            seed_doubled_runs=_seed_doubled_runs(prepared))
     assert exc.value.code == "frozen_scale_violation"
 
 
@@ -809,7 +817,8 @@ def test_k_axis_evidence_stays_terminally_blocked(prepared, monkeypatch):
                             B=4),
              "K": _evidence(prepared, run_label="double_K", axis="K",
                             K=400)},
-            _seed_runs(prepared), prepared=prepared)
+            _seed_runs(prepared), prepared=prepared,
+            seed_doubled_runs=_seed_doubled_runs(prepared))
     assert exc.value.code == "k_axis_evidence_blocked_grid_replay"
 
 
@@ -821,7 +830,8 @@ def test_m_axis_doubling_stays_forbidden(prepared, monkeypatch):
             {"B": _evidence(prepared, run_label="double_B", axis="B",
                             B=4),
              "M": _evidence(prepared, run_label="double_M", axis="M")},
-            _seed_runs(prepared), prepared=prepared)
+            _seed_runs(prepared), prepared=prepared,
+            seed_doubled_runs=_seed_doubled_runs(prepared))
     assert exc.value.code == "m_axis_doubling_forbidden_by_ir29"
 
 
@@ -1050,7 +1060,8 @@ def test_convergence_fallthrough_is_an_mcinputerror_not_an_assertion(
             _evidence(prepared),
             {"B": _evidence(prepared, run_label="double_B", axis="B",
                             B=4)},
-            _seed_runs(prepared), prepared=prepared)
+            _seed_runs(prepared), prepared=prepared,
+            seed_doubled_runs=_seed_doubled_runs(prepared))
     except mcc.MCInputError as exc:
         # N11 replaced the unreachable terminal arm with the real
         # rules (a)-(d) computation, so the specific code moved on.
@@ -1077,7 +1088,8 @@ def test_convergence_fallthrough_is_an_mcinputerror_not_an_assertion(
             _evidence(prepared),
             {"B": _evidence(prepared, run_label="double_B", axis="B",
                             B=4)},
-            _seed_runs(prepared), prepared=prepared)
+            _seed_runs(prepared), prepared=prepared,
+            seed_doubled_runs=_seed_doubled_runs(prepared))
         assert type(report) is mcc.ConvergenceReport
 
 
