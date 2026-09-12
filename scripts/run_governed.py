@@ -207,6 +207,16 @@ def run_child(argv: list) -> int:
             sys.path.append(d)
     if str(SRC) not in sys.path:
         sys.path.append(str(SRC))
+    # AND THE REPOSITORY ROOT, so a `scripts.*` target is importable.
+    #
+    # `-P` keeps the launcher's own directory off `sys.path`, which is what
+    # made `scripts.mc_real_run:main` fail to import with
+    # `ModuleNotFoundError: No module named 'scripts'` -- the launcher could
+    # start a target under `src/` and nothing else. APPENDED like the two
+    # above, never prepended, so stdlib resolution still runs ahead of the
+    # governed tree until the attestation has been taken.
+    if str(REPO) not in sys.path:
+        sys.path.append(str(REPO))
 
     # The FIRST governed import, and the proof comes immediately after it.
     from itsf.execution_identity import assert_governed_launch

@@ -150,6 +150,25 @@ def test_the_entrypoint_binds_the_trusted_launch_gate():
         "precheck_bundle_on_disk")
 
 
+def test_the_launcher_can_import_a_scripts_target():
+    """THE wiring that failed the first time this was launched for real.
+
+    `run_governed`'s child runs under `-P`, so the launcher's own directory
+    is off `sys.path` and `scripts.mc_real_run:main` raised
+    `ModuleNotFoundError: No module named 'scripts'` -- the launcher could
+    start a target under `src/` and nothing else. The child now appends the
+    repository root as well, and this pins that it keeps doing so.
+    """
+    import inspect
+    import scripts.run_governed as launcher
+    body = inspect.getsource(launcher.run_child)
+    assert "str(REPO)" in body, (
+        "the governed child no longer puts the repository root on sys.path, "
+        "so a scripts.* target cannot be imported")
+    assert body.index("sys.path.append(str(SRC))") < body.index(
+        "sys.path.append(str(REPO))"), "appended, never prepended"
+
+
 def test_the_entrypoint_refuses_without_a_bundle_root():
     """No pinned governed bundle root exists, and the entrypoint does not
     invent one."""
