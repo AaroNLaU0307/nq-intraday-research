@@ -349,6 +349,36 @@ class Bundle:
 
 
 # ---------------------------------------------------------------- checks
+def frozen_returns(profile: dict) -> list:
+    """THE frozen returns this delivery carries, normalised to a list.
+
+    A first-generation post-HOLD verification carries ONE return: the review
+    whose findings are being closed. A RESIDUAL verification carries two --
+    the original findings AND the verification that judged them -- because the
+    residual targets are defined by the second document and the findings they
+    refer to live in the first. Withholding either would ask the verifier to
+    adjudicate against a baseline it cannot read, which is the one thing the
+    FROZEN_REVIEW_RETURN class exists to prevent.
+
+    Each return keeps its own subdirectory. Two independent seats returned a
+    `GUARD_REPORT.json`; flattening them would silently drop one.
+    """
+    frozen = profile["frozen_baseline"]
+    rows = frozen if isinstance(frozen, list) else [frozen]
+    out, seen = [], set()
+    for row in rows:
+        prefix = row.get("prefix", "frozen/")
+        if not prefix.startswith("frozen/") or not prefix.endswith("/"):
+            refuse("frozen return prefix %r must live under frozen/" % prefix)
+        for art in row["artifacts"]:
+            rel = prefix + art["name"]
+            if rel in seen:
+                refuse("two frozen returns both claim %s" % rel)
+            seen.add(rel)
+        out.append(row)
+    return out
+
+
 def _mode(profile: dict) -> str:
     """REVIEW (the O1-O13 adjudication) or POSTHOLD_VERIFICATION.
 
@@ -506,20 +536,21 @@ def main(argv):
         # verification cannot be performed against a baseline the verifier is
         # not allowed to read, and digest-pinned so a restatement anywhere
         # else in this package can be checked against them.
-        frozen = profile["frozen_baseline"]
-        source_root = Path(frozen["source_root"])
-        for row in frozen["artifacts"]:
-            data = (source_root / row["name"]).read_bytes()
-            got = sha256_bytes(data)
-            if got != row["sha256"] or len(data) != row["byte_count"]:
-                refuse("frozen return %s is not the declared bytes "
-                       "(%s/%d declared, %s/%d found)"
-                       % (row["name"], row["sha256"][:12], row["byte_count"],
-                          got[:12], len(data)))
-            b.frozen_return("frozen/" + row["name"], data,
-                            source=str(source_root / row["name"]),
-                            produced_by=frozen["produced_by"],
-                            review_id=frozen["review_id"])
+        for frozen in frozen_returns(profile):
+            source_root = Path(frozen["source_root"])
+            prefix = frozen.get("prefix", "frozen/")
+            for row in frozen["artifacts"]:
+                data = (source_root / row["name"]).read_bytes()
+                got = sha256_bytes(data)
+                if got != row["sha256"] or len(data) != row["byte_count"]:
+                    refuse("frozen return %s is not the declared bytes "
+                           "(%s/%d declared, %s/%d found)"
+                           % (row["name"], row["sha256"][:12],
+                              row["byte_count"], got[:12], len(data)))
+                b.frozen_return(prefix + row["name"], data,
+                                source=str(source_root / row["name"]),
+                                produced_by=frozen["produced_by"],
+                                review_id=frozen["review_id"])
         targets = build_verification_targets(profile, b)
         b.generated("VERIFICATION_TARGETS.json", canonical(targets),
                     generator="scripts/build_code_review_bundle.py"
@@ -572,8 +603,9 @@ def main(argv):
         # package cannot be mistaken for a substantive round.
         "verification_of": (profile["repaired_target"]
                             if mode == "POSTHOLD_VERIFICATION" else None),
-        "frozen_baseline": ({k: v for k, v in profile["frozen_baseline"].items()
-                             if k != "source_root"}
+        "frozen_baseline": ([{k: v for k, v in row.items()
+                              if k != "source_root"}
+                             for row in frozen_returns(profile)]
                             if mode == "POSTHOLD_VERIFICATION" else None),
         "framework_commit": b.commit,
         "repository_root_tree": git("rev-parse", "%s^{tree}" % b.commit),
@@ -679,19 +711,26 @@ def build_verification_targets(profile: dict, b: Bundle) -> dict:
     """
     inb = {r["path"] for r in b.payload}
     digests = {r["path"]: r["sha256"] for r in b.payload}
-    rows, unresolved = {}, []
-    for target in profile["verification_targets"]:
+    unresolved = []
+
+    def resolve(entry, required_prose):
         loci = {}
-        for locus in target["loci"]:
+        for locus in entry["loci"]:
             path = locus.split("::", 1)[0]
             if path not in inb:
                 unresolved.append("%s names %s, which this delivery does not "
-                                  "carry" % (target["id"], path))
+                                  "carry" % (entry["id"], path))
                 continue
             loci[locus] = digests[path]
-        for name in ("frozen_finding", "closure_requires", "builder_claim"):
-            if not (target.get(name) or "").strip():
-                unresolved.append("%s.%s is empty" % (target["id"], name))
+        for name in required_prose:
+            if not (entry.get(name) or "").strip():
+                unresolved.append("%s.%s is empty" % (entry["id"], name))
+        return loci
+
+    rows = {}
+    for target in profile["verification_targets"]:
+        loci = resolve(target, ("frozen_finding", "closure_requires",
+                                "builder_claim"))
         rows[target["id"]] = {
             "title": target["title"],
             "frozen_finding": target["frozen_finding"],
@@ -700,22 +739,55 @@ def build_verification_targets(profile: dict, b: Bundle) -> dict:
             "loci_sha256": loci,
             "frozen_probe_refs": target.get("frozen_probe_refs", []),
             "focused_tests": target.get("focused_tests", []),
+            "builder_declared_incompleteness":
+                target.get("builder_declared_incompleteness"),
+        }
+    # NON-REGRESSION CONTROLS are a DIFFERENT question and must never be
+    # mistaken for a target. A target asks "is this finding now closed?"; a
+    # control asks "did closing something else break this one?" -- and the
+    # answer to a control can only ever be NO_REGRESSION or REGRESSED. Keeping
+    # them in separate maps is what stops a control from being read as a
+    # re-adjudication of an independently closed finding.
+    controls = {}
+    for control in profile.get("non_regression_controls", []):
+        loci = resolve(control, ("title", "previously_closed_as",
+                                 "control_question"))
+        controls[control["id"]] = {
+            "title": control["title"],
+            "previously_closed_as": control["previously_closed_as"],
+            "control_question": control["control_question"],
+            "loci_sha256": loci,
+            "control_tests": control.get("control_tests", []),
+            "may_not_be_reopened": True,
         }
     if unresolved:
         refuse("verification targets do not resolve:"
                + "".join(chr(10) + "  " + u for u in unresolved))
-    missing = {"F01", "F02", "F03", "F04", "F05", "F06", "F07"} - set(rows)
+    required = set(profile.get("required_target_ids")
+                   or ["F01", "F02", "F03", "F04", "F05", "F06", "F07"])
+    missing = required - set(rows)
     if missing:
         refuse("the frozen finding set is incomplete: %s" % sorted(missing))
+    overlap = set(rows) & set(controls)
+    if overlap:
+        refuse("%s is both a verification target and a non-regression "
+               "control; it cannot be both" % sorted(overlap))
+    required_controls = set(profile.get("required_control_ids") or [])
+    missing = required_controls - set(controls)
+    if missing:
+        refuse("the non-regression control set is incomplete: %s"
+               % sorted(missing))
     return {
         "schema": "n14_posthold_verification_targets.v1",
         "verification_id": profile["review_id"],
         "not_a_substantive_round": True,
         "round_accounting_unchanged": profile["round_accounting"],
-        "frozen_baseline_sha256":
-            profile["frozen_baseline"]["initial_findings_sha256"],
+        "frozen_baseline_sha256": {
+            row["review_id"]: row["initial_findings_sha256"]
+            for row in frozen_returns(profile)},
         "repaired_target": profile["repaired_target"],
         "targets": rows,
+        "non_regression_controls": controls,
     }
 
 

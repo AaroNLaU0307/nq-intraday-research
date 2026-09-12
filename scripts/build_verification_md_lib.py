@@ -35,19 +35,55 @@ def _targets_section(profile: dict, add) -> None:
         add("**BUILDER'S CLAIM, which is SELF_REPORTED and proves nothing.** %s"
             % target["builder_claim"])
         add("")
+        # A DECLARED OPEN HALF BELONGS BESIDE THE CLAIM, not in a later
+        # section a reader might skip. The builder saying what it did NOT
+        # repair is the one builder sentence worth printing in full, because
+        # it is the only one that cannot flatter the repair.
+        if target.get("builder_declared_incompleteness"):
+            add("**BUILDER-DECLARED INCOMPLETENESS -- read this before "
+                "judging closure.** %s"
+                % target["builder_declared_incompleteness"])
+            add("")
+
+
+import textwrap
+
+
+def _wrap(text: str, width: int = 74) -> list:
+    return textwrap.wrap(text, width=width) or [""]
+
+
+def _field(label: str, text: str, a) -> None:
+    """A fixed-width header field whose value wraps under its own column."""
+    lines = _wrap(text, 74 - 21)
+    a("%-18s = %s" % (label, lines[0]))
+    for line in lines[1:]:
+        a("%s%s" % (" " * 21, line))
+
+
+_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six",
+          7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+
+
+def _count(n: int) -> str:
+    return _WORDS.get(n, str(n))
 
 
 def render(profile: dict) -> str:
     L = []
     a = L.append
-    frozen = profile["frozen_baseline"]
+    baselines = profile["frozen_baseline"]
+    if not isinstance(baselines, list):
+        baselines = [baselines]
     target = profile["repaired_target"]
+    ids = ", ".join(t["id"] for t in profile["verification_targets"])
+    control_ids = [c["id"] for c in profile.get("non_regression_controls") or []]
 
     a("# VERIFY -- %s" % profile["review_id"])
     a("")
     a("```")
     a("VERIFICATION_ID    = %s" % profile["review_id"])
-    a("KIND               = POST-HOLD REMEDIATION VERIFICATION")
+    _field("KIND", profile["verification_kind"], a)
     a("THIS IS NOT        = N14 Round 3. It is not a substantive round of any")
     a("                     kind, it consumes no review round, and it does not")
     a("                     reopen O1-O13.")
@@ -55,18 +91,19 @@ def render(profile: dict) -> str:
     a("                     HOLD/CONSUMED, ordinary N14 budget EXHAUSTED.")
     a("CONTRACT           = %s" % profile["contract_version"])
     a("PROFILE            = %s" % profile["profile_version"])
-    a("BLINDNESS          = OUTCOME_BLIND. Judgment-first does NOT apply to the")
-    a("                     frozen F01-F07 comparand: those findings are the")
-    a("                     verification baseline on purpose, and closure")
-    a("                     cannot be checked against a baseline you may not")
-    a("                     read. Everything else is unchanged.")
-    a("SEAT               = the SAME independent session that authored the")
-    a("                     frozen Round-2 findings. That is deliberate here")
-    a("                     and is the one place this differs from an ordinary")
-    a("                     review seat: you are checking whether YOUR OWN")
-    a("                     stated failure paths still exist.")
-    a("MUST_NOT_BE        = the builder (Claude Opus / Claude Code) session or")
-    a("                     any subagent of it.")
+    _field("BLINDNESS",
+           "OUTCOME_BLIND. Judgment-first does NOT apply to the frozen "
+           "material in `frozen/`: those findings are the verification "
+           "baseline on purpose, and closure cannot be checked against a "
+           "baseline you may not read. Everything else is unchanged.", a)
+    _field("SEAT",
+           "the SAME independent session that authored the %s. That is "
+           "deliberate here and is the one place this differs from an "
+           "ordinary review seat: you are checking whether YOUR OWN stated "
+           "failure paths still exist." % profile["seat_note"], a)
+    _field("MUST_NOT_BE",
+           "the builder (Claude Opus / Claude Code) session or any subagent "
+           "of it.", a)
     a("REAL_MC_AUTHORIZED = NO    REAL_MC_EXECUTED = NO")
     a("STATISTICAL_SIGNAL = NOT_TESTED    STATISTICAL_OUTCOME_EXPOSED = NO")
     a("```")
@@ -74,10 +111,26 @@ def render(profile: dict) -> str:
 
     a("## 0. What you are being asked, and what you are not")
     a("")
-    a("**ASKED:** for each of the seven frozen findings F01-F07, determine")
-    a("independently whether the stated failure path still exists in the exact")
-    a("repaired tree carried in `tree/`.")
-    a("")
+    controls = profile.get("non_regression_controls") or []
+    if controls:
+        a("**ASKED, PRIMARY:** for %s -- the findings you left NOT_CLOSED, and"
+          % ids)
+        a("the consequential blocker you raised -- determine independently")
+        a("whether the stated failure path still exists in the exact repaired")
+        a("tree carried in `tree/`.")
+        a("")
+        a("**ASKED, CONTROL ONLY:** for %s -- which you already verified CLOSED"
+          % ", ".join(control_ids))
+        a("-- determine whether this residual repair REOPENED any of them. That")
+        a("is a non-regression question and nothing more: do not re-derive their")
+        a("closure and do not treat them as fresh substantive review.")
+        a("")
+    else:
+        a("**ASKED:** for each of the %s frozen findings %s, determine"
+          % (_count(len(profile["verification_targets"])), ids))
+        a("independently whether the stated failure path still exists in the")
+        a("exact repaired tree carried in `tree/`.")
+        a("")
     a("**ALSO ASKED, and it is not a broad audit:** whether the repairs")
     a("themselves broke something in the seams they directly changed. A repair")
     a("that closes its finding by damaging the code around it has not produced")
@@ -85,12 +138,13 @@ def render(profile: dict) -> str:
     a("footnote would be asking you to certify closure you do not believe in.")
     a("")
     a("**THE SEAMS THAT ARE IN SCOPE ARE MECHANICAL, not a judgement call.**")
-    a("They are the six production files listed in section 1, and the call")
+    a("They are the %s production files listed in section 1, and the call"
+      % _count(len(profile["repaired_target"]["production_files_changed"])))
     a("sites the repair itself altered inside them. Anything reachable only by")
     a("going further afield is out of scope.")
     a("")
     a("**NOT ASKED:** to re-adjudicate O1-O13, to audit the repository, to")
-    a("re-derive the Round-2 verdict, or to go looking for defects outside")
+    a("re-derive a verdict you have already returned, or to go looking outside")
     a("those seams. A finding that is genuinely unrelated to the repairs --")
     a("pre-existing, elsewhere in the tree, or reachable only by widening the")
     a("search -- goes in a clearly separated section and does NOT affect")
@@ -118,7 +172,8 @@ def render(profile: dict) -> str:
     a("row against the file it names. `MANIFEST.json` does not contain its own")
     a("hash -- a document that certifies itself certifies nothing.")
     a("")
-    a("**The six production files the repair touched:**")
+    a("**The %s production files the repair touched:**"
+      % _count(len(profile["repaired_target"]["production_files_changed"])))
     a("")
     for path in profile["repaired_target"]["production_files_changed"]:
         a("* `%s`" % path)
@@ -130,19 +185,21 @@ def render(profile: dict) -> str:
 
     a("## 2. The frozen baseline, carried byte-exact")
     a("")
-    a("`frozen/` holds YOUR Round-2 returns and probes, unmodified:")
-    a("")
-    a("```")
-    for row in frozen["artifacts"]:
-        a("%-32s %8d bytes  %s" % (row["name"], row["byte_count"],
-                                   row["sha256"][:16] + "..."))
-    a("```")
-    a("")
-    a("`frozen/FREEZE.json` declares `INITIAL_FINDINGS_SHA256 = %s`."
-      % frozen["initial_findings_sha256"])
-    a("The carried `frozen/INITIAL_FINDINGS.md` hashes to exactly that, so the")
-    a("baseline you are verifying against is provably the one you froze. Check")
-    a("it yourself; it is one hash.")
+    width = max(len(f.get("prefix", "frozen/") + r["name"])
+                for f in baselines for r in f["artifacts"])
+    for frozen in baselines:
+        for line in _wrap(frozen["intro"]):
+            a(line)
+        a("")
+        a("```")
+        for row in frozen["artifacts"]:
+            a("%-*s %8d bytes  %s"
+              % (width, frozen.get("prefix", "frozen/") + row["name"],
+                 row["byte_count"], row["sha256"][:16] + "..."))
+        a("```")
+        a("")
+    for line in profile["frozen_baseline_statement"]:
+        a(line)
     a("")
     a("**Nothing in `frozen/` was edited, reformatted or excerpted.** If any of")
     a("it disagrees with how a finding is restated in section 3, `frozen/` is")
@@ -158,7 +215,8 @@ def render(profile: dict) -> str:
     a("scan is unchanged and did run over every byte.")
     a("")
 
-    a("## 3. The seven verification targets")
+    a("## 3. The %s verification targets"
+      % _count(len(profile["verification_targets"])))
     a("")
     a("Each is stated as the FROZEN claim, the repaired loci, and what closure")
     a("requires. The closure criterion is the finding's own required repair")
@@ -166,51 +224,36 @@ def render(profile: dict) -> str:
     a("")
     _targets_section(profile, a)
 
-    a("## 4. The two targets Aaron singled out")
-    a("")
-    a("### A. F02 and the ruled doubling bound")
-    a("")
-    a("The repair asserts that the frozen authority makes K -> 2K expressible")
-    a("for every governed seed but does NOT authorize an invented 4K/8K")
-    a("escalation, and that it therefore applied the bound rather than")
-    a("extending it. **Do not accept that reading.** Compare the repaired")
-    a("behaviour against the authority directly:")
-    a("")
-    a("* `authority/RULES_EXTRACT.md` and `tree/MC_METHOD_SPEC.md` carry the")
-    a("  governing rules, including (e) and `GridRepeatPolicy.max_doublings`;")
-    a("* `tree/src/itsf/contracts.py` carries the ruled policy values;")
-    a("* `tree/src/itsf/mc/grid_replay.py` carries the frozen-k guard")
-    a("  (`grid_replay_k_per_seed_not_frozen`) and the 2x guard")
-    a("  (`grid_replay_k_doubling_violation`) that the builder says make a")
-    a("  second doubling inexpressible;")
-    a("* the aggregate records `doublings_executed` and `max_doublings`.")
-    a("")
-    a("**The question to answer is not whether the builder's story is coherent.**")
-    a("It is whether the required bounded doubling/escalation semantics are")
-    a("FULLY satisfied by what the repaired code does. If they are not, say so")
-    a("and name the exact rule that is unmet.")
-    a("")
-    a("### B. F06 and the governed Owner release")
-    a("")
-    a("The generic writer must refuse `OWNER_RELEASE`. The legitimate")
-    a("Owner-action path now reaches the one physical write through the")
-    a("compare-and-swap directly, rather than through the generic entry.")
-    a("Establish that this preserves ALL of:")
-    a("")
-    a("* the actor/Owner boundary (the row's actor cell, and who may file it);")
-    a("* hold identity -- a release names the hold it releases and only that;")
-    a("* the compare-and-swap condition against the decided snapshot;")
-    a("* serialization and integrity -- one lock, one write, tail-newline and")
-    a("  post-write re-parse;")
-    a("* downstream hold-state semantics -- what `active_holds` and")
-    a("  `holds_applicable_to_start` answer before and after.")
-    a("")
-    a("The loci are `tree/src/itsf/mc/registry_boundary.py` (`serialized_append`,")
-    a("`_compare_and_append`, `_append_owner_row`, `append_owner_release`,")
-    a("`_physical_serialized_write`) and `tree/src/itsf/mc/owner_control.py`.")
-    a("**A bypass here would be worse than the finding it repairs**, so this is")
-    a("the one place where 'the tests pass' is explicitly not enough.")
-    a("")
+    if profile.get("non_regression_controls"):
+        a("## 3.1 The non-regression controls")
+        a("")
+        a("You verified these CLOSED against the previous repair. The only")
+        a("question here is whether the residual repair reopened one. A repair")
+        a("that closes its own findings by reopening an earlier one has not")
+        a("produced a remediation, which is why they are in the package at all")
+        a("-- and equally, re-adjudicating them would be the broad review this")
+        a("delivery is not.")
+        a("")
+        for control in profile["non_regression_controls"]:
+            a("**%s -- %s.** %s" % (control["id"], control["title"],
+                                    control["control_question"]))
+            a("")
+            a("Controls: %s"
+              % ", ".join("`%s`" % t for t in control["control_tests"]))
+            a("")
+        a("**Report each as NO_REGRESSION or REGRESSED.** A REGRESSED control")
+        a("fails the whole verification on its own, however the primary targets")
+        a("came out: closure bought by reopening something already closed is")
+        a("not closure.")
+        a("")
+
+    for index, block in enumerate(profile.get("singled_out_sections", [])):
+        a("## 4%s %s" % ("." + str(index) if index else ".",
+                         block["heading"]))
+        a("")
+        for line in block["body"]:
+            a(line)
+        a("")
 
     a("## 5. Running the focused evidence")
     a("")
@@ -225,9 +268,12 @@ def render(profile: dict) -> str:
     a("one.")
     a("")
     a("It runs the selected repository tests from `tree/` plus the boundary")
-    a("probes. `%s` is the focused F01-F07 evidence"
-      % profile["focused_test_file"])
-    a("and is the file to read first: every test in it asserts a FINAL")
+    a("probes. The focused evidence is:")
+    a("")
+    for row in profile["focused_test_files"]:
+        a("* `%s` -- %s" % (row["path"], row["what"]))
+    a("")
+    a("Read those first: every test in them asserts a FINAL")
     a("OBSERVABLE -- the seal candidate, the returned object, the ledger bytes --")
     a("rather than that a helper exists or a source string appears. That")
     a("distinction is the builder's own account of why several of your findings")
@@ -247,12 +293,8 @@ def render(profile: dict) -> str:
         a(line)
     a("```")
     a("")
-    a("The affected-suite figures above were measured OUTSIDE this sealed")
-    a("package -- those suites use `subprocess`, `git` and source introspection,")
-    a("which the execution guard denies by design, so they cannot run in here.")
-    a("They are stated as builder self-reports and are not offered as evidence.")
-    a("Their SOURCE is not in this package either; if you need it to judge a")
-    a("closure, that is a transport defect worth reporting.")
+    for line in profile["measurement_provenance"]:
+        a(line)
     a("")
 
     a("## 6. Your output")
@@ -266,7 +308,7 @@ def render(profile: dict) -> str:
     a("<review workspace>\\VERIFICATION_ATTESTATION.md")
     a("```")
     a("")
-    a("`VERIFICATION_FINDINGS.md` must give, for EACH of F01-F07:")
+    a("`VERIFICATION_FINDINGS.md` must give, for EACH of %s:" % ids)
     a("")
     a("```")
     a("CLOSURE          CLOSED | NOT_CLOSED | CLOSED_WITH_RESERVATION")
@@ -280,8 +322,17 @@ def render(profile: dict) -> str:
     a("failure path while leaving a named narrower one open can be recorded")
     a("honestly instead of being forced into a binary.")
     a("")
-    a("**Then a section `CONSEQUENTIAL_REGRESSIONS`**, for anything the repairs")
-    a("broke in the seams they directly changed (section 0). For each:")
+    if profile.get("non_regression_controls"):
+        a("**Then a section `NON_REGRESSION`**, one line per control:")
+        a("")
+        a("```")
+        for index, cid in enumerate(control_ids):
+            a("%-5s NO_REGRESSION | REGRESSED%s"
+              % (cid, "   + what you ran or read" if not index else ""))
+        a("```")
+        a("")
+    a("**Then a section `CONSEQUENTIAL_REGRESSIONS`**, for anything the repair")
+    a("broke in the seams it directly changed (section 0). For each:")
     a("")
     a("```")
     a("SEVERITY         BLOCKER | NON_BLOCKING")
@@ -290,35 +341,25 @@ def render(profile: dict) -> str:
     a("BASIS            what you executed or read that established it")
     a("```")
     a("")
-    a("**A BLOCKER needs a concrete failure path**, the same standard a Round-2")
+    a("**A BLOCKER needs a concrete failure path**, the same standard a")
     a("blocking finding needed: an input or state, and the wrong behaviour that")
     a("follows. A cleaner design you would have preferred is not a blocker, and")
-    a("neither is a risk nobody can reach.")
+    a("neither is a risk nobody can reach. An observation unrelated to the")
+    a("changed seams does not affect closure -- put it in a separate section.")
     a("")
     a("End with:")
     a("")
     a("```")
-    a("REMEDIATION_VERIFIED        every finding CLOSED, and no BLOCKER")
-    a("                            consequential regression")
-    a("REMEDIATION_PARTIAL         at least one CLOSED_WITH_RESERVATION and/or a")
-    a("                            NON_BLOCKING consequential regression; no")
-    a("                            NOT_CLOSED and no BLOCKER")
-    a("REMEDIATION_NOT_VERIFIED    at least one NOT_CLOSED, OR at least one")
-    a("                            BLOCKER consequential regression")
+    for line in profile["overall_verdict_rule"]:
+        a(line)
     a("```")
-    a("")
-    a("**A single concrete repair-induced BLOCKER in a changed seam forces")
-    a("REMEDIATION_NOT_VERIFIED**, however many of the seven are closed. That is")
-    a("deliberate: seven closures bought by a new blocker is not a remediation,")
-    a("and reporting it any other way would hand Aaron a verified result over a")
-    a("defect you had found.")
     a("")
     a("There is no fourth value and this is **not** a GO/STOP verdict on N14.")
     a("Whether N14 proceeds is Aaron's decision and is not being delegated here.")
     a("")
     a("Then `VERIFICATION_FREEZE.json` recording `VERIFICATION_ID`,")
-    a("`MANIFEST_SHA256`, `VERIFICATION_FINDINGS_SHA256`, the frozen")
-    a("`INITIAL_FINDINGS_SHA256` you verified against, a timestamp and your")
+    a("`MANIFEST_SHA256`, `VERIFICATION_FINDINGS_SHA256`, the digest of every")
+    a("frozen return you verified against, a timestamp and your")
     a("session identity; then `VERIFICATION_ATTESTATION.md` stating what you")
     a("executed but did not inspect.")
     a("")
@@ -329,8 +370,10 @@ def render(profile: dict) -> str:
     a("")
     a("* `MANIFEST.json` does not match the digest you were given, or any")
     a("  payload row does not match its file;")
-    a("* `frozen/INITIAL_FINDINGS.md` does not hash to the value")
-    a("  `frozen/FREEZE.json` declares;")
+    for frozen in baselines:
+        a("* `%s` does not hash to the value `%s` declares;"
+          % (frozen.get("prefix", "frozen/") + frozen["findings_name"],
+             frozen.get("prefix", "frozen/") + frozen["freeze_name"]))
     a("* the launcher or the runtime refuses;")
     a("* `unexpected_denials` or `missing_prescribed_denials` is non-empty;")
     a("* a locus named in section 3 is absent from `tree/`;")
