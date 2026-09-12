@@ -52,11 +52,16 @@ input_bundle_commit   876c1b74131b4ab1a89dce433ecce646ba481f8c
                       the commit the sealed S0-T001 bundle was produced at;
                       historical and fixed. Compared against
                       `prepared.authorized_commit`.
-mc_execution_commit   f0e72e4cedf03693fc88e21a37b31eeb3d30e18a
-                      the governed checkout that would execute N16.
-                      MEASURED by the gate via the governed-identity
-                      resolver, never accepted from a caller, and refused
-                      when any governed path is modified.
+mc_execution_commit   NOT PINNED HERE, and deliberately: it is whatever
+                      the governed checkout is at when the run starts, so a
+                      value written on this page would be stale the next
+                      time anything is committed -- including the commit
+                      that wrote it. MEASURE it:
+                        scripts.mc_real_run:authorization_preview
+                      It is measured by the gate through the
+                      governed-identity resolver, never accepted from a
+                      caller, and refused when any governed path is
+                      modified.
 ```
 
 Two consequences worth knowing before writing the authorization:
