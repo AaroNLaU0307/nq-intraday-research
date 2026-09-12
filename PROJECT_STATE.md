@@ -24,21 +24,43 @@ TRIAL_ACCOUNTING    = ops/TRIAL_REGISTRY.md
 OUTCOME_EXPOSURE    = tracked — ops/EXPOSURE_LEDGER.md. RETAINED: this project has a
                       sealed preregistration and an unrevealed statistic, so
                       blinding is materially required (vNext §11).
-OPEN_MATERIAL_BLOCKERS = ONE, plus the authorization itself:
-                      (1) the governed 14-file sealed-bundle root is not
-                          pinned anywhere in code. `AUTHORIZED_JOB_DIR` pins
-                          the VENDOR job directory, not the bundle. Naming a
-                          data root is an Owner act, exactly as the job
-                          directory was on 2026-09-05, so the entrypoint
-                          takes it as a required argument with no default
-                          and refuses without it.
-                      (2) `ops/MC_RUN_AUTHORIZATION.json` does not exist —
-                          which is not a defect. It is the authorization.
+OPEN_MATERIAL_BLOCKERS = NONE mechanical. The sealed bundle is identified,
+                      unambiguous and now bound BY DIGEST in the gate, so a
+                      substituted bundle at any path refuses.
+                      `ops/MC_RUN_AUTHORIZATION.json` does not exist — which
+                      is not a defect, it IS the authorization.
+                      One thing for Aaron to settle when writing it: the gate
+                      compares the authorization's commit against
+                      `prepared.authorized_commit`, which is the SEALED
+                      BUNDLE's commit `876c1b74…` (S0-T001's), not today's
+                      HEAD. The MC code commit is not currently bound; making
+                      it a second binding would change what the authorization
+                      means, which is an Owner call, not a builder one.
                       Non-blocking rows carried: B-35, NB1, B-29, B-30.
-NEXT_OWNER_DECISION = pin the governed bundle root, then write
-                      `ops/MC_RUN_AUTHORIZATION.json`. REAL_MC =
+NEXT_OWNER_DECISION = write `ops/MC_RUN_AUTHORIZATION.json`. REAL_MC =
                       NOT AUTHORIZED. N16 NOT EXECUTED.
 ```
+
+## The sealed bundle, Owner-bound 2026-09-13
+
+```
+BUNDLE_ROOT   C:\Users\Aaron\quant-data\itsf-runs\runs\S0-T001_20260813T170432Z
+IDENTITY      bundle_summary_digest
+              7263f0c1802c205ae3bf3732a0d2de5b46f17aac67a93fe5aedcc7bb71262d67
+              (mc_bundle_ondisk_summary.v1 — the EXISTING governed aggregate,
+               not a new format invented to make another hash)
+INVENTORY     14/14 files, 440,688,080 bytes, every digest matching the
+              code-pinned attestation table
+COMMIT BOUND  876c1b74131b4ab1a89dce433ecce646ba481f8c (the bundle's own)
+```
+
+Exactly two directories on this machine carry that run name, and both
+precheck to the SAME summary digest: the ruled runs root above and its
+attested archive under `itsf-runs-archive`. They are one bundle at two
+paths, not two candidates — `contracts` distinguishes the roles, and
+`E:\quant-data` (the attested backup root) is not mounted. The gate now
+binds the DIGEST, so the path is no longer the security-relevant choice: a
+substituted bundle refuses wherever it sits.
 
 ## Two legacy obligations, reclassified 2026-09-13
 
