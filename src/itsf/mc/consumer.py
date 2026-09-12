@@ -3905,7 +3905,8 @@ MC_AUTHORIZATION_ACTOR = "Aaron"
 #: against what the RUNNER was handed, so an authorization for one design
 #: cannot start a run over another.
 MC_AUTHORIZATION_BINDINGS = ("run_id", "authorized_commit",
-                             "sealed_supplement_sha256", "prereg_sha256")
+                             "sealed_supplement_sha256", "prereg_sha256",
+                             "bundle_summary_digest")
 
 
 def _prereg_sha256() -> str:
@@ -3922,6 +3923,7 @@ def authorize_real_mc(registry_text: str = "", *,
                       run_id: str = "",
                       authorized_commit: str = "",
                       sealed_supplement_sha256: str = "",
+                      bundle_summary_digest: str = None,
                       path: str = MC_AUTHORIZATION_PATH) -> Mapping:
     """THE real-MC authorization boundary. Default: refuse.
 
@@ -3941,8 +3943,19 @@ def authorize_real_mc(registry_text: str = "", *,
          handed;
       6. its `prereg_sha256` is the sealed preregistration on disk, so an
          authorization cannot outlive the research design it was given for;
-      7. its `sentence` equals the sentence REBUILT from (3) and (4). The
+      7. its `bundle_summary_digest` is the sealed 14-file bundle actually
+         on disk -- but ONLY when the caller has one to offer;
+      8. its `sentence` equals the sentence REBUILT from (3) and (4). The
          transported string is never trusted -- the N06 round-3 lesson.
+
+    `bundle_summary_digest=None` is the PRE-READ phase, and it exists so an
+    unauthorized call costs nothing: computing the bundle digest means
+    hashing ~440 MB of outcome-carrying bytes, and doing that before
+    establishing that the caller is authorized at all would be paying the
+    price of a run to be told no. Everything else is checked in that phase.
+    The digest is then compared in a second call, and
+    `mc_runner.bind_owner_authorization` REFUSES to bind a run without it --
+    so skipping phase two cannot start anything.
 
     A caller that supplies no bindings (the historical one-argument shape)
     refuses, because a gate that cannot see what it is authorizing is not a
@@ -3996,6 +4009,13 @@ def authorize_real_mc(registry_text: str = "", *,
             != str(sealed_supplement_sha256)):
         refuse("the authorization names a different sealed supplement than "
                "the one this run was handed")
+    if bundle_summary_digest is not None:
+        if str(row["bundle_summary_digest"]).strip() != str(
+                bundle_summary_digest):
+            refuse("the authorization names sealed bundle "
+                   f"{str(row['bundle_summary_digest'])[:12]} and the bundle "
+                   f"on disk summarises to {str(bundle_summary_digest)[:12]}"
+                   " — a different bundle is a different run")
     want_prereg = _prereg_sha256()
     if str(row["prereg_sha256"]).strip() != want_prereg:
         refuse(f"the authorization was issued against preregistration "

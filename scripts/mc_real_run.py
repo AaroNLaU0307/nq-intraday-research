@@ -103,6 +103,27 @@ def authorization_preview() -> dict:
         "authorization_path": mcc.MC_AUTHORIZATION_PATH,
         "sentence_template": mcc.MC_AUTHORIZATION_SENTENCE,
         "authorized_commit": "<the commit the prepared input is bound to>",
+        "bundle_summary_digest": "<run bundle_identity(root) to measure it>",
+    }
+
+
+def bundle_identity(bundle_root: str) -> dict:
+    """The sealed bundle's governed identity, measured from disk.
+
+    Re-derives the 14-file table through the production precheck -- the same
+    call the run makes -- and reports its summary digest. It reports
+    identity only: no file content is returned, displayed or interpreted.
+    """
+    from itsf.mc.bundle_precheck import precheck_bundle_on_disk
+
+    pc = precheck_bundle_on_disk(Path(bundle_root))
+    return {
+        "bundle_root": str(Path(bundle_root)),
+        "n_files": pc.n_files,
+        "expected_source": pc.expected_source,
+        "bundle_summary_digest": pc.summary_digest,
+        "total_bytes": sum(int(e.size) for e in pc.recomputed),
+        "names": tuple(sorted(e.name for e in pc.recomputed)),
     }
 
 
@@ -137,19 +158,30 @@ def main(bundle_root: str = "", output_root: str = "") -> int:
     # from the authorization itself and re-checked against the prepared
     # input below: the gate refuses an unauthorized call at zero cost, and
     # a mismatched one before the run starts.
-    authorization = mcc.authorize_real_mc(
+    mcc.authorize_real_mc(
         resolution.snapshot.text,
         run_id=RUN_ID,
         authorized_commit=_declared_commit(mcc),
         sealed_supplement_sha256=supplement_sha)
-    commit = str(authorization["authorized_commit"])
 
     # ---- only now is anything read -----------------------------------
+    #
+    # The bundle is re-derived from DISK and summarised, and the gate is
+    # asked AGAIN with that summary. Phase one above cost nothing and
+    # refused an unauthorized caller; phase two is what binds the run to
+    # THIS bundle, and `bind_owner_authorization` refuses without it.
     from itsf.mc.bundle_precheck import precheck_bundle_on_disk
 
     precheck = precheck_bundle_on_disk(Path(bundle_root))
+    authorization = mcc.authorize_real_mc(
+        resolution.snapshot.text,
+        run_id=RUN_ID,
+        authorized_commit=_declared_commit(mcc),
+        sealed_supplement_sha256=supplement_sha,
+        bundle_summary_digest=precheck.summary_digest)
+    commit = str(authorization["authorized_commit"])
     bundle = {e.name: (Path(bundle_root) / e.name).read_bytes()
-              for e in precheck.entries}
+              for e in precheck.recomputed}
     attestation = (REPO / mcc.ATTESTATION_PATH).read_bytes()
     prepared = mcc.prepare_mc_input(
         bundle, authorization_snapshot=resolution.snapshot,
@@ -163,7 +195,8 @@ def main(bundle_root: str = "", output_root: str = "") -> int:
 
     result = run.execute_full_mc(
         prepared, run_id=RUN_ID, output_root=output_root or str(REPO),
-        supplement=supplement, sealed_artifact_sha256=supplement_sha)
+        supplement=supplement, sealed_artifact_sha256=supplement_sha,
+        bundle_summary_digest=precheck.summary_digest)
     sys.stderr.write("mc_real_run: completed %s\n" % result.run_id)
     return 0
 

@@ -21,6 +21,7 @@ from itsf.s0.handoff import McConsumerAbsent
 RUN_ID = "MC-R001"
 COMMIT = "a" * 40
 SUPPLEMENT = "b" * 64
+BUNDLE = "1" * 64
 
 
 def _authorization(**over):
@@ -28,6 +29,7 @@ def _authorization(**over):
         "run_id": RUN_ID,
         "authorized_commit": COMMIT,
         "sealed_supplement_sha256": SUPPLEMENT,
+        "bundle_summary_digest": BUNDLE,
         "prereg_sha256": mcc._prereg_sha256(),
         "authorized_by": mcc.MC_AUTHORIZATION_ACTOR,
         "sentence": mcc.MC_AUTHORIZATION_SENTENCE.format(
@@ -147,7 +149,9 @@ def test_a_different_run_id_refuses(authorized):
     with pytest.raises(McConsumerAbsent, match="run id"):
         mcc.authorize_real_mc("", run_id="MC-R999",
                               authorized_commit=COMMIT,
-                              sealed_supplement_sha256=SUPPLEMENT, path=rel)
+                              sealed_supplement_sha256=SUPPLEMENT,
+                              bundle_summary_digest=BUNDLE,
+                              path=rel)
 
 
 def test_a_non_hex_commit_refuses(authorized):
@@ -155,14 +159,18 @@ def test_a_non_hex_commit_refuses(authorized):
     with pytest.raises(McConsumerAbsent, match="40-character"):
         mcc.authorize_real_mc("", run_id=RUN_ID,
                               authorized_commit="not-40-hex",
-                              sealed_supplement_sha256=SUPPLEMENT, path=rel)
+                              sealed_supplement_sha256=SUPPLEMENT,
+                              bundle_summary_digest=BUNDLE,
+                              path=rel)
 
 
 def test_a_non_owner_actor_refuses(authorized):
     rel = _write(authorized, _authorization(authorized_by="main agent"))
     with pytest.raises(McConsumerAbsent, match="only Aaron"):
         mcc.authorize_real_mc("", run_id=RUN_ID, authorized_commit=COMMIT,
-                              sealed_supplement_sha256=SUPPLEMENT, path=rel)
+                              sealed_supplement_sha256=SUPPLEMENT,
+                              bundle_summary_digest=BUNDLE,
+                              path=rel)
 
 
 def test_malformed_json_refuses(authorized):
@@ -174,7 +182,9 @@ def test_malformed_json_refuses(authorized):
     rel = str(target.relative_to(repo)).replace("\\", "/")
     with pytest.raises(McConsumerAbsent, match="does not parse"):
         mcc.authorize_real_mc("", run_id=RUN_ID, authorized_commit=COMMIT,
-                              sealed_supplement_sha256=SUPPLEMENT, path=rel)
+                              sealed_supplement_sha256=SUPPLEMENT,
+                              bundle_summary_digest=BUNDLE,
+                              path=rel)
 
 
 def test_a_missing_field_refuses(authorized):
@@ -183,7 +193,9 @@ def test_a_missing_field_refuses(authorized):
     rel = _write(authorized, row)
     with pytest.raises(McConsumerAbsent, match="missing"):
         mcc.authorize_real_mc("", run_id=RUN_ID, authorized_commit=COMMIT,
-                              sealed_supplement_sha256=SUPPLEMENT, path=rel)
+                              sealed_supplement_sha256=SUPPLEMENT,
+                              bundle_summary_digest=BUNDLE,
+                              path=rel)
 
 
 # == 3. wrong code / supplement / prereg binding ==========================
@@ -192,14 +204,18 @@ def test_a_different_commit_refuses(authorized):
     rel = _write(authorized, _authorization())
     with pytest.raises(McConsumerAbsent, match="prepared input is bound"):
         mcc.authorize_real_mc("", run_id=RUN_ID, authorized_commit="c" * 40,
-                              sealed_supplement_sha256=SUPPLEMENT, path=rel)
+                              sealed_supplement_sha256=SUPPLEMENT,
+                              bundle_summary_digest=BUNDLE,
+                              path=rel)
 
 
 def test_a_different_supplement_refuses(authorized):
     rel = _write(authorized, _authorization())
     with pytest.raises(McConsumerAbsent, match="sealed supplement"):
         mcc.authorize_real_mc("", run_id=RUN_ID, authorized_commit=COMMIT,
-                              sealed_supplement_sha256="d" * 64, path=rel)
+                              sealed_supplement_sha256="d" * 64,
+                              bundle_summary_digest=BUNDLE,
+                              path=rel)
 
 
 def test_a_stale_preregistration_refuses(authorized):
@@ -207,7 +223,9 @@ def test_a_stale_preregistration_refuses(authorized):
     rel = _write(authorized, _authorization(prereg_sha256="e" * 64))
     with pytest.raises(McConsumerAbsent, match="preregistration"):
         mcc.authorize_real_mc("", run_id=RUN_ID, authorized_commit=COMMIT,
-                              sealed_supplement_sha256=SUPPLEMENT, path=rel)
+                              sealed_supplement_sha256=SUPPLEMENT,
+                              bundle_summary_digest=BUNDLE,
+                              path=rel)
 
 
 def test_a_transported_sentence_is_never_trusted(authorized):
@@ -216,7 +234,9 @@ def test_a_transported_sentence_is_never_trusted(authorized):
     rel = _write(authorized, _authorization(sentence="启动第一次真实MC，授权"))
     with pytest.raises(McConsumerAbsent, match="rebuilt"):
         mcc.authorize_real_mc("", run_id=RUN_ID, authorized_commit=COMMIT,
-                              sealed_supplement_sha256=SUPPLEMENT, path=rel)
+                              sealed_supplement_sha256=SUPPLEMENT,
+                              bundle_summary_digest=BUNDLE,
+                              path=rel)
 
 
 def test_a_sentence_for_another_commit_refuses(authorized):
@@ -226,7 +246,83 @@ def test_a_sentence_for_another_commit_refuses(authorized):
             run_id=RUN_ID, commit="f" * 40)))
     with pytest.raises(McConsumerAbsent, match="rebuilt"):
         mcc.authorize_real_mc("", run_id=RUN_ID, authorized_commit=COMMIT,
-                              sealed_supplement_sha256=SUPPLEMENT, path=rel)
+                              sealed_supplement_sha256=SUPPLEMENT,
+                              bundle_summary_digest=BUNDLE,
+                              path=rel)
+
+
+# == 3b. the sealed bundle identity ======================================
+
+def test_a_substituted_bundle_refuses(authorized):
+    """A different bundle is a different run, whatever path it sits at."""
+    rel = _write(authorized, _authorization())
+    with pytest.raises(McConsumerAbsent, match="sealed bundle"):
+        mcc.authorize_real_mc("", run_id=RUN_ID, authorized_commit=COMMIT,
+                              sealed_supplement_sha256=SUPPLEMENT,
+                              bundle_summary_digest="9" * 64, path=rel)
+
+
+def test_the_pre_read_phase_checks_everything_else(authorized):
+    """`bundle_summary_digest=None` is the cheap phase: it still refuses a
+    wrong commit, so an unauthorized caller never pays to hash the bundle."""
+    rel = _write(authorized, _authorization())
+    with pytest.raises(McConsumerAbsent, match="prepared input is bound"):
+        mcc.authorize_real_mc("", run_id=RUN_ID, authorized_commit="c" * 40,
+                              sealed_supplement_sha256=SUPPLEMENT,
+                              bundle_summary_digest=None, path=rel)
+    got = mcc.authorize_real_mc("", run_id=RUN_ID, authorized_commit=COMMIT,
+                                sealed_supplement_sha256=SUPPLEMENT,
+                                bundle_summary_digest=None, path=rel)
+    assert got["bundle_summary_digest"] == BUNDLE
+
+
+def test_nothing_binds_without_the_bundle_identity(authorized):
+    """THE property that keeps the cheap phase from becoming a bypass."""
+    from itsf.mc import mc_runner as run
+    rel = _write(authorized, _authorization())
+    owner = mcc.authorize_real_mc("", run_id=RUN_ID, authorized_commit=COMMIT,
+                                  sealed_supplement_sha256=SUPPLEMENT,
+                                  bundle_summary_digest=None, path=rel)
+    with pytest.raises(mcc.MCInputError) as ei:
+        run.bind_owner_authorization(owner, run_id=RUN_ID,
+                                     expected_commit=COMMIT,
+                                     output_root="out",
+                                     bundle_summary_digest="")
+    assert ei.value.code == "mc_run_bundle_identity_absent"
+    with pytest.raises(mcc.MCInputError) as ei:
+        run.bind_owner_authorization(owner, run_id=RUN_ID,
+                                     expected_commit=COMMIT,
+                                     output_root="out",
+                                     bundle_summary_digest="9" * 64)
+    assert ei.value.code == "mc_run_bundle_identity_mismatch"
+
+
+def test_the_owner_bound_bundle_reaches_the_binding_and_stops(authorized):
+    """CASE 4: the exact Owner-bound bundle reaches the post-authorization
+    boundary -- a bound `RunAuthorization` -- and goes no further here. No
+    real MC is executed and no protected outcome is read."""
+    from itsf.mc import mc_runner as run
+    rel = _write(authorized, _authorization())
+    owner = mcc.authorize_real_mc("", run_id=RUN_ID, authorized_commit=COMMIT,
+                                  sealed_supplement_sha256=SUPPLEMENT,
+                                  bundle_summary_digest=BUNDLE, path=rel)
+    bound = run.bind_owner_authorization(
+        owner, run_id=RUN_ID, expected_commit=COMMIT, output_root="out",
+        bundle_summary_digest=BUNDLE)
+    assert bound.run_id == RUN_ID
+    assert bound.authorized_commit == COMMIT
+    assert bound.test_only is False
+    assert mcc.MC_AUTHORIZATION_PATH in bound.registry_detail
+
+
+def test_a_wrong_bundle_path_refuses_at_the_precheck(tmp_path):
+    """A path that is not the sealed bundle never reaches the gate's digest
+    comparison: the production precheck refuses it first."""
+    from itsf.mc.bundle_precheck import (precheck_bundle_on_disk,
+                                         BundlePrecheckError)
+    (tmp_path / "manifest.jsonl").write_text("not it", encoding="utf-8")
+    with pytest.raises(BundlePrecheckError):
+        precheck_bundle_on_disk(tmp_path)
 
 
 # == 4. a correct authorization reaches the post-gate boundary ============
@@ -236,7 +332,8 @@ def test_a_correct_authorization_is_accepted_and_returned(authorized):
     authorization and the caller goes no further here."""
     rel = _write(authorized, _authorization())
     got = mcc.authorize_real_mc("", run_id=RUN_ID, authorized_commit=COMMIT,
-                                sealed_supplement_sha256=SUPPLEMENT, path=rel)
+                                sealed_supplement_sha256=SUPPLEMENT,
+                                bundle_summary_digest=BUNDLE, path=rel)
     assert got["run_id"] == RUN_ID
     assert got["authorized_commit"] == COMMIT
     assert got["authorized_by"] == mcc.MC_AUTHORIZATION_ACTOR

@@ -92,8 +92,8 @@ class RunAuthorization:
 
 
 def bind_owner_authorization(authorization: Mapping, *, run_id: str,
-                             expected_commit: str,
-                             output_root: str) -> RunAuthorization:
+                             expected_commit: str, output_root: str,
+                             bundle_summary_digest: str) -> RunAuthorization:
     """Bind the OWNER's authorization -- the current one -- or refuse.
 
     `bind_run_authorization` below binds a live `MC_RUN_AUTHORIZED` row in
@@ -110,10 +110,16 @@ def bind_owner_authorization(authorization: Mapping, *, run_id: str,
     that exercises it -- neither replaces the other, and nothing historical
     was rewritten to reach this.
 
-    This takes an ALREADY-VALIDATED mapping. It re-checks the two bindings
-    it is about to freeze into the `RunAuthorization` rather than trusting
-    the caller to have checked them, because a binder that assumes its input
-    was validated is a binder that can be handed anything.
+    This takes an ALREADY-VALIDATED mapping. It re-checks the bindings it is
+    about to freeze into the `RunAuthorization` rather than trusting the
+    caller to have checked them, because a binder that assumes its input was
+    validated is a binder that can be handed anything.
+
+    `bundle_summary_digest` is REQUIRED and must be non-empty. The gate can
+    be asked without it -- that is its cheap pre-read phase -- but nothing
+    may be BOUND without the sealed bundle on disk having been summarised
+    and matched. That is what stops the pre-read phase from becoming a way
+    to start a run over an unverified bundle.
     """
     if not _mcx.RUN_ID_RE.match(str(run_id)):
         raise MCInputError("mc_run_id_not_canonical",
@@ -126,6 +132,19 @@ def bind_owner_authorization(authorization: Mapping, *, run_id: str,
             "mc_run_output_root_absent",
             "the authorization binds an output root; an empty one would let "
             "the run write anywhere")
+    digest = str(bundle_summary_digest or "").strip()
+    if not digest:
+        raise MCInputError(
+            "mc_run_bundle_identity_absent",
+            "no sealed-bundle summary digest was supplied; a run may not be "
+            "bound until the bundle on disk has been summarised and matched "
+            "against the Owner authorization")
+    if str((authorization or {}).get("bundle_summary_digest", "")).strip()             != digest:
+        raise MCInputError(
+            "mc_run_bundle_identity_mismatch",
+            f"the Owner authorization names sealed bundle "
+            f"{str((authorization or {}).get('bundle_summary_digest'))[:12]} "
+            f"and the bundle on disk summarises to {digest[:12]}")
     commit = str((authorization or {}).get("authorized_commit", "")).strip()
     if str((authorization or {}).get("run_id", "")).strip() != str(run_id):
         raise MCInputError(
@@ -529,6 +548,7 @@ def _execute(prepared, *, authorization: RunAuthorization,
 
 def execute_full_mc(prepared, *, run_id: str, output_root: str,
                     supplement: Mapping, sealed_artifact_sha256: str,
+                    bundle_summary_digest: str = "",
                     cells: tuple = _gr.GRID_CELL_KEYS) -> RunnerResult:
     """PRODUCTION entry. GATE-FIRST.
 
@@ -551,11 +571,13 @@ def execute_full_mc(prepared, *, run_id: str, output_root: str,
         resolution.snapshot.text,
         run_id=run_id,
         authorized_commit=prepared.authorized_commit,
-        sealed_supplement_sha256=sealed_artifact_sha256)
+        sealed_supplement_sha256=sealed_artifact_sha256,
+        bundle_summary_digest=bundle_summary_digest or None)
     # --- reachable ONLY behind a valid Owner authorization ---------------
     authorization = bind_owner_authorization(
         owner, run_id=run_id,
-        expected_commit=prepared.authorized_commit, output_root=output_root)
+        expected_commit=prepared.authorized_commit, output_root=output_root,
+        bundle_summary_digest=bundle_summary_digest)
     return _execute(prepared, authorization=authorization,
                     supplement=supplement,
                     sealed_artifact_sha256=sealed_artifact_sha256,
