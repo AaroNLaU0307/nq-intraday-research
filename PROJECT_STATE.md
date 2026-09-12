@@ -29,17 +29,43 @@ OPEN_MATERIAL_BLOCKERS = NONE mechanical. The sealed bundle is identified,
                       substituted bundle at any path refuses.
                       `ops/MC_RUN_AUTHORIZATION.json` does not exist — which
                       is not a defect, it IS the authorization.
-                      One thing for Aaron to settle when writing it: the gate
-                      compares the authorization's commit against
-                      `prepared.authorized_commit`, which is the SEALED
-                      BUNDLE's commit `876c1b74…` (S0-T001's), not today's
-                      HEAD. The MC code commit is not currently bound; making
-                      it a second binding would change what the authorization
-                      means, which is an Owner call, not a builder one.
+                      The two commits are now bound SEPARATELY:
+                      `input_bundle_commit` = 876c1b74… (the sealed bundle's
+                      provenance) and `mc_execution_commit` = the governed
+                      checkout's HEAD, MEASURED by the gate. Because it is
+                      measured at run time, ANY further commit invalidates a
+                      standing authorization — authorize against the HEAD in
+                      the block above and commit nothing before the run.
                       Non-blocking rows carried: B-35, NB1, B-29, B-30.
 NEXT_OWNER_DECISION = write `ops/MC_RUN_AUTHORIZATION.json`. REAL_MC =
                       NOT AUTHORIZED. N16 NOT EXECUTED.
 ```
+
+## The authorization's two commits, separated 2026-09-13
+
+`authorized_commit` was one word for two identities that do not move
+together. They are now separate required fields, and the sentence names
+both:
+
+```
+input_bundle_commit   876c1b74131b4ab1a89dce433ecce646ba481f8c
+                      the commit the sealed S0-T001 bundle was produced at;
+                      historical and fixed. Compared against
+                      `prepared.authorized_commit`.
+mc_execution_commit   f0e72e4cedf03693fc88e21a37b31eeb3d30e18a
+                      the governed checkout that would execute N16.
+                      MEASURED by the gate via the governed-identity
+                      resolver, never accepted from a caller, and refused
+                      when any governed path is modified.
+```
+
+Two consequences worth knowing before writing the authorization:
+
+* the execution commit is measured AT RUN TIME, so any further commit
+  invalidates a standing authorization and a fresh one is needed;
+* `ops/MC_RUN_AUTHORIZATION.json` is NOT in the governed set
+  (`covering_mechanism` returns None for it), so writing it does not dirty
+  the governed checkout and cannot invalidate the gate it feeds.
 
 ## The sealed bundle, Owner-bound 2026-09-13
 
