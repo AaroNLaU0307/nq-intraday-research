@@ -2228,6 +2228,15 @@ class ConvergenceReport:
     quantile_drift_ok: bool                  # rule (c)
     mcse_ok: bool                            # rule (d)
     drift_by_axis: Mapping                   # axis -> {quantile: |delta|}
+    #: axis -> the run_label the deltas above were measured AGAINST.
+    #:
+    #: Rule (c) compares each arm with the arm it is a doubling of, and which
+    #: arm that is, is the whole of R2: a per-seed DOUBLED arm is a
+    #: within-seed question and its reference is that seed's own base-B arm,
+    #: while a per-seed BASE-scale arm is a cross-seed question against the
+    #: base run. Recording the reference makes the pairing checkable from the
+    #: report instead of only from the source.
+    drift_reference_by_axis: Mapping = None
     #: THE GRID SECTION'S OWN STANDING, reported BESIDE the four rules and
     #: deliberately not inside them.
     #:
@@ -2246,6 +2255,13 @@ class ConvergenceReport:
     seeds_agree_by_scale: Mapping = None
 
     def __post_init__(self):
+        if self.drift_reference_by_axis is None:
+            object.__setattr__(self, "drift_reference_by_axis",
+                               MappingProxyType({}))
+        else:
+            object.__setattr__(
+                self, "drift_reference_by_axis",
+                MappingProxyType(dict(self.drift_reference_by_axis)))
         if self.seeds_agree_by_scale is None:
             object.__setattr__(self, "seeds_agree_by_scale",
                                MappingProxyType({}))
@@ -2842,8 +2858,12 @@ def _convergence_rules_a_to_d(base: RunEvidence, doubled_by_axis: Mapping,
         cross-seed agreement to hold in the base tier and in the doubled
         tier. The doubled half is a genuine second question: two seeds
         can agree at B and disagree once each has twice the worlds.
-    (c) key-quantile drift within max($25, relative 5%), measured against
-        the base run per combo and per scenario role.
+    (c) key-quantile drift within max($25, relative 5%), measured per
+        combo and per scenario role against THE ARM EACH ONE DOUBLES --
+        the base run for the axis arms and the per-seed base-scale arms,
+        and that seed's OWN base-B arm for a per-seed doubled arm. A
+        within-seed question measured against another seed's baseline is
+        a different question, and R2 is what the difference costs.
     (d) within-world MCSE <= 10% of the between-world SD — already
         DERIVED on every EpistemicResult from its own atom trace, so this
         reads the derived flag rather than recomputing it from numbers a
@@ -2878,26 +2898,48 @@ def _convergence_rules_a_to_d(base: RunEvidence, doubled_by_axis: Mapping,
     agree_at_doubled = len(doubled_categories) == 1
     same_across_seeds = agree_at_base and agree_at_doubled
     # --- (c) ----------------------------------------------------------
+    #
+    # EVERY ARM IS MEASURED AGAINST THE ARM IT IS A DOUBLING OF, and that
+    # reference is carried here rather than assumed to be `base`.
+    #
+    # R2. A doubled-B arm asks ONE question: did THIS SEED's result stop
+    # moving when THIS SEED got twice the worlds? Measuring it against the
+    # base seed's arm answers a different question -- how far this seed sits
+    # from seed 7 -- and the two are not interchangeable. Seed 13 at B=-120
+    # and 2B=-80 is 20 from a seed-7 baseline of -100 in both directions and
+    # passes; within itself it moved 40 and has plainly not stabilised. The
+    # shared baseline made a seed's own instability unobservable, and it
+    # could only ever be caught by whichever OTHER rule happened to notice.
+    #
+    # The two levels stay separate and neither substitutes for the other:
+    # WITHIN-SEED stability is this rule, per seed, against that seed's own
+    # base-B arm; CROSS-SEED agreement is rule (b), computed afterwards from
+    # the categories. A failure of one is not hidden by the other.
     drift_by_axis, drift_ok = {}, True
-    arms = [(f"double_{axis}", doubled_by_axis[axis])
+    drift_reference = {}
+    # (label, arm, THE REFERENCE IT IS A DOUBLING OF)
+    arms = [(f"double_{axis}", doubled_by_axis[axis], base)
             for axis in sorted(doubled_by_axis)]
-    arms += [(f"seed_{seed}", seed_runs[seed]) for seed in seeds]
-    # every seed's doubled-B arm owes (c) and (d) too: M10's convergence
-    # requirement is "每 seed 各自满足 (a)/(c)/(d)", per seed, and an arm
-    # that is exempt from the drift and MCSE checks is an arm whose
-    # numbers nobody looked at.
-    arms += [(f"seed_{seed}_double_B", seed_doubled_runs[seed])
-             for seed in seeds]
-    for label, run in arms:
+    # a per-seed BASE-scale arm is a cross-seed comparison and keeps its
+    # ratified reference: the base run.
+    arms += [(f"seed_{seed}", seed_runs[seed], base) for seed in seeds]
+    # a per-seed DOUBLED arm is a within-seed comparison. Its reference is
+    # that seed's own base-B arm -- including the base seed's, so there is
+    # no privileged seed left in this rule at all.
+    arms += [(f"seed_{seed}_double_B", seed_doubled_runs[seed],
+              seed_runs[seed]) for seed in seeds]
+    for label, run, reference in arms:
         per_arm = {}
         for cid in sorted(base.results):
-            if cid not in run.results:
-                raise MCInputError(
-                    "run_evidence_inner_mismatch:combo",
-                    f"{run.run_label} is missing combo {cid}")
-            for role, b_r, o_r in (("Conservative", base.results[cid][0],
+            for named, ev in (("reference", reference), ("arm", run)):
+                if cid not in ev.results:
+                    raise MCInputError(
+                        "run_evidence_inner_mismatch:combo",
+                        f"{ev.run_label} ({named} of {label}) is missing "
+                        f"combo {cid}")
+            for role, b_r, o_r in (("Conservative", reference.results[cid][0],
                                     run.results[cid][0]),
-                                   ("Stress", base.results[cid][1],
+                                   ("Stress", reference.results[cid][1],
                                     run.results[cid][1])):
                 for field in KEY_QUANTILE_FIELDS:
                     b_v, o_v = getattr(b_r, field), getattr(o_r, field)
@@ -2906,9 +2948,10 @@ def _convergence_rules_a_to_d(base: RunEvidence, doubled_by_axis: Mapping,
                     if delta > max(CONV_ABS_USD, CONV_REL * abs(b_v)):
                         drift_ok = False
         drift_by_axis[label] = MappingProxyType(per_arm)
+        drift_reference[label] = reference.run_label
     # --- (d) ----------------------------------------------------------
     mcse_ok = True
-    for run in [base] + [r for _, r in arms]:
+    for run in [base] + [r for _, r, _ in arms]:
         for pair in run.results.values():
             for r in pair:
                 if not r.mcse_ok:
@@ -2919,6 +2962,7 @@ def _convergence_rules_a_to_d(base: RunEvidence, doubled_by_axis: Mapping,
         quantile_drift_ok=drift_ok,
         mcse_ok=mcse_ok,
         drift_by_axis=MappingProxyType(drift_by_axis),
+        drift_reference_by_axis=MappingProxyType(drift_reference),
         grid_converged=grid_converged,
         seeds_agree_by_scale=MappingProxyType(
             {"base": bool(agree_at_base),
