@@ -92,7 +92,7 @@ class RunAuthorization:
 
 
 def bind_owner_authorization(authorization: Mapping, *, run_id: str,
-                             expected_commit: str, output_root: str,
+                             input_bundle_commit: str, output_root: str,
                              bundle_summary_digest: str) -> RunAuthorization:
     """Bind the OWNER's authorization -- the current one -- or refuse.
 
@@ -124,9 +124,9 @@ def bind_owner_authorization(authorization: Mapping, *, run_id: str,
     if not _mcx.RUN_ID_RE.match(str(run_id)):
         raise MCInputError("mc_run_id_not_canonical",
                            f"{run_id!r} is not a canonical MC run id")
-    if not _mcx.COMMIT_RE.match(str(expected_commit)):
+    if not _mcx.COMMIT_RE.match(str(input_bundle_commit)):
         raise MCInputError("mc_run_commit_not_canonical",
-                           f"{expected_commit!r} is not a 40-hex commit")
+                           f"{input_bundle_commit!r} is not a 40-hex commit")
     if not str(output_root).strip():
         raise MCInputError(
             "mc_run_output_root_absent",
@@ -145,18 +145,19 @@ def bind_owner_authorization(authorization: Mapping, *, run_id: str,
             f"the Owner authorization names sealed bundle "
             f"{str((authorization or {}).get('bundle_summary_digest'))[:12]} "
             f"and the bundle on disk summarises to {digest[:12]}")
-    commit = str((authorization or {}).get("authorized_commit", "")).strip()
+    commit = str((authorization or {}).get("input_bundle_commit", "")).strip()
     if str((authorization or {}).get("run_id", "")).strip() != str(run_id):
         raise MCInputError(
             "mc_run_not_authorized",
             f"the Owner authorization is for run id "
             f"{(authorization or {}).get('run_id')!r}, not {run_id!r}")
-    if commit != str(expected_commit):
+    if commit != str(input_bundle_commit):
         raise MCInputError(
             "mc_run_authorization_commit_mismatch",
-            f"{run_id}: the Owner authorization binds commit {commit[:12]}, "
-            f"the runner is at {str(expected_commit)[:12]} — an "
-            "authorization for a different tree authorizes a different run")
+            f"{run_id}: the Owner authorization binds input-bundle commit "
+            f"{commit[:12]}, the prepared input is at "
+            f"{str(input_bundle_commit)[:12]} — an authorization for a "
+            "different input authorizes a different run")
     return RunAuthorization(
         run_id=str(run_id), authorized_commit=commit,
         output_root=str(output_root),
@@ -570,13 +571,14 @@ def execute_full_mc(prepared, *, run_id: str, output_root: str,
     owner = _mcc.authorize_real_mc(
         resolution.snapshot.text,
         run_id=run_id,
-        authorized_commit=prepared.authorized_commit,
+        input_bundle_commit=prepared.authorized_commit,
         sealed_supplement_sha256=sealed_artifact_sha256,
         bundle_summary_digest=bundle_summary_digest or None)
     # --- reachable ONLY behind a valid Owner authorization ---------------
     authorization = bind_owner_authorization(
         owner, run_id=run_id,
-        expected_commit=prepared.authorized_commit, output_root=output_root,
+        input_bundle_commit=prepared.authorized_commit,
+        output_root=output_root,
         bundle_summary_digest=bundle_summary_digest)
     return _execute(prepared, authorization=authorization,
                     supplement=supplement,

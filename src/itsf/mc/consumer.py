@@ -3896,15 +3896,25 @@ MC_AUTHORIZATION_PATH = "ops/MC_RUN_AUTHORIZATION.json"
 #: Rebuilt from the run id and the commit and compared to the file's own
 #: `sentence`, so a transported string is never trusted. Same discipline as
 #: the S0 runner's §10 check.
+#: TWO COMMITS, NAMED APART. "使用commit" was one word for two different
+#: identities: the commit the INPUT BUNDLE was produced at, and the commit of
+#: the MC CODE that will execute. They are not the same thing and they do not
+#: move together -- the bundle's is historical and fixed, the code's is
+#: whatever the governed checkout is at when the run starts. One ambiguous
+#: word covering both is how an authorization for one could be read as an
+#: authorization for the other, so each is spelled out.
 MC_AUTHORIZATION_SENTENCE = (
-    "启动第一次真实MC，授权run_id: {run_id}，使用commit: {commit}")
+    "启动第一次真实MC，授权run_id: {run_id}，"
+    "MC执行代码commit: {mc_execution_commit}，"
+    "输入bundle来源commit: {input_bundle_commit}")
 
 MC_AUTHORIZATION_ACTOR = "Aaron"
 
 #: Every fact the sentence's commit does not already carry. Each is compared
 #: against what the RUNNER was handed, so an authorization for one design
 #: cannot start a run over another.
-MC_AUTHORIZATION_BINDINGS = ("run_id", "authorized_commit",
+MC_AUTHORIZATION_BINDINGS = ("run_id", "input_bundle_commit",
+                             "mc_execution_commit",
                              "sealed_supplement_sha256", "prereg_sha256",
                              "bundle_summary_digest")
 
@@ -3919,11 +3929,29 @@ def _prereg_sha256() -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def mc_execution_checkout() -> tuple:
+    """`(head_commit, dirty_governed_paths)` for the checkout that will run.
+
+    MEASURED, never accepted from a caller: an execution-code binding a
+    caller could supply would bind whatever the caller said it was. The
+    governed-identity resolver already owns this question, so this reuses it
+    rather than opening a second path to `git`.
+
+    The dirty list matters as much as the commit. If a governed file has been
+    edited, HEAD no longer describes the code that would execute, and
+    verifying the commit would be verifying nothing.
+    """
+    from itsf import execution_identity as _ei
+    head = _ei._git(_ei.REPO, "rev-parse", "HEAD").strip()
+    return head, tuple(_ei.governed_dirty_paths(_ei.REPO, head))
+
+
 def authorize_real_mc(registry_text: str = "", *,
                       run_id: str = "",
-                      authorized_commit: str = "",
+                      input_bundle_commit: str = "",
                       sealed_supplement_sha256: str = "",
                       bundle_summary_digest: str = None,
+                      execution_checkout=mc_execution_checkout,
                       path: str = MC_AUTHORIZATION_PATH) -> Mapping:
     """THE real-MC authorization boundary. Default: refuse.
 
@@ -3936,9 +3964,14 @@ def authorize_real_mc(registry_text: str = "", *,
       1. `ops/MC_RUN_AUTHORIZATION.json` exists and parses;
       2. its actor is Aaron;
       3. its `run_id` is the run the caller is about to start;
-      4. its `authorized_commit` is 40-hex and is the commit the PREPARED
+      4. its `input_bundle_commit` is 40-hex and is the commit the PREPARED
          INPUT is bound to -- so an authorization cannot be carried across
          to a differently-built input;
+      4b. its `mc_execution_commit` is 40-hex and is the HEAD of the governed
+         checkout MEASURED here, with no governed file modified. This is the
+         code that will actually run, and it is a different identity from
+         (4): the bundle's commit is historical and fixed, the execution
+         commit is whatever the checkout is at when the run starts;
       5. its `sealed_supplement_sha256` is the supplement the caller was
          handed;
       6. its `prereg_sha256` is the sealed preregistration on disk, so an
@@ -3972,7 +4005,7 @@ def authorize_real_mc(registry_text: str = "", *,
                "parser/grammar accepts it — refusal stands)"
                if marker in (registry_text or "") else ""))
 
-    if not (run_id and authorized_commit and sealed_supplement_sha256):
+    if not (run_id and input_bundle_commit and sealed_supplement_sha256):
         refuse(f"the caller supplied no run identity, commit binding or "
                f"supplement digest, so there is nothing to check "
                f"{MC_AUTHORIZATION_PATH} against; a gate that cannot see "
@@ -3998,13 +4031,29 @@ def authorize_real_mc(registry_text: str = "", *,
     if str(row["run_id"]).strip() != str(run_id):
         refuse(f"the authorization is for run id {row['run_id']!r}, and "
                f"this call is starting {run_id!r}")
-    commit = str(row["authorized_commit"]).strip()
-    if not re.fullmatch(r"[0-9a-f]{40}", commit):
-        refuse("`authorized_commit` is not a 40-character lowercase hex "
+    bundle_commit = str(row["input_bundle_commit"]).strip()
+    if not re.fullmatch(r"[0-9a-f]{40}", bundle_commit):
+        refuse("`input_bundle_commit` is not a 40-character lowercase hex "
                "commit")
-    if commit != str(authorized_commit):
-        refuse(f"the authorization names commit {commit[:12]} and the "
-               f"prepared input is bound to {str(authorized_commit)[:12]}")
+    if bundle_commit != str(input_bundle_commit):
+        refuse(f"the authorization names input-bundle commit "
+               f"{bundle_commit[:12]} and the prepared input is bound to "
+               f"{str(input_bundle_commit)[:12]}")
+    exec_commit = str(row["mc_execution_commit"]).strip()
+    if not re.fullmatch(r"[0-9a-f]{40}", exec_commit):
+        refuse("`mc_execution_commit` is not a 40-character lowercase hex "
+               "commit")
+    head, dirty = execution_checkout()
+    if dirty:
+        refuse(f"{len(dirty)} governed path(s) are modified in the checkout "
+               f"({list(dirty)[:3]}), so HEAD does not describe the code "
+               "that would execute and verifying a commit against it would "
+               "verify nothing")
+    if exec_commit != str(head):
+        refuse(f"the authorization names MC execution commit "
+               f"{exec_commit[:12]} and the governed checkout is at "
+               f"{str(head)[:12]} — an authorization for one code version "
+               "does not authorize another")
     if (str(row["sealed_supplement_sha256"]).strip()
             != str(sealed_supplement_sha256)):
         refuse("the authorization names a different sealed supplement than "
@@ -4021,10 +4070,12 @@ def authorize_real_mc(registry_text: str = "", *,
         refuse(f"the authorization was issued against preregistration "
                f"{str(row['prereg_sha256'])[:12]} and the sealed "
                f"preregistration on disk is {want_prereg[:12]}")
-    rebuilt = MC_AUTHORIZATION_SENTENCE.format(run_id=run_id, commit=commit)
+    rebuilt = MC_AUTHORIZATION_SENTENCE.format(
+        run_id=run_id, mc_execution_commit=exec_commit,
+        input_bundle_commit=bundle_commit)
     if str(row["sentence"]).strip() != rebuilt:
         refuse("the authorization sentence does not equal the sentence "
-               "rebuilt from this run id and this commit; the transported "
+               "rebuilt from this run id and BOTH commits; the transported "
                "string is never trusted")
     return MappingProxyType(dict(row))
 

@@ -102,7 +102,10 @@ def authorization_preview() -> dict:
         "prereg_sha256": mcc._prereg_sha256(),
         "authorization_path": mcc.MC_AUTHORIZATION_PATH,
         "sentence_template": mcc.MC_AUTHORIZATION_SENTENCE,
-        "authorized_commit": "<the commit the prepared input is bound to>",
+        "input_bundle_commit":
+            "<the commit the prepared input is bound to>",
+        "mc_execution_commit": mcc.mc_execution_checkout()[0],
+        "governed_paths_modified": list(mcc.mc_execution_checkout()[1]),
         "bundle_summary_digest": "<run bundle_identity(root) to measure it>",
     }
 
@@ -161,7 +164,7 @@ def main(bundle_root: str = "", output_root: str = "") -> int:
     mcc.authorize_real_mc(
         resolution.snapshot.text,
         run_id=RUN_ID,
-        authorized_commit=_declared_commit(mcc),
+        input_bundle_commit=_declared_commit(mcc),
         sealed_supplement_sha256=supplement_sha)
 
     # ---- only now is anything read -----------------------------------
@@ -176,10 +179,10 @@ def main(bundle_root: str = "", output_root: str = "") -> int:
     authorization = mcc.authorize_real_mc(
         resolution.snapshot.text,
         run_id=RUN_ID,
-        authorized_commit=_declared_commit(mcc),
+        input_bundle_commit=_declared_commit(mcc),
         sealed_supplement_sha256=supplement_sha,
         bundle_summary_digest=precheck.summary_digest)
-    commit = str(authorization["authorized_commit"])
+    commit = str(authorization["input_bundle_commit"])
     bundle = {e.name: (Path(bundle_root) / e.name).read_bytes()
               for e in precheck.recomputed}
     attestation = (REPO / mcc.ATTESTATION_PATH).read_bytes()
@@ -216,7 +219,7 @@ def _declared_commit(mcc) -> str:
         return ""
     try:
         return str(json.loads(path.read_text(encoding="utf-8"))
-                   .get("authorized_commit", "")).strip()
+                   .get("input_bundle_commit", "")).strip()
     except Exception:                                       # noqa: BLE001
         return ""
 
