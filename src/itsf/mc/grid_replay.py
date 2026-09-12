@@ -909,8 +909,8 @@ _K_EVIDENCE_CAPABILITY = _KEvidenceCapability()
 
 K_EVIDENCE_PAYLOAD_FIELDS = (
     "schema", "authority_digest", "master_seed", "k", "k_doubled",
-    "prepared_digest", "converged_by_kind", "boundary_band_by_kind",
-    "flipped_by_kind", "drift_violations_by_kind",
+    "doublings_at_base", "prepared_digest", "converged_by_kind",
+    "boundary_band_by_kind", "flipped_by_kind", "drift_violations_by_kind",
     "region_map_digest_by_kind", "adjusted_map_by_kind", "test_only")
 
 
@@ -940,6 +940,11 @@ class KReplayEvidence:
     master_seed: int
     k: int
     k_doubled: int
+    #: WHICH AUTHORIZED ATTEMPT this is: 0 compares K with 2K, 1 compares 2K
+    #: with 4K. Rule (e) bounds it by the ruled `max_doublings`, so a witness
+    #: carries the attempt it belongs to rather than leaving a reader to infer
+    #: it from the arm sizes.
+    doublings_at_base: int
     prepared_digest: str
     converged_by_kind: Mapping
     boundary_band_by_kind: Mapping
@@ -1045,10 +1050,32 @@ def derive_k_replay_evidence(authority, *, master_seed: int,
         raise MCInputError(
             "k_replay_evidence_seed_not_research_seed",
             f"{master_seed!r} is not one of {list(RESEARCH_BOOTSTRAP_SEEDS)}")
+    # THE AUTHORIZED BASE ARMS, and why this is no longer a single value.
+    #
+    # Rule (e) licenses doubling K while a region has not converged, bounded
+    # by the ruled `GridRepeatPolicy.max_doublings`. The sequence that permits
+    # is K -> 2K, and -- only if that comparison failed -- 2K -> 4K, then
+    # stop. So the BASE arm of an authorized comparison is the frozen k times
+    # a power of two, with the exponent strictly below the bound: attempt 0
+    # compares K with 2K, attempt 1 compares 2K with 4K, and there is no
+    # attempt 2. Pinning the base arm to the frozen k made the second
+    # authorized comparison inexpressible, which is how the escalation came
+    # to be missing rather than merely unexercised.
+    from itsf import contracts as _contracts
+    max_doublings = int(_contracts.aaron_ruled_methods()
+                        .grid_policy.max_doublings)
     k = int(authority.k_per_seed if k is None else k)
-    if k != _mcc.K_PER_SEED_FROZEN:
-        raise MCInputError("grid_replay_k_per_seed_not_frozen",
-                           f"k={k}, frozen is {_mcc.K_PER_SEED_FROZEN}")
+    frozen = int(_mcc.K_PER_SEED_FROZEN)
+    doublings_at_base, scale = 0, frozen
+    while scale < k and doublings_at_base < max_doublings:
+        scale *= 2
+        doublings_at_base += 1
+    if scale != k or doublings_at_base >= max_doublings:
+        raise MCInputError(
+            "grid_replay_k_per_seed_not_frozen",
+            f"k={k} is not an authorized base arm: the frozen k is {frozen} "
+            f"and rule (e) authorizes base arms {frozen} x 2^d for "
+            f"0 <= d < {max_doublings}")
     k_doubled = int(2 * k if k_doubled is None else k_doubled)
 
     # THE ARMS MUST BE THE GOVERNED PRODUCER'S. Placed after the seed and k
@@ -1072,6 +1099,12 @@ def derive_k_replay_evidence(authority, *, master_seed: int,
                 "k_replay_evidence_pass_test_only_mismatch",
                 f"the {arm} pass is test_only={pass_.test_only} and the "
                 f"authority is test_only={authority.test_only}")
+    if at_k.doublings != doublings_at_base:
+        raise MCInputError(
+            "k_replay_evidence_pass_base_scale_mismatch",
+            f"the base arm was produced at doublings={at_k.doublings} and the "
+            f"witness is being minted for attempt {doublings_at_base} "
+            f"(k={k})")
     if at_2k.doublings != at_k.doublings + 1:
         raise MCInputError(
             "k_replay_evidence_pass_doubling_mismatch",
@@ -1114,6 +1147,7 @@ def derive_k_replay_evidence(authority, *, master_seed: int,
         "master_seed": int(master_seed),
         "k": k,
         "k_doubled": k_doubled,
+        "doublings_at_base": doublings_at_base,
         "prepared_digest": authority.prepared_digest,
         "converged_by_kind": converged,
         "boundary_band_by_kind": band,
@@ -1390,7 +1424,7 @@ SAMPLED_CELL_FIELDS = ("conservative_p5", "stress_median", "feasible",
 
 
 def per_seed_grid_report(passes_by_seed: Mapping,
-                         witness_by_seed: Mapping) -> Mapping:
+                         witness_chain_by_seed: Mapping) -> Mapping:
     """EVERY governed seed, EVERY cell, with absence stated as absence.
 
     WHAT THIS EXISTS TO STOP. The producer held all of it -- three seeds, 63
@@ -1414,15 +1448,22 @@ def per_seed_grid_report(passes_by_seed: Mapping,
         raise MCInputError(
             "grid_report_seed_set_incomplete",
             f"{sorted(passes_by_seed)} != {list(RESEARCH_BOOTSTRAP_SEEDS)}")
-    if set(witness_by_seed) != set(passes_by_seed):
+    if set(witness_chain_by_seed) != set(passes_by_seed):
         raise MCInputError(
             "grid_report_witness_set_mismatch",
-            f"{sorted(witness_by_seed)} != {sorted(passes_by_seed)}")
+            f"{sorted(witness_chain_by_seed)} != {sorted(passes_by_seed)}")
     report = {}
     for seed in RESEARCH_BOOTSTRAP_SEEDS:
-        at_k = verify_grid_pass(passes_by_seed[seed]["at_k"])
+        chain = tuple(witness_chain_by_seed[seed])
+        if not chain:
+            raise MCInputError(
+                "grid_report_attempt_chain_empty",
+                f"seed {seed} carries no authorized attempt")
+        witness = verify_k_replay_evidence(chain[-1])
+        # the FINAL attempt's own base arm is the pass this report describes
+        final_arms = passes_by_seed[seed]["attempt_%d" % (len(chain) - 1)]
+        at_k = verify_grid_pass(final_arms["at_k"])
         cells_at_k = at_k.cells
-        witness = verify_k_replay_evidence(witness_by_seed[seed])
         if at_k.master_seed != seed:
             raise MCInputError(
                 "grid_report_pass_seed_mismatch",
@@ -1450,6 +1491,13 @@ def per_seed_grid_report(passes_by_seed: Mapping,
             "master_seed": int(seed),
             "k": witness.k,
             "k_doubled": witness.k_doubled,
+            # HOW MANY AUTHORIZED ATTEMPTS THIS SEED ACTUALLY RAN. One means
+            # it converged at K vs 2K; two means rule (e)'s retry was
+            # required and executed.
+            "attempts": len(chain),
+            "doublings_executed": len(chain),
+            "converged_by_attempt": tuple(
+                w.grid_converged for w in chain),
             "converged_by_kind": MappingProxyType(
                 dict(witness.converged_by_kind)),
             "marked_cells": tuple(marked),
@@ -1475,9 +1523,10 @@ class _GridConvergenceCapability:
 _GRID_CONVERGENCE_CAPABILITY = _GridConvergenceCapability()
 
 GRID_CONVERGENCE_PAYLOAD_FIELDS = (
-    "schema", "authority_digest", "prepared_digest", "k", "k_doubled",
+    "schema", "authority_digest", "prepared_digest",
     "seeds", "converged_by_kind", "converged_by_seed",
-    "witness_digest_by_seed", "doublings_executed", "max_doublings",
+    "witness_chain_by_seed", "final_k_by_seed", "final_k_doubled_by_seed",
+    "attempts_by_seed", "doublings_executed", "max_doublings",
     "test_only")
 
 
@@ -1512,12 +1561,17 @@ class GridConvergenceAcrossSeeds:
     schema: str
     authority_digest: str
     prepared_digest: str
-    k: int
-    k_doubled: int
     seeds: tuple
     converged_by_kind: Mapping
     converged_by_seed: Mapping
-    witness_digest_by_seed: Mapping
+    #: seed -> the ORDERED digests of every authorized attempt that seed ran,
+    #: first (K vs 2K) to last. A seed that converged immediately has one; a
+    #: seed that needed rule (e)'s retry has two. The chain is what makes the
+    #: bound checkable: its length is the doublings that were executed.
+    witness_chain_by_seed: Mapping
+    final_k_by_seed: Mapping
+    final_k_doubled_by_seed: Mapping
+    attempts_by_seed: Mapping
     doublings_executed: int
     max_doublings: int
     test_only: bool
@@ -1531,9 +1585,25 @@ class GridConvergenceAcrossSeeds:
                 "aggregate_k_replay_evidence()")
         object.__setattr__(self, "capability", None)
         for name in ("converged_by_kind", "converged_by_seed",
-                     "witness_digest_by_seed"):
+                     "witness_chain_by_seed", "final_k_by_seed",
+                     "final_k_doubled_by_seed", "attempts_by_seed"):
             object.__setattr__(self, name,
                                MappingProxyType(dict(getattr(self, name))))
+
+    def first_witness_digest(self, seed) -> str:
+        """The attempt that binds the outer K arm: a seed's FIRST comparison.
+
+        The K arm of `RunEvidence` is produced at the frozen scales, so it is
+        bound to the frozen-base attempt. A seed that escalated has a later
+        attempt as its FINAL standing, and conflating the two would either
+        break the K-arm binding or hide the escalation.
+        """
+        chain = self.witness_chain_by_seed.get(seed)
+        if not chain:
+            raise MCInputError(
+                "grid_convergence_seed_absent",
+                f"the standing carries no attempt chain for seed {seed!r}")
+        return chain[0]
 
     @property
     def grid_converged(self) -> bool:
@@ -1568,82 +1638,110 @@ def _grid_convergence_payload(standing) -> dict:
     return payload
 
 
-def aggregate_k_replay_evidence(witness_by_seed: Mapping
+def aggregate_k_replay_evidence(witness_chain_by_seed: Mapping
                                 ) -> GridConvergenceAcrossSeeds:
-    """THE only minter: every governed seed's witness, verified, then ANDed.
+    """THE only minter: every governed seed's FULL attempt chain, verified,
+    with the FINAL attempt of each ANDed into one standing.
 
     Requires exactly `RESEARCH_BOOTSTRAP_SEEDS`. A two-seed aggregation would
     quietly weaken rule (b) in the same way publishing from two maps would
     weaken M10, and the seed set is an identity requirement rather than a
     convenience.
+
+    EACH SEED ESCALATES INDEPENDENTLY. Rule (e) doubles K while a region has
+    not converged, bounded by the ruled `max_doublings`, and nothing ties one
+    seed's retry to another's: a chain of one means that seed converged at K
+    vs 2K, a chain of two means it did not and the authorized retry ran. The
+    standing consumes the LAST attempt of every chain, so a seed still not
+    converged at the bound stays NON_CONVERGED and takes the cross-seed
+    conjunction with it.
     """
-    if set(witness_by_seed) != set(RESEARCH_BOOTSTRAP_SEEDS):
+    if set(witness_chain_by_seed) != set(RESEARCH_BOOTSTRAP_SEEDS):
         raise MCInputError(
             "grid_convergence_seed_set_incomplete",
-            f"{sorted(witness_by_seed)} != {list(RESEARCH_BOOTSTRAP_SEEDS)}")
-    seeds = tuple(RESEARCH_BOOTSTRAP_SEEDS)
-    witnesses = {}
-    for seed in seeds:
-        witnesses[seed] = verify_k_replay_evidence(witness_by_seed[seed])
-        if witnesses[seed].master_seed != seed:
-            raise MCInputError(
-                "grid_convergence_witness_seed_mismatch",
-                f"the witness filed under seed {seed} carries master_seed="
-                f"{witnesses[seed].master_seed}")
-    first = witnesses[seeds[0]]
-    for seed in seeds[1:]:
-        other = witnesses[seed]
-        for field, code in (("authority_digest",
-                             "grid_convergence_authority_mismatch"),
-                            ("prepared_digest",
-                             "grid_convergence_prepared_mismatch"),
-                            ("k", "grid_convergence_k_mismatch"),
-                            ("k_doubled", "grid_convergence_k_mismatch"),
-                            ("test_only",
-                             "grid_convergence_test_only_mismatch")):
-            if getattr(other, field) != getattr(first, field):
-                raise MCInputError(
-                    code,
-                    f"seed {seed} witness {field}={getattr(other, field)!r} "
-                    f"!= seed {seeds[0]}'s {getattr(first, field)!r}")
-    converged_by_kind = {
-        kind: all(bool(witnesses[seed].converged_by_kind.get(kind))
-                  for seed in seeds)
-        for kind in REGION_KINDS}
-    # (e)'s bound, read off the ruled policy rather than written here, and
-    # DERIVED from the evidence: how many doublings does k -> k_doubled span?
+            f"{sorted(witness_chain_by_seed)} != "
+            f"{list(RESEARCH_BOOTSTRAP_SEEDS)}")
     from itsf import contracts as _contracts
     policy = _contracts.aaron_ruled_methods().grid_policy
-    executed = 0
-    span = int(first.k_doubled)
-    while span > int(first.k):
-        span //= 2
-        executed += 1
-    if executed < 1 or span != int(first.k):
-        raise MCInputError(
-            "grid_convergence_doubling_span_invalid",
-            f"k={first.k} -> k_doubled={first.k_doubled} is not a whole "
-            "number of doublings")
-    if executed > int(policy.max_doublings):
-        raise MCInputError(
-            "grid_convergence_doublings_exceed_bound",
-            f"{executed} doubling(s) executed, the ruled bound is "
-            f"{policy.max_doublings}")
+    bound = int(policy.max_doublings)
+    seeds = tuple(RESEARCH_BOOTSTRAP_SEEDS)
+    chains = {}
+    for seed in seeds:
+        chain = tuple(witness_chain_by_seed[seed])
+        if not chain:
+            raise MCInputError(
+                "grid_convergence_seed_attempt_chain_empty",
+                f"seed {seed} carries no authorized attempt")
+        if len(chain) > bound:
+            raise MCInputError(
+                "grid_convergence_doublings_exceed_bound",
+                f"seed {seed} ran {len(chain)} attempt(s); the ruled bound is "
+                f"{bound}")
+        verified = []
+        for index, witness in enumerate(chain):
+            checked = verify_k_replay_evidence(witness)
+            if checked.master_seed != seed:
+                raise MCInputError(
+                    "grid_convergence_witness_seed_mismatch",
+                    f"the witness filed under seed {seed} carries master_seed="
+                    f"{checked.master_seed}")
+            if checked.doublings_at_base != index:
+                raise MCInputError(
+                    "grid_convergence_attempt_out_of_order",
+                    f"seed {seed} attempt {index} carries "
+                    f"doublings_at_base={checked.doublings_at_base}")
+            # A CHAIN ONLY CONTINUES BECAUSE THE PREVIOUS ATTEMPT FAILED.
+            # Rule (e) authorizes the retry only while a region has not
+            # converged, so an extra attempt after a converged one is not a
+            # bounded escalation -- it is a second opinion, and refusing it
+            # is what keeps the bound from becoming a budget to spend.
+            if index and verified[index - 1].grid_converged:
+                raise MCInputError(
+                    "grid_convergence_retry_after_convergence",
+                    f"seed {seed} ran attempt {index} after attempt "
+                    f"{index - 1} had already converged")
+            verified.append(checked)
+        chains[seed] = tuple(verified)
+    first_seed = seeds[0]
+    reference = chains[first_seed][0]
+    for seed in seeds:
+        for witness in chains[seed]:
+            for field, code in (("authority_digest",
+                                 "grid_convergence_authority_mismatch"),
+                                ("prepared_digest",
+                                 "grid_convergence_prepared_mismatch"),
+                                ("test_only",
+                                 "grid_convergence_test_only_mismatch")):
+                if getattr(witness, field) != getattr(reference, field):
+                    raise MCInputError(
+                        code,
+                        f"seed {seed} witness {field}="
+                        f"{getattr(witness, field)!r} != "
+                        f"{getattr(reference, field)!r}")
+    finals = {seed: chains[seed][-1] for seed in seeds}
+    converged_by_kind = {
+        kind: all(bool(finals[seed].converged_by_kind.get(kind))
+                  for seed in seeds)
+        for kind in REGION_KINDS}
+    executed = max(len(chains[seed]) for seed in seeds)
     payload = {
         "schema": GRID_CONVERGENCE_SCHEMA,
-        "authority_digest": first.authority_digest,
-        "prepared_digest": first.prepared_digest,
-        "k": int(first.k),
-        "k_doubled": int(first.k_doubled),
+        "authority_digest": reference.authority_digest,
+        "prepared_digest": reference.prepared_digest,
         "seeds": seeds,
         "converged_by_kind": converged_by_kind,
         "converged_by_seed": {
-            seed: witnesses[seed].grid_converged for seed in seeds},
-        "witness_digest_by_seed": {
-            seed: witnesses[seed].evidence_digest for seed in seeds},
+            seed: finals[seed].grid_converged for seed in seeds},
+        "witness_chain_by_seed": {
+            seed: tuple(w.evidence_digest for w in chains[seed])
+            for seed in seeds},
+        "final_k_by_seed": {seed: int(finals[seed].k) for seed in seeds},
+        "final_k_doubled_by_seed": {
+            seed: int(finals[seed].k_doubled) for seed in seeds},
+        "attempts_by_seed": {seed: len(chains[seed]) for seed in seeds},
         "doublings_executed": executed,
-        "max_doublings": int(policy.max_doublings),
-        "test_only": bool(first.test_only),
+        "max_doublings": bound,
+        "test_only": bool(reference.test_only),
     }
     if set(payload) != set(GRID_CONVERGENCE_PAYLOAD_FIELDS):
         raise MCInputError(

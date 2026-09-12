@@ -600,7 +600,8 @@ def test_hand_built_verdict_inputs_have_no_callable_entry():
     with pytest.raises(mcc.MCInputError) as _ei:
         _gr.KReplayEvidence(
             capability=None, schema="x", authority_digest="0" * 64,
-            master_seed=7, k=200, k_doubled=400, prepared_digest="0" * 64,
+            master_seed=7, k=200, k_doubled=400,
+            doublings_at_base=0, prepared_digest="0" * 64,
             converged_by_kind={}, boundary_band_by_kind={},
             flipped_by_kind={}, drift_violations_by_kind={},
             region_map_digest_by_kind={}, adjusted_map_by_kind={},
@@ -623,7 +624,8 @@ def test_hand_built_verdict_inputs_have_no_callable_entry():
     with pytest.raises(mcc.MCInputError) as _ei:
         _gr.KReplayEvidence(
             capability=None, schema="x", authority_digest="0" * 64,
-            master_seed=7, k=200, k_doubled=400, prepared_digest="0" * 64,
+            master_seed=7, k=200, k_doubled=400,
+            doublings_at_base=0, prepared_digest="0" * 64,
             converged_by_kind={}, boundary_band_by_kind={},
             flipped_by_kind={}, drift_violations_by_kind={},
             region_map_digest_by_kind={}, adjusted_map_by_kind={},

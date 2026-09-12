@@ -579,8 +579,15 @@ def run_grid_pass(prepared, authority, supplement: Mapping, *,
 
 def drawn_count(prepared, authority, supplement: Mapping, *,
                 master_seed: int, cells: tuple = _gr.GRID_CELL_KEYS,
-                channel: str = _mcc.PRIMARY_THETA_CHANNEL) -> tuple:
-    """`(n_draws_at_K, n_draws_at_2K)` for a representative cell.
+                channel: str = _mcc.PRIMARY_THETA_CHANNEL,
+                doublings: int = 0) -> tuple:
+    """`(n_draws at `doublings`, n_draws at `doublings` + 1)` for a
+    representative cell.
+
+    `doublings` names the BASE arm of the comparison being checked. It is 0
+    for the first authorized comparison (K vs 2K) and 1 for the second (2K vs
+    4K), which rule (e) licenses when the first did not converge. The default
+    keeps every existing caller answering about the frozen base arm.
 
     Exists so a caller can check a witness's reported pass sizes against the
     draws the frozen policy actually prescribes, instead of taking the
@@ -618,12 +625,14 @@ def drawn_count(prepared, authority, supplement: Mapping, *,
         q_mil, r_mil = int(cell[0]), int(cell[1])
         at_k, infeasible = plan_cell_draws(
             authority, prepared, supplement, master_seed=master_seed,
-            q_mil=q_mil, r_mil=r_mil, doublings=0, channel=channel)
+            q_mil=q_mil, r_mil=r_mil, doublings=int(doublings),
+            channel=channel)
         if infeasible is not None:
             continue
         at_2k, _ = plan_cell_draws(
             authority, prepared, supplement, master_seed=master_seed,
-            q_mil=q_mil, r_mil=r_mil, doublings=1, channel=channel)
+            q_mil=q_mil, r_mil=r_mil, doublings=int(doublings) + 1,
+            channel=channel)
         return (len(at_k), len(at_2k))
     return None
 

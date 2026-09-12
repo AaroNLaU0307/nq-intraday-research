@@ -3507,22 +3507,48 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
                 "with grid_replay.aggregate_k_replay_evidence; one seed's "
                 "witness is the K-arm binding, not the grid's standing")
         _gr.verify_grid_convergence(grid_convergence)
-        if grid_convergence.witness_digest_by_seed.get(
+        if grid_convergence.first_witness_digest(
                 k_witness.master_seed) != k_witness.evidence_digest:
             raise MCInputError(
                 "grid_convergence_witness_not_in_aggregate",
                 f"the K-arm witness for seed {k_witness.master_seed} is not "
-                "the one the cross-seed standing aggregated")
+                "the FIRST authorized attempt the cross-seed standing "
+                "aggregated. The outer K arm is produced at the frozen "
+                "scales, so it binds to that attempt; a seed that needed "
+                "rule (e)'s retry still ends on a later one, and the "
+                "standing carries both")
         if grid_convergence.prepared_digest != base.prepared_digest:
             raise MCInputError("provenance_mismatch",
                                "grid convergence vs base prepared digest")
-        # NO test_only COMPARISON AGAINST `prepared` HERE, and that is
-        # deliberate. The synthetic entry runs a PRODUCTION-shaped prepared
-        # input (`test_only=False`) against a test-only authority on purpose,
-        # so the two flags legitimately differ and comparing them would refuse
-        # the sanctioned harness. The flag that matters is whether the RUN is
-        # a production one, which only the runner knows; it refuses there.
-        # What rides into the seal is the fact itself, recorded below.
+        # TEST-ONLY GRID EVIDENCE IS NOT PRODUCTION SEAL-ADMISSIBLE.
+        #
+        # Recording the flag was not enough. A test-only standing reached
+        # this boundary against a PRODUCTION prepared input and sealed
+        # CONVERGED with `may_support_h1_entry` True -- the flag rode along
+        # and admitted nothing, which is a label rather than a boundary. The
+        # comparison is between two AUTHORITATIVE TYPED STATES, neither of
+        # them a caller argument: `prepared.test_only` is the battery's own
+        # product identity, and the standing's flag is capability-minted,
+        # carried from the authority through every pass and witness, and
+        # re-verified by its own digest a few lines above.
+        #
+        # It is asserted HERE, at the public seal entry, and before the
+        # grid section is composed -- so a test-only CONVERGED standing can
+        # never become a production seal candidate, and H1 support can never
+        # be granted from it.
+        if grid_convergence.test_only and not bool(prepared.test_only):
+            raise MCInputError(
+                "grid_evidence_test_only_at_production_seal",
+                "the grid evidence is test_only and the prepared input is "
+                "not: synthetic grid evidence may exist for testing and may "
+                "never become production seal-admissible. Nothing here "
+                "sanitizes it -- produce the evidence through the governed "
+                "production authority, or seal a test_only prepared input")
+        if bool(k_witness.test_only) is not bool(grid_convergence.test_only):
+            raise MCInputError(
+                "grid_convergence_test_only_mismatch",
+                f"the K-arm witness is test_only={k_witness.test_only} and "
+                f"the standing is test_only={grid_convergence.test_only}")
     elif grid_convergence is not None:
         raise MCInputError(
             "grid_convergence_without_k_arm",
@@ -3614,6 +3640,14 @@ def verdict_and_seal_from_evidence(prepared: PreparedMCInput, *,
                                   grid_convergence.converged_by_kind.items())},
                           "doublings_executed":
                               grid_convergence.doublings_executed,
+                          "attempts_by_seed": {
+                              str(seed): int(value) for seed, value
+                              in sorted(
+                                  grid_convergence.attempts_by_seed.items())},
+                          "final_k_by_seed": {
+                              str(seed): int(value) for seed, value
+                              in sorted(
+                                  grid_convergence.final_k_by_seed.items())},
                           "max_doublings": grid_convergence.max_doublings,
                           "convergence_digest":
                               grid_convergence.convergence_digest,

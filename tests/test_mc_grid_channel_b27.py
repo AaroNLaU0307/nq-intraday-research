@@ -1163,7 +1163,9 @@ def test_F1R2_an_absent_count_is_refused_when_a_cell_was_actually_sampled(
     `drawn_count` returns None while the passes DO carry statistics, that is an
     inconsistency and the runner refuses rather than sealing."""
     import inspect
-    src = inspect.getsource(run._witness)
+    # the per-attempt body lives in `_attempt`, which `_witness` drives once
+    # per authorized doubling; the guard is the same one, one frame in
+    src = inspect.getsource(run._witness) + inspect.getsource(run._attempt)
     assert "mc_run_draw_count_absent_but_cells_sampled" in src
     assert "is_infeasible" in src
     # the guard is corroborated from the passes, not taken on drawn_count's word

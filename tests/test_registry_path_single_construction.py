@@ -180,6 +180,10 @@ _KNOWN_TEST_CONSTRUCTIONS = {
     # ADDED 2026-09-12 with the N14 Round-2 repairs: the F06 tests build a
     # synthetic ledger to prove that a generic OWNER_RELEASE leaves its bytes
     # unchanged and that the governed Owner route still releases.
+    # ADDED 2026-09-12 with the residual remediation: the F06/R1 atomicity
+    # tests build a synthetic ledger to prove that a rejected owner-release
+    # candidate leaves its bytes exactly unchanged.
+    "tests/test_n14_residual_repairs.py": 2,
     "tests/test_n14_round2_repairs.py": 4,
     "tests/test_the_writer_rulings_are_already_in_the_contract.py": 1,
     "tests/test_what_the_registry_append_unlocks.py": 1,

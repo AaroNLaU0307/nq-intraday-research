@@ -376,6 +376,39 @@ RUN_STARTED_TOKEN = "SUPPLEMENT_RUN_STARTED"
 #: stamp (`YYYYMMDDTHHMMSSZ`) and the two are different formats for
 #: different places. Reusing it here would refuse every legal row.
 #: The parser itself does not validate this cell, so the seam does.
+def _line_boundary_characters() -> frozenset:
+    """Every character `str.splitlines()` treats as a line boundary.
+
+    DERIVED BY ASKING IT, one codepoint at a time, rather than written down.
+    R1 is exactly what an enumerated list costs: the owner-row guard banned
+    `|`, `;`, CR and LF, and `splitlines()` recognises seven more. A reason
+    carrying U+2028 therefore passed every pre-write check, the bytes landed,
+    and the POST-write re-parse then read one row as two and refused -- with
+    the ledger already unreadable.
+
+    `str.splitlines` is the same primitive the registry parser splits on, so
+    this set is the parser's own answer rather than a second opinion about it.
+    A future CPython that recognises another separator is covered without an
+    edit here.
+    """
+    out = set()
+    for code in range(0x110000):
+        ch = chr(code)
+        if ch in ("\n", "\r"):
+            out.add(ch)
+            continue
+        if len(("a" + ch + "b").splitlines()) > 1:
+            out.add(ch)
+    return frozenset(out)
+
+
+#: Computed once at import. Small (single digits) and the scan is one pass.
+LINE_BOUNDARY_CHARACTERS = _line_boundary_characters()
+
+#: What may never ride inside a registry row's free text: a cell boundary, a
+#: field boundary, and anything that would split the row into two lines.
+ROW_TEXT_FORBIDDEN = frozenset({"|", ";"}) | LINE_BOUNDARY_CHARACTERS
+
 _REGISTRY_UTC_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00\Z")
 
@@ -909,12 +942,13 @@ def _append_owner_row(token: str, *, scope: str, reason: str,
     # boundary and a `;` a field boundary, so neither may ride inside the
     # reason text -- refused here rather than discovered by the parser after
     # the bytes are already in the ledger.
-    for bad in ("|", ";", "\n", "\r"):
+    for bad in sorted(ROW_TEXT_FORBIDDEN):
         if bad in reason:
             raise AppendRefused(
                 "owner_append_reason_breaks_the_row",
-                "reason may not contain %r; it would forge a cell or field "
-                "boundary" % bad)
+                "reason may not contain U+%04X; it would forge a cell "
+                "boundary, a field boundary or a line break"
+                % ord(bad))
     if token == _oc.OWNER_RELEASE and releases_event_sequence is None:
         raise AppendRefused("owner_append_release_names_no_hold",
                             "OWNER_RELEASE must name releases_event_sequence")
@@ -953,34 +987,100 @@ def _append_owner_row(token: str, *, scope: str, reason: str,
     if not decided.endswith(b"\n"):
         raise AppendRefused("owner_append_registry_tail_is_not_a_line",
                             "the registry does not end in a newline")
-    _compare_and_append(target, decided, (row + "\n").encode("utf-8"))
 
-    # THE ROW MUST DO WHAT IT CLAIMS, asked of `owner_control` itself rather
-    # than assumed -- the same post-write discipline `append_run_started`
-    # uses, and the reason a malformed hold cannot land silently.
-    after = _read_text(target)
+    # ------------------------------------------------------------------
+    # THE CANDIDATE IS ADJUDICATED BEFORE ANY BYTE MOVES.
+    #
+    # R1. This used to append first and ask `owner_control` afterwards
+    # whether the row it had just written did what it claimed. When the
+    # answer was no -- a reason carrying U+2028 split one row into two under
+    # `splitlines()` -- the refusal arrived with the bytes already committed
+    # and the ledger persistently unreadable. A post-write check can report a
+    # bad write; it cannot prevent one.
+    #
+    # So the whole question is asked of the CANDIDATE LEDGER: the exact bytes
+    # the append would produce, parsed by the same parsers, answered by the
+    # same `owner_control`. Every refusal below leaves the file untouched,
+    # and the post-write step that remains only confirms that what landed is
+    # what was adjudicated.
+    # ------------------------------------------------------------------
+    line = (row + "\n").encode("utf-8")
+    candidate_bytes = decided + line
     try:
-        written = _oc.parse_owner_rows(after)
+        candidate = candidate_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise AppendRefused("owner_append_candidate_not_utf8",
+                            str(exc)) from exc
+    # (a) SYNTAX: the addition must be exactly one row the authoritative row
+    #     parser can read. A candidate that reads as two lines -- which is
+    #     precisely what R1 produced -- is refused here.
+    added = line.decode("utf-8").splitlines()
+    if len(added) != 1:
+        raise AppendRefused(
+            "owner_append_candidate_is_not_one_line",
+            "the candidate row spans %d lines; a row that splits cannot be "
+            "read back as the row it claims to be" % len(added))
+    addition_rows, addition_refusal = _sr.parse_registry_rows(added[0] + "\n")
+    if addition_refusal is not None or len(addition_rows) != 1:
+        raise AppendRefused(
+            "owner_append_candidate_unparseable",
+            "the candidate row is not one parseable registry row (%s)"
+            % (getattr(addition_refusal, "code", "rows=%d"
+                       % len(addition_rows))))
+    # (b) SCHEMA + SEMANTICS + HOLD IDENTITY: the candidate LEDGER must parse,
+    #     and `owner_control` must agree the row is the owner row it claims.
+    candidate_registry, candidate_refusal = _sr.parse_registry_rows(candidate)
+    if candidate_refusal is not None:
+        raise AppendRefused(
+            "owner_append_candidate_registry_unparseable",
+            "%s: %s" % (candidate_refusal.code,
+                        getattr(candidate_refusal, "detail", "")))
+    try:
+        candidate_owner_rows = _oc.parse_owner_rows(candidate)
     except _oc.OwnerControlRefusal as exc:
-        raise AppendRefused("owner_append_written_but_unreadable",
-                            "%s: %s" % (exc.code, exc.detail)) from exc
-    if not any(r.seq == seq and r.token == token for r in written):
-        raise AppendRefused("owner_append_written_but_absent",
-                            "seq %d is not an owner row of the ledger" % seq)
+        raise AppendRefused(
+            "owner_append_candidate_unreadable",
+            "%s: %s -- refused BEFORE the write, so the ledger is unchanged"
+            % (exc.code, exc.detail)) from exc
+    if not any(r.seq == seq and r.token == token
+               for r in candidate_owner_rows):
+        raise AppendRefused(
+            "owner_append_candidate_absent",
+            "seq %d is not an owner row of the candidate ledger" % seq)
+    # (c) THE STATE THE ROW CLAIMS TO PRODUCE, evaluated on the candidate.
     probe = scope if scope != _oc.GLOBAL_SCOPE else _sc.FIRST_SUPPLEMENT_ID
     if token == _oc.OWNER_HOLD:
-        if not any(h.seq == seq for h in _oc.active_holds(after, probe)):
+        if not any(h.seq == seq for h in _oc.active_holds(candidate, probe)):
             raise AppendRefused(
-                "owner_append_hold_written_but_not_in_force",
-                "OWNER_HOLD %d landed and is not an active hold for %s"
+                "owner_append_hold_would_not_be_in_force",
+                "OWNER_HOLD %d would not be an active hold for %s"
                 % (seq, probe))
     else:
         released = int(releases_event_sequence)
-        if any(h.seq == released for h in _oc.active_holds(after, probe)):
+        if not any(r.seq == released and r.token == _oc.OWNER_HOLD
+                   for r in candidate_owner_rows):
             raise AppendRefused(
-                "owner_append_release_written_but_hold_still_active",
-                "OWNER_RELEASE %d landed and hold %d is still in force"
-                % (seq, released))
+                "owner_append_release_names_no_such_hold",
+                "no OWNER_HOLD at sequence %d exists to release" % released)
+        if any(h.seq == released for h in _oc.active_holds(candidate, probe)):
+            raise AppendRefused(
+                "owner_append_release_would_not_lift_the_hold",
+                "OWNER_RELEASE %d would land and hold %d would still be in "
+                "force" % (seq, released))
+
+    # (d) ONLY NOW: the compare-and-swap and the one physical write.
+    _compare_and_append(target, decided, line)
+
+    # (e) POST-WRITE CONFIRMATION, narrowed to its honest job: the bytes that
+    #     landed are the bytes that were adjudicated. It is no longer where
+    #     the row's legality is decided.
+    after_bytes = target.read_bytes()
+    if after_bytes != candidate_bytes:
+        raise AppendRefused(
+            "owner_append_written_bytes_differ_from_candidate",
+            "the ledger after the append is not the candidate that was "
+            "validated (%d bytes vs %d)"
+            % (len(after_bytes), len(candidate_bytes)))
     return row
 
 

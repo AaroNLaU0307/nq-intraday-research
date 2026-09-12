@@ -229,65 +229,109 @@ def _witness(prepared, *, supplement: Mapping, sealed_artifact_sha256: str,
     claim nobody computed (N11). `doublings=1` is the 2K pass and its first K
     draws are the K pass's, by the frozen streams.
     """
-    derive_authority = (_gr.derive_grid_replay_authority if production
-                        else _gr.derive_grid_replay_authority_for_tests)
+    # THE AUTHORITY FOLLOWS THE PREPARED INPUT'S OWN KIND, not the entry.
+    #
+    # F04. The synthetic entry used to force a TEST-ONLY authority even for a
+    # production-shaped prepared input -- which is what the seal requires,
+    # because only the production battery's product passes `
+    # _assert_seal_provenance`. The result was a production-shaped run whose
+    # grid evidence was test-only, sealed CONVERGED with H1 support: exactly
+    # the admission hole. The supplement authority already resolves its entry
+    # this way, and this now matches it.
+    derive_authority = (_gr.derive_grid_replay_authority_for_tests
+                        if prepared.test_only
+                        else _gr.derive_grid_replay_authority)
     authority = derive_authority(
         prepared, supplement,
         sealed_artifact_sha256=sealed_artifact_sha256)
-    witnesses, passes = {}, {}
+    # (e)'s BOUND, read off the ruled policy rather than written here.
+    from itsf import contracts as _contracts
+    max_doublings = int(_contracts.aaron_ruled_methods()
+                        .grid_policy.max_doublings)
+    chains, passes = {}, {}
     for seed in RESEARCH_BOOTSTRAP_SEEDS:
-        at_k = _gc.run_grid_pass(prepared, authority, supplement,
-                                 master_seed=seed, B=B, doublings=0,
-                                 cells=cells)
-        at_2k = _gc.run_grid_pass(prepared, authority, supplement,
-                                  master_seed=seed, B=B, doublings=1,
-                                  cells=cells)
-        passes[seed] = MappingProxyType({"at_k": at_k, "at_2k": at_2k})
-        witness = _gr.derive_k_replay_evidence(
-            authority, master_seed=seed, cells_at_k=at_k, cells_at_2k=at_2k)
+        chains[seed] = []
+        seed_passes = {}
+        for attempt in range(max_doublings):
+            witness, arms = _attempt(
+                prepared, authority, supplement, master_seed=seed, B=B,
+                cells=cells, doublings=attempt)
+            chains[seed].append(witness)
+            seed_passes["attempt_%d" % attempt] = arms
+            # THE RETRY IS CONDITIONAL, which is what makes it rule (e)'s
+            # escalation rather than a fixed two-pass ritual: it happens only
+            # while the region has not converged, and it stops at the bound.
+            if witness.grid_converged:
+                break
+        passes[seed] = MappingProxyType(seed_passes)
+    return (authority,
+            MappingProxyType({s: tuple(c) for s, c in chains.items()}),
+            MappingProxyType(passes))
+
+
+def _attempt(prepared, authority, supplement, *, master_seed: int, B: int,
+             cells: tuple, doublings: int):
+    """ONE authorized comparison: the arm at `doublings` against the arm at
+    `doublings` + 1, and the witness derived from them.
+
+    Attempt 0 is K vs 2K. Attempt 1 -- run only when attempt 0 did not
+    converge -- is 2K vs 4K. There is no attempt 2: the ruled
+    `max_doublings` is the bound and the caller stops there.
+    """
+    seed = master_seed
+    at_k = _gc.run_grid_pass(prepared, authority, supplement,
+                             master_seed=seed, B=B, doublings=doublings,
+                             cells=cells)
+    at_2k = _gc.run_grid_pass(prepared, authority, supplement,
+                              master_seed=seed, B=B, doublings=doublings + 1,
+                              cells=cells)
+    base_k = int(authority.k_per_seed) * (2 ** int(doublings))
+    witness = _gr.derive_k_replay_evidence(
+        authority, master_seed=seed, cells_at_k=at_k, cells_at_2k=at_2k,
+        k=base_k, k_doubled=2 * base_k)
         # The witness REPORTS k and 2k. Check it against the draws actually
         # executed, or the evidence could claim a pass size nobody ran —
         # which is the same class of defect as outer metadata impersonating
         # an axis. In production both are the ruled `k_per_seed`; they can
         # only diverge if the draw policy and the prepared input disagree,
         # and that is worth refusing rather than sealing.
-        ran = _gc.drawn_count(prepared, authority, supplement,
-                              master_seed=seed, cells=cells)
-        if ran is None:
-            # F1-R2-01. No cell of this pass prescribed a draw. The sealed rule
-            # licenses that only when EVERY grid point is marked
-            # `infeasible_by_sample` — marked, skipped, reported in full — and
-            # then there is nothing for the count guard to reconcile, because
-            # nothing was sampled anywhere to compare against.
-            #
-            # The absence is CORROBORATED from the passes rather than taken on
-            # `drawn_count`'s word. Trusting it would make `None` a hole in the
-            # guard: a future change that returned it for the wrong reason would
-            # skip the check silently. So "all skipped" must be visible in the
-            # evidence itself, and anything else is a refusal.
-            sampled = sorted(
-                {key for pas in (at_k, at_2k)
-                 for key, cell in pas.cells.items()
-                 if not _gr.is_infeasible(cell)})
-            if sampled:
-                # Every offending cell is named, not a slice of them: this is a
-                # fail-closed refusal and the full list is what a human needs.
-                # A slice would also add a numeric constant to a module whose
-                # own guard keeps it free of them.
-                raise MCInputError(
-                    "mc_run_draw_count_absent_but_cells_sampled",
-                    f"seed {seed}: no cell prescribed a draw, yet "
-                    f"{len(sampled)} cell(s) carry statistics — an absent draw "
-                    "count is lawful only when every grid point is marked "
-                    f"{_gr.INFEASIBLE_BY_SAMPLE}: {sampled}")
-        elif ran != (witness.k, witness.k_doubled):
+    ran = _gc.drawn_count(prepared, authority, supplement,
+                          master_seed=seed, cells=cells,
+                          doublings=doublings)
+    if ran is None:
+        # F1-R2-01. No cell of this pass prescribed a draw. The sealed rule
+        # licenses that only when EVERY grid point is marked
+        # `infeasible_by_sample` — marked, skipped, reported in full — and
+        # then there is nothing for the count guard to reconcile, because
+        # nothing was sampled anywhere to compare against.
+        #
+        # The absence is CORROBORATED from the passes rather than taken on
+        # `drawn_count`'s word. Trusting it would make `None` a hole in the
+        # guard: a future change that returned it for the wrong reason would
+        # skip the check silently. So "all skipped" must be visible in the
+        # evidence itself, and anything else is a refusal.
+        sampled = sorted(
+            {key for pas in (at_k, at_2k)
+             for key, cell in pas.cells.items()
+             if not _gr.is_infeasible(cell)})
+        if sampled:
+            # Every offending cell is named, not a slice of them: this is a
+            # fail-closed refusal and the full list is what a human needs.
+            # A slice would also add a numeric constant to a module whose
+            # own guard keeps it free of them.
             raise MCInputError(
-                "mc_run_draw_count_mismatch",
-                f"seed {seed}: the passes executed {ran[0]} and {ran[1]} "
-                f"draws, the witness reports {witness.k} and "
-                f"{witness.k_doubled}")
-        witnesses[seed] = witness
-    return authority, MappingProxyType(witnesses), MappingProxyType(passes)
+                "mc_run_draw_count_absent_but_cells_sampled",
+                f"seed {seed}: no cell prescribed a draw, yet "
+                f"{len(sampled)} cell(s) carry statistics — an absent draw "
+                "count is lawful only when every grid point is marked "
+                f"{_gr.INFEASIBLE_BY_SAMPLE}: {sampled}")
+    elif ran != (witness.k, witness.k_doubled):
+        raise MCInputError(
+            "mc_run_draw_count_mismatch",
+            f"seed {seed}: the passes executed {ran[0]} and {ran[1]} "
+            f"draws, the witness reports {witness.k} and "
+            f"{witness.k_doubled}")
+    return witness, MappingProxyType({"at_k": at_k, "at_2k": at_2k})
 
 
 def _execute(prepared, *, authorization: RunAuthorization,
@@ -322,15 +366,19 @@ def _execute(prepared, *, authorization: RunAuthorization,
                             seed=seed)
                  for seed in RESEARCH_BOOTSTRAP_SEEDS}
 
-    authority, witnesses, grid_passes_by_seed = _witness(
+    authority, chains, grid_passes_by_seed = _witness(
         prepared, supplement=supplement,
         sealed_artifact_sha256=sealed_artifact_sha256,
         B=_mcc.B_WORLDS_FROZEN, cells=cells, production=production)
-    # the base arm's seed is what convergence binds the K ARM to; the grid
-    # SECTION's standing is the AND across every governed seed, minted here
-    # from all three witnesses rather than read off one of them
-    witness = witnesses[base_seed]
-    grid_convergence = _gr.aggregate_k_replay_evidence(witnesses)
+    # THE K ARM BINDS TO THE FROZEN-BASE ATTEMPT; THE STANDING CONSUMES THE
+    # FINAL ONE. The outer `double_K` RunEvidence is produced at the frozen
+    # scales, so the witness it is bound to is the base seed's FIRST attempt.
+    # A seed that needed rule (e)'s retry ends on a later attempt, and that
+    # later attempt is what the grid section's standing must reflect --
+    # conflating the two would either break the K-arm binding or hide the
+    # escalation.
+    witness = chains[base_seed][0]
+    grid_convergence = _gr.aggregate_k_replay_evidence(chains)
     # THE TEST-ONLY BOUNDARY, at the one place that knows which path this is.
     # A synthetic authority marks every witness it mints `test_only`, and a
     # production run may not seal that evidence. The synthetic entry passes
@@ -354,7 +402,9 @@ def _execute(prepared, *, authorization: RunAuthorization,
     published = {}
     for kind in _gr.REGION_KINDS:
         published[kind] = _gr.publish_region(kind, {
-            seed: witnesses[seed].adjusted_map(kind)
+            # the FINAL authorized attempt's adjusted map, so publication
+            # reflects the comparison the standing was actually taken from
+            seed: chains[seed][-1].adjusted_map(kind)
             for seed in RESEARCH_BOOTSTRAP_SEEDS})
 
     return RunnerResult(
@@ -369,7 +419,7 @@ def _execute(prepared, *, authorization: RunAuthorization,
         published_region_by_kind=MappingProxyType(published),
         grid_convergence=grid_convergence,
         grid_evidence_by_seed=_gr.per_seed_grid_report(
-            grid_passes_by_seed, witnesses),
+            grid_passes_by_seed, chains),
         arm_labels=ARM_LABELS, test_only=authorization.test_only)
 
 

@@ -249,9 +249,11 @@ def test_the_runner_no_longer_takes_grid_passes_from_a_caller(prepared):
 
     for entry in (run.execute_full_mc, run.execute_full_mc_for_tests):
         assert "grid_passes_by_seed" not in inspect.signature(entry).parameters
-    src = inspect.getsource(run._witness)
+    src = inspect.getsource(run._witness) + inspect.getsource(run._attempt)
     assert "RESEARCH_BOOTSTRAP_SEEDS" in src
-    assert "doublings=0" in src and "doublings=1" in src
+    # the arms are now `doublings` and `doublings + 1` of the attempt being
+    # run, which is what made rule (e)'s second comparison expressible
+    assert "doublings=doublings" in src and "doublings=doublings + 1" in src
     assert "run_grid_pass" in src
     # and the draw count the witness reports is checked against what ran
     assert "mc_run_draw_count_mismatch" in src

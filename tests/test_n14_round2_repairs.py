@@ -104,7 +104,7 @@ def test_F02_the_final_grid_status_is_the_AND_across_every_seed(executed):
     gr.verify_grid_convergence(standing)
     assert set(standing.seeds) == set(RESEARCH_BOOTSTRAP_SEEDS)
     assert set(standing.converged_by_seed) == set(RESEARCH_BOOTSTRAP_SEEDS)
-    assert set(standing.witness_digest_by_seed) == set(RESEARCH_BOOTSTRAP_SEEDS)
+    assert set(standing.witness_chain_by_seed) == set(RESEARCH_BOOTSTRAP_SEEDS)
     assert executed.grid_seal_status == standing.grid_seal_status
     assert executed.may_support_h1_entry is standing.may_support_h1_entry
     # and the seal records the same per-seed detail
@@ -152,7 +152,19 @@ def test_F02_a_non_converged_seed_is_conjunctive_for_every_seed(
             cells_at_k=pass_(seed, 0, 100.0),
             cells_at_2k=pass_(seed, 1, far))
     assert witnesses[victim].grid_converged is False
-    standing = gr.aggregate_k_replay_evidence(witnesses)
+    # rule (e) authorizes a retry for a seed that did not converge, so the
+    # non-converged seed's chain carries its second attempt; the converged
+    # ones stop at their first
+    chains = {}
+    for seed in RESEARCH_BOOTSTRAP_SEEDS:
+        chains[seed] = ((witnesses[seed],) if seed != victim else
+                        (witnesses[seed],
+                         gr.derive_k_replay_evidence(
+                             auth, master_seed=seed, k=2 * K_SMALL,
+                             k_doubled=4 * K_SMALL,
+                             cells_at_k=pass_(seed, 1, 100.0),
+                             cells_at_2k=pass_(seed, 2, -100.0))))
+    standing = gr.aggregate_k_replay_evidence(chains)
     assert standing.grid_converged is False
     assert standing.grid_seal_status == "NON_CONVERGED"
     assert standing.may_support_h1_entry is False
@@ -309,10 +321,13 @@ def test_F04_the_test_pathway_is_typed_test_only_and_stays_that_way(
             doublings=0, B=2, channel=mcc.PRIMARY_THETA_CHANNEL, cells={})
 
 
-def test_F04_test_only_grid_evidence_is_recorded_in_the_seal(executed):
-    """It says so, in the seal it produced, rather than being indistinguishable
-    from production evidence."""
-    assert executed.seal_candidate["grid_section"]["test_only"] is True
+def test_F04_the_seal_records_the_grid_evidence_kind(executed):
+    """It says which kind of evidence it sealed, rather than leaving the two
+    indistinguishable. The harness runs a PRODUCTION-shaped prepared input, so
+    the governed authority that matches it is the production one -- pairing it
+    with test-only grid evidence is the admission hole, and is refused
+    elsewhere in this file."""
+    assert executed.seal_candidate["grid_section"]["test_only"] is False
 
 
 # == F05 -- the supplement binding is verified against the prepared input ==
