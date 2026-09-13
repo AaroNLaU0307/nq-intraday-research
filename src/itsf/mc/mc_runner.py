@@ -38,6 +38,7 @@ rather than merely written.
 """
 from __future__ import annotations
 
+import dataclasses as _dc
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping
@@ -132,6 +133,16 @@ def bind_owner_authorization(authorization: Mapping, *, run_id: str,
             "mc_run_output_root_absent",
             "the authorization binds an output root; an empty one would let "
             "the run write anywhere")
+    # THE EXACT DESTINATION, not merely a non-empty string. The gate already
+    # checked this path against the executing code, the ruled runs root and
+    # its own non-existence; re-checking equality HERE is what stops a
+    # runner being handed a different destination than the one authorized.
+    bound_out = str((authorization or {}).get("output_path", "")).strip()
+    if bound_out != str(output_root):
+        raise MCInputError(
+            "mc_run_output_path_mismatch",
+            f"{run_id}: the Owner authorization binds output path "
+            f"{bound_out!r} and the runner was handed {str(output_root)!r}")
     digest = str(bundle_summary_digest or "").strip()
     if not digest:
         raise MCInputError(
@@ -272,6 +283,13 @@ class RunnerResult:
     b_scales_by_seed: Mapping
     arm_labels: tuple
     test_only: bool
+    #: WHERE THIS RUN'S EVIDENCE WAS WRITTEN, and what it hashes to --
+    #: `run_output.PersistedOutput.as_mapping()`, or empty when nothing was
+    #: persisted (the synthetic entry). Identities only: a path, an
+    #: inventory and digests. Empty here means the result exists only in
+    #: this process, which is exactly the state that made a real run
+    #: worthless.
+    persisted_output: Mapping = MappingProxyType({})
 
     @property
     def sealed(self) -> bool:
@@ -573,17 +591,29 @@ def execute_full_mc(prepared, *, run_id: str, output_root: str,
         run_id=run_id,
         input_bundle_commit=prepared.authorized_commit,
         sealed_supplement_sha256=sealed_artifact_sha256,
-        bundle_summary_digest=bundle_summary_digest or None)
+        bundle_summary_digest=bundle_summary_digest or None,
+        output_path=output_root)
     # --- reachable ONLY behind a valid Owner authorization ---------------
     authorization = bind_owner_authorization(
         owner, run_id=run_id,
         input_bundle_commit=prepared.authorized_commit,
         output_root=output_root,
         bundle_summary_digest=bundle_summary_digest)
-    return _execute(prepared, authorization=authorization,
-                    supplement=supplement,
-                    sealed_artifact_sha256=sealed_artifact_sha256,
-                    production=True, cells=cells)
+    result = _execute(prepared, authorization=authorization,
+                      supplement=supplement,
+                      sealed_artifact_sha256=sealed_artifact_sha256,
+                      production=True, cells=cells)
+    # PERSISTENCE IS PART OF THE RUN, not of whoever called it. Until this
+    # line existed, `_execute` returned the entire product of a real run as
+    # an in-memory object and the process then exited with it. Putting the
+    # write here rather than in the entrypoint means no caller can reach a
+    # completed real run and forget to keep it. `_execute` itself stays
+    # pure; this function is the one that already owns the Owner boundary,
+    # so it owns the destination too.
+    from itsf.mc import run_output as _ro
+    persisted = _ro.persist_run_output(
+        result, destination=authorization.output_root, authorization=owner)
+    return _dc.replace(result, persisted_output=persisted.as_mapping())
 
 
 def execute_full_mc_for_tests(prepared, *, authorization: RunAuthorization,

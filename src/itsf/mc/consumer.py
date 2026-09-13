@@ -3916,7 +3916,7 @@ MC_AUTHORIZATION_ACTOR = "Aaron"
 MC_AUTHORIZATION_BINDINGS = ("run_id", "input_bundle_commit",
                              "mc_execution_commit",
                              "sealed_supplement_sha256", "prereg_sha256",
-                             "bundle_summary_digest")
+                             "bundle_summary_digest", "output_path")
 
 
 def _prereg_sha256() -> str:
@@ -3951,6 +3951,7 @@ def authorize_real_mc(registry_text: str = "", *,
                       input_bundle_commit: str = "",
                       sealed_supplement_sha256: str = "",
                       bundle_summary_digest: str = None,
+                      output_path: str = "",
                       execution_checkout=mc_execution_checkout,
                       path: str = MC_AUTHORIZATION_PATH) -> Mapping:
     """THE real-MC authorization boundary. Default: refuse.
@@ -3978,6 +3979,12 @@ def authorize_real_mc(registry_text: str = "", *,
          authorization cannot outlive the research design it was given for;
       7. its `bundle_summary_digest` is the sealed 14-file bundle actually
          on disk -- but ONLY when the caller has one to offer;
+      7b. its `output_path` is the EXACT final directory the run will write,
+         it is the one the executing code names, it lies under the ruled
+         runs root, and NOTHING IS THERE YET. The run's evidence destination
+         is decided before the run starts and by the Owner, not chosen at
+         write time by whatever is running -- and a path that already exists
+         would mean reusing or overwriting a finalized run output;
       8. its `sentence` equals the sentence REBUILT from (3) and (4). The
          transported string is never trusted -- the N06 round-3 lesson.
 
@@ -4005,9 +4012,11 @@ def authorize_real_mc(registry_text: str = "", *,
                "parser/grammar accepts it — refusal stands)"
                if marker in (registry_text or "") else ""))
 
-    if not (run_id and input_bundle_commit and sealed_supplement_sha256):
-        refuse(f"the caller supplied no run identity, commit binding or "
-               f"supplement digest, so there is nothing to check "
+    if not (run_id and input_bundle_commit and sealed_supplement_sha256
+            and output_path):
+        refuse(f"the caller supplied no run identity, commit binding, "
+               f"supplement digest or output path, so there is nothing to "
+               f"check "
                f"{MC_AUTHORIZATION_PATH} against; a gate that cannot see "
                f"what it is authorizing is not a gate")
     here = Path(__file__).resolve().parents[3] / path
@@ -4065,6 +4074,26 @@ def authorize_real_mc(registry_text: str = "", *,
                    f"{str(row['bundle_summary_digest'])[:12]} and the bundle "
                    f"on disk summarises to {str(bundle_summary_digest)[:12]}"
                    " — a different bundle is a different run")
+    # THE OUTPUT DESTINATION, bound three ways. Equality with what the
+    # executing code names is what stops an authorization being pointed at a
+    # different directory; containment keeps governed evidence inside the
+    # ruled runs root; and non-existence is what makes "one run, one output"
+    # mechanical rather than a convention -- a finalized MC-R001 output can
+    # never be reused, extended or overwritten by a later authorization.
+    declared_out = str(row["output_path"]).strip()
+    if declared_out != str(output_path):
+        refuse(f"the authorization binds output path {declared_out!r} and "
+               f"the executing code writes {str(output_path)!r} — an "
+               "authorization for one destination does not authorize "
+               "another")
+    from itsf.mc.run_output import RULED_RUNS_DIR as _RUNS_DIR
+    out = Path(declared_out)
+    if not out.is_absolute() or out.parent.resolve() != _RUNS_DIR.resolve():
+        refuse(f"the bound output path {declared_out!r} is not one directory "
+               f"directly under the ruled runs root {_RUNS_DIR}")
+    if out.exists():
+        refuse(f"the bound output path {declared_out!r} already exists; a "
+               "finalized MC run output is never reused or overwritten")
     want_prereg = _prereg_sha256()
     if str(row["prereg_sha256"]).strip() != want_prereg:
         refuse(f"the authorization was issued against preregistration "

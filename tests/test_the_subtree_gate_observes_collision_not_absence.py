@@ -140,9 +140,18 @@ class TestTheGrantStillHasAReason(unittest.TestCase):
     #: fired on my own new code, which is what it is for. The widening is
     #: not a rubber stamp: entry (2) is checked STRUCTURALLY below, by
     #: proving the refusal runs before the mkdir.
+    #:
+    #: WIDENED AGAIN on 2026-09-13 for entry (3): the real MC run now writes
+    #: its evidence, and writing means a directory. It fired on that too.
+    #: Entry (3) is backed the same way -- structurally, by proving all
+    #: three refusals run before the mkdir, that the mkdir creates the
+    #: STAGING directory only and no parent, and behaviourally, by showing
+    #: those refusals actually reject.
     MKDIR_SITES = {
         ("day_strata_supplement.py", "seal_supplement_test_only"): "TEST_ONLY",
         ("day_strata_dryrun.py", "rehearse"): "GUARDED_BY_ASSERT_SYNTHETIC",
+        ("run_output.py", "persist_run_output"):
+            "REFUSES_FIRST_AND_STAGES_ONLY",
     }
 
     def test_every_mkdir_site_in_the_package_is_a_KNOWN_one(self):
@@ -172,10 +181,10 @@ class TestTheGrantStillHasAReason(unittest.TestCase):
         self.assertGreater(scanned, 20,
                            "the package glob found %d files" % scanned)
         self.assertGreaterEqual(
-            len(sites), 2,
-            "the scan found %d mkdir sites; there are known to be two, so a "
-            "smaller number means the matcher stopped working, not that the "
-            "code stopped creating directories" % len(sites))
+            len(sites), 3,
+            "the scan found %d mkdir sites; there are known to be three, so "
+            "a smaller number means the matcher stopped working, not that "
+            "the code stopped creating directories" % len(sites))
         unknown = sorted(sites - set(self.MKDIR_SITES))
         self.assertEqual(
             [], unknown,
@@ -185,6 +194,99 @@ class TestTheGrantStillHasAReason(unittest.TestCase):
             % unknown)
         self.assertEqual(sorted(self.MKDIR_SITES), sorted(sites),
                          "MKDIR_SITES names a site that no longer exists")
+
+    def test_the_run_outputs_mkdir_runs_AFTER_every_refusal(self):
+        """The proof behind `REFUSES_FIRST_AND_STAGES_ONLY`, structural.
+
+        `persist_run_output` refuses three things before it creates
+        anything: a test-only result aimed at the ruled runs root, a final
+        directory that already exists, and staging debris from an earlier
+        attempt. If the mkdir ever moved above them, the refusal would fire
+        only after the directory it exists to prevent had been created.
+        """
+        import ast
+        import io as _io
+
+        tree = ast.parse(_io.open(
+            REPO / "src" / "itsf" / "mc" / "run_output.py",
+            encoding="utf-8").read())
+        fn = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+              and n.name == "persist_run_output"]
+        self.assertEqual(1, len(fn), "persist_run_output is gone/duplicated")
+        codes = [n.exc.args[0].value for n in ast.walk(fn[0])
+                 if isinstance(n, ast.Raise)
+                 and isinstance(n.exc, ast.Call)
+                 and getattr(n.exc.func, "id", "") == "MCInputError"
+                 and n.exc.args and isinstance(n.exc.args[0], ast.Constant)]
+        mkdirs = [n.lineno for n in ast.walk(fn[0]) if isinstance(n, ast.Call)
+                  and getattr(n.func, "attr", "") == "mkdir"]
+        self.assertEqual(1, len(mkdirs),
+                         "this module creates exactly one directory")
+        guards = [n.lineno for n in ast.walk(fn[0])
+                  if isinstance(n, ast.Raise)
+                  and isinstance(n.exc, ast.Call)
+                  and getattr(n.exc.func, "id", "") == "MCInputError"
+                  and n.exc.args and isinstance(n.exc.args[0], ast.Constant)
+                  and n.exc.args[0].value in (
+                      "mc_output_test_only_in_ruled_root",
+                      "mc_output_already_finalized",
+                      "mc_output_partial_residue")]
+        self.assertEqual(3, len(guards),
+                         "a refusal disappeared; codes present were %s"
+                         % codes)
+        self.assertLess(max(guards), min(mkdirs),
+                        "a directory is created before the refusals run")
+        call = [n for n in ast.walk(fn[0]) if isinstance(n, ast.Call)
+                and getattr(n.func, "attr", "") == "mkdir"][0]
+        self.assertEqual([], [k.arg for k in call.keywords],
+                         "the staging mkdir takes no parents/exist_ok; with "
+                         "them it could create a runs root it was never "
+                         "given, or reuse debris it just refused")
+
+    def test_and_those_refusals_actually_reject(self):
+        """The premise. Refusals in the right PLACE that rejected nothing
+        would satisfy the structural check above."""
+        import tempfile
+        from itsf.mc import run_output as ro
+        from itsf.mc.atoms import MCInputError
+        import scripts.mc_real_run as entry
+
+        auth = {"run_id": "MC-R999", "input_bundle_commit": "a" * 40,
+                "mc_execution_commit": "e" * 40,
+                "bundle_summary_digest": "1" * 64,
+                "sealed_supplement_sha256": "b" * 64,
+                "prereg_sha256": "c" * 64, "authorized_by": "Aaron",
+                "output_path": "<set below>"}
+
+        def persist(dest):
+            auth["output_path"] = str(dest)
+            return ro.persist_run_output(
+                entry.synthetic_result(), destination=dest,
+                authorization=auth, manifest_sha256="d" * 64)
+
+        ruled = ro.RULED_RUNS_DIR / "MC-R999_19700101T000000Z"
+        with self.assertRaises(MCInputError) as caught:
+            persist(ruled)
+        self.assertEqual("mc_output_test_only_in_ruled_root",
+                         caught.exception.code)
+        self.assertFalse(ruled.exists(), "the refusal created the directory")
+
+        with tempfile.TemporaryDirectory() as d:
+            dest = Path(d) / "MC-R999_19700101T000000Z"
+            dest.mkdir()
+            with self.assertRaises(MCInputError) as caught:
+                persist(dest)
+            self.assertEqual("mc_output_already_finalized",
+                             caught.exception.code)
+
+        with tempfile.TemporaryDirectory() as d:
+            dest = Path(d) / "MC-R999_19700101T000000Z"
+            dest.with_name(dest.name + ro.PARTIAL_SUFFIX).mkdir()
+            with self.assertRaises(MCInputError) as caught:
+                persist(dest)
+            self.assertEqual("mc_output_partial_residue",
+                             caught.exception.code)
+            self.assertFalse(dest.exists())
 
     def test_the_rehearsals_mkdir_runs_AFTER_the_governed_root_refusal(self):
         """The proof behind `GUARDED_BY_ASSERT_SYNTHETIC`, structural

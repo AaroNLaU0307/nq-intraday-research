@@ -38,11 +38,46 @@ OPEN_MATERIAL_BLOCKERS = NONE mechanical. The sealed bundle is identified,
                       the block above and commit nothing before the run.
                       Non-blocking rows carried: B-35, NB1, B-29, B-30.
 NEXT_OWNER_DECISION = write `ops/MC_RUN_AUTHORIZATION.json` against the
-                      HEAD measured at that moment. REAL_MC = NOT
-                      AUTHORIZED. N16 NOT EXECUTED. MC-R001 UNUSED —
-                      twice authorized, twice stopped by mechanical
-                      infrastructure BEFORE the run began, never started.
+                      HEAD measured at that moment, naming the exact
+                      output path below. REAL_MC = NOT AUTHORIZED. N16 NOT
+                      EXECUTED. MC-R001 UNUSED — three times authorized,
+                      three times stopped BEFORE the run began, never
+                      started.
 ```
+
+## The output contract, Owner-decided 2026-09-13
+
+A completed real MC produced a `RunnerResult` and nothing wrote it: the run
+would have finished and the evidence would have died with the process. Found
+before MC-R001 started, not after. Aaron ruled the destination; the
+persistence reuses the existing sealed-run discipline rather than adding a
+second one.
+
+```
+RUNS_ROOT            C:\Users\Aaron\quant-data\itsf-runs\runs
+FINAL_OUTPUT_PATH    <RUNS_ROOT>\MC-R001_20260913T063102Z
+PARTIAL_OUTPUT_PATH  <RUNS_ROOT>\MC-R001_20260913T063102Z.partial
+ARTIFACTS            RUN_IDENTITY.json · SEAL_CANDIDATE.json ·
+                     GRID_STANDING.json · PER_SEED_EVIDENCE.json ·
+                     OUTPUT_MANIFEST.json
+ATOMICITY            stage into `.partial`, re-read and verify every staged
+                     byte, promote with one `os.replace`. A failed attempt
+                     keeps its `.partial` and never occupies the final name.
+ARCHIVE              `runinfra.archive_sealed_run`, reused unchanged, to
+                     `C:\Users\Aaron\quant-data\itsf-runs-archive`.
+                     Reported, never raised: an archive problem does not
+                     un-complete a finished run.
+```
+
+The path is pinned in `scripts/mc_real_run.py` as `OUTPUT_PATH`, so the
+executing commit fixes it, AND the Owner authorization must carry the same
+value in a new required `output_path` field. The gate refuses a mismatch, a
+path that is not one directory directly under the ruled runs root, and a
+path that already exists — which is what makes "one run, one output"
+mechanical rather than a convention.
+
+The console reports operational identities only. The verdict, seal candidate
+and every statistic live in the evidence and are never printed.
 
 ## The authorization's two commits, separated 2026-09-13
 
@@ -122,6 +157,11 @@ authority changed):
   and the file actually read cannot diverge through a def-time default;
 * `main()` is now exercised end to end past the gate — the testability gap
   that allowed both failures. Previously nothing had ever executed it.
+
+THIRD STOP, 2026-09-13, before any launch: the run persisted nothing. See
+the output contract above. The authorization for `9fb14015…` is preserved as
+`ops/MC_RUN_AUTHORIZATION.VOID_9fb14015_never_executed.json` (671 bytes,
+sha256 `997cf40a…`) and never executed MC-R001.
 
 ## The sealed bundle, Owner-bound 2026-09-13
 

@@ -41,6 +41,19 @@ what broke the second launch.) The argument is still required, with no
 default: it makes the caller STATE which root it believes it is running, and
 a disagreement with the pinned one refuses.
 
+WHERE THE EVIDENCE GOES. `OUTPUT_PATH` below is the exact final directory,
+fixed in code so the executing commit determines it, and the Owner
+authorization must name the same path. `execute_full_mc` writes the run's
+evidence there through `run_output` -- staged in `<path>.partial`, verified,
+promoted by one rename -- BEFORE it returns. Until that existed, a completed
+real run returned an in-memory object and the process dropped it.
+
+WHAT THIS CONSOLE SAYS, and what it never says. Operational identities only:
+completed, run id, output path, inventory digests, execution commit. The
+verdict, the seal candidate and every statistic are in the evidence and not
+on the console -- printing them would interpret the research before S4
+exists to do it.
+
 ONE ASSEMBLY. The prepared input is built by
 `real_input._assemble_from_sealed_run` and by nothing here -- see the
 comment at the call site, and
@@ -57,6 +70,19 @@ if str(REPO / "src") not in sys.path:
 
 #: The run this entrypoint starts. One id, spelled once.
 RUN_ID = "MC-R001"
+
+#: THE EXACT FINAL OUTPUT DIRECTORY, decided BEFORE the run and pinned in
+#: code so the executing commit fixes it. The Owner authorization must name
+#: this same path; the gate compares the two, checks it sits directly under
+#: the ruled runs root, and refuses if anything is already there. A run that
+#: chose its own destination at write time would be a run whose evidence
+#: location nobody agreed to in advance.
+#:
+#: The stamp is a LABEL, not a clock reading: it is the UTC instant this
+#: destination was fixed (2026-09-13T06:31:02Z), and it does not move when
+#: the run happens to start.
+RUNS_ROOT = Path(r"C:\Users\Aaron\quant-data\itsf-runs\runs")
+OUTPUT_PATH = RUNS_ROOT / "MC-R001_20260913T063102Z"
 
 #: The sealed DAY_STRATA supplement the run consumes, and its digest as the
 #: registry recorded it at `SUPPLEMENT_SEALED`. Both are checked; neither is
@@ -101,6 +127,7 @@ def authorization_preview() -> dict:
     an authorization exists, and it cannot start anything.
     """
     from itsf.mc import consumer as mcc
+    from itsf.mc import run_output as _ro
 
     _supplement, digest = _sealed_supplement()
     return {
@@ -114,6 +141,11 @@ def authorization_preview() -> dict:
         "mc_execution_commit": mcc.mc_execution_checkout()[0],
         "governed_paths_modified": list(mcc.mc_execution_checkout()[1]),
         "bundle_summary_digest": "<run bundle_identity(root) to measure it>",
+        "output_path": str(OUTPUT_PATH),
+        "output_path_exists": OUTPUT_PATH.exists(),
+        "partial_path": str(OUTPUT_PATH) + _ro.PARTIAL_SUFFIX,
+        "partial_path_exists": Path(
+            str(OUTPUT_PATH) + _ro.PARTIAL_SUFFIX).exists(),
     }
 
 
@@ -137,7 +169,66 @@ def bundle_identity(bundle_root: str) -> dict:
     }
 
 
-def main(bundle_root: str = "", output_root: str = "") -> int:
+def synthetic_result(**over):
+    """A `RunnerResult` shaped like a real one and carrying no research.
+
+    `test_only=True` is the load-bearing field: `run_output` REFUSES to
+    finalize a test-only result anywhere under the ruled runs root, so this
+    object cannot be used to plant something that looks like governed
+    evidence. Its numbers are placeholders with no meaning.
+    """
+    from itsf.mc.mc_runner import RunnerResult
+    row = dict(
+        run_id="MC-PROBE", authorized_commit="0" * 40,
+        output_root="<probe>",
+        seal_candidate={"verdict": {"category": "PROBE", "reason": "probe"}},
+        verdict="PROBE", grid_seal_status="PROBE",
+        may_support_h1_entry=False,
+        published_region_by_kind={"probe": {"cell": "probe"}},
+        grid_convergence={"schema": "probe"},
+        grid_evidence_by_seed={7: {"cell": "probe"}},
+        b_scales_by_seed={7: (1, 2)}, arm_labels=("probe",), test_only=True)
+    row.update(over)
+    return RunnerResult(**row)
+
+
+def output_contract_probe(dest: str = "") -> int:
+    """EXERCISE THE OUTPUT WIRING. Runs no MC, touches no governed path.
+
+    This is the launcher-visible proof that the persistence path works in
+    the child process the real run would use: it stages, verifies, promotes
+    and then RE-READS a synthetic run output through exactly the functions
+    `execute_full_mc` calls. It cannot produce governed evidence -- the
+    result is `test_only`, which `run_output` refuses to finalize under the
+    ruled runs root -- and it prints identities only, like the real report.
+
+    It exists because the two MC-R001 launch failures were both in glue that
+    nothing had ever executed. Glue that is never run is glue that is wrong.
+    """
+    import tempfile
+    from itsf.mc import run_output as _ro
+
+    root = Path(dest) if dest else Path(tempfile.mkdtemp(prefix="mc-probe-"))
+    destination = root / "MC-PROBE_00000000T000000Z"
+    authorization = {
+        "run_id": "MC-PROBE", "input_bundle_commit": "0" * 40,
+        "mc_execution_commit": "0" * 40, "bundle_summary_digest": "0" * 64,
+        "sealed_supplement_sha256": "0" * 64, "prereg_sha256": "0" * 64,
+        "authorized_by": "probe", "output_path": str(destination)}
+    persisted = _ro.persist_run_output(
+        synthetic_result(), destination=destination,
+        authorization=authorization, manifest_sha256="0" * 64)
+    reread = _ro.read_persisted_output(destination)
+    if reread.summary_digest != persisted.summary_digest:
+        sys.stderr.write("mc_real_run: PROBE FAILED — re-read digest differs\n")
+        return 1
+    _report(persisted.as_mapping(), exec_commit="<probe>")
+    sys.stderr.write("mc_real_run:   re-read             %s\n"
+                     % reread.summary_digest)
+    return 0
+
+
+def main(bundle_root: str = "") -> int:
     """The real run. Refuses before reading anything without the Owner."""
     from itsf.mc import consumer as mcc
     from itsf.mc import mc_runner as run
@@ -188,6 +279,7 @@ def main(bundle_root: str = "", output_root: str = "") -> int:
         run_id=RUN_ID,
         input_bundle_commit=_declared_commit(mcc),
         sealed_supplement_sha256=supplement_sha,
+        output_path=str(OUTPUT_PATH),
         path=mcc.MC_AUTHORIZATION_PATH)
 
     # ---- only now is anything read -----------------------------------
@@ -205,6 +297,7 @@ def main(bundle_root: str = "", output_root: str = "") -> int:
         input_bundle_commit=_declared_commit(mcc),
         sealed_supplement_sha256=supplement_sha,
         bundle_summary_digest=precheck.summary_digest,
+        output_path=str(OUTPUT_PATH),
         path=mcc.MC_AUTHORIZATION_PATH)
     commit = str(authorization["input_bundle_commit"])
     # THE ASSEMBLY IS `real_input`'s, NOT THIS FILE'S.
@@ -226,12 +319,76 @@ def main(bundle_root: str = "", output_root: str = "") -> int:
             % (commit[:12], str(prepared.authorized_commit)[:12]))
         return 3
 
+    # `execute_full_mc` writes the run's evidence to the bound destination
+    # before returning; `persisted_output` is where it went and what it
+    # hashes to.
     result = run.execute_full_mc(
-        prepared, run_id=RUN_ID, output_root=output_root or str(REPO),
+        prepared, run_id=RUN_ID, output_root=str(OUTPUT_PATH),
         supplement=supplement, sealed_artifact_sha256=supplement_sha,
         bundle_summary_digest=precheck.summary_digest)
-    sys.stderr.write("mc_real_run: completed %s\n" % result.run_id)
+    _report(result.persisted_output, exec_commit=_head_commit(mcc))
+    _archive(result.persisted_output)
     return 0
+
+
+def _report(persisted, *, exec_commit: str) -> None:
+    """OPERATIONAL IDENTITIES ONLY, and this is a hard boundary.
+
+    The verdict, the seal candidate, the region maps and every statistic the
+    run produced are IN the evidence and NOT on this console. A runner that
+    prints its own verdict has interpreted the research before S4 exists to
+    do it, and once printed it cannot be un-seen. What belongs here is what
+    an operator needs: did it finish, where is the evidence, and what does
+    that evidence hash to.
+    """
+    w = sys.stderr.write
+    w("mc_real_run: COMPLETED %s\n"
+      % persisted.get("run_id", RUN_ID))
+    w("mc_real_run:   mc_execution_commit %s\n" % exec_commit)
+    w("mc_real_run:   output_path         %s\n"
+      % persisted.get("final_path", "<absent>"))
+    w("mc_real_run:   summary_digest      %s\n"
+      % persisted.get("summary_digest", "<absent>"))
+    w("mc_real_run:   artifacts           %s\n"
+      % persisted.get("n_files", 0))
+    for entry in persisted.get("files", ()):
+        w("mc_real_run:     %-22s %9d  %s\n"
+          % (entry["name"], entry["size"], entry["sha256"]))
+
+
+def _archive(persisted) -> None:
+    """Mirror the finalized output with the EXISTING archive machinery.
+
+    `runinfra.archive_sealed_run` already owns this: per-file re-read on
+    both sides, `.partial` staging, never overwrites, never mutates the
+    source. It is reused unchanged.
+
+    An archive problem is reported and never raised. The run is already
+    complete and its evidence already written; letting a copy failure
+    propagate would turn a finished governed run into a failed one, which it
+    structurally is not -- the same holding `s0/runner._archive_sealed_run`
+    records.
+    """
+    from itsf import contracts as _c
+    from itsf.s0 import runinfra
+    final = persisted.get("final_path", "")
+    if not final:
+        return
+    try:
+        report = runinfra.archive_sealed_run(final, _c.RULED_ARCHIVE_ROOT)
+        status, detail = report.status, report.dest_dir
+    except Exception as exc:                                # noqa: BLE001
+        status, detail = "archive_failed", "%s: %s" % (type(exc).__name__, exc)
+    sys.stderr.write("mc_real_run:   archive             %s %s\n"
+                     % (status, detail))
+
+
+def _head_commit(mcc) -> str:
+    """The executing commit, re-measured for the report."""
+    try:
+        return mcc.mc_execution_checkout()[0]
+    except Exception:                                       # noqa: BLE001
+        return "<unmeasured>"
 
 
 def _declared_commit(mcc) -> str:

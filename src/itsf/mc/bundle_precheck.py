@@ -78,12 +78,20 @@ class BundlePrecheck:
         return len(self.recomputed)
 
 
-def _summary(entries) -> str:
-    """One digest over the whole set, order-independent by construction."""
+def _summary(entries, schema: str = SUMMARY_DIGEST_SCHEMA) -> str:
+    """One digest over the whole set, order-independent by construction.
+
+    `schema` is a parameter so a DIFFERENT file-table artifact class can
+    use THIS formula instead of copying it (`run_output` digests the
+    run's own output inventory). It defaults to the bundle schema, so
+    every existing caller and every recorded bundle digest is unchanged;
+    a different class passes its own string, which is what keeps the two
+    from colliding.
+    """
     body = "\n".join(f"{e.name}={e.size}={e.sha256}"
                      for e in sorted(entries, key=lambda x: x.name))
     return hashlib.sha256(
-        (SUMMARY_DIGEST_SCHEMA + "\n" + body).encode("utf-8")).hexdigest()
+        (schema + "\n" + body).encode("utf-8")).hexdigest()
 
 
 def frozen_bundle_table():
