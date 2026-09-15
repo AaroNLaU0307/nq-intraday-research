@@ -143,6 +143,8 @@ def test_the_production_entrypoint_refuses_before_reading_anything(
     import itsf.mc.bundle_precheck as bp
     monkeypatch.setattr(bp, "precheck_bundle_on_disk", explode)
     monkeypatch.setattr(mcc, "prepare_mc_input", explode)
+    import itsf.host_preflight as _hp
+    monkeypatch.setattr(_hp, "assert_host_fit_for_long_run", lambda: {})
 
     from itsf.mc import real_input as ri
     with pytest.raises((McConsumerAbsent, RunBlockedError)):
@@ -531,6 +533,8 @@ def test_main_reaches_execute_full_mc_with_the_right_arguments(
 
     import itsf.guards as guards
     monkeypatch.setattr(guards, "assert_real_run_allowed", lambda *a, **k: None)
+    import itsf.host_preflight as _hp
+    monkeypatch.setattr(_hp, "assert_host_fit_for_long_run", lambda: {})
 
     class _PC:
         summary_digest = BUNDLE

@@ -251,6 +251,21 @@ def main(bundle_root: str = "") -> int:
             "as real_input.SEALED_RUN_DIR and the argument must state it.\n")
         return 2
 
+    # THE HOST, BEFORE ANYTHING ELSE. MC-R001 spent 39h52m of computation
+    # and was then destroyed by a Windows Update planned restart. Nothing
+    # had ever looked at whether the machine was already waiting to
+    # restart. This refuses when it is -- and it is NOT protection: it
+    # cannot stop a restart, it can only decline to start a multi-day run
+    # on top of one that is already scheduled. The remaining risk is the
+    # Owner's to manage outside this process.
+    from itsf import host_preflight as _hp
+    try:
+        context = _hp.assert_host_fit_for_long_run()
+    except _hp.HostNotFitError as exc:
+        sys.stderr.write("mc_real_run: REFUSING - %s" % exc + chr(10))
+        return 5
+    _report_host(context)
+
     # THE TRUSTED-LAUNCH GATE, with the production defaults. Every sanctioned
     # real-run entry binds to it, and binding to it IS binding to the trusted
     # launch: run outside `run_governed.cmd` and this refuses here. It reads
@@ -329,6 +344,29 @@ def main(bundle_root: str = "") -> int:
     _report(result.persisted_output, exec_commit=_head_commit(mcc))
     _archive(result.persisted_output)
     return 0
+
+
+def _report_host(context) -> None:
+    """The host facts, on the record before the run starts.
+
+    Operational only. None of it refuses; it exists so that a run which
+    later dies to the environment can be read against what the environment
+    looked like when it was started.
+    """
+    w = sys.stderr.write
+    span = context.get("active_hours_span_hours")
+    w("mc_real_run: host preflight OK - no pending reboot marker" + chr(10))
+    w("mc_real_run:   pending_file_renames %s" % context.get(
+        "pending_file_rename_operations") + chr(10))
+    w("mc_real_run:   active_hours         %s-%s (span %s h)"
+      % (context.get("active_hours_start"), context.get("active_hours_end"),
+         span) + chr(10))
+    w("mc_real_run:   updates_paused_until %s" % context.get(
+        "updates_paused_until") + chr(10))
+    if span is not None and span < 24:
+        w("mc_real_run:   NOTE Active Hours cannot cover a run longer than "
+          "its span; a restart outside it is permitted by design"
+          + chr(10))
 
 
 def _report(persisted, *, exec_commit: str) -> None:

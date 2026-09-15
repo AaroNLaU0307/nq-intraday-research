@@ -37,13 +37,101 @@ OPEN_MATERIAL_BLOCKERS = NONE mechanical. The sealed bundle is identified,
                       standing authorization — authorize against the HEAD in
                       the block above and commit nothing before the run.
                       Non-blocking rows carried: B-35, NB1, B-29, B-30.
-NEXT_OWNER_DECISION = write `ops/MC_RUN_AUTHORIZATION.json` against the
-                      HEAD measured at that moment, naming the exact
-                      output path below. REAL_MC = NOT AUTHORIZED. N16 NOT
-                      EXECUTED. MC-R001 UNUSED — three times authorized,
-                      three times stopped BEFORE the run began, never
-                      started.
+NEXT_OWNER_DECISION = resolve the run-identity question below, then
+                      authorize a recomputation if wanted. REAL_MC = NOT
+                      AUTHORIZED. MC-R001 attempt 1 RAN 39h52m and was
+                      destroyed by a Windows Update restart; no result was
+                      persisted and no outcome was exposed. The trial
+                      registry is byte-unchanged and records nothing.
 ```
+
+## MC-R001 attempt 1 — lost to a Windows Update restart, 2026-09-15
+
+The first real MC genuinely ran. It was not a launcher defect this time and
+not a research failure; the machine restarted underneath it.
+
+```
+launched      2026-09-13T07:21:49Z, through scripts\run_governed.cmd
+ran           39h52m, ~96-98% CPU-bound throughout, inside `_execute`
+killed        2026-09-14T23:14Z (local 2026-09-15 07:14:11)
+cause         System event 1074 — MoUsoCoreWorker.exe initiated a restart
+              on behalf of NT AUTHORITY\SYSTEM, "Operating System:
+              Service pack (Planned)". Not a user kill, not an OOM, no
+              MemoryError, no python Application error event.
+persisted     NOTHING. No `.partial`, no final output. `_execute` writes
+              nothing until it returns, so the whole run was lost.
+exposed       NOTHING. No outcome was read, printed or recorded.
+registry      TRIAL_REGISTRY.md sha256 b964b19a… unchanged, 0 MC-R001 rows
+```
+
+The authorization is preserved byte-exact, out of the live gate path:
+
+```
+ops/MC_RUN_AUTHORIZATION.VOID_23ca9b05_os_restart_no_result.json
+763 bytes, sha256 c982f91e97cb5b47c053e159a5f53faf3ede0dfee422307edf9b571a58145878
+SUBSTANTIVE_EXECUTION_STARTED · OS_RESTART_TERMINATED ·
+NO_RESULT_PERSISTED · NO_OUTCOME_EXPOSED
+```
+
+The earlier three VOID files are `never_executed`; this one is not, and the
+name says so.
+
+### Why there is no resume, and why one is not being built
+
+`_execute` and `_arm` make no write, print or log call of any kind
+(AST-verified), so there is no durable state to continue from. That is the
+shallow reason. The architectural reason is that the governed evidence
+objects — `GridReplayAuthority`, `GridPass`, `KReplayEvidence`,
+`GridConvergence` — are **factory-only by capability token**: each
+`__post_init__` refuses construction unless handed the module-private
+capability, and `KReplayEvidence`'s own docstring states the point, that an
+outer K "can no longer be asserted, it has to match a comparison that was
+actually computed from two grid passes".
+
+A resume reconstructs completed work from disk. For these objects that means
+**asserting** evidence rather than minting it by computation — exactly what
+the capability pattern exists to forbid. Implementing it would require
+either exporting the capability or adding a second trusted-deserialization
+minting path, and both delete the guarantee for every caller, not just for
+resume. So: CHECKPOINT_RESUME_FEASIBLE = NO, and nothing was built.
+
+### The run-identity question, unresolved by current authority
+
+Separate the two identities:
+
+* SCIENTIFIC TRIAL — nothing statistical occurred. No outcome was produced,
+  observed or recorded, and a recomputation from identical seeds, inputs and
+  method is the same deterministic trial. No code or sealed document makes
+  `run_id` single-attempt: `mc_contract.RUN_ID_RE` validates the FORM
+  (`^MC-R[0-9]{3}$`) and nothing anywhere records prior use.
+* PHYSICAL ATTEMPT — already expressed by the timestamped output directory,
+  and the gate enforces it: an `output_path` that already exists refuses. The
+  project's own S0 convention separates these the same way
+  (`runs/<trial>_<UTC>` beside `attempts/<trial>-A<seq>`).
+
+So the mechanics permit reusing MC-R001 with a new output path. What blocks
+it is Aaron's own authorization language, which excluded "automatic rerun
+after substantive computation begins". That is an Owner reservation, not a
+code rule, so only Aaron can lift it.
+
+### Host resilience — what was found and what it costs
+
+```
+edition        Windows 11 Home Single Language — no Group Policy, so
+               NoAutoRebootWithLoggedOnUsers / AUOptions are unavailable
+active hours   14:00-05:00 (span 15 h). The restart fired at 07:14, in the
+               gap. Windows caps Active Hours at 18 h, so it CANNOT cover a
+               40-hour run however it is set.
+pause updates  available on Home, up to 5 weeks. This is the only
+               Windows-supported mechanism that can cover the window.
+```
+
+`src/itsf/host_preflight.py` refuses to START a long run when Windows is
+already waiting to restart (the CBS and Windows Update servicing markers),
+and reports Active Hours, pause state and pending file renames. **It cannot
+prevent a restart and must never be described as protection** — a test
+asserts that the module says so.
+
 
 ## The output contract, Owner-decided 2026-09-13
 
