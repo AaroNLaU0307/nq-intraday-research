@@ -45,6 +45,27 @@ NEXT_OWNER_DECISION = resolve the run-identity question below, then
                       registry is byte-unchanged and records nothing.
 ```
 
+## MC-R001 attempts — one trial, two physical attempts
+
+Aaron's ruling, 2026-09-15: MC-R001 is ONE scientific trial. A mechanical
+recomputation after an infrastructure failure is not a new statistical trial
+and does not increment the trial count.
+
+```
+ATTEMPT 1  MC-R001_20260913T063102Z
+           FAILED_AFTER_SUBSTANTIVE_START
+           cause = OS_RESTART_OR_MACHINE_FAILURE
+           result_persisted = NO
+           outcome_exposed  = NO
+           the bound output path was never created on disk
+ATTEMPT 2  MC-R001_20260915T080712Z
+           prepared, NOT AUTHORIZED, NOT STARTED
+```
+
+The attempt identity IS the output directory, and it is enforced rather than
+conventional: the gate refuses an `output_path` that already exists, so no
+attempt can occupy another's identity.
+
 ## MC-R001 attempt 1 — lost to a Windows Update restart, 2026-09-15
 
 The first real MC genuinely ran. It was not a launcher defect this time and

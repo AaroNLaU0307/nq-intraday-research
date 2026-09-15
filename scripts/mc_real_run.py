@@ -79,10 +79,21 @@ RUN_ID = "MC-R001"
 #: location nobody agreed to in advance.
 #:
 #: The stamp is a LABEL, not a clock reading: it is the UTC instant this
-#: destination was fixed (2026-09-13T06:31:02Z), and it does not move when
-#: the run happens to start.
+#: destination was fixed, and it does not move when the run happens to
+#: start.
+#:
+#: IT IS ALSO THE PHYSICAL ATTEMPT IDENTITY, and the reason it changed.
+#: MC-R001 is one SCIENTIFIC TRIAL; this path is one PHYSICAL ATTEMPT at
+#: computing it. Attempt 1 (`MC-R001_20260913T063102Z`, fixed
+#: 2026-09-13T06:31:02Z) ran 39h52m and was destroyed by a Windows Update
+#: restart with nothing persisted and no outcome exposed; Aaron ruled it
+#: FAILED_AFTER_SUBSTANTIVE_START and the same trial recomputable. Attempt 2
+#: therefore keeps the trial id and takes a new stamp -- which is not merely
+#: convention: the gate REFUSES an `output_path` that already exists, so a
+#: second attempt cannot be pointed at the first one's identity even by
+#: mistake.
 RUNS_ROOT = Path(r"C:\Users\Aaron\quant-data\itsf-runs\runs")
-OUTPUT_PATH = RUNS_ROOT / "MC-R001_20260913T063102Z"
+OUTPUT_PATH = RUNS_ROOT / "MC-R001_20260915T080712Z"
 
 #: The sealed DAY_STRATA supplement the run consumes, and its digest as the
 #: registry recorded it at `SUPPLEMENT_SEALED`. Both are checked; neither is
