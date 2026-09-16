@@ -12,10 +12,27 @@ RESEARCH_QUESTION   = NQ opening-drive (09:30-10:00) continuation: base rate and
                       the Oracle's daily USD P&L distribution (Q3).
                       Verbatim and binding: STUDY_0_PREREGISTRATION.md (SEALED).
 RESEARCH_ID · LANE  = ITSF-S0 · FULL
-STAGE               = S3 RUN — mechanical gate (N15). Two of the three
-                      2026-09-13 blockers RETIRED as historical under vNext
-                      §0; the third is REPAIRED. One Owner data pin and the
-                      authorization itself remain. N16 not executed.
+STAGE               = STOPPED / PARKED (Aaron, 2026-09-16). S3 RUN was
+                      reached and attempted twice; S4 was never reached
+                      because no governed MC result was ever produced.
+FINAL_EVIDENCE_VERDICT = INSUFFICIENT_EVIDENCE
+                      Canonical KB term: `unresolved`. The KB enum
+                      (confirmed · supported · not_promoted · falsified ·
+                      active · archived · experimental · unresolved) has no
+                      `insufficient_evidence` member, and the project
+                      convention is explicit that `unresolved` is its
+                      replacement. Both words are kept here deliberately:
+                      INSUFFICIENT_EVIDENCE is what happened, `unresolved`
+                      is what the schema calls it.
+RESEARCH_STATUS     = PARKED. Nearest canonical KB term: `archived`. No
+                      enum value is asserted anywhere, because ITSF holds
+                      no KB strategy card (see §KB note below) — so this is
+                      a description, not a schema claim.
+WHY PARKED          = NOT because the signal failed. MC robustness
+                      validation remained incomplete after two substantive
+                      execution attempts, and a third 40–50+ hour attempt is
+                      not currently justified by research priority and
+                      compute cost on the available host.
 ACTIVE_HYPOTHESIS   = sealed Study-0 contract; MC pipeline must produce the
                       Checkpoint-0 statistic the sealed §10.4 decision table reads
 DATA_GRANT          = the existing ITSF S0 grant only. No new grant. Protected
@@ -24,7 +41,12 @@ TRIAL_ACCOUNTING    = ops/TRIAL_REGISTRY.md
 OUTCOME_EXPOSURE    = tracked — ops/EXPOSURE_LEDGER.md. RETAINED: this project has a
                       sealed preregistration and an unrevealed statistic, so
                       blinding is materially required (vNext §11).
-OPEN_MATERIAL_BLOCKERS = NONE mechanical. The sealed bundle is identified,
+OPEN_MATERIAL_BLOCKERS = NONE. The project is parked, not blocked: every
+                      mechanical prerequisite is green and the missing thing
+                      is compute time on a reliable host, which is an Owner
+                      priority call rather than a defect.
+HISTORICAL (pre-park, kept because it is what a reopening would inherit):
+                      The sealed bundle is identified,
                       unambiguous and now bound BY DIGEST in the gate, so a
                       substituted bundle at any path refuses.
                       `ops/MC_RUN_AUTHORIZATION.json` does not exist — which
@@ -37,13 +59,90 @@ OPEN_MATERIAL_BLOCKERS = NONE mechanical. The sealed bundle is identified,
                       standing authorization — authorize against the HEAD in
                       the block above and commit nothing before the run.
                       Non-blocking rows carried: B-35, NB1, B-29, B-30.
-NEXT_OWNER_DECISION = resolve the run-identity question below, then
-                      authorize a recomputation if wanted. REAL_MC = NOT
-                      AUTHORIZED. MC-R001 attempt 1 RAN 39h52m and was
-                      destroyed by a Windows Update restart; no result was
-                      persisted and no outcome was exposed. The trial
-                      registry is byte-unchanged and records nothing.
+NEXT_OWNER_DECISION = NONE. ITSF is stopped. It may be reopened for final
+                      MC validation ONLY by an explicit Aaron Owner
+                      decision, preferably once a more reliable long-run
+                      execution environment or a materially better
+                      execution solution is available.
+REAL_MC             = NOT AUTHORIZED. No authorization exists. MC-R001 has
+                      never completed and no outcome has ever been exposed.
 ```
+
+## ITSF STOPPED / PARKED — 2026-09-16
+
+**What exists.** A sealed Study-0 preregistration and charter, a frozen
+`MC_METHOD_SPEC`, the full MC implementation with its governed gates, the
+sealed 14-file S0-T001 input bundle, the sealed DAY_STRATA supplement, a
+durable run-output contract, a host preflight, and a repaired Topstep payout
+path — all tested, with the full suite green.
+
+**What is missing, and it is the thing that mattered.** The governed MC
+robustness evidence the sealed §10.4 decision table reads. MC-R001 never
+completed. Nothing downstream of it exists.
+
+**Therefore ITSF is recorded as neither SUPPORTED nor FALSIFIED.** No claim
+about the strategy is on record, in either direction, and none may be
+inferred from this page. The Checkpoint-0 statistic has never been computed,
+let alone read.
+
+### The two substantive attempts, both real, neither a research outcome
+
+```
+ATTEMPT 1   MC-R001_20260913T063102Z
+            substantive computation STARTED: YES
+            terminated by OS_RESTART_OR_MACHINE_FAILURE at ~39h52m
+            (System event 1074, MoUsoCoreWorker, planned service-pack restart)
+            result persisted NO · outcome exposed NO
+            authorization void: MC_RUN_AUTHORIZATION.VOID_23ca9b05_os_restart_no_result.json
+
+ATTEMPT 2   MC-R001_20260915T080712Z
+            substantive computation STARTED: YES
+            terminated by CODE_DEFECT at ~29h05m
+            Topstep payout eligibility ordering: eligibility was sampled from
+            the state entering the session (correct) and re-validated after
+            the session's P&L (wrong), so a losing day that took the balance
+            under $250 raised `payout requested while ineligible`
+            result persisted NO · outcome exposed NO
+            defect REPAIRED and regression-tested at 48c1ac94
+            authorization void: MC_RUN_AUTHORIZATION.VOID_1c7a3eda_code_defect_no_result.json
+```
+
+Neither failure is a research result. An infrastructure restart and a code
+defect say nothing whatever about the strategy, and this page must never be
+read as though they did. No third attempt was made.
+
+### Canonical identities at the park
+
+```
+CURRENT_CANONICAL_COMMIT   48c1ac94149b795e5b31b90575000c806994686d
+input_bundle_commit        876c1b74131b4ab1a89dce433ecce646ba481f8c
+bundle_summary_digest      7263f0c1802c205ae3bf3732a0d2de5b46f17aac67a93fe5aedcc7bb71262d67
+sealed_supplement_sha256   f59a009213f2e3b9ce3b4b4937c1945227c89e724fc6c4fa0c063d0326417e4d
+prereg_sha256              6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132
+development_manifest       d8d1edc7b549b441d691dda74331806c957a19946e746bd795978e01d73c3ae8
+trial registry             b964b19a6b788bf9f47d1d24018dfc93836f74cbfd7ef69e4680471368d11fe9
+                           — byte-unchanged; 0 rows mention MC-R001
+runs/                      only S0-T001_20260813T170432Z. No MC-R001 output
+                           of any kind was ever created, final or .partial.
+```
+
+### Reopening
+
+ITSF may be reopened for final MC validation **only by an explicit Aaron
+Owner decision**, preferably when a more reliable long-run execution
+environment, or a materially better execution solution, is available. A
+reopening inherits everything above: the seals hold, the bundle is bound by
+digest, and the execution commit will have to be re-measured and re-bound
+because the gate measures it at run time.
+
+### KB note
+
+ITSF holds no knowledge-base strategy card, by the KB's own standing rule:
+*"Catalogue it once it produces its first Finding, not before"*
+(`docs/session-conventions.md` §11; `docs/state-of-play.md`). It produced no
+Finding, so it stays uncatalogued and that rule is not being reversed here.
+The KB's existing ITSF bullet was updated in place to stop describing the
+project as early-stage, and nothing else in the KB was touched.
 
 ## MC-R001 attempts — one trial, two physical attempts
 

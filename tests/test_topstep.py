@@ -301,14 +301,18 @@ def test_a_lapsed_request_changes_no_payout_state():
     assert x.cycle_net == 200.0
 
 
-def test_a_lapsed_day_still_counts_as_an_ordinary_qualifying_day():
+def test_a_lapsed_day_is_accounted_as_an_ordinary_trading_day():
     """The request-day exclusion exists because a payout RESETS the cycle.
-    With no payout there is no reset, so a winning day that happens to carry
-    a lapsed request counts exactly as any other winning day would.
+    With no payout there is no reset, so the ordinary day rules apply: the
+    net joins `cycle_net`, and the qualifying-day test is applied exactly as
+    it would be on any other day.
 
-    Constructed so the request lapses on a day that is itself a winner: a
-    $130 balance is under the $250 the minimum needs, and +$200 leaves 330 --
-    still under, so the request lapses while the day qualifies.
+    ARITHMETIC NOTE, because the name of this test used to overstate it: on
+    Topstep a lapsing day can never BE a qualifying day. Lapsing needs the
+    settled balance under $250 while entry was at or above it, so a lapsing
+    day is always a losing day, and a losing day satisfies no qualifying
+    rule. The ordinary rule is applied; its condition simply cannot be met
+    here. What is asserted below is the accounting, not a qualifying day.
     """
     x = XfaLifecycle()
     x.balance = 200.0
