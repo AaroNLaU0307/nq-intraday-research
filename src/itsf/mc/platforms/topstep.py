@@ -428,6 +428,22 @@ class XfaLifecycle:
                                 **over_budget_facts(None, 0, 0.0))
         balance_at_open = self.balance
         qual_before = self.qualifying_days
+        # ELIGIBILITY IS A PROPERTY OF THE STATE ENTERING THE SESSION, and it
+        # is captured HERE, before the day moves anything. `payout_eligible`
+        # checks "current settled state"; once this session's P&L has been
+        # applied that is no longer the state the caller decided on.
+        #
+        # Re-reading it after the fact is how MC-R001 attempt 2 died at 29h:
+        # an account entered the session eligible, had a losing day, its
+        # balance fell under $250, `min(0.5 * balance, 2000) >= 125` stopped
+        # holding, and the guard below accused the orchestrator of a bug it
+        # had not committed. The orchestrator was right; the guard was reading
+        # the wrong state.
+        #
+        # frozen: MC SS4.2 payout_policy_primary request_timing
+        # first_eligible_session -- the same reading `lucid` implements by
+        # settling eligibility at session end for the NEXT session.
+        eligible_at_open = self.payout_eligible()
         # frozen: xfa.scaling_tiers.update next_session_only — today's cap was
         # fixed at the END of the previous session; platform enforces the limit
         cap_today = self.micro_cap
@@ -441,6 +457,8 @@ class XfaLifecycle:
         day_net = 0.0
         payout_gross = 0.0
         payout_cash = 0.0
+        payout_taken = False
+        lapsed = False
         if trade is not None:
             # frozen: xfa.mll_engine.intraday_breach — realtime net P&L incl.
             # unrealized (adverse path, MC SS3) touches floor -> PERMANENT close
@@ -464,23 +482,48 @@ class XfaLifecycle:
             day_net = n * trade.final_pnl_per_contract
             self.balance += day_net
         if request_payout:
-            if not self.payout_eligible():
+            # THE CALLER'S CONTRACT, checked against the state the caller was
+            # required to decide on. A request made without entry eligibility
+            # is still a caller defect and still refuses, in this same place
+            # and with this same message.
+            if not eligible_at_open:
                 raise ValueError("payout requested while ineligible (orchestrator bug)")
             # frozen: payout_accounting — gross removed from sim balance;
             # trader cash = gross x split - rail fee (Wise $0 Primary)
-            payout_gross = min(XFA_PAYOUT_MAX_FRACTION * self.balance, XFA_PAYOUT_CAP_USD)
-            self.balance -= payout_gross
-            payout_cash = payout_gross * TRADER_SPLIT - PAYOUT_RAIL_FEE_USD
-            # frozen: xfa.mll_engine.payout_effect — MLL = 0 PERMANENTLY
-            self.floor_engine.set_floor(XFA_LOCKED_MLL_USD)
-            self.payout_count += 1
-            # frozen: payout_paths.standard.after_payout — 5-day count restarts
-            self.qualifying_days = 0
-            self.cycle_net = 0.0
-            # frozen: MC SS4.2 — request day itself NOT counted toward the
-            # next cycle (its net joins neither qualifying count nor cycle_net);
-            # NO halt: trading may continue immediately, funds already deducted
-        elif trade is not None:
+            candidate = min(XFA_PAYOUT_MAX_FRACTION * self.balance,
+                            XFA_PAYOUT_CAP_USD)
+            # LAPSE AND WAIT (Aaron, 2026-09-16, clarifying an edge the sealed
+            # wording left underspecified). The amount is `maximum_allowed` on
+            # the settled balance AFTER this session, and `payout_min_usd`
+            # stays binding. When the session's own result leaves that amount
+            # below the platform minimum there is no COMPLIANT request to
+            # make, so none is made: the request lapses, no sub-minimum payout
+            # is ever emitted, and eligibility is evaluated again normally at
+            # the next session.
+            if candidate >= XFA_PAYOUT_MIN_USD:
+                payout_taken = True
+                payout_gross = candidate
+                self.balance -= payout_gross
+                payout_cash = payout_gross * TRADER_SPLIT - PAYOUT_RAIL_FEE_USD
+                # frozen: xfa.mll_engine.payout_effect — MLL = 0 PERMANENTLY
+                self.floor_engine.set_floor(XFA_LOCKED_MLL_USD)
+                self.payout_count += 1
+                # frozen: payout_paths.standard.after_payout — 5-day count restarts
+                self.qualifying_days = 0
+                self.cycle_net = 0.0
+                # frozen: MC SS4.2 — request day itself NOT counted toward the
+                # next cycle (its net joins neither qualifying count nor
+                # cycle_net); NO halt: trading may continue immediately, funds
+                # already deducted
+            else:
+                lapsed = True
+        # A LAPSED REQUEST LEAVES AN ORDINARY TRADING SESSION BEHIND IT. The
+        # frozen rule excluding the request day from the next cycle exists
+        # because a payout RESETS that cycle; with no payout there is no reset
+        # and no reason to discard the day, so its net joins `cycle_net` and
+        # the qualifying count exactly as any other day's does. Discarding it
+        # would penalise the account for a request it was not allowed to make.
+        if not payout_taken and trade is not None:
             self.cycle_net += day_net
             # frozen: payout_paths.standard.qualifying — winning day locks EOD
             if day_net >= XFA_QUALIFYING_DAY_MIN_NET_USD:
@@ -493,6 +536,11 @@ class XfaLifecycle:
         self.micro_cap = self._tier_micros(self.balance)
         return AccountEvent(day=str(day), phase="xfa", balance=self.balance,
                             floor=self.floor_engine.floor,
+                            # A lapse is EVIDENCE, not a silent skip: the
+                            # session is the one where eligibility held and no
+                            # compliant request could be made.
+                            notes=("payout_request_lapsed_below_minimum"
+                                   if lapsed else ""),
                             payout_gross=payout_gross, payout_cash=payout_cash,
                             # AUTHORITATIVE (N02/D5-5): the day's TRADING net
                             # only. On a payout day the balance also fell by

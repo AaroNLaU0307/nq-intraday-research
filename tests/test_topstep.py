@@ -205,6 +205,184 @@ def test_xfa_payout_cap_2000_and_min_125():
         y.process_day(0, request_payout=True)
 
 
+# --- payout timing: entry eligibility, lapse-and-wait ------------------------
+#
+# THE DEFECT THESE PIN. MC-R001 attempt 2 ran 29h05m of real MC and died with
+# `ValueError: payout requested while ineligible (orchestrator bug)`. The
+# orchestrator had done exactly what the frozen policy requires -- sampled
+# eligibility from the state ENTERING the session -- and `process_day` then
+# re-evaluated the same predicate AFTER applying the session's P&L, on a
+# losing day that had taken the balance under $250. Nothing was wrong with
+# the caller; the guard was reading a state nobody had decided on.
+#
+# Owner clarification 2026-09-16 (LAPSE_AND_WAIT): eligibility entering the
+# session; amount `maximum_allowed` on the settled balance after it;
+# `payout_min_usd` stays binding; if the settled amount falls below that
+# minimum the request LAPSES with no payout and eligibility is evaluated
+# again next session.
+
+
+def _eligible_at_1000():
+    """Minimal synthetic state: five $200 winning days, nothing else.
+
+    No protected MC outcome is involved -- these are conftest trade paths.
+    """
+    x = XfaLifecycle()
+    for d in range(5):
+        x.process_day(d, make_trade_path([200.0], final=200.0))
+    assert x.qualifying_days == 5 and x.balance == 1000.0
+    assert x.payout_eligible()
+    return x
+
+
+def test_payout_on_a_winning_day_uses_the_post_session_balance():
+    """CASE 1. Eligible entering the session, profitable day: the amount is
+    `maximum_allowed` on the SETTLED balance, not the opening one."""
+    x = _eligible_at_1000()
+    ev = x.process_day(5, make_trade_path([200.0], final=200.0),
+                       request_payout=True)
+    assert ev.payout_gross == 600.0            # min(0.5 * 1200, 2000)
+    assert x.balance == 600.0
+    assert x.payout_count == 1
+
+
+def test_payout_on_a_losing_day_still_above_the_minimum_is_taken():
+    """CASE 2. The day's loss shrinks the payout but does not disqualify it.
+
+    Opening 1000 -> -500 -> settled 500 -> min(250, 2000) = 250 >= 125.
+    The amount tracks the settled balance downward, which is the whole point
+    of computing it after the session.
+    """
+    x = _eligible_at_1000()
+    ev = x.process_day(5, make_trade_path([-500.0], final=-500.0),
+                       request_payout=True)
+    assert ev.payout_gross == 250.0            # min(0.5 * 500, 2000)
+    assert x.balance == 250.0
+    assert x.payout_count == 1
+    assert ev.notes == ""
+
+
+def test_a_request_that_settles_below_the_minimum_lapses_without_paying():
+    """CASE 3 and THE REGRESSION. This is the exact class of state that
+    killed MC-R001 attempt 2 after 29 hours.
+
+    Opening 1000, eligible. The day loses 800 -> settled 200 ->
+    `min(0.5 * 200, 2000) = 100`, under the $125 platform minimum. Before the
+    repair this raised `ValueError("payout requested while ineligible
+    (orchestrator bug)")` and took the whole run down with it.
+
+    It must now lapse: no exception, no payout, and no sub-minimum amount.
+    """
+    x = _eligible_at_1000()
+    ev = x.process_day(5, make_trade_path([-800.0], final=-800.0),
+                       request_payout=True)      # must not raise
+    assert ev.payout_gross == 0.0
+    assert ev.payout_cash == 0.0
+    assert x.balance == 200.0                    # the loss, and nothing else
+    assert ev.notes == "payout_request_lapsed_below_minimum"
+    # AND THIS IS THE REPRODUCTION, stated in the test rather than implied:
+    # the SETTLED state is exactly the state the old guard re-read and
+    # rejected. Verified against the pre-repair module: it raises here.
+    assert not x.payout_eligible()
+
+
+def test_a_lapsed_request_changes_no_payout_state():
+    """The lapse is a non-event for every payout-side counter: no payout was
+    taken, so nothing a payout would have done may happen."""
+    x = _eligible_at_1000()
+    floor_before = x.floor_engine.floor
+    x.process_day(5, make_trade_path([-800.0], final=-800.0),
+                  request_payout=True)
+    assert x.payout_count == 0                   # no payout happened
+    assert x.floor_engine.floor == floor_before  # MLL not locked by a lapse
+    assert x.qualifying_days == 5                # counts NOT restarted
+    # ordinary trading session: the five winning days had accumulated 1000,
+    # and the lapsed day's -800 joins it exactly as any other day's would
+    assert x.cycle_net == 200.0
+
+
+def test_a_lapsed_day_still_counts_as_an_ordinary_qualifying_day():
+    """The request-day exclusion exists because a payout RESETS the cycle.
+    With no payout there is no reset, so a winning day that happens to carry
+    a lapsed request counts exactly as any other winning day would.
+
+    Constructed so the request lapses on a day that is itself a winner: a
+    $130 balance is under the $250 the minimum needs, and +$200 leaves 330 --
+    still under, so the request lapses while the day qualifies.
+    """
+    x = XfaLifecycle()
+    x.balance = 200.0
+    x.qualifying_days = 5
+    x.cycle_net = 0.0
+    assert not x.payout_eligible()               # entry: min(100, 2000) < 125
+    # a caller that HAS entry eligibility is the only one allowed to request;
+    # give it that, then let the session settle just under the minimum
+    x.balance = 249.0                            # min(124.5, 2000) < 125
+    assert not x.payout_eligible()
+    x.balance = 250.0                            # min(125, 2000) == 125
+    assert x.payout_eligible()                   # eligible entering
+    ev = x.process_day(9, make_trade_path([-51.0], final=-51.0),
+                       request_payout=True)      # settles 199 -> 99.5 < 125
+    assert ev.payout_gross == 0.0
+    assert ev.notes == "payout_request_lapsed_below_minimum"
+    assert x.cycle_net == -51.0
+    assert x.qualifying_days == 5                # a losing day adds none
+
+
+def test_the_next_session_re_evaluates_eligibility_normally():
+    """CASE 4. A lapse is not sticky. The account recovers and the next
+    session where eligibility holds is the payout-request session."""
+    x = _eligible_at_1000()
+    x.process_day(5, make_trade_path([-800.0], final=-800.0),
+                  request_payout=True)           # lapses, balance 200
+    assert not x.payout_eligible()               # entering the NEXT session
+    x.process_day(6, make_trade_path([400.0], final=400.0))   # no request
+    assert x.balance == 600.0
+    assert x.payout_eligible()                   # eligible again on entry
+    ev = x.process_day(7, make_trade_path([100.0], final=100.0),
+                       request_payout=True)
+    assert ev.payout_gross == 350.0              # min(0.5 * 700, 2000)
+    assert x.payout_count == 1
+
+
+def test_a_request_without_entry_eligibility_is_still_a_caller_defect():
+    """CASE 5. The guard still exists and still refuses -- it just measures
+    the state the caller was required to decide on."""
+    y = XfaLifecycle()
+    y.balance = 200.0                            # 50% = 100 < 125 minimum
+    y.qualifying_days = 5
+    assert not y.payout_eligible()
+    with pytest.raises(ValueError, match="orchestrator bug"):
+        y.process_day(0, request_payout=True)
+    # and a winning day cannot rescue an ineligible ENTRY either
+    z = XfaLifecycle()
+    z.balance = 200.0
+    z.qualifying_days = 5
+    assert not z.payout_eligible()
+    with pytest.raises(ValueError, match="orchestrator bug"):
+        z.process_day(0, make_trade_path([5000.0], final=5000.0),
+                      request_payout=True)
+
+
+def test_no_sub_minimum_payout_is_reachable_from_any_settled_balance():
+    """THE INVARIANT, swept rather than sampled: across settled balances
+    either the payout is zero or it is at least the platform minimum. A
+    payout strictly between the two is what the repair must never emit."""
+    from itsf.mc.platforms.topstep import XFA_PAYOUT_MIN_USD
+    for opening in (250.0, 300.0, 500.0, 1000.0, 4000.0):
+        for delta in (-249.0, -200.0, -100.0, -1.0, 0.0, 50.0, 500.0):
+            x = XfaLifecycle()
+            x.balance = opening
+            x.qualifying_days = 5
+            if not x.payout_eligible():
+                continue
+            ev = x.process_day(0, make_trade_path([delta], final=delta),
+                               request_payout=True)
+            assert ev.payout_gross == 0.0 or \
+                ev.payout_gross >= XFA_PAYOUT_MIN_USD, (opening, delta,
+                                                        ev.payout_gross)
+
+
 def test_xfa_cycle_net_gate_applies_only_after_first_payout():
     x = XfaLifecycle()
     x.balance = 1000.0
