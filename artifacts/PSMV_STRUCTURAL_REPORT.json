@@ -1,0 +1,326 @@
+{
+  "artifact": "R1_PSMV_STRUCTURAL_REPORT",
+  "schema": "r1_psmv_structural.v1",
+  "stage": "S1_PRE_SEAL_MECHANICAL_VALIDATION",
+  "purity_contract": "L-13: counts, booleans, dates, reason codes and digests only. The decoder read field 'ts_event' and no other. No price, return, sign, P&L, dispersion or outcome statistic exists in this artifact or in the process that produced it.",
+  "authority": {
+    "OD_1_DATA_AUTHORITY": "GRANT (R1 scope only)",
+    "INTERNAL_VALIDATION": "NOT GRANTED / NOT ACCESSED",
+    "LOCKBOX": "NOT GRANTED / NOT ACCESSED",
+    "PROTECTED_ITSF_OUTCOMES": "NOT GRANTED / NOT ACCESSED",
+    "S1_SEALED": false,
+    "S2_AUTHORIZED": false
+  },
+  "inputs": {
+    "job_dir": "C:\\Users\\Aaron\\quant-data\\databento-archive\\intraday-trend\\development_signal\\GLBX-20260727-DL3BEBCHJA",
+    "ohlcv_1m_files_verified": 139,
+    "files_digest_rollup_sha256": "320b12c4c376acd165f67176dcfb0dc03d2fbd6f74fd872dc3e6912c9577d7f1",
+    "event_calendar_sha256": "5e92ad00737339c392ed2c0927736e196e076e185897c146c884d5f515bb5e8c",
+    "symbology_csv_sha256": "85a32d44994b51e004e0c322510527aae18b70e1fadc70437e754253a2ac1850",
+    "calendar_source": "pandas_market_calendars CME_Equity",
+    "calendar_span": [
+      "2010-06-06",
+      "2021-12-31"
+    ]
+  },
+  "bar_structure": {
+    "total_bars_decoded": 3848635,
+    "et_dates_with_bars": 3586,
+    "duplicate_rth_minute_days": []
+  },
+  "session_funnel": {
+    "L0_scheduled_trading_days": 2989,
+    "minus_zero_bar_days": 20,
+    "L1_observed_rth_days": 2969,
+    "minus_scheduled_early_close_days": 85,
+    "L2_regular_full_session_candidates": 2884,
+    "minus_rth_missing_gt_10pct_days": 2,
+    "L3_structurally_eligible_days": 2882,
+    "minus_adr14_warmup_days": 14,
+    "L4_final_feature_construction_dates": 2868,
+    "side_diagnostic_complete_390_bar_rth_days": 2870,
+    "checks": {
+      "L0_minus_zero_bar_equals_L1": true,
+      "L1_minus_early_close_equals_L2": true,
+      "L2_minus_missing_gt_10pct_equals_L3": true,
+      "L3_minus_adr14_warmup_equals_L4": true,
+      "no_date_vanishes_unaccounted": true,
+      "no_rth_bars_on_unscheduled_days": true
+    }
+  },
+  "roll": {
+    "n_intervals_in_mapping": 48,
+    "n_transitions": 47,
+    "n_distinct_transition_sessions": 47,
+    "all_map_to_valid_rth_trading_day": true,
+    "all_inside_official_interval": true,
+    "is_roll_window_days_total": 235,
+    "transition_sessions": [
+      "2010-06-14",
+      "2010-09-13",
+      "2010-12-13",
+      "2011-03-14",
+      "2011-06-13",
+      "2011-09-12",
+      "2011-12-12",
+      "2012-03-13",
+      "2012-06-11",
+      "2012-09-17",
+      "2012-12-17",
+      "2013-03-12",
+      "2013-06-17",
+      "2013-09-16",
+      "2013-12-16",
+      "2014-03-17",
+      "2014-06-16",
+      "2014-09-15",
+      "2014-12-15",
+      "2015-03-16",
+      "2015-06-15",
+      "2015-09-14",
+      "2015-12-14",
+      "2016-03-14",
+      "2016-06-13",
+      "2016-09-12",
+      "2016-12-13",
+      "2017-03-13",
+      "2017-06-12",
+      "2017-09-11",
+      "2017-12-11",
+      "2018-03-12",
+      "2018-06-11",
+      "2018-09-17",
+      "2018-12-17",
+      "2019-03-11",
+      "2019-06-19",
+      "2019-09-16",
+      "2019-12-16",
+      "2020-03-18",
+      "2020-06-17",
+      "2020-09-16",
+      "2020-12-16",
+      "2021-03-17",
+      "2021-06-16",
+      "2021-09-15",
+      "2021-12-13"
+    ]
+  },
+  "event_funnel": {
+    "E0_cpi_or_nfp_calendar_events": 277,
+    "E1_minus_any_fomc_calendar_entry": {
+      "removed": 19,
+      "remaining": 258,
+      "removed_dates": [
+        "2010-10-15",
+        "2013-06-18",
+        "2013-09-17",
+        "2013-10-30",
+        "2013-12-17",
+        "2014-03-18",
+        "2014-06-17",
+        "2014-09-17",
+        "2014-12-17",
+        "2015-09-16",
+        "2015-12-15",
+        "2016-03-16",
+        "2017-03-15",
+        "2017-06-14",
+        "2017-12-13",
+        "2018-06-12",
+        "2019-10-04",
+        "2019-12-11",
+        "2020-06-10"
+      ]
+    },
+    "E2_minus_exact_roll_transition_sessions": {
+      "removed": 0,
+      "remaining": 258,
+      "removed_dates": []
+    },
+    "E3_minus_missing_required_structural_anchors": {
+      "removed": 6,
+      "remaining": 252,
+      "removed_by_reason": {
+        "adr14_warmup_insufficient_prior_complete_days": 1,
+        "anchor_missing_O_0929": 3,
+        "no_bars_on_date": 2
+      },
+      "removed_dates": [
+        "2010-06-17",
+        "2012-04-06",
+        "2015-04-03",
+        "2017-04-14",
+        "2020-04-10",
+        "2021-04-02"
+      ],
+      "removed_detail": [
+        {
+          "date_et": "2010-06-17",
+          "event_type": "CPI",
+          "weekday": "Thursday",
+          "cme_equity_scheduled": true,
+          "bars_on_et_date": 1186,
+          "first_bar_minute_et": "00:02",
+          "last_bar_minute_et": "23:55",
+          "n_rth_bars": 390,
+          "prior_complete_390_days": 8,
+          "reason": "adr14_warmup_insufficient_prior_complete_days"
+        },
+        {
+          "date_et": "2012-04-06",
+          "event_type": "NFP",
+          "weekday": "Friday",
+          "cme_equity_scheduled": true,
+          "bars_on_et_date": 275,
+          "first_bar_minute_et": "00:01",
+          "last_bar_minute_et": "09:14",
+          "n_rth_bars": 0,
+          "prior_complete_390_days": 455,
+          "reason": "anchor_missing_O_0929"
+        },
+        {
+          "date_et": "2015-04-03",
+          "event_type": "NFP",
+          "weekday": "Friday",
+          "cme_equity_scheduled": true,
+          "bars_on_et_date": 335,
+          "first_bar_minute_et": "00:00",
+          "last_bar_minute_et": "09:14",
+          "n_rth_bars": 0,
+          "prior_complete_390_days": 1190,
+          "reason": "anchor_missing_O_0929"
+        },
+        {
+          "date_et": "2017-04-14",
+          "event_type": "CPI",
+          "weekday": "Friday",
+          "cme_equity_scheduled": false,
+          "bars_on_et_date": 0,
+          "first_bar_minute_et": null,
+          "last_bar_minute_et": null,
+          "n_rth_bars": 0,
+          "prior_complete_390_days": 1699,
+          "reason": "no_bars_on_date"
+        },
+        {
+          "date_et": "2020-04-10",
+          "event_type": "CPI",
+          "weekday": "Friday",
+          "cme_equity_scheduled": false,
+          "bars_on_et_date": 0,
+          "first_bar_minute_et": null,
+          "last_bar_minute_et": null,
+          "n_rth_bars": 0,
+          "prior_complete_390_days": 2438,
+          "reason": "no_bars_on_date"
+        },
+        {
+          "date_et": "2021-04-02",
+          "event_type": "NFP",
+          "weekday": "Friday",
+          "cme_equity_scheduled": true,
+          "bars_on_et_date": 551,
+          "first_bar_minute_et": "00:00",
+          "last_bar_minute_et": "09:14",
+          "n_rth_bars": 0,
+          "prior_complete_390_days": 2681,
+          "reason": "anchor_missing_O_0929"
+        }
+      ]
+    },
+    "E4_r_init_zero_no_direction": {
+      "status": "DEFERRED_TO_S2",
+      "why": "R_init == 0 is a comparison of two bar CLOSE PRICES. Evaluating it pre-seal would require inspecting market values, which invariant L-13 forbids. PSMV therefore stops at E3, the deepest structurally decidable point."
+    },
+    "conservation_checks": {
+      "E0_minus_fomc_equals_E1": true,
+      "E1_minus_roll_transition_equals_E2": true,
+      "E2_minus_anchor_or_adr14_equals_E3": true,
+      "removed_sets_mutually_disjoint": true,
+      "no_event_vanishes_unaccounted": true,
+      "cpi_and_nfp_never_coincide": true
+    }
+  },
+  "anchor_availability": {
+    "required_anchors": {
+      "C_0829": "minute_of_day_et=509",
+      "C_0831": "minute_of_day_et=511",
+      "O_0833": "minute_of_day_et=513",
+      "O_0929": "minute_of_day_et=569"
+    },
+    "note": "presence/absence of the named BAR LOCATION only; no value of any anchor bar was read",
+    "population": "E2 (post-FOMC-exclusion, post-roll-exclusion)",
+    "population_size": 258,
+    "present": {
+      "C_0829": 256,
+      "C_0831": 256,
+      "O_0833": 256,
+      "O_0929": 253
+    },
+    "missing": {
+      "C_0829": 2,
+      "C_0831": 2,
+      "O_0833": 2,
+      "O_0929": 5
+    },
+    "missing_dates": {
+      "C_0829": [
+        "2017-04-14",
+        "2020-04-10"
+      ],
+      "C_0831": [
+        "2017-04-14",
+        "2020-04-10"
+      ],
+      "O_0833": [
+        "2017-04-14",
+        "2020-04-10"
+      ],
+      "O_0929": [
+        "2012-04-06",
+        "2015-04-03",
+        "2017-04-14",
+        "2020-04-10",
+        "2021-04-02"
+      ]
+    },
+    "adr14_availability": {
+      "rule": "ADR14 exists iff >= 14 complete-390-bar RTH days precede the event date (value never computed)",
+      "unavailable": 1,
+      "unavailable_dates": [
+        "2010-06-17"
+      ]
+    }
+  },
+  "pre_seal_structural_n": 252,
+  "post_seal_signal_defined_n": null,
+  "balance_at_pre_seal_structural_n": {
+    "per_year": {
+      "2010": 11,
+      "2011": 24,
+      "2012": 23,
+      "2013": 20,
+      "2014": 20,
+      "2015": 21,
+      "2016": 23,
+      "2017": 20,
+      "2018": 23,
+      "2019": 22,
+      "2020": 22,
+      "2021": 23
+    },
+    "per_epoch": {
+      "2010-2013": 78,
+      "2014-2017": 84,
+      "2018-2021": 90
+    },
+    "per_micro_era": {
+      "counterfactual_micro_execution": 194,
+      "actual_micro_available_era": 58
+    },
+    "per_event_type": {
+      "NFP": 134,
+      "CPI": 118
+    }
+  }
+}
