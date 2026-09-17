@@ -65,9 +65,16 @@ def _env() -> dict[str, str]:
 def main() -> int:
     seal = json.loads(SEAL_FILE.read_text(encoding="utf-8"))
     content_commit = seal["CONTENT_COMMIT"]
-    attestation_commit = _git("rev-list", "-1", "--all",
-                              "--grep=SEAL_ATTESTATION_COMMIT", "--", ".") \
-        or _git("rev-parse", "r1-s1-sealed^{commit}")
+    # Resolved from the SEAL TAG, not by searching commit messages: a later
+    # commit that merely MENTIONS the attestation must never be mistaken for it.
+    # (An earlier version of this tool grepped, and picked up the ledger-record
+    # commit the moment one existed.)
+    attestation_commit = _git("rev-parse", "r1-s1-sealed^{commit}")
+    parent = _git("rev-parse", f"{attestation_commit}^")
+    if parent != content_commit:
+        print(f"FAIL  the seal tag's parent is {parent[:12]}, but the "
+              f"attestation records CONTENT_COMMIT {content_commit[:12]}")
+        return 1
 
     failures = 0
     with tempfile.TemporaryDirectory(prefix="r1-seal-snapshot-") as tmp:

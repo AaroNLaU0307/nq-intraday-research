@@ -173,3 +173,17 @@ def test_ledger_changes_no_scientific_constant(contract):
     tree = ast.parse(inspect.getsource(ledger))
     names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
     assert not {"k", "entry_minute", "exit_minute", "materiality_m_usd"} & names
+
+
+def test_seal_snapshot_resolves_the_attestation_by_tag_not_by_grep():
+    """A later commit that MENTIONS the attestation is not the attestation.
+
+    The first version of tools/validate_seal_snapshot.py searched commit
+    messages and picked up the ledger-record commit as soon as one existed,
+    turning a clean PASS into a FAIL. It now resolves the tag and checks that
+    its parent is the CONTENT_COMMIT.
+    """
+    src = (PROJECT_ROOT / "tools" / "validate_seal_snapshot.py").read_text(
+        encoding="utf-8")
+    assert "--grep=SEAL_ATTESTATION_COMMIT" not in src
+    assert 'rev-parse", "r1-s1-sealed^{commit}"' in src
