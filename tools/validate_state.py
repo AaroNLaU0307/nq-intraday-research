@@ -23,6 +23,28 @@ This file checks what matters now:
      append-safe;
   4. the post-seal artifacts, the Development adapter and A1 are in place.
 
+**LIFECYCLE AWARENESS.** The stage-dependent assertions used to be hard-coded to
+S2-era truths -- "no outcome exists", "the trial is not consumed", "the reveal is
+not granted". Those were correct at S2 and became FALSE the moment Aaron
+authorized S3-B and then the S4 reveal, so the tool reported legitimate progress
+as failure. The stage is now DERIVED FROM THE OPERATIONAL LEDGER -- the
+append-only hash chain, which is the authoritative record of what actually
+happened -- and each stage asserts its own invariants:
+
+    S2            no RUN_STARTED        -> trial NOT consumed, NO outcome file
+    S3B_CONSUMED  RUN_STARTED           -> trial consumed, EXACTLY ONE run and
+                                           EXACTLY ONE outcome bundle
+    S4_REVEALED   REVEALED              -> reveal granted and recorded
+    S4_CLOSED     VERDICT_CLOSED        -> verdict recorded, lifecycle STOP
+
+Nothing is weakened to get green. The post-run stages assert STRICTLY MORE than
+the pre-run stage did: "no outcome exists" is replaced by "exactly one outcome
+exists, and its bytes still hash to the digest the receipt recorded", which is
+the invariant that actually protects an immutable result.
+
+This tool reads NO outcome value. It hashes the bundle and reads counts and
+identity fields; it never opens the payload records.
+
 Run:  python tools/validate_state.py
 """
 from __future__ import annotations
@@ -42,6 +64,55 @@ from r1.invariants import (scan_no_duplicated_constants,     # noqa: E402
                            scan_no_release_time_inference,
                            verify_l13_still_holds)
 from r1.power_gate import prove_gate_independence            # noqa: E402
+
+#: Sealed verdict enums, mirrored here for validation only. This tool asserts
+#: that a recorded verdict is one of the legal values; it never decides one.
+LEGAL_AXIS1 = ("PREDICTIVE_EFFECT_SUPPORTED_ON_SAMPLE",
+               "PREDICTIVE_EFFECT_EXCLUDED_AT_MATERIALITY_M",
+               "PREDICTIVE_EFFECT_UNRESOLVED", "PARKED")
+LEGAL_AXIS2 = ("MECHANISM_SPECIFICITY_ESTABLISHED",
+               "MECHANISM_SPECIFICITY_NOT_ESTABLISHED")
+LEGAL_VERDICTS = ("SUPPORTED", "FALSIFIED", "INSUFFICIENT_EVIDENCE", "PARKED")
+
+
+def lifecycle_stage(entries) -> str:
+    """Derive the stage from the append-only ledger, never from prose.
+
+    The ledger is the authoritative record of what happened. PROJECT_STATE.md is
+    a description of it, and a description can drift; the chain cannot, because
+    every entry commits to its parent.
+    """
+    events = {e.event for e in entries}
+    if "VERDICT_CLOSED" in events:
+        return "S4_CLOSED"
+    if "REVEALED" in events:
+        return "S4_REVEALED"
+    if "RUN_STARTED" in events:
+        return "S3B_CONSUMED"
+    if "POWER_GATE_EXECUTED" in events:
+        return "S3A"
+    return "S2"
+
+
+def parse_state_block(text: str) -> dict[str, str]:
+    """Read PROJECT_STATE.md's fenced state block into {KEY: value}.
+
+    Continuation lines are folded into the value they belong to, so a wrapped
+    field is read as one value rather than silently truncated.
+    """
+    m = re.search(r"^```\n(.*?)^```", text, re.S | re.M)
+    body = m.group(1) if m else text
+    fields: dict[str, str] = {}
+    key: str | None = None
+    for line in body.splitlines():
+        head = re.match(r"^([A-Z][A-Z0-9_]*(?:\s*\u00b7\s*[A-Z]+)?)\s*=\s*(.*)$", line)
+        if head:
+            key = head.group(1).split("\u00b7")[0].strip()
+            fields[key] = head.group(2).strip()
+        elif key and line.strip():
+            fields[key] += " " + line.strip()
+    return fields
+
 
 failures: list[str] = []
 notes: list[str] = []
@@ -67,24 +138,101 @@ def main() -> int:
     check("sealed n is 252", contract.pre_seal_structural_n == 252)
     check("sealed k is 1", contract.k == 1)
 
-    # ---- 2. current stage state --------------------------------------
-    for phrase, why in (
-            ("STAGE                = S2 BUILD (COMPLETE)", "stage"),
-            ("S1                   = SEALED", "S1 sealed"),
-            ("S3_RUN               = NOT AUTHORIZED", "S3 not authorized"),
-            ("OD3_POWER_GATE       = NOT RUN", "gate not run"),
-            ("R1_OUTCOME           = NOT COMPUTED", "no outcome"),
-            ("TRIAL_CONSUMED       = NO", "trial not consumed"),
-            ("INTERNAL_VALIDATION  = NOT GRANTED", "IV not granted"),
-            ("LOCKBOX              = NOT GRANTED", "Lockbox not granted"),
-            ("OUTCOME_REVEAL       = NOT GRANTED", "reveal not granted"),
-            ("R1_OUTCOME_EXPOSURE  = NONE", "no exposure")):
-        check(f"state: {why}", phrase in state, phrase.split("=")[0].strip())
+    # ---- 2. current stage state, ASSERTED AGAINST THE LEDGER ----------
+    from r1.ledger import LEDGER_FILE                        # noqa: PLC0415
+    from r1.ledger import verify_chain as _verify_chain      # noqa: PLC0415
+    entries = _verify_chain(ROOT / LEDGER_FILE)
+    stage = lifecycle_stage(entries)
+    fields = parse_state_block(state)
+    check("lifecycle stage derived from the operational ledger", True,
+          f"{stage} ({len(entries)} ledger entries)")
 
-    # ---- 3. no real outcome exists anywhere in the repository --------
-    run_dirs = [p for p in ROOT.rglob("sealed_r1_outcome.json")]
-    check("no sealed R1 outcome file exists in the repository",
-          not run_dirs, "; ".join(str(p) for p in run_dirs[:3]))
+    # Invariant at EVERY stage: the seal stands and no authority was widened.
+    for key, want, why in (
+            ("S1", "SEALED", "S1 sealed"),
+            ("INTERNAL_VALIDATION", "NOT GRANTED", "IV not granted"),
+            ("LOCKBOX", "NOT GRANTED", "Lockbox not granted"),
+            ("PROTECTED_ITSF_OUTCOMES", "NOT GRANTED", "ITSF outcomes not granted")):
+        check(f"state: {why}", fields.get(key, "").startswith(want),
+              f"{key} = {fields.get(key, '<missing>')[:48]}")
+
+    # Stage-dependent. Each stage asserts ITS OWN truth, never a stale one.
+    if stage == "S2":
+        for key, want, why in (
+                ("TRIAL_CONSUMED", "NO", "trial not consumed"),
+                ("OUTCOME_REVEAL", "NOT GRANTED", "reveal not granted"),
+                ("R1_OUTCOME_EXPOSURE", "NONE", "no exposure")):
+            check(f"state[S2]: {why}", fields.get(key, "").startswith(want),
+                  f"{key} = {fields.get(key, '<missing>')[:48]}")
+    else:
+        check("state[post-run]: trial consumed",
+              fields.get("TRIAL_CONSUMED", "").startswith("YES"),
+              fields.get("TRIAL_CONSUMED", "<missing>")[:48])
+
+    if stage in ("S4_REVEALED", "S4_CLOSED"):
+        check("state[revealed]: reveal granted",
+              fields.get("OUTCOME_REVEAL", "").startswith("GRANTED"),
+              fields.get("OUTCOME_REVEAL", "<missing>")[:48])
+        check("state[revealed]: exposure records the reveal",
+              "REVEALED" in fields.get("R1_OUTCOME_EXPOSURE", "").upper(),
+              fields.get("R1_OUTCOME_EXPOSURE", "<missing>")[:48])
+
+    if stage == "S4_CLOSED":
+        verdict_file = ROOT / "artifacts" / "R1_S4_VERDICT.json"
+        check("state[closed]: the S4 verdict artifact exists", verdict_file.exists())
+        if verdict_file.exists():
+            v = json.loads(verdict_file.read_text(encoding="utf-8"))
+            # Final-state ENUMS only -- no outcome value is read here.
+            check("state[closed]: Axis-1 verdict is a legal sealed enum",
+                  v.get("axis_1", {}).get("verdict") in LEGAL_AXIS1,
+                  str(v.get("axis_1", {}).get("verdict")))
+            check("state[closed]: Axis-2 verdict is a legal sealed enum",
+                  v.get("axis_2", {}).get("verdict") in LEGAL_AXIS2,
+                  str(v.get("axis_2", {}).get("verdict")))
+            check("state[closed]: final verdict is a legal research verdict",
+                  v.get("final_research_verdict") in LEGAL_VERDICTS,
+                  str(v.get("final_research_verdict")))
+            # PROJECT_STATE must AGREE with the durable artifact, not drift.
+            check("state[closed]: PROJECT_STATE Axis-1 agrees with the artifact",
+                  fields.get("AXIS_1", "").startswith(
+                      str(v.get("axis_1", {}).get("verdict"))),
+                  fields.get("AXIS_1", "<missing>")[:48])
+            check("state[closed]: PROJECT_STATE final verdict agrees with the artifact",
+                  fields.get("R1_FINAL_VERDICT", "").startswith(
+                      str(v.get("final_research_verdict"))),
+                  fields.get("R1_FINAL_VERDICT", "<missing>")[:48])
+        check("state[closed]: lifecycle is STOP",
+              "STOP" in fields.get("R1_LIFECYCLE", "").upper()
+              or "STOP" in fields.get("STAGE", "").upper(),
+              fields.get("R1_LIFECYCLE", fields.get("STAGE", "<missing>"))[:48])
+
+    # ---- 3. outcome existence, stage-appropriate ----------------------
+    # Pre-run: none may exist. Post-run: EXACTLY ONE must exist and its bytes
+    # must still hash to the digest the receipt recorded. The second assertion
+    # is strictly stronger than the first -- it is what protects immutability.
+    bundles = sorted(ROOT.rglob("sealed_r1_outcome.json"))
+    if stage == "S2":
+        check("no sealed R1 outcome file exists in the repository",
+              not bundles, "; ".join(str(p) for p in bundles[:3]))
+    else:
+        check("exactly one sealed R1 outcome file exists",
+              len(bundles) == 1, "; ".join(str(p) for p in bundles[:3]))
+        run_dirs = [p for p in (ROOT / "runs").iterdir() if p.is_dir()] \
+            if (ROOT / "runs").exists() else []
+        check("exactly one real run directory exists",
+              len(run_dirs) == 1, "; ".join(p.name for p in run_dirs))
+        receipt = ROOT / "artifacts" / "R1_S3B_OUTCOME_RECEIPT.json"
+        check("the outcome receipt exists", receipt.exists())
+        if receipt.exists() and len(bundles) == 1:
+            r = json.loads(receipt.read_text(encoding="utf-8"))
+            check("outcome bundle bytes still match the recorded file digest",
+                  sha256_file(bundles[0]) == r["outcome_file_sha256"],
+                  r["outcome_file_sha256"][:16])
+            check("outcome bundle identity bindings match the seal",
+                  r["identity_bindings"]["CONTENT_COMMIT"] == seal["CONTENT_COMMIT"])
+            check("exactly one run was executed",
+                  r["execution"]["runs_executed"] == 1,
+                  str(r["execution"]["runs_executed"]))
 
     # ---- 4. the engine's own guards ----------------------------------
     check("L-3 scan clean", scan_no_release_time_inference() == ())
@@ -109,19 +257,24 @@ def main() -> int:
           len(re.findall(r"state: S2 NOT AUTHORIZED", sealed_validator)) == 1)
 
     # ---- 6. registry immutability and the operational ledger ---------
-    from r1.ledger import (LEDGER_FILE, assert_sealed_registry_unchanged,
-                           current_digest, verify_chain)
+    from r1.ledger import (assert_sealed_registry_unchanged,  # noqa: PLC0415
+                           current_digest)
     assert_sealed_registry_unchanged(contract)
     check("sealed trial registry is byte-identical", True,
           contract.trial_registry_sha256[:16])
     check("operational ledger is OUTSIDE the sealed digest set",
           LEDGER_FILE not in seal["sealed_digests"])
-    entries = verify_chain(ROOT / LEDGER_FILE)
     check("operational ledger chain verifies",
           entries[0].event == "GENESIS" and len(entries) >= 2,
           f"{len(entries)} entries, head {current_digest(ROOT / LEDGER_FILE)[:12]}")
-    check("RUN_STARTED has NOT been appended -- the trial is not consumed",
-          not any(e.event == "RUN_STARTED" for e in entries))
+    n_started = sum(1 for e in entries if e.event == "RUN_STARTED")
+    if stage == "S2":
+        check("RUN_STARTED has NOT been appended -- the trial is not consumed",
+              n_started == 0)
+    else:
+        # Stronger than the pre-run assertion: one run, and never a second.
+        check("RUN_STARTED appears EXACTLY ONCE -- one trial, never a second",
+              n_started == 1, f"{n_started} occurrence(s)")
 
     # ---- 7. post-seal interpretation artifacts -----------------------
     errata = ROOT / "R1_SEALED_ERRATA.md"

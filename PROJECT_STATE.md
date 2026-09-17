@@ -10,7 +10,19 @@ RESEARCH_QUESTION    = After a public scheduled information release, and after a
                        realistically executable decision delay, does economically
                        meaningful directional price adjustment remain in NQ?
 RESEARCH_ID · LANE   = R1 · FULL
-STAGE                = S3-B COMPLETE (one governed Primary run); OUTCOME SEALED
+STAGE                = S4 COMPLETE — outcome revealed, deterministic verdict
+                       recorded, R1 lifecycle STOP
+R1_LIFECYCLE         = STOP
+S3A                  = CLOSED
+S3B                  = CLOSED
+S4                   = COMPLETE
+R1_OUTCOME_REVEALED  = YES
+INTERNAL_VALIDATION_ACCESSED = NO
+LOCKBOX_ACCESSED     = NO
+POST_RESULT_RESEARCH = NONE
+R1_RESEARCH_REOPEN_ALLOWED = NO  (only an explicit future Aaron new-lineage
+                       decision, under a new seal and a new sample — never a
+                       reopening of R1)
 S0                   = CLOSED  (Owner decision: RESEARCH — see R1_S0_PROVENANCE.md)
 S1                   = SEALED  (r4, 2026-09-17)
 PREREG_SEALED        = YES
@@ -39,8 +51,10 @@ DATA_GRANT           = OD-1 GRANT, R1 scope only:
 INTERNAL_VALIDATION  = NOT GRANTED   (and not present on this machine)
 LOCKBOX              = NOT GRANTED   (and not present on this machine)
 PROTECTED_ITSF_OUTCOMES = NOT GRANTED
-OUTCOME_REVEAL       = NOT GRANTED
-R1_OUTCOME_EXPOSURE  = NONE
+OUTCOME_REVEAL       = GRANTED 2026-09-18 by Aaron, for the EXISTING
+                       R1-S3B-001 bundle only (ledger seq 10)
+R1_OUTCOME_EXPOSURE  = REVEALED 2026-09-18 under Owner authorization
+                       (ledger seq 11). No additional trial consumed.
 TRIAL_ACCOUNTING     = R1_TRIAL_REGISTRY.md  (separate R1 lineage; the ITSF
                        registry at C:\Users\Aaron\quant-data\itsf-registry is
                        referenced by identity and is NEVER mutated)
@@ -53,8 +67,8 @@ IS_SEALED_COMMIT     = NO   (the seal is a separate Aaron Owner act)
 OPEN_MATERIAL_BLOCKERS = NONE
 OPEN_PRE_SEAL_ITEMS  = P-5 only (cost residual, NON-BLOCKING). P-1..P-4, P-7
                        and P-8 are CLOSED; P-6 is not applicable yet.
-S2                   = BUILD COMPLETE 2026-09-17 (authorized by Aaron:
-                       implementation + synthetic validation ONLY)
+S2                   = CLOSED  (BUILD COMPLETE 2026-09-17, authorized by
+                       Aaron: implementation + synthetic validation ONLY)
 S3A_POWER_GATE       = COMPLETE 2026-09-18 (real data, outcome-blind)
                        E4_COUNT = 6 -> POST_SEAL_SIGNAL_DEFINED_N = 246
                        s_hat = $28.2082/MNQ (C2 dispersion, 2331 non-event days)
@@ -70,14 +84,29 @@ OD3_POWER_GATE       = RUN 2026-09-18 (pre-reveal, outcome-blind)
 S3B_PRIMARY_RUN      = COMPLETE 2026-09-18, RUN_ID R1-S3B-001, executed once
 RUN_STARTED          = YES (operational ledger seq 8)
 TRIAL_CONSUMED       = YES  (SAMPLE_FORMAL_TRIAL_ORDINAL = 2, consumed)
-R1_OUTCOME           = COMPUTED AND SEALED -- NOT REVEALED, NOT INSPECTED
+R1_OUTCOME           = COMPUTED, SEALED, AND REVEALED 2026-09-18 under
+                       explicit Owner authorization. Bundle unchanged.
 SEALED_OUTCOME       = runs/R1-S3B-001/sealed_r1_outcome.json
                        sha256 f6ca60e2dee7bb3c3c810fc8fe459d42449008ee12c9e331aefea75a16e5dd6e
 OUTCOME_RECEIPT      = artifacts/R1_S3B_OUTCOME_RECEIPT.json
 RUN_IDENTITY         = artifacts/R1_S3B_RUN_IDENTITY.json
-BUILDER_OUTCOME_BLIND= YES
-REVEAL_AUTHORIZATION = PENDING (Aaron only)
-S4_VERDICT           = NOT YET HUMAN-REVIEWED
+BUILDER_OUTCOME_BLIND= NO LONGER — blindness held through S3-B and was ended
+                       only by the authorized S4 reveal
+REVEAL_AUTHORIZATION = GRANTED (Aaron), executed 2026-09-18
+S4_VERDICT           = COMPLETE — artifacts/R1_S4_VERDICT.json
+AXIS_1               = PREDICTIVE_EFFECT_UNRESOLVED
+AXIS_2               = MECHANISM_SPECIFICITY_NOT_ESTABLISHED (non-confirmatory)
+R1_FINAL_VERDICT     = INSUFFICIENT_EVIDENCE   (KB claim_status: unresolved)
+FAILURE_TYPE         = INSUFFICIENT_EVIDENCE_LOW_POWER
+PRIMARY_RESULT       = Base mean Y_net = -$8.768455 per event per 1 MNQ, n=246,
+                       95% bootstrap [-13.920945, -4.107835], half-width 4.9066,
+                       M = $3.99. Interval entirely below M AND below zero, but
+                       the sealed exclusion rule also requires half-width < M,
+                       which FAILS — so this is NOT a falsification.
+RERESEARCH_ELIGIBILITY = CONDITIONAL — new lineage / new seal / new sample only.
+                       No same-sample or parameter re-testing of this rule.
+KB_FINDING           = artifacts/R1_S4_KB_FINDING_PROPOSAL.yaml (PROPOSAL only;
+                       no KB registry card created — that is an Owner act)
 ENGINE               = r1/ (22 modules) + tests/ (264 tests, all passing)
                        See S2_BUILD_REPORT.md (r2, after bounded repair).
 S2_CODE_COMMIT       = 433e2cc035391ec73c5c94135ad9cf6afaca746e
@@ -96,11 +125,48 @@ SEALED_ERRATA        = R1_SEALED_ERRATA.md (post-seal, descriptive only)
 VALIDATION           = SEAL_SNAPSHOT_VALIDATION = PASS (seal-time context)
                        CURRENT_STATE_VALIDATION = PASS (tools/validate_state.py)
                        S2_TEST_SUITE            = PASS
-CURRENT_NEXT_ACTION  = S3-B — COMPLETE AND STOPPED HERE. The outcome exists,
-                       sealed and unread. Nothing further may run: no rerun
-                       (the trial is consumed), no reveal, no S4 verdict.
-NEXT_OWNER_DECISION  = authorize the outcome reveal / S4 verdict review, or do
-                       not
+CURRENT_NEXT_ACTION  = NONE. R1 is CLOSED at STOP. The trial is consumed, the
+                       outcome is revealed and the verdict is recorded. No
+                       rerun, no re-test of this rule on this sample, no
+                       parameter or window variation, no CPI/NFP promotion, no
+                       rescue analysis. FOMC remains separately DEFERRED and was
+                       never tested by R1.
+NEXT_OWNER_DECISION  = whether to catalogue the KB Finding proposal, and whether
+                       to open a NEW lineage for a genuinely distinct mechanism
+                       or subspace (powered on EVENT-DAY dispersion, not
+                       control-day dispersion)
+
+PERMANENT_RESIDUALS  = two, both NON-BLOCKING, both preserved rather than fixed:
+  OUTCOME_SCHEMA_LABEL_DEFECT
+                       the sealed bundle field `mean_y_net_usd` holds -10.268455,
+                       which is the CONSERVATIVE point estimate. The true Base
+                       mean, reconstructed from the immutable Base records, is
+                       -8.768455; the $1.50 gap is the Base→Conservative flat
+                       round-turn differential (r1/pipeline.py:176). A LABEL
+                       defect — no stored value is wrong and the deterministic
+                       verdict is unchanged. The sealed outcome bundle is NOT
+                       edited, replaced or regenerated.
+  AXIS2_EVIDENCE_PROVENANCE_GAP
+                       the bundle stores MECHANISM_SPECIFICITY_NOT_ESTABLISHED
+                       but does not persist D or its 95% interval, and the engine
+                       returns NOT_ESTABLISHED both when D is absent and when its
+                       lower bound ≤ 0. The Axis-2 STATUS is determinate under
+                       either branch; the underlying statistic cannot be
+                       independently reconstructed. Rerunning is forbidden, so
+                       the gap is permanent. Axis 2 is non-confirmatory and could
+                       not have created Primary support in any case.
+VALIDATOR_STATUS     = tools/validate_state.py REPAIRED at closeout — now
+                       LIFECYCLE-AWARE. The stage is derived from the append-only
+                       operational ledger, and each stage asserts its own
+                       invariants instead of S2-era pre-run truths. Nothing was
+                       weakened: the post-run stage asserts strictly MORE than the
+                       pre-run stage did (exactly one run, exactly one bundle,
+                       bundle bytes still hash to the recorded digest, verdict
+                       enums legal, PROJECT_STATE agrees with the durable
+                       artifact). tools/ is outside the frozen r1/*.py rollup, so
+                       the S2 executable identity is untouched; no scientific rule
+                       changed and the validator reads no outcome value.
+                       CURRENT_STATE_VALIDATION = PASS (60 passed, 0 failed).
 ```
 
 ## What this project is, in one paragraph
@@ -128,7 +194,9 @@ different question about the 09:30–10:00 opening drive.
 | `artifacts/R1_S3A_POWER_GATE.json` | the S3-A power-gate artifact — outcome-free |
 | `artifacts/R1_S3B_RUN_IDENTITY.json` | the one real run identity |
 | `artifacts/R1_S3B_OUTCOME_RECEIPT.json` | the outcome receipt — no result values |
-| `runs/R1-S3B-001/sealed_r1_outcome.json` | **SEALED R1 OUTCOME — do not open without an Owner-authorized reveal** |
+| `runs/R1-S3B-001/sealed_r1_outcome.json` | **SEALED R1 OUTCOME — revealed 2026-09-18 under Owner authorization; immutable, never regenerate** |
+| `artifacts/R1_S4_VERDICT.json` | the S4 deterministic verdict record |
+| `artifacts/R1_S4_KB_FINDING_PROPOSAL.yaml` | KB-ready Finding **proposal** — not a registry card |
 | `S2_BUILD_REPORT.md` | the S2 build record |
 | `R1_TRIAL_REGISTRY.md` | R1's own trial/exposure identity |
 | `psmv/psmv_structural.py` | the pre-seal structural reader (L-13 constrained) |

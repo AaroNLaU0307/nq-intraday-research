@@ -1,0 +1,145 @@
+# R1 S4 -- KB-READY FINDING PROPOSAL (proposal only; not written into the KB registry)
+#
+# STATUS        : PROPOSAL. Cataloguing a card into quant-research-knowledge-base/registry/findings/
+#                 is an Owner act and is NOT performed by this S4 session.
+# SCHEMA        : validated by hand against quant-research-knowledge-base/schemas/finding.schema.yaml
+# SCHEMA GAP    : NONE. claim_status `unresolved` is a legal enum value and is the exact mapping the
+#                 sealed engine emits (r1.verdict.KB_STATUS[PREDICTIVE_EFFECT_UNRESOLVED] == "unresolved").
+#                 The strong NEGATIVE evidence is preserved in effect_size / confidence_interval /
+#                 limitations / notes rather than being flattened into the label. It is deliberately
+#                 NOT filed as `not_promoted` (which would understate the negative point estimate) and
+#                 NOT as `contradicted` (the sealed precision requirement for exclusion was not met).
+# G3 source_files non-empty                    : OK
+# G4 evidence_type preregistered_primary       : OK (claim_status is not `confirmed`)
+# G6 contradicted_by required only if contradicted : N/A
+# G7 all source_files exist under source_repository : verified at write time
+
+id: finding.nq-event-diffusion.r1-cpi-nfp-continuation-unresolved
+claim: >
+  A preregistered, sealed, once-only test of scheduled-release information-diffusion continuation in
+  NQ -- enter at O(08:33) in the direction of the 08:29-to-08:31 initial reaction, exit at O(09:29),
+  k=1, CPI and NFP only -- is UNRESOLVED at the sealed materiality of $3.99 per event per MNQ: the
+  Base point estimate is NEGATIVE at -$8.77 per event and the entire 95% interval lies below zero,
+  but the sealed exclusion rule additionally requires a CI half-width below M and the realized
+  half-width ($4.91) exceeds it, so an effect of size >= M is not excluded with the prespecified
+  precision and the rule is not falsified either.
+claim_status: unresolved
+evidence_type: preregistered_primary
+strategy_ids: []
+factor_ids: []
+source_repository: "nq-event-diffusion-research"
+source_files:
+  - R1_S1_PREREGISTRATION_SEALED.md
+  - runs/R1-S3B-001/sealed_r1_outcome.json
+  - artifacts/R1_S3B_OUTCOME_RECEIPT.json
+  - artifacts/R1_S3B_RUN_IDENTITY.json
+  - artifacts/R1_S3A_POWER_GATE.json
+  - artifacts/R1_S4_VERDICT.json
+  - R1_EXECUTION_LEDGER.md
+source_sections:
+  - "R1_S1_PREREGISTRATION_SEALED.md#C.1 initial reaction and signal"
+  - "R1_S1_PREREGISTRATION_SEALED.md#C.2 support and exclusion rule"
+  - "R1_S1_PREREGISTRATION_SEALED.md#I.3 power gate and half-width resolution"
+  - "R1_S1_PREREGISTRATION_SEALED.md#M.1 sealed verdict guards"
+  - "R1_S1_PREREGISTRATION_SEALED.md#R.2 prop-constraint treatment"
+  - "artifacts/R1_S4_VERDICT.json#primary_guards"
+sample_period: >
+  NQ (MNQ, $2 per index point), CPI and NFP scheduled releases only, 2010-07-02 to 2021-12-10,
+  Development sample. 252 structurally eligible events; 6 removed by the prespecified E4 rule
+  (R_init exactly zero, so no direction is defined); n = 246 signal-defined events. FOMC was
+  excluded by design and was never tested.
+test_statistic: >
+  Sealed stationary block bootstrap: expected block 5 events, 10,000 resamples per seed, seeds
+  {7,13,31} pooled to 30,000 resample means, two-sided 95% percentile interval. Realized event-day
+  sd = $49.48, SE = $3.15, CI half-width = $4.906555 against materiality M = $3.99. Guards:
+  PRIMARY_INTERVAL_GATE FAIL (CI_lower -13.92 not > 3.99); EXCLUSION_PRECISION_GATE FAIL
+  (upper -4.11 < M is TRUE, but half-width 4.91 < M is FALSE -- the binding failure);
+  CONSERVATIVE_SURVIVAL FAIL (-10.27 not > 0); A1_GUARD PASS (sign holds, 126/246 members);
+  C1_GUARD NOT RECOVERABLE (not persisted; verdict shown invariant to both of its values).
+effect_size: >
+  Base (primary sealed cost scenario, $3.99 round-turn): mean Y_net = -$8.768455 per event per 1 MNQ
+  = -4.384 NQ index points. Conservative ($5.49 RT): -$10.268455. Stress ($6.24 RT): -$11.018455.
+  Severe ($6.74 RT): -$11.518455. Median -$4.74; win rate 98/246 = 39.84%; min -$400.49, max +$252.51;
+  cumulative -$2,157.04 over the 246 events. At ~21.5 events/year this is about -$188.53 per year per
+  1 MNQ against a materiality bar of about +$85.79 per year.
+confidence_interval: >
+  95% pooled stationary-block bootstrap on mean Base Y_net = [-$13.920945, -$4.107835]. Entirely
+  below the materiality threshold M = $3.99 AND entirely below zero. Half-width $4.906555 > M, which
+  is why the sealed design cannot convert this into exclusion. The interval was independently
+  recomputed at S4 from the 246 sealed outcome records and reproduces the stored interval exactly.
+multiple_testing_status: >
+  Lineage R1, SAMPLE_FORMAL_TRIAL_ORDINAL = 2, one and only one Primary run (RUN_ID R1-S3B-001,
+  runs_executed = 1). Inherited researcher exposure count 1575 from prior lineage ITSF S0-T001.
+  No subgroup search, no parameter sweep, no seed selection: a single prespecified rule, tested once.
+limitations:
+  - >
+    UNDERPOWERED FOR FALSIFICATION, not for direction. The OD-3 pre-run power gate sized the study on
+    the dispersion of NON-EVENT control days (s_hat = $28.21), which understated realized event-day
+    dispersion ($49.48, about 1.75x) and projected a half-width of ~$3.53 when the realized value was
+    $4.91. The gate therefore cleared on a precision the Primary never achieved. The OD-3 decision was
+    made before any outcome existed and altered no sealed design element.
+  - >
+    E4 removed 6 of 252 events (R_init exactly zero). This is prespecified and outcome-blind, but it
+    means n = 246 rather than 252.
+  - >
+    The 2025-Q1 spread proxy applied to earlier pre-open history remains a disclosed cost-model
+    limitation (sealed residual P-5). It was deliberately not resolved by a data purchase before the seal.
+  - >
+    Axis-2 mechanism specificity is NOT ESTABLISHED, but the D statistic and its interval were not
+    persisted in the sealed bundle. The engine returns NOT_ESTABLISHED both when D is absent and when
+    its 95% lower bound is <= 0, so the verdict is determinate while it cannot be independently reconstructed
+    without a rerun, which is forbidden.
+  - >
+    C1_clears_m, the vol-tercile / era / micro-era / event-type disclosures and the A1 per-event
+    membership list were not persisted in the sealed bundle and cannot be reported from it.
+  - >
+    A bundle FIELD-LABEL defect exists: payload["mean_y_net_usd"] carries the Conservative arm point
+    estimate, not the Base mean (r1/pipeline.py:176). No stored value is wrong and the verdict is
+    unaffected, but a naive reader of that field would misreport the Primary by $1.50 per event.
+  - >
+    Scope is bounded to CPI + NFP, NQ, the 08:33 to 09:29 window, this Development sample and this
+    sealed rule. Nothing here extrapolates to FOMC, other instruments, other horizons or other
+    entry/exit choices.
+contradicted_by: []
+notes: >
+  FAILURE TYPE: INSUFFICIENT_EVIDENCE_LOW_POWER. The binding constraint is the sealed precision
+  requirement for exclusion, not the direction of the estimate. Read the two facts together and keep
+  them apart: (1) on this sample the rule LOST money under every sealed cost scenario, with the whole
+  95% interval below zero -- that is real negative evidence and it should not be softened; (2) the
+  sealed contract still refuses to call an effect of size >= M excluded, because the half-width bar
+  was not met -- so this is NOT a falsification and must not be catalogued as one.
+  PROP FEASIBILITY, reported per sealed R.2 as a feasibility fact and not a strategy result: maximum
+  adverse excursion per event per 1 MNQ has median -$13.25, p90 -$81.25, p99 -$199.45 and worst
+  -$485.75 (2021-03-05); at ONE micro, 0 of 246 events breach either the $1,000 DLL or the $2,000
+  trailing MLL of a 50k prop account, while 7.72% of events exceed $100 of adverse excursion.
+  Excursion feasibility is therefore not the blocker -- the negative Primary is.
+  RE-RESEARCH ELIGIBILITY: CONDITIONAL. Forbidden: any re-test of this rule on this sample, any
+  window/parameter/cost/k/exit tweak, any CPI-versus-NFP split promoted as a winner, and any renaming
+  of the same failed rule as a new study. Permitted only under a NEW lineage with a new seal and a
+  new sample: a genuinely distinct mechanism or a genuinely untested subspace, powered on EVENT-DAY
+  dispersion rather than control-day dispersion. FOMC remains separately DEFERRED and was never
+  tested by R1 -- it is untested, not falsified.
+  METHOD LESSON worth a research-lesson card in its own right: when a power gate's nuisance parameter
+  is estimated on control days but the Primary runs on event days, the gate can license a run that
+  cannot reach its own falsification bar.
+  FORMAL CLAIM STATUS vs OBSERVED ESTIMATE -- these are two different facts and this card keeps them
+  apart. FORMAL CLAIM STATUS = unresolved / insufficient evidence: that is what the sealed rule
+  licenses, because the exclusion criterion needs CI half-width < M and 4.906555 > 3.99. OBSERVED
+  ESTIMATE = strongly negative: the Base mean is -$8.768455 per event per 1 MNQ, the whole 95%
+  interval [-13.920945, -4.107835] is below zero, and all four sealed cost scenarios are negative.
+  Neither fact may be used to erase the other. Do not reduce this card to a generic not_promoted, and
+  do not relabel it contradicted or falsified.
+  IDENTITY / SOURCE DIGESTS -- sealed preregistration: CONTENT_COMMIT
+  46b8aef9d2471dd427db6a780435e743660a6f24, SEAL_ATTESTATION_COMMIT
+  595af1c9663eb868e9f2d72f44abfe2f426ca24d (tag r1-s1-sealed), R1_S1_PREREGISTRATION_SEALED.md sha256
+  49267deb92a79cc9c5b36cd6a5e198c587cc81e347fbb91e82078989419c4bf8. Executable identity:
+  S2_CODE_COMMIT 433e2cc035391ec73c5c94135ad9cf6afaca746e, S2_BUILD_ATTESTATION_COMMIT
+  b99e10eeadbd254bc3e39256366ed3db1d9f84fd (tag r1-s2-built), runtime rollup
+  3f64307d2b214c9cc21d7873c198be4ebc247de5b5fbcc56a082e6a17acad2a5 over 23 r1/*.py files. Power gate:
+  artifacts/R1_S3A_POWER_GATE.json sha256
+  f8760918c7ce79f47492bcf7aaf2da4ae3c00d1df42cc3d6f891ce2ef6dd5cfd. Run identity: RUN_ID R1-S3B-001,
+  run identity digest bb8655821ecd526c8fba7ad4b1601304368637794eccf9c0a44ec633d46b8a51. Outcome
+  bundle: runs/R1-S3B-001/sealed_r1_outcome.json, BUNDLE digest
+  92c3877f1855f5d9a9865a87283c43303dd89684916994579c4173ec8f350514, FILE sha256
+  f6ca60e2dee7bb3c3c810fc8fe459d42449008ee12c9e331aefea75a16e5dd6e, 246 records, runs_executed = 1.
+  The outcome bundle is immutable and was never edited, replaced or regenerated.

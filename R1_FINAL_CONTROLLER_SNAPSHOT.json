@@ -1,0 +1,181 @@
+{
+  "record": "R1_FINAL_CONTROLLER_SNAPSHOT",
+  "schema": "r1_final_snapshot.v1",
+  "written_utc": "2026-09-18T03:45:00Z",
+  "immutable": "Written once at R1 closeout. It records final state; it creates no result and authorizes nothing.",
+  "project": "nq-event-diffusion-research",
+  "lineage": "R1 — Scheduled-Release Information-Diffusion Continuation",
+  "research_question": "After a public scheduled information release (CPI or NFP) and a realistically executable decision delay, does economically meaningful directional price adjustment remain in NQ?",
+  "sealed_rule": "Enter O(08:33) in the direction of R_init = C(08:31) - C(08:29); exit O(09:29); k = 1; CPI and NFP only; no stop; Base cost scenario primary.",
+  "final_head": {
+    "head_at_snapshot": "28ed268a0721d71d9c322e04a1afab4bb67d56c9",
+    "note": "A file cannot contain the SHA of the commit that introduces it. This snapshot ships INSIDE the closeout commit, so the closeout commit is identified by the annotated tag `r1-final`, exactly as CONTENT_COMMIT/SEAL_ATTESTATION_COMMIT and S2_CODE_COMMIT/S2_BUILD_ATTESTATION_COMMIT are resolved in this repository.",
+    "closeout_commit_resolves_by": "tag:r1-final",
+    "branch": "main",
+    "remote": "none — standalone local repository (OD-5 OPTION A). Nothing pushed."
+  },
+  "working_tree_state": {
+    "at_snapshot": "closeout changes staged for the single closeout commit",
+    "paths_changed_at_closeout": [
+      "R1_EXECUTION_LEDGER.md",
+      "ROJECT_STATE.md",
+      "artifacts/R1_S4_KB_FINDING_PROPOSAL.yaml",
+      "artifacts/R1_S4_VERDICT.json",
+      "tools/validate_state.py"
+    ],
+    "sealed_and_immutable_paths_changed": "NONE",
+    "r1_runtime_changed": "NONE — git status on r1/ is empty",
+    "expected_after_closeout_commit": "clean"
+  },
+  "identities": {
+    "S1_CONTENT_COMMIT": "46b8aef9d2471dd427db6a780435e743660a6f24",
+    "S1_SEAL_ATTESTATION_COMMIT": "595af1c9663eb868e9f2d72f44abfe2f426ca24d",
+    "S1_SEAL_TAG": "r1-s1-sealed",
+    "S1_PREREG_SHA256": "49267deb92a79cc9c5b36cd6a5e198c587cc81e347fbb91e82078989419c4bf8",
+    "S1_SEALED_DIGESTS_VERIFIED": 12,
+    "S1_SEALED_DIGEST_MISMATCHES": 0,
+    "S2_CODE_COMMIT": "433e2cc035391ec73c5c94135ad9cf6afaca746e",
+    "S2_BUILD_ATTESTATION_COMMIT": "b99e10eeadbd254bc3e39256366ed3db1d9f84fd",
+    "S2_BUILD_TAG": "r1-s2-built",
+    "S2_RUNTIME_SOURCE_ROLLUP_SHA256": "3f64307d2b214c9cc21d7873c198be4ebc247de5b5fbcc56a082e6a17acad2a5",
+    "S2_RUNTIME_FILES": 23,
+    "S3A_ARTIFACT_SHA256": "f8760918c7ce79f47492bcf7aaf2da4ae3c00d1df42cc3d6f891ce2ef6dd5cfd",
+    "PRE_SEAL_PROJECT_COMMIT": "8656701564d798a227efa9f46e2f581353017ff5",
+    "PRE_SEAL_TAG": "r1-pre-seal"
+  },
+  "run": {
+    "RUN_ID": "R1-S3B-001",
+    "RUN_IDENTITY_DIGEST": "bb8655821ecd526c8fba7ad4b1601304368637794eccf9c0a44ec633d46b8a51",
+    "OUTCOME_BUNDLE_PATH": "runs/R1-S3B-001/sealed_r1_outcome.json",
+    "OUTCOME_BUNDLE_DIGEST": "92c3877f1855f5d9a9865a87283c43303dd89684916994579c4173ec8f350514",
+    "OUTCOME_FILE_SHA256": "f6ca60e2dee7bb3c3c810fc8fe459d42449008ee12c9e331aefea75a16e5dd6e",
+    "RUNS_EXECUTED": 1,
+    "N_RECORDS": 246,
+    "N_STRUCTURAL": 252,
+    "E4_COUNT": 6,
+    "SAMPLE_SPAN": [
+      "2010-07-02",
+      "2021-12-10"
+    ],
+    "OD3_DECISION": "PROCEED_TO_PRIMARY_RUN (DELEGATED_BY Aaron / DECIDED_BY Fable 5.1 / ACCEPTED_BY ChatGPT; PRIMARY_OUTCOME_KNOWN_AT_DECISION = NO)",
+    "bundle_immutable": "never edited, replaced or regenerated"
+  },
+  "trial_accounting": {
+    "SAMPLE_FORMAL_TRIAL_ORDINAL": 2,
+    "TRIAL_CONSUMED": "YES",
+    "consumed_at": "operational ledger seq 8, RUN_STARTED",
+    "additional_trials_consumed_at_S4_or_closeout": "NONE",
+    "INHERITED_RESEARCHER_EXPOSURE_COUNT": 1575,
+    "PRIOR_LINEAGE": "ITSF S0-T001",
+    "OUTCOME_REVEALED": "YES",
+    "revealed_at": "operational ledger seq 11, REVEALED, under explicit Aaron authorization"
+  },
+  "result": {
+    "FINAL_VERDICT": "INSUFFICIENT_EVIDENCE",
+    "KB_CLAIM_STATUS": "unresolved",
+    "AXIS_1_STATUS": "PREDICTIVE_EFFECT_UNRESOLVED",
+    "AXIS_2_STATUS": "MECHANISM_SPECIFICITY_NOT_ESTABLISHED",
+    "AXIS_2_IS_CONFIRMATORY": false,
+    "FAILURE_TYPE": "INSUFFICIENT_EVIDENCE_LOW_POWER",
+    "OBSERVED_DIRECTION": "STRONGLY_NEGATIVE",
+    "base_mean_usd_per_event_per_mnq": -8.768455,
+    "base_interval_95": [
+      -13.920945,
+      -4.107835
+    ],
+    "materiality_m_usd": 3.99,
+    "ci_half_width_usd": 4.906555,
+    "binding_precision_failure": "CI_upper < M holds (-4.107835 < 3.99) but CI_half_width < M FAILS (4.906555 > 3.99). That single condition is the whole reason this is NOT a falsification.",
+    "formal_status_vs_observed_estimate": "Two separate facts. The formal status says what the sealed rule licenses; the observed direction says what the sample showed. Neither erases the other.",
+    "must_not_be_relabelled": [
+      "FALSIFIED",
+      "SUPPORTED",
+      "not_promoted",
+      "contradicted",
+      "near-zero evidence",
+      "a promising edge"
+    ]
+  },
+  "permanent_residuals": {
+    "OUTCOME_SCHEMA_LABEL_DEFECT": {
+      "status": "PERMANENT — recorded, deliberately not repaired",
+      "summary": "Sealed bundle field mean_y_net_usd holds -10.268455 (the CONSERVATIVE point estimate). True Base mean is -8.768455. The $1.50 gap is the Base-to-Conservative flat round-turn differential (r1/pipeline.py:176).",
+      "verdict_impact": "NONE"
+    },
+    "AXIS2_EVIDENCE_PROVENANCE_GAP": {
+      "status": "PERMANENT — not recoverable without a forbidden rerun",
+      "summary": "D and its 95% interval were never persisted. The engine returns NOT_ESTABLISHED both when D is absent and when its lower bound <= 0, so the status is determinate but the statistic cannot be independently reconstructed.",
+      "verdict_impact": "NONE — Axis 2 is non-confirmatory"
+    },
+    "STALE_STAGE_VALIDATOR": {
+      "status": "REPAIRED at closeout",
+      "summary": "tools/validate_state.py is now lifecycle-aware, deriving the stage from the append-only ledger. Strictly stronger post-run assertions; no scientific rule changed; outside the frozen r1/*.py rollup; reads no outcome value.",
+      "verdict_impact": "NONE — tooling only"
+    }
+  },
+  "authority_state": {
+    "INTERNAL_VALIDATION": "NOT GRANTED",
+    "INTERNAL_VALIDATION_ACCESSED": "NO",
+    "LOCKBOX": "NOT GRANTED",
+    "LOCKBOX_ACCESSED": "NO",
+    "PROTECTED_ITSF_OUTCOMES": "NOT GRANTED",
+    "POST_RESULT_RESEARCH": "NONE",
+    "ITSF_REPOSITORY_MODIFIED": false
+  },
+  "lifecycle": {
+    "S0": "CLOSED",
+    "S1": "SEALED",
+    "S2": "CLOSED",
+    "S3A": "CLOSED",
+    "S3B": "CLOSED",
+    "S4": "COMPLETE",
+    "R1_LIFECYCLE": "STOP",
+    "NEXT_RESEARCH_LINEAGE": "NONE_FROM_R1",
+    "R1_RESEARCH_REOPEN_ALLOWED": "NO",
+    "reopen_exception": "Only under an explicit future Aaron new-lineage decision, with a new seal and a new sample. That is a NEW lineage, never a reopening of R1. Forbidden under any circumstance: re-testing this rule on this sample, window/parameter/cost/k/exit variation, CPI-vs-NFP promotion, renaming the same failed rule as a new study.",
+    "RERESEARCH_ELIGIBILITY": "CONDITIONAL",
+    "FOMC": "SEPARATELY DEFERRED — never tested by R1; untested, not falsified"
+  },
+  "operational_ledger": {
+    "path": "R1_EXECUTION_LEDGER.md",
+    "entries": 13,
+    "head_digest": "7fa7fab5a4659abfc1274fe030e48612c79035138b2c5caea9564a233fb106ee",
+    "chain_verified": true,
+    "lifecycle_events": [
+      "1:GENESIS",
+      "2:S2_BUILD_COMPLETE",
+      "3:S2_BUILD_COMPLETE",
+      "4:S2_BUILD_COMPLETE",
+      "5:S3_AUTHORIZED",
+      "6:POWER_GATE_EXECUTED",
+      "7:OWNER_POWER_GATE_DECISION",
+      "8:RUN_STARTED",
+      "9:OUTCOME_BUNDLE_CREATED",
+      "10:REVEAL_AUTHORIZED",
+      "11:REVEALED",
+      "12:VERDICT_CLOSED",
+      "13:VERDICT_CLOSED"
+    ]
+  },
+  "artifacts": {
+    "artifacts/R1_S4_VERDICT.json": "cf7511a304b8fdc4640364e01502e2913ea8081c6c511a9c86bf823e8b73bb48",
+    "artifacts/R1_S4_KB_FINDING_PROPOSAL.yaml": "9ed6b2c8b36e35e1c263459e91d9dfa58b11d47580de10099f4d81284a43e171",
+    "PROJECT_STATE.md": "344de2afa9eb85ea7cc78311511d1dee5e554d61fbb24558dd5a4385fa110717",
+    "R1_EXECUTION_LEDGER.md": "9d14fb334aac72c8df35498b662ce8203b6c46be4b4aa72f6d7953eff68b6ccb",
+    "tools/validate_state.py": "ec52a9f17c4b9cd39a459b229a012e81b12b186ab263a4ae337089424e6cf06c"
+  },
+  "validation_at_closeout": {
+    "CURRENT_STATE_VALIDATION": "PASS (60 passed, 0 failed)",
+    "SEAL_SNAPSHOT_VALIDATION": "PASS (CONTENT_COMMIT 161/0; SEAL_ATTESTATION_COMMIT 185/0)",
+    "S2_TEST_SUITE": "PASS (285 passed, 0 failed)",
+    "CLOSEOUT_IDENTITY_GATE": "PASS (25/25)"
+  },
+  "kb_handoff": {
+    "KB_HANDOFF_READY": "YES",
+    "proposal_path": "artifacts/R1_S4_KB_FINDING_PROPOSAL.yaml",
+    "target_repository": "quant-research-knowledge-base",
+    "target_path": "registry/findings/finding.nq-event-diffusion.r1-cpi-nfp-continuation-unresolved.yaml",
+    "ingestion_authorized": "NO — cataloguing a KB card is a separate Owner act",
+    "note": "This repository has neither authority nor mechanism to write the central KB. The proposal is schema-validated and ready; ingestion is the next controller step."
+  }
+}
