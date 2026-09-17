@@ -18,7 +18,10 @@ SEALED_BY            = Aaron (Owner)
 SEAL_EXECUTED_BY     = Claude Opus (Main Agent), under explicit Aaron
                        authorization
 SEAL_IDENTITY        = R1_S1_SEAL_ATTESTATION.json (CONTENT_COMMIT + digests)
-SEALED_COMMIT        = PENDING   (recorded by the attestation commit)
+CONTENT_COMMIT       = 46b8aef9d2471dd427db6a780435e743660a6f24
+                       (the commit whose tree IS the sealed content)
+SEAL_ATTESTATION_COMMIT = its child, tagged `r1-s1-sealed`; it adds the
+                       attestation and this line, and changes no sealed file
 PSMV                 = AUTHORIZED · COMPLETE 2026-09-17
                        record-repaired 2026-09-17 (output surface only):
                          PSMV_MDE_SCOPE_VIOLATION = RECORD_HYGIENE_ONLY
