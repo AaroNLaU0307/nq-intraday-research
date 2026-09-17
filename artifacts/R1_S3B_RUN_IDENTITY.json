@@ -1,0 +1,94 @@
+{
+  "run_label": "R1-S3B-001",
+  "is_real_run": true,
+  "content_commit": "46b8aef9d2471dd427db6a780435e743660a6f24",
+  "seal_attestation_commit": "595af1c9663eb868e9f2d72f44abfe2f426ca24d",
+  "prereg_sha256": "49267deb92a79cc9c5b36cd6a5e198c587cc81e347fbb91e82078989419c4bf8",
+  "manifest_sha256": "385a171d8f81a17ebc13c3600845a51eca2e11f394b2496736461e85718a45e7",
+  "decision_record_sha256": "27f4c4338aabf78de34782e128a442991c479b64b8ee4b80f80d21b7a5786882",
+  "trial_registry_sha256": "56715810cdadea3ee2b1da67d287ad243c64f0ae76a22efeddf074b576cc5fdd",
+  "event_calendar_sha256": "5e92ad00737339c392ed2c0927736e196e076e185897c146c884d5f515bb5e8c",
+  "symbology_sha256": "85a32d44994b51e004e0c322510527aae18b70e1fadc70437e754253a2ac1850",
+  "data_manifest_sha256": "d8d1edc7b549b441d691dda74331806c957a19946e746bd795978e01d73c3ae8",
+  "psmv_artifact_sha256": "df0242bad6e2a1e2eb6ad1c412f91ffc1d9d421ef036ea802f7fd382e68aef47",
+  "event_universe_digest": "f0f08a620725c8603cc54c00d67e9b22ca7e068517f0fa9cfa385bc3ce0c9554",
+  "code_commit": "7426a2f1f4c174601c2cb57df170cc536d240d5d",
+  "s2_code_commit": "433e2cc035391ec73c5c94135ad9cf6afaca746e",
+  "s2_build_attestation_commit": "tag:r1-s2-built",
+  "runtime_source_rollup_sha256": "3f64307d2b214c9cc21d7873c198be4ebc247de5b5fbcc56a082e6a17acad2a5",
+  "environment": {
+    "python": "3.13.14",
+    "implementation": "CPython",
+    "platform": "Windows-11",
+    "numpy": "2.5.0"
+  },
+  "sealed_errata_sha256": "e89d8f4cbe58e1f1fc3e3fc83baa21aeb183a342160adaf8bf8dd426c278a5f1",
+  "operational_ledger_digest": "ed5d5ec5f757cc3d2547e53929a10225c76e541e669d07883b4f81d906e2e266",
+  "cost_scenarios": {
+    "Base": {
+      "entry_spread_points": 0.75,
+      "exit_spread_points": 0.5,
+      "slippage_ticks_per_side": 1.0,
+      "friction_multiplier": 1.0,
+      "platform_fee_rt_usd": 1.74,
+      "round_turn_usd": 3.99
+    },
+    "Conservative": {
+      "entry_spread_points": 1.0,
+      "exit_spread_points": 0.75,
+      "slippage_ticks_per_side": 2.0,
+      "friction_multiplier": 1.0,
+      "platform_fee_rt_usd": 1.74,
+      "round_turn_usd": 5.49
+    },
+    "Stress": {
+      "entry_spread_points": 0.75,
+      "exit_spread_points": 0.5,
+      "slippage_ticks_per_side": 1.0,
+      "friction_multiplier": 2.0,
+      "platform_fee_rt_usd": 1.74,
+      "round_turn_usd": 6.24
+    },
+    "Severe": {
+      "entry_spread_points": 1.0,
+      "exit_spread_points": 1.0,
+      "slippage_ticks_per_side": 3.0,
+      "friction_multiplier": 1.0,
+      "platform_fee_rt_usd": 1.74,
+      "round_turn_usd": 6.74
+    }
+  },
+  "primary_cost_scenario": "Base",
+  "bootstrap_seeds": [
+    7,
+    13,
+    31
+  ],
+  "bootstrap_block_events": 5,
+  "bootstrap_resamples": 10000,
+  "c1_seed_set": [
+    7,
+    13,
+    31
+  ],
+  "materiality_m_usd": 3.99,
+  "k": 1,
+  "n_structural": 252,
+  "sample_formal_trial_ordinal": 2,
+  "inherited_researcher_exposure_count": 1575,
+  "trial_consumed": false,
+  "notes": [
+    "S3-B one governed Primary run",
+    "S3A_ARTIFACT_SHA256=f8760918c7ce79f47492bcf7aaf2da4ae3c00d1df42cc3d6f891ce2ef6dd5cfd",
+    "OD3_DECISION=PROCEED_TO_PRIMARY_RUN"
+  ],
+  "signal_defined_n": 246,
+  "s3a_artifact_sha256": "f8760918c7ce79f47492bcf7aaf2da4ae3c00d1df42cc3d6f891ce2ef6dd5cfd",
+  "od3_decision": {
+    "DECISION": "PROCEED_TO_PRIMARY_RUN",
+    "DELEGATED_BY": "Aaron",
+    "DECIDED_BY": "Fable 5.1",
+    "ACCEPTED_BY": "ChatGPT",
+    "PRIMARY_OUTCOME_KNOWN_AT_DECISION": "NO"
+  }
+}

@@ -10,7 +10,7 @@ RESEARCH_QUESTION    = After a public scheduled information release, and after a
                        realistically executable decision delay, does economically
                        meaningful directional price adjustment remain in NQ?
 RESEARCH_ID · LANE   = R1 · FULL
-STAGE                = S3-A COMPLETE (pre-run power gate); S3-B NOT AUTHORIZED
+STAGE                = S3-B COMPLETE (one governed Primary run); OUTCOME SEALED
 S0                   = CLOSED  (Owner decision: RESEARCH — see R1_S0_PROVENANCE.md)
 S1                   = SEALED  (r4, 2026-09-17)
 PREREG_SEALED        = YES
@@ -62,13 +62,22 @@ S3A_POWER_GATE       = COMPLETE 2026-09-18 (real data, outcome-blind)
                        CI half-width would exceed M: NO
                        artifact artifacts/R1_S3A_POWER_GATE.json
                        sha256 f8760918c7ce79f47492bcf7aaf2da4ae3c00d1df42cc3d6f891ce2ef6dd5cfd
-OWNER_POWER_DECISION = PENDING (PROCEED_TO_PRIMARY_RUN | PARK_FOR_INSUFFICIENT_POWER)
-S3B_RUN              = NOT AUTHORIZED
-S3_RUN               = NOT AUTHORIZED
+OWNER_POWER_DECISION = PROCEED_TO_PRIMARY_RUN
+                       DELEGATED_BY Aaron / DECIDED_BY Fable 5.1 /
+                       ACCEPTED_BY ChatGPT; outcome NOT known at decision.
+                       Rationale only -- it altered no sealed design element.
 OD3_POWER_GATE       = RUN 2026-09-18 (pre-reveal, outcome-blind)
-R1_OUTCOME           = NOT COMPUTED
-RUN_STARTED          = NO
-TRIAL_CONSUMED       = NO
+S3B_PRIMARY_RUN      = COMPLETE 2026-09-18, RUN_ID R1-S3B-001, executed once
+RUN_STARTED          = YES (operational ledger seq 8)
+TRIAL_CONSUMED       = YES  (SAMPLE_FORMAL_TRIAL_ORDINAL = 2, consumed)
+R1_OUTCOME           = COMPUTED AND SEALED -- NOT REVEALED, NOT INSPECTED
+SEALED_OUTCOME       = runs/R1-S3B-001/sealed_r1_outcome.json
+                       sha256 f6ca60e2dee7bb3c3c810fc8fe459d42449008ee12c9e331aefea75a16e5dd6e
+OUTCOME_RECEIPT      = artifacts/R1_S3B_OUTCOME_RECEIPT.json
+RUN_IDENTITY         = artifacts/R1_S3B_RUN_IDENTITY.json
+BUILDER_OUTCOME_BLIND= YES
+REVEAL_AUTHORIZATION = PENDING (Aaron only)
+S4_VERDICT           = NOT YET HUMAN-REVIEWED
 ENGINE               = r1/ (22 modules) + tests/ (264 tests, all passing)
                        See S2_BUILD_REPORT.md (r2, after bounded repair).
 S2_CODE_COMMIT       = 433e2cc035391ec73c5c94135ad9cf6afaca746e
@@ -87,10 +96,11 @@ SEALED_ERRATA        = R1_SEALED_ERRATA.md (post-seal, descriptive only)
 VALIDATION           = SEAL_SNAPSHOT_VALIDATION = PASS (seal-time context)
                        CURRENT_STATE_VALIDATION = PASS (tools/validate_state.py)
                        S2_TEST_SUITE            = PASS
-CURRENT_NEXT_ACTION  = S3-A — COMPLETE AND STOPPED HERE. The Primary run
-                       (S3-B) is NOT authorized and may not begin until Aaron
-                       rules on the power packet.
-NEXT_OWNER_DECISION  = PROCEED_TO_PRIMARY_RUN or PARK_FOR_INSUFFICIENT_POWER
+CURRENT_NEXT_ACTION  = S3-B — COMPLETE AND STOPPED HERE. The outcome exists,
+                       sealed and unread. Nothing further may run: no rerun
+                       (the trial is consumed), no reveal, no S4 verdict.
+NEXT_OWNER_DECISION  = authorize the outcome reveal / S4 verdict review, or do
+                       not
 ```
 
 ## What this project is, in one paragraph
@@ -116,6 +126,9 @@ different question about the 09:30–10:00 opening drive.
 | `R1_SEALED_ERRATA.md` | post-seal descriptive corrections — **not sealed** |
 | `R1_S2_BUILD_ATTESTATION.json` | the attested S2 executable identity — **not sealed** |
 | `artifacts/R1_S3A_POWER_GATE.json` | the S3-A power-gate artifact — outcome-free |
+| `artifacts/R1_S3B_RUN_IDENTITY.json` | the one real run identity |
+| `artifacts/R1_S3B_OUTCOME_RECEIPT.json` | the outcome receipt — no result values |
+| `runs/R1-S3B-001/sealed_r1_outcome.json` | **SEALED R1 OUTCOME — do not open without an Owner-authorized reveal** |
 | `S2_BUILD_REPORT.md` | the S2 build record |
 | `R1_TRIAL_REGISTRY.md` | R1's own trial/exposure identity |
 | `psmv/psmv_structural.py` | the pre-seal structural reader (L-13 constrained) |
