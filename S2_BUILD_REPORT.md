@@ -22,11 +22,17 @@ synthetic value.
 ## 1. Sealed-contract binding
 
 ```
-CONTENT_COMMIT          = 46b8aef9d2471dd427db6a780435e743660a6f24   immutable
-SEAL_ATTESTATION_COMMIT = 595af1c9663eb868e9f2d72f44abfe2f426ca24d   immutable
-S2_BUILD_COMMIT         = implementation identity — versioned, and never
-                          confused with either of the above (r1/run_identity.py)
+CONTENT_COMMIT              = 46b8aef9d2471dd427db6a780435e743660a6f24  sealed
+SEAL_ATTESTATION_COMMIT     = 595af1c9663eb868e9f2d72f44abfe2f426ca24d  sealed
+S2_CODE_COMMIT              = 433e2cc035391ec73c5c94135ad9cf6afaca746e  code
+S2_BUILD_ATTESTATION_COMMIT = tag r1-s2-built (metadata-only child)
 ```
+
+Four identities, never interchangeable. The last two are read from
+`R1_S2_BUILD_ATTESTATION.json` by `r1.build_identity` — never hard-coded, never
+caller-supplied. At S3 preflight `assert_executable_identity` refuses if the
+live runtime bytes are not the attested ones: a metadata-only ledger append does
+**not** invalidate the identity, a runtime-source edit **does**.
 
 `r1/contract.py` is the single source of every scientific constant, and it binds
 rather than restates: operative design ← the attestation; anchor minutes ← the
@@ -157,8 +163,8 @@ integrity failure instead.
 SEAL_SNAPSHOT_VALIDATION   PASS   tools/validate_seal_snapshot.py
                                   CONTENT_COMMIT   46b8aef -> 161 passed, 0 failed
                                   SEAL_ATTESTATION 595af1c -> 185 passed, 0 failed
-CURRENT_STATE_VALIDATION   PASS   tools/validate_state.py  ->  46 passed, 0 failed
-S2_TEST_SUITE              PASS   pytest tests/            -> 264 passed, 0 failed
+CURRENT_STATE_VALIDATION   PASS   tools/validate_state.py  ->  50 passed, 0 failed
+S2_TEST_SUITE              PASS   pytest tests/            -> 285 passed, 0 failed
 ```
 
 The sealed validator asserts **seal-time** state, including
@@ -169,8 +175,9 @@ edited, and `PROJECT_STATE.md` is not made to lie to satisfy it.
 
 ## 8. Implementation inventory
 
-22 modules in `r1/` plus two tools. New since r1: `ledger.py` (the operational
-chain), `dev_adapter.py` (the real loader), `auxiliary.py` (A1), and
+23 modules in `r1/` plus two tools. New since r1: `ledger.py` (the operational
+chain), `dev_adapter.py` (the real loader), `auxiliary.py` (A1),
+`build_identity.py` (the attested executable identity), and
 `tools/validate_seal_snapshot.py`.
 
 Leakage safety remains structural: nothing reads a bar except through a window
@@ -180,7 +187,7 @@ that refuses out-of-window minutes — `SignalWindow` (≥ 08:32), `TradeWindow`
 ## 9. Tests
 
 ```
-264 tests, 20 files            264 passed, 0 failed
+285 tests, 21 files            285 passed, 0 failed
 ```
 
 Guards demonstrated able to fail against fabricated poisoned fixtures: the
@@ -210,7 +217,18 @@ C.2 speaks of a half-width; (3) the three sealed seeds run as a stability set
 with the primary interval pooled over them; (4) no invented threshold for
 "materially shrank n" — now superseded by the RUN_INTEGRITY_FAILURE rule in §6.
 
-## 12. Remaining items for S3
+## 12. S3 pre-run input preflight — recorded, not executed
+
+The first real Development archive access happens **only** under S3 PRE-RUN
+INPUT PREFLIGHT, before `RUN_STARTED`. It may verify exactly: the authorized
+data role · vendor manifest identity · per-file sha256 · DBN/schema
+compatibility · timestamp retrieval · structural event universe reproduction
+= 252. It may **not** compute real `R_init`, E4, C2 dispersion, event P&L or the
+Primary outcome. If the adapter cannot read the authoritative archive exactly:
+`RUN_INTEGRITY_FAILURE`, and **STOP before trial consumption**. This preflight
+was not performed.
+
+## 13. Remaining items for S3
 
 Nothing blocks S3 authorization.
 

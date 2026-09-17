@@ -1,0 +1,140 @@
+{
+  "record": "R1_S2_BUILD_ATTESTATION",
+  "schema": "r1_s2_build.v1",
+  "immutable": "Written once, in the metadata-only child of S2_CODE_COMMIT. It attests which EXECUTABLE BYTES were built, tested and validated. It contains no scientific result.",
+  "S2_CODE_COMMIT": "433e2cc035391ec73c5c94135ad9cf6afaca746e",
+  "S2_BUILD_ATTESTATION_COMMIT": "the commit that adds this file, i.e. the child of S2_CODE_COMMIT. It cannot be named here -- a file cannot contain the SHA of the commit that introduces it. Identified by the annotated tag r1-s2-built.",
+  "CONTENT_COMMIT": "46b8aef9d2471dd427db6a780435e743660a6f24",
+  "SEAL_ATTESTATION_COMMIT": "595af1c9663eb868e9f2d72f44abfe2f426ca24d",
+  "identity_note": "Four identities, never interchangeable: the sealed design (CONTENT_COMMIT), its attestation (SEAL_ATTESTATION_COMMIT), the executable code (S2_CODE_COMMIT) and this build attestation.",
+  "runtime_source": {
+    "scope": "r1/*.py -- the only runtime surface this project owns; tools/ are validators and are deliberately excluded",
+    "n_files": 23,
+    "rollup_sha256": "3f64307d2b214c9cc21d7873c198be4ebc247de5b5fbcc56a082e6a17acad2a5",
+    "files": {
+      "r1/__init__.py": "82c35380d68d21a914c8bf1a54891f17a5938d745f807b4ab992129834f0da98",
+      "r1/auxiliary.py": "5479a3f01bef47645853e730e0c490a1d24984e20f914936c55fb978ab33fee7",
+      "r1/bars.py": "53a11cf93c30ef75c2a3f6a4f5573b2dafc4fbd124836690f23f7ec96dc292f1",
+      "r1/bootstrap.py": "0b74740cdea86d62683ac8a17671c17e4140a5973c520ca5c04101bf015ff576",
+      "r1/build_identity.py": "f880d2c6cb7a2259d44fba6f095a84cca433458ed1907f1ffe8e2731b4319355",
+      "r1/contract.py": "1e53830e2e1ad0684171017613d94bd4144cd659909d4b887694896c7ecb7cab",
+      "r1/controls.py": "b54329a06bc5c54fb0cd5f38569c152fa872b2356f16e4be606af2378c0cc86a",
+      "r1/costs.py": "99d1b26adac909b12468f4fa08e51ddb04d18bdbdce71f4aa44c75ae21793809",
+      "r1/covariates.py": "b96f818338ee456cc137221a27b25bbaced22e93b64237199eb1a1e77b17e54a",
+      "r1/dev_adapter.py": "01263f10884553385b7207bb4f3e4d6b5288f43b94589f4476f2ad16ec827caf",
+      "r1/errors.py": "f4fdb4bf4c2b36311803a347cc0032f38cbf718149c0ceebfc972476b3095ec3",
+      "r1/events.py": "2adc0e16d1c37ba63e4669022c998ddc5195f5582a5e6fd5582d4ce8ff4d56d7",
+      "r1/invariants.py": "5f1aab5a9342552a24ea197105ca9c5b35f46dd512b69ee81567787a860979a3",
+      "r1/itsf_pin.py": "a5d249949cfe3ec17958dff08417fd0d12e28b2335836fd454b63ca4db89a7df",
+      "r1/ledger.py": "4ac0f24d7cf4f5857ef3b81f6a43b60644fd8310b43f032c40422d1fbbfc8cba",
+      "r1/outcome_seal.py": "cb45b90bf549e28dd27c0c171c53a087f25ec1a80b7a86c8f47b86b30c6084c5",
+      "r1/pipeline.py": "8415457f07254231d6573005aaa3431f18d91aa24d1c5ff14ac18e9097217365",
+      "r1/power_gate.py": "1c5f448b02fab727042f2799d43cba9e28e2a04b39e397a3c70788828c072108",
+      "r1/roles.py": "f17e678ddd7e8e557703827497c9bd560ffbebcd222e2759cffe0182ccf53d4a",
+      "r1/run_identity.py": "69b378f9324a2cae705aac60dcd24bd0ca1f915db2c93a94854f3710e931f6c6",
+      "r1/signal.py": "ee67f4f5d0ac3482f3de0e642ecaa261f7aac8471cae87e9cd14f7581a61e985",
+      "r1/trade.py": "ff86cbd03e65413841355caf9fb6a0c09b830d12760408470dd17b5b159016eb",
+      "r1/verdict.py": "0e16f0d982b4cef7370135b92d23dfff5a3b2cdc8f395d984c493fb18acb58bf"
+    }
+  },
+  "sealed_digests": {
+    "R1_S1_PREREGISTRATION_SEALED.md": "49267deb92a79cc9c5b36cd6a5e198c587cc81e347fbb91e82078989419c4bf8",
+    "R1_PREREG_MANIFEST.json": "385a171d8f81a17ebc13c3600845a51eca2e11f394b2496736461e85718a45e7",
+    "R1_TRIAL_REGISTRY.md": "56715810cdadea3ee2b1da67d287ad243c64f0ae76a22efeddf074b576cc5fdd",
+    "R1_DELEGATED_OWNER_DECISIONS.md": "27f4c4338aabf78de34782e128a442991c479b64b8ee4b80f80d21b7a5786882",
+    "R1_S0_PROVENANCE.md": "4d6386a90c614930004c3a7c4052965dd103f0e1f70219b6266b0a4fe1fcbeaa",
+    "artifacts/PSMV_STRUCTURAL_REPORT.json": "df0242bad6e2a1e2eb6ad1c412f91ffc1d9d421ef036ea802f7fd382e68aef47",
+    "artifacts/PSMV_PURITY_ATTESTATION.json": "67e13b1770d1895084c2a989fb8c67e5692b1888f11d3c21cd464cdb7f546c7e"
+  },
+  "post_seal_artifacts": {
+    "R1_SEALED_ERRATA.md": "e89d8f4cbe58e1f1fc3e3fc83baa21aeb183a342160adaf8bf8dd426c278a5f1",
+    "R1_EXECUTION_LEDGER.md": {
+      "sha256": "181b178002b007e18ee21461ce93d6842763f6a7a51c8a207f5a1742baf68f71",
+      "chain_head": "543975b3ae228ba3e89bdefa364140dca23304da7b77bedc9d01b69c2a8a027d",
+      "n_entries": 3
+    }
+  },
+  "data_identity": {
+    "event_calendar_sha256": "5e92ad00737339c392ed2c0927736e196e076e185897c146c884d5f515bb5e8c",
+    "symbology_csv_sha256": "85a32d44994b51e004e0c322510527aae18b70e1fadc70437e754253a2ac1850",
+    "real_archive_read": false
+  },
+  "validation": {
+    "S2_TEST_SUITE": {
+      "result": "PASS",
+      "passed": 285,
+      "failed": 0,
+      "command": "pytest tests/"
+    },
+    "CURRENT_STATE_VALIDATION": {
+      "result": "PASS",
+      "passed": 49,
+      "failed": 0,
+      "command": "python tools/validate_state.py"
+    },
+    "SEAL_SNAPSHOT_VALIDATION": {
+      "result": "PASS",
+      "CONTENT_COMMIT": {
+        "passed": 161,
+        "failed": 0
+      },
+      "SEAL_ATTESTATION_COMMIT": {
+        "passed": 185,
+        "failed": 0
+      },
+      "command": "python tools/validate_seal_snapshot.py"
+    },
+    "SEALED_DIGEST_VERIFICATION": {
+      "result": "PASS",
+      "files": 12,
+      "mismatches": 0
+    },
+    "OPERATIONAL_LEDGER_INTEGRITY": {
+      "result": "PASS"
+    },
+    "DEVELOPMENT_ADAPTER_TESTS": {
+      "result": "PASS",
+      "basis": "fixtures, fake manifests, mocks"
+    },
+    "A1_WIRING_TESTS": {
+      "result": "PASS"
+    },
+    "OD3_ISOLATION_PROOF": {
+      "result": "PASS",
+      "findings": []
+    }
+  },
+  "state": {
+    "REAL_MARKET_DATA_READ": "NO",
+    "REAL_E4_EVALUATED": "NO",
+    "REAL_C2_DISPERSION_COMPUTED": "NO",
+    "OD3_POWER_GATE_RUN": "NO",
+    "R1_PRIMARY_OUTCOME_COMPUTED": "NO",
+    "R1_OUTCOME_INSPECTED": "NO",
+    "INTERNAL_VALIDATION_ACCESSED": "NO",
+    "LOCKBOX_ACCESSED": "NO",
+    "TRIAL_CONSUMED": "NO",
+    "S2_BUILD": "COMPLETE CANDIDATE",
+    "S3_STARTED": "NO"
+  },
+  "s3_input_preflight_rule": {
+    "status": "RECORDED, NOT EXECUTED",
+    "when": "the first real Development archive access occurs ONLY under S3 PRE-RUN INPUT PREFLIGHT, before RUN_STARTED",
+    "may_verify_only": [
+      "exact authorized data role (DEVELOPMENT_SIGNAL)",
+      "vendor manifest identity",
+      "per-file sha256",
+      "DBN / schema compatibility",
+      "timestamp retrieval",
+      "structural event universe reproduction = 252"
+    ],
+    "may_not_compute": [
+      "real R_init",
+      "E4",
+      "C2 dispersion",
+      "event P&L",
+      "Primary outcome"
+    ],
+    "on_failure": "RUN_INTEGRITY_FAILURE and STOP before trial consumption"
+  }
+}

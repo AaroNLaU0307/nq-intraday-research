@@ -61,6 +61,15 @@ R1_OUTCOME           = NOT COMPUTED
 TRIAL_CONSUMED       = NO
 ENGINE               = r1/ (22 modules) + tests/ (264 tests, all passing)
                        See S2_BUILD_REPORT.md (r2, after bounded repair).
+S2_CODE_COMMIT       = 433e2cc035391ec73c5c94135ad9cf6afaca746e
+                       (the attested EXECUTABLE code and tests)
+S2_BUILD_ATTESTATION = R1_S2_BUILD_ATTESTATION.json, in the metadata-only child
+                       commit, tagged `r1-s2-built`. A commit cannot contain its
+                       own SHA; the tag resolves it.
+EXECUTABLE_IDENTITY  = enforced at S3 preflight by
+                       r1.build_identity.assert_executable_identity: a
+                       metadata-only ledger append does NOT invalidate it, a
+                       runtime-source edit DOES.
 REAL_DATA_ADAPTER    = IMPLEMENTED (r1/dev_adapter.py); NOT EXECUTED on R1
 SEALED_REGISTRY      = IMMUTABLE — R1_TRIAL_REGISTRY.md, byte-for-byte
 OPERATIONAL_LEDGER   = R1_EXECUTION_LEDGER.md (append-only chain, UNSEALED)
@@ -95,6 +104,7 @@ different question about the 09:30–10:00 opening drive.
 | `R1_PREREG_MANIFEST.json` | structured companion to the prereg (closes P-7); **not authoritative** |
 | `R1_EXECUTION_LEDGER.md` | operational append-only lifecycle chain — **not sealed** |
 | `R1_SEALED_ERRATA.md` | post-seal descriptive corrections — **not sealed** |
+| `R1_S2_BUILD_ATTESTATION.json` | the attested S2 executable identity — **not sealed** |
 | `S2_BUILD_REPORT.md` | the S2 build record |
 | `R1_TRIAL_REGISTRY.md` | R1's own trial/exposure identity |
 | `psmv/psmv_structural.py` | the pre-seal structural reader (L-13 constrained) |
