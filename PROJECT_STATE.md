@@ -38,7 +38,9 @@ TRIAL_ACCOUNTING     = R1_TRIAL_REGISTRY.md  (separate R1 lineage; the ITSF
                        referenced by identity and is NEVER mutated)
 VERSION_CONTROL      = standalone local git repository (OD-5 = OPTION A
                        implementation). No remote. Nothing pushed.
-PRE_SEAL_PROJECT_COMMIT = PENDING
+PRE_SEAL_PROJECT_COMMIT = 8656701564d798a227efa9f46e2f581353017ff5
+                       (the full pre-seal state. The commit that RECORDS
+                        this line is its child; git carries the rest.)
 IS_SEALED_COMMIT     = NO   (the seal is a separate Aaron Owner act)
 OPEN_MATERIAL_BLOCKERS = NONE
 OPEN_PRE_SEAL_ITEMS  = P-5 only (cost residual, NON-BLOCKING). P-1..P-4, P-7

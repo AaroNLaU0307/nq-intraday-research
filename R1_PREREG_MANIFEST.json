@@ -162,7 +162,7 @@
   "version_control": {
     "repository": "standalone local git repository; no remote; nothing pushed",
     "initialised": "2026-09-17, as technical implementation of OD-5 = OPTION A",
-    "PRE_SEAL_PROJECT_COMMIT": "PENDING",
+    "PRE_SEAL_PROJECT_COMMIT": "8656701564d798a227efa9f46e2f581353017ff5",
     "is_sealed_commit": false
   }
 }

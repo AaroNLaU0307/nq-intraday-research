@@ -166,6 +166,6 @@ onward git is their integrity record** — which is precisely what P-8 existed t
 provide.
 
 ```
-PRE_SEAL_PROJECT_COMMIT = PENDING
+PRE_SEAL_PROJECT_COMMIT = 8656701564d798a227efa9f46e2f581353017ff5
 IS_SEALED_COMMIT        = NO
 ```
