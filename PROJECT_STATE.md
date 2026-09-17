@@ -59,14 +59,19 @@ S3_RUN               = NOT AUTHORIZED
 OD3_POWER_GATE       = NOT RUN
 R1_OUTCOME           = NOT COMPUTED
 TRIAL_CONSUMED       = NO
-ENGINE               = r1/ (19 modules) + tests/ (203 tests, all passing)
-                       See S2_BUILD_REPORT.md.
+ENGINE               = r1/ (22 modules) + tests/ (264 tests, all passing)
+                       See S2_BUILD_REPORT.md (r2, after bounded repair).
+REAL_DATA_ADAPTER    = IMPLEMENTED (r1/dev_adapter.py); NOT EXECUTED on R1
+SEALED_REGISTRY      = IMMUTABLE — R1_TRIAL_REGISTRY.md, byte-for-byte
+OPERATIONAL_LEDGER   = R1_EXECUTION_LEDGER.md (append-only chain, UNSEALED)
+SEALED_ERRATA        = R1_SEALED_ERRATA.md (post-seal, descriptive only)
+VALIDATION           = SEAL_SNAPSHOT_VALIDATION = PASS (seal-time context)
+                       CURRENT_STATE_VALIDATION = PASS (tools/validate_state.py)
+                       S2_TEST_SUITE            = PASS
 CURRENT_NEXT_ACTION  = S2 BUILD — COMPLETE AND STOPPED HERE. S3 RUN is the next
-                       possible stage and is NOT authorized. Before it can run,
-                       Aaron must rule on the sealed-trial-registry conflict in
-                       S2_BUILD_REPORT.md §10.
-NEXT_OWNER_DECISION  = (a) rule on the sealed-registry append conflict;
-                       (b) authorize S3 RUN, or do not
+                       possible stage and is NOT authorized. No material
+                       blocker remains.
+NEXT_OWNER_DECISION  = authorize S3 RUN, or do not
 ```
 
 ## What this project is, in one paragraph
@@ -88,6 +93,9 @@ different question about the 09:30–10:00 opening drive.
 | `R1_S1_PREREGISTRATION_SEALED.md` | the r4 design — **SEALED** 2026-09-17 |
 | `R1_S1_SEAL_ATTESTATION.json` | the seal: CONTENT_COMMIT + every sealed sha256 |
 | `R1_PREREG_MANIFEST.json` | structured companion to the prereg (closes P-7); **not authoritative** |
+| `R1_EXECUTION_LEDGER.md` | operational append-only lifecycle chain — **not sealed** |
+| `R1_SEALED_ERRATA.md` | post-seal descriptive corrections — **not sealed** |
+| `S2_BUILD_REPORT.md` | the S2 build record |
 | `R1_TRIAL_REGISTRY.md` | R1's own trial/exposure identity |
 | `psmv/psmv_structural.py` | the pre-seal structural reader (L-13 constrained) |
 | `psmv/psmv_purity_guard.py` | the L-13 guard and its mutation demonstration |

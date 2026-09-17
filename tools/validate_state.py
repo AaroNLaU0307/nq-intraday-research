@@ -1,22 +1,27 @@
 """Current-stage state validator. UNSEALED, and deliberately so.
 
-`psmv/validate_prereg.py` is inside the sealed digest set. It was written
-before the seal and it asserts, among other things:
+Validation after a seal is TWO questions, and conflating them is how a stale
+assertion gets reported as a normal failure:
 
-    check("state: S2 NOT AUTHORIZED", "S2  = NOT AUTHORIZED" in state)
+    SEAL_SNAPSHOT_VALIDATION   does the sealed validator pass against the state
+                               it was sealed with?   -> tools/validate_seal_snapshot.py
+    CURRENT_STATE_VALIDATION   is the CURRENT stage state what it claims?
+                               -> this file
 
-That assertion was true at seal time and is now FALSE: Aaron authorized S2
-BUILD on 2026-09-17. The sealed validator cannot be updated -- editing it would
-break the seal it exists to protect -- and PROJECT_STATE.md must not be made to
-lie in order to satisfy it. So the sealed validator now reports exactly one
-expected failure, recorded in S2_BUILD_REPORT.md section 10, and THIS file
-validates the current state instead.
+`psmv/validate_prereg.py` is sealed and asserts seal-time state, including
+`state: S2 NOT AUTHORIZED`, which was true when Aaron sealed S1 and is false now
+that he has authorized S2. It is neither edited (that would break the seal it
+protects) nor satisfied by making PROJECT_STATE.md lie. It is run in its own
+context, where it passes cleanly.
 
-It checks the two things that actually matter after a seal:
+This file checks what matters now:
 
   1. the seal is intact -- every sealed digest still verifies;
   2. the current stage state is what it claims, and no authority has been
-     silently granted.
+     silently granted;
+  3. the sealed trial registry is immutable while the operational ledger is
+     append-safe;
+  4. the post-seal artifacts, the Development adapter and A1 are in place.
 
 Run:  python tools/validate_state.py
 """
@@ -91,12 +96,61 @@ def main() -> int:
     check("OD-3 gate is independent of the primary path",
           proof["independent"] is True, str(proof["findings"]))
 
-    # ---- 5. the known, expected failure of the sealed validator ------
+    # ---- 5. validation is SEPARATED, not excused ---------------------
+    # The sealed validator asserts SEAL-TIME state and is run against the
+    # seal-time content by tools/validate_seal_snapshot.py, where it passes
+    # cleanly. It is deliberately NOT run against HEAD here: that would report
+    # a validator failure as a normal state.
+    check("seal-snapshot validation is a separate tool",
+          (ROOT / "tools" / "validate_seal_snapshot.py").exists())
     sealed_validator = (ROOT / "psmv" / "validate_prereg.py").read_text(
         encoding="utf-8")
-    check("the sealed validator's expired S2 assertion is still the ONLY one",
-          len(re.findall(r'state: S2 NOT AUTHORIZED', sealed_validator)) == 1,
-          "see S2_BUILD_REPORT.md section 10")
+    check("the sealed validator itself is untouched",
+          len(re.findall(r"state: S2 NOT AUTHORIZED", sealed_validator)) == 1)
+
+    # ---- 6. registry immutability and the operational ledger ---------
+    from r1.ledger import (LEDGER_FILE, assert_sealed_registry_unchanged,
+                           current_digest, verify_chain)
+    assert_sealed_registry_unchanged(contract)
+    check("sealed trial registry is byte-identical", True,
+          contract.trial_registry_sha256[:16])
+    check("operational ledger is OUTSIDE the sealed digest set",
+          LEDGER_FILE not in seal["sealed_digests"])
+    entries = verify_chain(ROOT / LEDGER_FILE)
+    check("operational ledger chain verifies",
+          entries[0].event == "GENESIS" and len(entries) >= 2,
+          f"{len(entries)} entries, head {current_digest(ROOT / LEDGER_FILE)[:12]}")
+    check("RUN_STARTED has NOT been appended -- the trial is not consumed",
+          not any(e.event == "RUN_STARTED" for e in entries))
+
+    # ---- 7. post-seal interpretation artifacts -----------------------
+    errata = ROOT / "R1_SEALED_ERRATA.md"
+    check("sealed errata record exists", errata.exists())
+    check("errata is NOT in the sealed digest set",
+          "R1_SEALED_ERRATA.md" not in seal["sealed_digests"])
+    check("errata records the descriptive-only materiality",
+          "MATERIALITY                    = DESCRIPTIVE_ONLY"
+          in errata.read_text(encoding="utf-8"))
+
+    # ---- 8. the Development adapter is implemented, not deferred -----
+    adapter_src = (ROOT / "r1" / "dev_adapter.py").read_text(encoding="utf-8")
+    check("Development adapter is implemented",
+          "NotImplementedError" not in adapter_src)
+    check("Development adapter imports its decoder lazily",
+          not any(ln.startswith("import databento")
+                  for ln in adapter_src.splitlines()))
+
+    # ---- 9. A1 is wired into the production path ---------------------
+    import inspect
+
+    from r1.pipeline import run_study
+    params = inspect.signature(run_study).parameters
+    check("run_study takes no caller-supplied A1 boolean",
+          "a1_sign_holds" not in params)
+    check("run_study takes no n-shrinkage judgement",
+          "n_shrunk_materially" not in params)
+    check("A1 is computed in the pipeline",
+          "evaluate_a1" in inspect.getsource(run_study))
 
     for line in notes:
         print(line)

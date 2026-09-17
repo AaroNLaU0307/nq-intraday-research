@@ -104,3 +104,38 @@ def test_environment_identity_is_recorded():
     env = environment_identity()
     assert env["python"] and env["platform"]
     assert "numpy" in env
+
+
+# --------------------------------------- post-seal identity separation (r2)
+def test_implementation_identity_is_kept_apart_from_the_sealed_identity(contract):
+    ident = _identity(contract, s2_build_commit="a" * 40,
+                      sealed_errata_sha256="b" * 64,
+                      operational_ledger_digest="c" * 64)
+    p = ident.payload()
+    assert p["content_commit"] == contract.content_commit
+    assert p["seal_attestation_commit"] == \
+        "595af1c9663eb868e9f2d72f44abfe2f426ca24d"
+    assert p["s2_build_commit"] == "a" * 40
+    # three distinct fields, never the same value by construction
+    assert len({p["content_commit"], p["seal_attestation_commit"],
+                p["s2_build_commit"]}) == 3
+
+
+def test_post_seal_artifacts_are_bound_but_not_sealed(contract):
+    import json
+    from pathlib import Path
+    ident = _identity(contract, sealed_errata_sha256="b" * 64,
+                      operational_ledger_digest="c" * 64)
+    assert ident.sealed_errata_sha256 == "b" * 64
+    assert ident.operational_ledger_digest == "c" * 64
+    seal = json.loads(
+        (Path(__file__).resolve().parent.parent
+         / "R1_S1_SEAL_ATTESTATION.json").read_text(encoding="utf-8"))
+    for post_seal in ("R1_SEALED_ERRATA.md", "R1_EXECUTION_LEDGER.md"):
+        assert post_seal not in seal["sealed_digests"]
+
+
+def test_identity_digest_moves_with_the_build_commit(contract):
+    a = _identity(contract, s2_build_commit="a" * 40).digest()
+    b = _identity(contract, s2_build_commit="b" * 40).digest()
+    assert a != b

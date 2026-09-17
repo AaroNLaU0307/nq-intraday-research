@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .contract import SealedContract
-from .errors import CalendarError, SealIdentityError
+from .errors import CalendarError, RunIntegrityError, SealIdentityError
 from .roles import DataRole, check_role
 
 ITSF_CALENDAR_PATH = (Path(__file__).resolve().parent.parent.parent
@@ -181,9 +181,16 @@ def _verify_against_sealed(contract: SealedContract, u: EventUniverse) -> None:
         raise SealIdentityError(f"E0 = {f['E0_cpi_or_nfp_calendar_events']}, "
                                 f"sealed record says {sealed_e0}")
     if u.n != contract.pre_seal_structural_n:
-        raise SealIdentityError(
-            f"reproduced n = {u.n}, sealed PRE_SEAL_STRUCTURAL_N = "
-            f"{contract.pre_seal_structural_n}")
+        # NOT a researcher judgement about a shrunken sample, and NOT an
+        # UNRESOLVED verdict with a smaller n. PSMV fixed the structural
+        # universe before the seal; failing to reproduce it exactly means the
+        # run is broken (see r1.errors.RunIntegrityError).
+        raise RunIntegrityError(
+            f"RUN_INTEGRITY_FAILURE: reproduced n = {u.n}, sealed "
+            f"PRE_SEAL_STRUCTURAL_N = {contract.pre_seal_structural_n}. The "
+            f"structural event universe must reproduce EXACTLY. E4 exact-zero "
+            f"exclusions are a separate, prespecified stage that determines "
+            f"POST_SEAL_SIGNAL_DEFINED_N; they are not structural shrinkage.")
     by_type = count_by_type(u.events)
     if by_type.get("CPI") != contract.cpi_structural_n or \
             by_type.get("NFP") != contract.nfp_structural_n:

@@ -28,10 +28,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from .auxiliary import A1Result, a1_memberships, a1_metric, evaluate_a1
+from .bars import TrailingHistory
 from .bootstrap import Interval, bootstrap_interval, sensitivity_interval
 from .contract import SealedContract
 from .controls import (C1Result, C2Arm, c2_dispersion, run_c1, run_c2,
                        specificity_difference, tercile_weights, weighted_mean)
+from .covariates import adr14
 from .errors import AuthorityError
 from .outcome_seal import SEALED_R1_OUTCOME, SealedOutcomeHandle, seal_outcome
 from .signal import apply_e4
@@ -67,6 +70,7 @@ class StudySummary:
     n_signal_defined: int
     na_count: int
     verdict: Verdict
+    a1: A1Result
     c1_mean_of_draw_means: float
     c1_clears_m_same_bar: bool
     specificity_d: float | None
@@ -95,12 +99,18 @@ def run_primary(source, dates, contract: SealedContract, *,
 
 def run_study(source, dates, contract: SealedContract, *, run_dir: Path | str,
               c2_dates=(), event_vol_states=(), c2_vol_states=(),
-              a1_sign_holds: bool = True,
+              session_dates=None,
               power_gate_resolves_m: bool = True,
-              n_shrunk_materially: bool = False,
               c1_seed: int | None = None, c1_draws: int | None = None,
               s3_authorization: str | None = None) -> StudySummary:
-    """The whole sealed study, once. Returns decision inputs and a receipt."""
+    """The whole sealed study, once. Returns decision inputs and a receipt.
+
+    Note what is NOT a parameter. `a1_sign_holds`: A1 is computed here from the
+    pipeline's own signals and trailing ADR14, never handed in by a caller.
+    `n_shrunk_materially`: the structural universe must reproduce exactly or
+    the run fails (r1.errors.RunIntegrityError), so there is no judgement to
+    pass in.
+    """
     _require_authorized_source(source, s3_authorization)
 
     e4 = apply_e4(source, dates, contract,
@@ -136,14 +146,22 @@ def run_study(source, dates, contract: SealedContract, *, run_dir: Path | str,
             d_values = [v - weighted for v in base_values]
             d_ci = bootstrap_interval(d_values, contract)
 
+    # A1: computed HERE, from this run's own signals and trailing ADR14.
+    history_dates = (tuple(session_dates) if session_dates is not None
+                     else tuple(getattr(source, "dates", ())))
+    metrics = [a1_metric(sig, adr14(TrailingHistory(source, sig.date_et,
+                                                    history_dates), contract))
+               for sig in e4.signals]
+    a1 = evaluate_a1(base, a1_memberships([d for d, _ in directed], metrics))
+
     evidence = PrimaryEvidence(
         base_interval=base_ci,
         conservative_point_estimate=mean_y_net(conservative),
         c1_clears_m=c1_clears,
-        a1_sign_holds=a1_sign_holds,
+        a1_sign_holds=a1.sign_holds,
         materiality_m=contract.materiality_m_usd,
         power_gate_resolves_m=power_gate_resolves_m,
-        n_shrunk_materially=n_shrunk_materially)
+        n_shrunk_materially=False)
     verdict = decide(evidence, d_ci)
 
     handle = seal_outcome(
@@ -158,6 +176,8 @@ def run_study(source, dates, contract: SealedContract, *, run_dir: Path | str,
             "mean_y_net_usd": evidence.conservative_point_estimate,
             "base_interval": [base_ci.lower, base_ci.upper],
             "e4_count": e4.e4_count,
+            "a1_n_members": a1.n_members,
+            "a1_sign_holds": a1.sign_holds,
             "verdict_axis1": verdict.axis1,
             "verdict_axis2": verdict.axis2,
         },
@@ -168,7 +188,7 @@ def run_study(source, dates, contract: SealedContract, *, run_dir: Path | str,
     return StudySummary(
         n_structural=e4.pre_seal_structural_n, e4_count=e4.e4_count,
         n_signal_defined=len(base), na_count=len(e4.na_dates),
-        verdict=verdict, c1_mean_of_draw_means=c1.mean_of_draw_means,
+        verdict=verdict, a1=a1, c1_mean_of_draw_means=c1.mean_of_draw_means,
         c1_clears_m_same_bar=c1_clears, specificity_d=d_stat, handle=handle)
 
 

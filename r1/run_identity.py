@@ -10,6 +10,17 @@ later be described loosely:
     run configuration . cost scenario definitions . seed set .
     trial-registry identity
 
+Three identities are kept apart on purpose, because conflating them is how a
+sealed design quietly becomes whatever the code happens to do:
+
+    CONTENT_COMMIT          the SEALED research content       immutable
+    SEAL_ATTESTATION_COMMIT the attestation to it             immutable
+    S2_BUILD_COMMIT         the IMPLEMENTATION that runs it   versioned
+
+Post-seal interpretation artifacts -- the errata record and the operational
+execution ledger -- are bound here too, and are never part of the S1 sealed
+digest set
+
 No real research run is created here, and `RunIdentity.is_real_run` is False
 unless an S3 authorization token is supplied -- so a synthetic identity can
 never be mistaken for a run that consumed the trial.
@@ -64,9 +75,14 @@ class RunIdentity:
     psmv_artifact_sha256: str
     event_universe_digest: str          # L-6: frozen before any outcome
 
-    # code and environment identity
+    # code and environment identity -- NEVER confused with the sealed identity
     code_commit: str
+    s2_build_commit: str | None            # implementation identity only
     environment: Mapping[str, str]
+
+    # post-seal interpretation artifacts (additive; never part of the S1 seal)
+    sealed_errata_sha256: str | None
+    operational_ledger_digest: str | None
 
     # run configuration
     cost_scenarios: Mapping[str, Mapping[str, float]]
@@ -101,6 +117,9 @@ class RunIdentity:
 def build_run_identity(contract: SealedContract, *, run_label: str,
                        code_commit: str, data_manifest_sha256: str,
                        event_universe_digest: str,
+                       s2_build_commit: str | None = None,
+                       sealed_errata_sha256: str | None = None,
+                       operational_ledger_digest: str | None = None,
                        s3_authorization: str | None = None,
                        notes: tuple[str, ...] = ()) -> RunIdentity:
     """Build the identity. Real only under an explicit S3 authorization."""
@@ -135,7 +154,10 @@ def build_run_identity(contract: SealedContract, *, run_label: str,
         psmv_artifact_sha256=contract.psmv_artifact_sha256,
         event_universe_digest=event_universe_digest,
         code_commit=code_commit,
+        s2_build_commit=s2_build_commit,
         environment=environment_identity(),
+        sealed_errata_sha256=sealed_errata_sha256,
+        operational_ledger_digest=operational_ledger_digest,
         cost_scenarios=scenarios,
         primary_cost_scenario=contract.primary_cost_scenario,
         bootstrap_seeds=contract.bootstrap_seeds,

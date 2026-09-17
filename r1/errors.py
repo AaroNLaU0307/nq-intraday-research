@@ -38,6 +38,22 @@ class CalendarError(R1Error):
     or an attempt to infer/default a release time (L-3)."""
 
 
+class LedgerError(R1Error):
+    """The operational execution ledger is broken: a missing genesis record, a
+    gap in the sequence, or an entry that no longer hashes to its digest. The
+    ledger is append-only; edits, deletions and reorderings are refused."""
+
+
+class RunIntegrityError(R1Error):
+    """The real loader failed to reproduce the SEALED structural universe.
+
+    This is never a researcher judgement about a shrunken sample. PSMV fixed
+    PRE_SEAL_STRUCTURAL_N = 252 before the seal; if execution cannot reproduce
+    it exactly, the run is broken and must stop -- it does not become an
+    UNRESOLVED verdict with a smaller n.
+    """
+
+
 class OutcomeExposureError(R1Error):
     """An attempt to read, print or return a sealed R1 outcome without an
     explicit Owner-authorized reveal."""

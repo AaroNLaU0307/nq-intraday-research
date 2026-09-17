@@ -24,8 +24,12 @@ CONSTANTS_HOME = "contract.py"
 SEALED_LITERALS = {509, 511, 512, 513, 569, 252, 118, 134, 277, 258,
                    3.99, 5.49, 6.24, 6.74, 1.74, 7.98}
 
-#: L-10: R1 reads the DERIVED spread table, never a raw decoder / raw BBO.
+#: L-10: R1 reads the DERIVED spread table, never raw BBO. The ohlcv-1m
+#: decoder is authorized in exactly ONE module -- the Development adapter --
+#: and forbidden everywhere else. The exception is explicit and audited rather
+#: than silent, and no module anywhere may name a `bbo` schema.
 FORBIDDEN_IMPORTS = ("databento", "dbn", "databento_dbn")
+DECODER_HOME = "dev_adapter.py"
 
 #: L-3: no release-time literal, default or fallback anywhere in the event path.
 TIME_LITERAL = re.compile(r"\b(?:0?8[:.]?30(?::00)?|0830)\b")
@@ -57,6 +61,8 @@ def scan_no_raw_decoder_import(paths=None) -> tuple[str, ...]:
     """
     findings: list[str] = []
     for path in ([Path(p) for p in paths] if paths else _modules()):
+        if not paths and path.name == DECODER_HOME:
+            continue                     # the one audited exception
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             names: list[str] = []

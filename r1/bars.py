@@ -73,19 +73,26 @@ class SyntheticBarSource:
 
 
 class DevelopmentBarSource:
-    """The real NQ Development OHLCV source -- BUILT, and BLOCKED until S3.
+    """The real NQ Development OHLCV source, for the OUTCOME PATH.
 
-    S2 BUILD authorization explicitly does not authorize processing real
-    Development data through the completed outcome path. So this class refuses
-    at construction unless it is handed an S3 authorization token, and the
-    refusal happens before any decoder import and before any path is built:
-    an accidental call cannot read a byte of market data.
+    The loader itself is fully implemented in `r1.dev_adapter` -- S3 is a RUN
+    stage, not a BUILD stage, so the adapter was built and validated during S2
+    against fixtures, mocks and fake manifests. What this wrapper adds is the
+    AUTHORITY gate: running the outcome path over real data is an S3 act, so it
+    refuses without an explicit token, BEFORE constructing the adapter, so no
+    file is opened and no decoder is imported.
+
+    The adapter is separately constructible for validation, and still cannot
+    reach an outcome: its `role` is `development_signal`, and `apply_e4`,
+    `run_primary` and `run_study` all refuse a non-synthetic source without the
+    same token.
     """
 
     role = "development_signal"
     S3_TOKEN_PREFIX = "S3_RUN_AUTHORIZED_BY_AARON:"
 
-    def __init__(self, data_dir, s3_authorization: str | None = None):
+    def __init__(self, data_dir, s3_authorization: str | None = None, *,
+                 expected_manifest_sha256: str | None = None):
         if not isinstance(s3_authorization, str) or not \
                 s3_authorization.startswith(self.S3_TOKEN_PREFIX):
             raise AuthorityError(
@@ -94,18 +101,23 @@ class DevelopmentBarSource:
                 "running the outcome path over real data is an S3 act and "
                 "needs Aaron's explicit authorization. No decoder was "
                 "imported and no path was constructed.")
-        self._data_dir = data_dir
+        if not expected_manifest_sha256:
+            raise AuthorityError(
+                "a real run must pin the vendor manifest identity; refusing to "
+                "read an unidentified archive")
+        from .dev_adapter import DevelopmentDataAdapter   # noqa: PLC0415
+        self._adapter = DevelopmentDataAdapter(
+            data_dir, expected_manifest_sha256=expected_manifest_sha256)
         self._token = s3_authorization
 
-    def bars_for(self, date_et: str) -> Mapping[int, Bar]:   # pragma: no cover
-        raise NotImplementedError(
-            "S3 integration deliberately left unimplemented in S2: the loader "
-            "body would be exercised only by a real run. Build it in S3 "
-            "against the same Bar/BarSource contract the synthetic source and "
-            "the whole test suite already pin.")
+    def bars_for(self, date_et: str) -> Mapping[int, Bar]:
+        return self._adapter.bars_for(date_et)
 
-    def has_date(self, date_et: str) -> bool:                # pragma: no cover
-        raise NotImplementedError
+    def has_date(self, date_et: str) -> bool:
+        return self._adapter.has_date(date_et)
+
+    def identity(self) -> dict:
+        return self._adapter.identity()
 
 
 # --------------------------------------------------------------------------
