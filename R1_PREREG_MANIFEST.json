@@ -4,7 +4,7 @@
   "generated": "2026-09-17",
   "closes": "P-7 (mechanical validation of the preregistration format)",
   "purpose": "The SMALLEST structured companion to the prose preregistration that permits mechanical validation of the fields that genuinely matter. It is deliberately not a schema translation of the document: the 1,300 lines of prose were NOT converted into a schema.",
-  "authoritative_document": "R1_S1_PREREGISTRATION_DRAFT_UNSEALED.md",
+  "authoritative_document": "R1_S1_PREREGISTRATION_SEALED.md",
   "authority_note": "THIS FILE IS NOT AUTHORITATIVE. The prose preregistration is. Every field below is cross-checked against the prose, PROJECT_STATE.md, R1_DELEGATED_OWNER_DECISIONS.md, R1_TRIAL_REGISTRY.md and the PSMV artifact by psmv/validate_prereg.py, so this companion cannot silently drift from the document it describes. On a conflict the prose wins and the manifest is the defect.",
   "purity_note": "Contains no price, return, sign, P&L, dispersion, MDE or any other outcome quantity. Monetary constants are ruled Owner decisions carried as strings, not measurements.",
 
@@ -26,10 +26,10 @@
   },
 
   "stage": {
-    "stage": "S1 PRE-SEAL",
+    "stage": "S1 SEALED",
     "revision": "r4",
     "s0": "CLOSED",
-    "s1": "UNSEALED",
+    "s1": "SEALED",
     "psmv": "COMPLETE",
     "s2_authorized": false,
     "experiments_run": false,
@@ -100,13 +100,15 @@
   },
 
   "seal_status": {
-    "prereg_sealed": false,
+    "prereg_sealed": true,
     "seal_conditions_total": 11,
-    "seal_conditions_satisfied": 10,
-    "outstanding_conditions": ["11 AARON SEALS"],
-    "sealed_by": null,
-    "sealed_utc": null,
-    "sealed_commit": null
+    "seal_conditions_satisfied": 11,
+    "outstanding_conditions": [],
+    "sealed_by": "Aaron (Owner)",
+    "seal_executed_by": "Claude Opus (Main Agent), acting under explicit Aaron authorization",
+    "sealed_date": "2026-09-17",
+    "sealed_commit": "SEE R1_S1_SEAL_ATTESTATION.json (CONTENT_COMMIT) -- a commit cannot contain its own SHA",
+    "seal_authorizes": "nothing beyond fixing the design; S2, the run, the reveal and the OD-3 gate each need their own Aaron authorization"
   },
 
   "trial_identity": {
@@ -163,6 +165,9 @@
     "repository": "standalone local git repository; no remote; nothing pushed",
     "initialised": "2026-09-17, as technical implementation of OD-5 = OPTION A",
     "PRE_SEAL_PROJECT_COMMIT": "8656701564d798a227efa9f46e2f581353017ff5",
-    "is_sealed_commit": false
+    "pre_seal_commit_is_the_sealed_commit": false,
+    "SEAL_IDENTITY": "R1_S1_SEAL_ATTESTATION.json",
+    "seal_tag": "r1-s1-sealed",
+    "pre_seal_tag_preserved": "r1-pre-seal"
   }
 }

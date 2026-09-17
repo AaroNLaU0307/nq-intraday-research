@@ -59,13 +59,14 @@ ITSF repository      not modified by this project (worktree clean at 11725fb)
 | 4 | 2026-09-17 | `PSMV_SCOPE_RECORD_REPAIR` | main agent, on review (`PSMV_SCIENTIFIC_INTEGRITY = PASS`, `PSMV_AUTHORITY_COMPLIANCE = HOLD / BOUNDED_RECORD_REPAIR`) | The PSMV record carried a deterministic MDE recalculation that exceeded the authorized PSMV output surface. Removed from the record. `PSMV_MDE_SCOPE_VIOLATION = RECORD_HYGIENE_ONLY` · `R1_OUTCOME_CONTAMINATION = NO` · `PSMV_RERUN_REQUIRED = NO`. **No data process re-run, no artifact modified, no exposure consumed.** |
 | 5 | 2026-09-17 | `PREREG_MANIFEST_ADDED` | main agent | P-7 closed: `R1_PREREG_MANIFEST.json`, the smallest structured companion that validates mechanically, cross-checked by `psmv/validate_prereg.py`. The manifest is **not** authoritative. |
 | 6 | 2026-09-17 | `VERSION_CONTROL_INITIALISED` | main agent | P-8 closed: the project is now a standalone local git repository (OD-5 = OPTION A implementation; no remote, nothing pushed). `PRE_SEAL_PROJECT_COMMIT` in §4. **This is NOT a seal and NOT a sealed commit.** |
+| 7 | 2026-09-17 | `PREREG_SEALED` | **Aaron (Owner)** authorized; executed by Claude Opus (Main Agent) under that explicit authorization | S1 FINAL SEAL. `CHATGPT FINAL PRE-SEAL ACCEPTANCE = PASS`, `MATERIAL_BLOCKERS = 0`. The r4 design is sealed unchanged as `R1_S1_PREREGISTRATION_SEALED.md`; seal identity (CONTENT_COMMIT + every sha256) in `R1_S1_SEAL_ATTESTATION.json`. **Fable did not seal this** -- Fable decided the delegated packet (row 2). **Exposure NOT consumed: a seal is not a run.** S2 NOT started, NOT authorized. |
 
 <!-- Append below this line only. Nothing above may be altered once committed. -->
 
-**Still not appended, and each requires its own authority:** `PREREG_SEALED`
-(Aaron only) · `S2_BUILD_STARTED` (after the seal) · `RUN_AUTHORIZED` (Aaron
-only) · `RUN_STARTED` (**the row that consumes exposure**) · `POWER_GATE_REPORTED`
-(OD-3) · `REVEAL_AUTHORIZED` (Aaron only) · `COMPLETED`.
+**Still not appended, and each requires its own authority:**
+`S2_BUILD_STARTED` (Aaron — the seal did NOT authorize it) · `RUN_AUTHORIZED`
+(Aaron only) · `RUN_STARTED` (**the row that consumes exposure**) ·
+`POWER_GATE_REPORTED` (OD-3) · `REVEAL_AUTHORIZED` (Aaron only) · `COMPLETED`.
 
 ---
 
@@ -168,4 +169,35 @@ provide.
 ```
 PRE_SEAL_PROJECT_COMMIT = 8656701564d798a227efa9f46e2f581353017ff5
 IS_SEALED_COMMIT        = NO
+```
+
+---
+
+## 5. Seal-time identities — S1 FINAL SEAL, 2026-09-17
+
+```
+PREREG_SEALED    = YES
+SEALED_BY        = Aaron (Owner)
+SEAL_EXECUTED_BY = Claude Opus (Main Agent), under explicit Aaron authorization
+DELEGATED PACKET = DELEGATED_BY Aaron / DECIDED_BY Fable 5.1 / ACCEPTED_BY
+                   ChatGPT -- an earlier and separate act (row 2). Fable did
+                   NOT seal the preregistration.
+```
+
+**The sealed document was renamed at seal**, from
+`R1_S1_PREREGISTRATION_DRAFT_UNSEALED.md` to
+`R1_S1_PREREGISTRATION_SEALED.md`. A sealed preregistration must not be named a
+draft. The content is the accepted r4 design plus seal status metadata and
+section T; the seal binds the **content**, and git carries the rename.
+
+**No digest is written here.** Every seal-time sha256 — the sealed
+preregistration, the manifest, the delegated Owner-decision record, the S0
+provenance record, this registry and both PSMV artifacts — lives in
+`R1_S1_SEAL_ATTESTATION.json`, together with `CONTENT_COMMIT`. This file is
+itself inside the sealed digest set, so a digest written here would be stale the
+moment it was written. `psmv/validate_prereg.py` recomputes the whole set.
+
+```
+SEAL_IDENTITY = R1_S1_SEAL_ATTESTATION.json
+SEAL_TAG      = r1-s1-sealed          (r1-pre-seal is preserved, untouched)
 ```

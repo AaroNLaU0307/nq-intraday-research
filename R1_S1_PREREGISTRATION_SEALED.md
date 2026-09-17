@@ -1,15 +1,20 @@
 # R1 — SCHEDULED-RELEASE INFORMATION-DIFFUSION CONTINUATION
-## S1 DESIGN / PREREGISTRATION — **DRAFT · UNSEALED · NOT_AUTHORIZED**
+## S1 DESIGN / PREREGISTRATION — **SEALED · AUTHORITATIVE · S2 NOT AUTHORIZED**
 
 ```
-STATUS               = DRAFT / UNSEALED / NOT_AUTHORIZED
-REVISION             = r4  (bounded RECORD repair: PSMV output surface,
-                       P-7 and P-8 closed. No design element reopened.)
-STAGE                = S1 PRE-SEAL (draft only; the seal is an Aaron Owner act)
+STATUS               = SEALED / AUTHORITATIVE
+REVISION             = r4  (the ACCEPTED design, sealed unchanged. The seal
+                       added status metadata and section T, nothing else.)
+STAGE                = S1 SEALED
 LINEAGE              = R1 (new lineage; NOT a continuation of ITSF-S0)
 AUTHORED_BY          = Claude Opus 5 (Main Agent / builder seat), 2026-09-17
 WORKFLOW_AUTHORITY   = QUANT_WORKFLOW_VNEXT.md (cutover 2026-09-12)
-PREREG_SEALED        = NO
+PREREG_SEALED        = YES
+SEALED_BY            = Aaron (Owner)
+SEAL_EXECUTED_BY     = Claude Opus (Main Agent), acting under explicit Aaron
+                       authorization dated 2026-09-17
+SEAL_DATE            = 2026-09-17
+SEAL_IDENTITY        = R1_S1_SEAL_ATTESTATION.json (CONTENT_COMMIT + digests)
 S2_AUTHORIZED        = NO
 PSMV                 = COMPLETE 2026-09-17 (structural only, invariant L-13)
 EXPERIMENTS_RUN      = NO
@@ -114,7 +119,7 @@ and are not revived. `qros` was not run.
 
 ```
 S0 FRAME                            CLOSED (Owner decision RESEARCH)
-S1 DESIGN  (this draft, r3)         DONE
+S1 DESIGN  (this document, r4)      DONE -- and now SEALED
    |
    +-- OD-1 GRANTED                 DONE 2026-09-17 (delegated ruling)
    |
@@ -127,11 +132,14 @@ S1 DESIGN  (this draft, r3)         DONE
    +-- structural n + availability   DONE -- written into section D.3 and S
    |   table WRITTEN INTO this prereg
    |
-   +-- ChatGPT / Aaron acceptance   <== WE ARE HERE
+   +-- ChatGPT / Aaron acceptance   DONE 2026-09-17.
+   |                                CHATGPT FINAL PRE-SEAL ACCEPTANCE = PASS,
+   |                                MATERIAL_BLOCKERS = 0
    |
-   +-- AARON SEALS                  <-- the seal is the boundary
+   +-- AARON SEALS                  DONE 2026-09-17  <== WE ARE HERE
+   |                                the seal is the boundary, and it is crossed
    |
-S2 BUILD                            may begin ONLY after the seal
+S2 BUILD                            NOT STARTED, NOT AUTHORIZED
 S3 RUN -> S4 VERDICT -> STOP
 ```
 
@@ -1336,12 +1344,14 @@ The preregistration may be sealed when, and only when, **all** of the following 
                      artifact by psmv/validate_prereg.py.
 10.  OD-3 ACCEPTED   SATISFIED -- the pre-reveal power protocol is in the text
                      (section I.3) and was NOT run at PSMV.
-11.  AARON SEALS     OUTSTANDING -- and only then may S2 BUILD begin.
+11.  AARON SEALS     SATISFIED 2026-09-17 -- Aaron authorized the S1 final
+                     seal; Claude Opus executed it. Only S2 BUILD remains,
+                     and it is NOT authorized by the seal.
 
-STATUS: 10 of 11 satisfied. Outstanding: item 11, the seal itself, which is an
-Aaron Owner act. P-5 remains an open, NON-BLOCKING cost residual and is disclosed
-rather than closed. P-8 is closed; the pre-seal state is committed, and the seal
-must bind to a committed state.
+STATUS: 11 of 11 satisfied. The seal was taken on 2026-09-17 and binds to a
+committed state (section T.3). P-5 remains a disclosed, NON_BLOCKING_RESIDUAL
+cost-model limitation and was deliberately NOT resolved by a purchase at seal
+time.
 ```
 
 **Why item 8 must not be waived, restated after REPAIR 4 — and now discharged.**
@@ -1353,7 +1363,7 @@ measured fact in the text rather than a promise — with the honest qualificatio
 §S.3 that it is the *structural* `n`, because the last funnel stage is not decidable
 without prices.
 
-**Nothing in this document is sealed. Nothing in it authorizes PSMV or S2.**
+**This document is SEALED (section T). Being sealed authorizes nothing by itself: not S2, not a run, not a reveal.**
 
 ---
 
@@ -1570,6 +1580,9 @@ touched prose only.
 
 ## R. RECOMMENDATION
 
+*(Historical, and now discharged: this recommendation was accepted on 2026-09-17
+and the seal was taken. Retained unaltered as part of the sealed record.)*
+
 **Proceed to final acceptance, then to Aaron for the seal.** The delegated
 Owner packet is closed, PSMV is complete and pure, `n` is a measured fact, the
 PSMV record has been repaired to its authorized surface (§S.6), and the pre-seal
@@ -1611,6 +1624,124 @@ session check the preregistration now has.
 EXPERIMENTS_RUN      = NO
 BACKTEST_RUN         = NO
 R1_OUTCOME_INSPECTED = NO
-S1_SEALED            = NO
+S1_SEALED            = YES   (2026-09-17; Aaron sealed, Claude Opus executed)
 S2_STARTED           = NO
 ```
+
+
+---
+
+## T. S1 SEAL RECORD
+
+```
+PREREG_SEALED    = YES
+SEALED_BY        = Aaron (Owner)
+SEAL_EXECUTED_BY = Claude Opus (Main Agent), acting under explicit Aaron
+                   authorization dated 2026-09-17
+SEAL_DATE        = 2026-09-17
+SEAL_SCOPE       = S1 FINAL SEAL ONLY
+SEALED_DOCUMENT  = this file, revision r4 -- the accepted design, unchanged
+FILENAME AT SEAL = R1_S1_PREREGISTRATION_SEALED.md
+                   (renamed at seal from R1_S1_PREREGISTRATION_DRAFT_UNSEALED.md;
+                    a sealed preregistration must not be called a draft. The
+                    content, not the path, is what the seal binds.)
+```
+
+**Aaron sealed it; Claude Opus executed the seal.** Those are two different acts
+and this record keeps them apart. The delegated Owner-decision packet that fixed
+OD-1…OD-7 and P-2 was a third, earlier act, and its provenance is preserved
+separately and unchanged:
+
+```
+DECISION_TYPE = DELEGATED_OWNER_RULING
+DELEGATED_BY  = Aaron        DECIDED_BY = Fable 5.1      ACCEPTED_BY = ChatGPT
+```
+
+**Fable did not seal this preregistration.** Fable decided the delegated packet;
+ChatGPT accepted it and returned `CHATGPT FINAL PRE-SEAL ACCEPTANCE = PASS`
+with `MATERIAL_BLOCKERS = 0`; **Aaron** is the authority that authorized the
+seal. Aaron retains override authority over everything the packet decided.
+
+### T.1 What the seal fixes
+
+The sealed operative design, as it stands in the sections that define it — each
+line is mechanically cross-checked against those sections and against
+`R1_PREREG_MANIFEST.json` by `psmv/validate_prereg.py`:
+
+```
+EVENT FAMILY              CPI + Employment Situation / NFP, POOLED     (D.2-D.3)
+INITIAL REACTION          R_init = C(08:31) - C(08:29)                 (E.1)
+SIGNAL COMPLETE           08:32:00 ET                                  (E.1)
+PRIMARY ENTRY REFERENCE   O(08:33)                                     (E.1-E.2)
+EXIT                      O(09:29)                                     (F.1-F.2)
+HOLDING PERIOD            56 minutes                                   (F.1)
+MATERIALITY               k = 1,  M = $3.99 per event per 1 MNQ        (G.3)
+PRE_SEAL_STRUCTURAL_N     252   (CPI 118 / NFP 134)                    (J, S)
+ROLL TRANSITION EXCL.     0, measured exactly                          (S.2)
+E4                        DEFERRED TO POST-SEAL S2                     (S.3)
+FOMC                      UNRESOLVED / DEFERRED, never falsified       (D.1)
+CROSS-ASSET PURCHASE      DECLINED                                     (H.3)
+PLANNING_POWER_TABLE      TO_BE_REFRESHED_OUTSIDE_PSMV / BEFORE_SEAL IF REQUIRED
+```
+
+`E4` was **not** computed during sealing. Deciding it requires comparing two bar
+close prices, and no price was read at any point in the seal.
+
+### T.2 What the seal does NOT authorize
+
+```
+S2 implementation           NOT AUTHORIZED
+R1 outcome computation      NOT AUTHORIZED
+R1 outcome reveal           NOT AUTHORIZED
+the OD-3 power gate         NOT AUTHORIZED (post-seal S2; still not run)
+Internal Validation         NOT GRANTED
+Lockbox                     NOT GRANTED
+experiments / backtests     NOT AUTHORIZED
+parameter changes           FORBIDDEN -- the design is sealed
+prereg redesign             FORBIDDEN -- see below
+```
+
+Each needs its own Aaron authorization. A sealed preregistration may be
+**superseded on the record**, never quietly edited: any future change requires a
+new Owner act, a new revision and a new seal, with this one preserved intact.
+
+### T.3 Seal identity — the two-layer pattern, stated honestly
+
+A commit cannot contain its own SHA and a file cannot contain its own digest.
+The seal therefore binds in two layers, and neither pretends otherwise:
+
+```
+CONTENT_COMMIT           the commit whose tree IS the sealed content
+SEAL_ATTESTATION_COMMIT  its child, which adds R1_S1_SEAL_ATTESTATION.json --
+                         the CONTENT_COMMIT SHA and the sha256 of every sealed
+                         file -- and changes nothing else in the sealed set
+TAG                      r1-s1-sealed, annotated, carrying both SHAs
+                         (the earlier r1-pre-seal tag is left untouched)
+```
+
+Both SHAs and the full digest set live in `R1_S1_SEAL_ATTESTATION.json`.
+`psmv/validate_prereg.py` recomputes every digest recorded there and fails if
+any sealed file has moved by a single byte, so the seal is **checkable**, not
+merely declared.
+
+### T.4 State at the seal
+
+```
+S0 = CLOSED   S1 = SEALED   PSMV = COMPLETE   S2 = NOT STARTED / NOT AUTHORIZED
+
+PSMV_COMPLETE            = YES
+PSMV_RERUN               = NO
+PSMV_MDE_SCOPE_VIOLATION = RECORD_HYGIENE_ONLY
+R1_OUTCOME_CONTAMINATION = NO
+P-5                      = NON_BLOCKING_RESIDUAL -- the 2025-Q1 spread proxy
+                           applied to earlier pre-open history remains a
+                           DISCLOSED cost-model limitation. It was deliberately
+                           not resolved by a purchase at seal time.
+R1_OUTCOME_EXPOSURE      = NONE       R1_TRIAL_CONSUMED = NO
+SAMPLE_FORMAL_TRIAL_ORDINAL = 2       INHERITED_RESEARCHER_EXPOSURE_COUNT = 1575
+PRIOR_LINEAGE            = ITSF S0-T001 (referenced by digest; never mutated)
+```
+
+**No R1 outcome exists.** None was computed, inspected or revealed, at the seal
+or before it. The next possible stage is S2 BUILD, and it is not authorized by
+this seal.

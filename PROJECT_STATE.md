@@ -10,9 +10,15 @@ RESEARCH_QUESTION    = After a public scheduled information release, and after a
                        realistically executable decision delay, does economically
                        meaningful directional price adjustment remain in NQ?
 RESEARCH_ID · LANE   = R1 · FULL
-STAGE                = S1 PRE-SEAL
+STAGE                = S1 SEALED
 S0                   = CLOSED  (Owner decision: RESEARCH — see R1_S0_PROVENANCE.md)
-S1                   = UNSEALED  (draft r4; ready for final acceptance)
+S1                   = SEALED  (r4, 2026-09-17)
+PREREG_SEALED        = YES
+SEALED_BY            = Aaron (Owner)
+SEAL_EXECUTED_BY     = Claude Opus (Main Agent), under explicit Aaron
+                       authorization
+SEAL_IDENTITY        = R1_S1_SEAL_ATTESTATION.json (CONTENT_COMMIT + digests)
+SEALED_COMMIT        = PENDING   (recorded by the attestation commit)
 PSMV                 = AUTHORIZED · COMPLETE 2026-09-17
                        record-repaired 2026-09-17 (output surface only):
                          PSMV_MDE_SCOPE_VIOLATION = RECORD_HYGIENE_ONLY
@@ -45,10 +51,11 @@ IS_SEALED_COMMIT     = NO   (the seal is a separate Aaron Owner act)
 OPEN_MATERIAL_BLOCKERS = NONE
 OPEN_PRE_SEAL_ITEMS  = P-5 only (cost residual, NON-BLOCKING). P-1..P-4, P-7
                        and P-8 are CLOSED; P-6 is not applicable yet.
-CURRENT_NEXT_ACTION  = PRE-SEAL CLEANUP — COMPLETE. Next: ChatGPT/Aaron final
-                       acceptance of the r4 UNSEALED preregistration, then
-                       Aaron's seal. Nothing else is authorized.
-NEXT_OWNER_DECISION  = seal or withhold the R1 preregistration
+CURRENT_NEXT_ACTION  = S1 SEALED — COMPLETE AND STOPPED HERE. S2 BUILD is the
+                       next possible stage and is NOT authorized. No R1 outcome
+                       may be computed, and nothing may be built, until Aaron
+                       authorizes S2.
+NEXT_OWNER_DECISION  = authorize S2 BUILD, or do not
 ```
 
 ## What this project is, in one paragraph
@@ -67,7 +74,8 @@ different question about the 09:30–10:00 opening drive.
 | `PROJECT_STATE.md` | this page — current state only |
 | `R1_S0_PROVENANCE.md` | how R1 reached `RESEARCH`; the S0 chain and the parallel dispositions |
 | `R1_DELEGATED_OWNER_DECISIONS.md` | the operative OD-1…OD-7 and P-2 ruling record |
-| `R1_S1_PREREGISTRATION_DRAFT_UNSEALED.md` | the r4 design — **UNSEALED** |
+| `R1_S1_PREREGISTRATION_SEALED.md` | the r4 design — **SEALED** 2026-09-17 |
+| `R1_S1_SEAL_ATTESTATION.json` | the seal: CONTENT_COMMIT + every sealed sha256 |
 | `R1_PREREG_MANIFEST.json` | structured companion to the prereg (closes P-7); **not authoritative** |
 | `R1_TRIAL_REGISTRY.md` | R1's own trial/exposure identity |
 | `psmv/psmv_structural.py` | the pre-seal structural reader (L-13 constrained) |

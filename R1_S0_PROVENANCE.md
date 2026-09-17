@@ -91,5 +91,6 @@ preregistration implements each; the pointer says where.
 
 It is not an S0 packet, not a review, not a challenge and not an authority. The
 operative decisions live in `R1_DELEGATED_OWNER_DECISIONS.md`; the design lives
-in `R1_S1_PREREGISTRATION_DRAFT_UNSEALED.md`. Where this file and either of
-those disagree, they win.
+in `R1_S1_PREREGISTRATION_SEALED.md` (named
+`R1_S1_PREREGISTRATION_DRAFT_UNSEALED.md` until the seal of 2026-09-17).
+Where this file and either of those disagree, they win.

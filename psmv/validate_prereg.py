@@ -4,8 +4,13 @@ it executes NO research statistic and reads NO market data.
 
 r4 (2026-09-17) adds two things: the P-7 manifest cross-check (group 13), and
 the PSMV output-surface repair checks (group 9b), which make a numeric MDE
-anywhere in the pre-seal record a FAILURE rather than an allowlisted planning
-figure."""
+anywhere in the record a FAILURE rather than an allowlisted planning figure.
+
+SEAL (2026-09-17): group 10 now asserts the SEALED state rather than the
+unsealed one, and group 14 verifies the seal attestation -- recomputing the
+sha256 of every sealed file, so the seal is checkable rather than declared.
+Group 14 is skipped while the attestation does not exist, which is exactly the
+state of the CONTENT_COMMIT itself (a commit cannot attest to its own SHA)."""
 from __future__ import annotations
 
 import hashlib
@@ -15,8 +20,9 @@ import sys
 from pathlib import Path
 
 P = Path(__file__).resolve().parent.parent
-PREREG = P / "R1_S1_PREREGISTRATION_DRAFT_UNSEALED.md"
+PREREG = P / "R1_S1_PREREGISTRATION_SEALED.md"
 MANIFEST = P / "R1_PREREG_MANIFEST.json"
+SEAL = P / "R1_S1_SEAL_ATTESTATION.json"
 STATE = P / "PROJECT_STATE.md"
 DECISIONS = P / "R1_DELEGATED_OWNER_DECISIONS.md"
 PROVENANCE = P / "R1_S0_PROVENANCE.md"
@@ -221,9 +227,26 @@ def main() -> int:
           rep["authority"]["LOCKBOX"] == "NOT GRANTED / NOT ACCESSED")
     check("artifact denies protected ITSF outcomes",
           rep["authority"]["PROTECTED_ITSF_OUTCOMES"] == "NOT GRANTED / NOT ACCESSED")
-    check("artifact: S1 not sealed", rep["authority"]["S1_SEALED"] is False)
+    # HISTORICAL, not current: the PSMV artifact records the authority state
+    # at PSMV time, when S1 was correctly not yet sealed. It is frozen.
+    check("PSMV artifact still records S1 unsealed AT PSMV TIME",
+          rep["authority"]["S1_SEALED"] is False)
     check("artifact: S2 not authorized", rep["authority"]["S2_AUTHORIZED"] is False)
-    check("prereg: PREREG_SEALED = NO", "PREREG_SEALED        = NO" in doc)
+    check("prereg: PREREG_SEALED = YES", "PREREG_SEALED        = YES" in doc)
+    check("prereg: SEALED_BY = Aaron", "SEALED_BY            = Aaron (Owner)" in doc)
+    check("prereg: the seal was EXECUTED by Claude Opus, not decided by it",
+          has(doc, "SEAL_EXECUTED_BY = Claude Opus (Main Agent), acting under "
+                   "explicit Aaron authorization"))
+    check("prereg: Fable is NOT recorded as the sealer",
+          has(doc, "Fable did not seal this preregistration")
+          and not has(doc, "SEALED_BY = Fable"))
+    check("prereg: the delegated provenance survives the seal, separately",
+          has(doc, "DELEGATED_BY  = Aaron        DECIDED_BY = Fable 5.1      "
+                   "ACCEPTED_BY = ChatGPT"))
+    check("prereg: S1_SEALED = YES in the trailer",
+          has(doc, "S1_SEALED            = YES"))
+    check("prereg: S2_STARTED = NO in the trailer",
+          has(doc, "S2_STARTED           = NO"))
     check("prereg: S2_AUTHORIZED = NO", "S2_AUTHORIZED        = NO" in doc)
     check("prereg: R1_OUTCOME_INSPECTED = NO",
           "R1_OUTCOME_INSPECTED = NO" in doc)
@@ -232,7 +255,9 @@ def main() -> int:
     check("state: Lockbox not granted", "LOCKBOX              = NOT GRANTED" in state)
     check("state: outcome reveal not granted",
           "OUTCOME_REVEAL       = NOT GRANTED" in state)
-    check("state: S1 unsealed", "S1                   = UNSEALED" in state)
+    check("state: S1 SEALED", "S1                   = SEALED" in state)
+    check("state: sealed by Aaron",
+          "SEALED_BY            = Aaron (Owner)" in state)
 
     # ---- 11. delegated provenance recorded exactly --------------------
     dec = DECISIONS.read_text(encoding="utf-8")
@@ -280,9 +305,9 @@ def main() -> int:
                                  "Fable 5.1", "ChatGPT")))
 
     st = man["stage"]
-    check("manifest stage: S1 PRE-SEAL / UNSEALED / PSMV COMPLETE",
+    check("manifest stage: S1 SEALED / S0 CLOSED / PSMV COMPLETE",
           (st["stage"], st["s0"], st["s1"], st["psmv"])
-          == ("S1 PRE-SEAL", "CLOSED", "UNSEALED", "COMPLETE"))
+          == ("S1 SEALED", "CLOSED", "SEALED", "COMPLETE"))
     check("manifest stage: S2 not authorized, nothing run",
           st["s2_authorized"] is False and st["experiments_run"] is False
           and st["backtest_run"] is False)
@@ -346,13 +371,19 @@ def main() -> int:
           "NOT RUN" in ra["pre_reveal_power_gate"])
 
     ss = man["seal_status"]
-    check("manifest: prereg NOT sealed, no sealed commit",
-          ss["prereg_sealed"] is False and ss["sealed_commit"] is None
-          and ss["sealed_by"] is None)
+    check("manifest: prereg SEALED, by Aaron, executed by Claude Opus",
+          ss["prereg_sealed"] is True
+          and ss["sealed_by"] == "Aaron (Owner)"
+          and ss["seal_executed_by"].startswith("Claude Opus"))
     check("manifest seal-condition count matches the prose",
           ss["seal_conditions_total"] == 11
-          and ss["seal_conditions_satisfied"] == 10
-          and has(doc, "STATUS: 10 of 11 satisfied"))
+          and ss["seal_conditions_satisfied"] == 11
+          and not ss["outstanding_conditions"]
+          and has(doc, "STATUS: 11 of 11 satisfied"))
+    check("manifest does not fake a sealed-commit SHA inside the sealed content",
+          "R1_S1_SEAL_ATTESTATION.json" in ss["sealed_commit"])
+    check("manifest still names the sealed document",
+          man["authoritative_document"] == "R1_S1_PREREGISTRATION_SEALED.md")
 
     ti = man["trial_identity"]
     check("manifest trial ordinal matches the registry",
@@ -412,13 +443,74 @@ def main() -> int:
     check("manifest commit field is PENDING or a full 40-hex sha",
           commit == "PENDING" or re.fullmatch(r"[0-9a-f]{40}", commit)
           is not None, commit[:12])
-    check("manifest: this is NOT the sealed commit",
-          vc["is_sealed_commit"] is False)
+    check("manifest: the PRE-SEAL commit is NOT the sealed commit",
+          vc["pre_seal_commit_is_the_sealed_commit"] is False)
+    check("manifest points at the seal identity, and keeps both tags",
+          vc["SEAL_IDENTITY"] == "R1_S1_SEAL_ATTESTATION.json"
+          and vc["seal_tag"] == "r1-s1-sealed"
+          and vc["pre_seal_tag_preserved"] == "r1-pre-seal")
     if commit != "PENDING":
         check("PROJECT_STATE records the same PRE_SEAL_PROJECT_COMMIT",
               commit in state)
         check("the trial registry records the same PRE_SEAL_PROJECT_COMMIT",
               commit in reg)
+
+    # ---- 14. the seal attestation -------------------------------------
+    # Skipped in the CONTENT_COMMIT itself, where the attestation does not yet
+    # exist. Once it does, every sealed digest is recomputed from disk.
+    if not SEAL.exists():
+        notes.append("SKIP  seal attestation not present yet "
+                     "(expected inside the CONTENT_COMMIT)")
+    else:
+        seal = json.loads(SEAL.read_text(encoding="utf-8"))
+        check("seal: PREREG_SEALED = YES", seal["PREREG_SEALED"] == "YES")
+        check("seal: SEALED_BY = Aaron", seal["SEALED_BY"].startswith("Aaron"))
+        check("seal: SEAL_EXECUTED_BY = Claude Opus under Aaron authorization",
+              seal["SEAL_EXECUTED_BY"].startswith("Claude Opus"))
+        check("seal: Fable recorded as packet decider, NOT as sealer",
+              seal["delegated_owner_packet"]["DECIDED_BY"] == "Fable 5.1"
+              and "Fable" not in seal["SEALED_BY"]
+              and "Fable" not in seal["SEAL_EXECUTED_BY"])
+        cc = seal["CONTENT_COMMIT"]
+        check("seal: CONTENT_COMMIT is a full 40-hex sha",
+              re.fullmatch(r"[0-9a-f]{40}", cc) is not None, cc[:12])
+        check("seal: CONTENT_COMMIT is not the pre-seal commit",
+              cc != "8656701564d798a227efa9f46e2f581353017ff5")
+        check("seal: the sealed set covers every required record",
+              all(k in seal["sealed_digests"] for k in (
+                  "R1_S1_PREREGISTRATION_SEALED.md", "R1_PREREG_MANIFEST.json",
+                  "R1_DELEGATED_OWNER_DECISIONS.md", "R1_S0_PROVENANCE.md",
+                  "R1_TRIAL_REGISTRY.md",
+                  "artifacts/PSMV_STRUCTURAL_REPORT.json",
+                  "artifacts/PSMV_PURITY_ATTESTATION.json")))
+        for rel, dig in seal["sealed_digests"].items():
+            check(f"seal digest verifies on disk: {rel}",
+                  (P / rel).exists() and sha256_of(P / rel) == dig, dig[:16])
+        check("seal: PSMV artifacts keep their PSMV-time digests",
+              seal["sealed_digests"]["artifacts/PSMV_STRUCTURAL_REPORT.json"]
+              == "df0242bad6e2a1e2eb6ad1c412f91ffc1d9d421ef036ea802f7fd382e68aef47"
+              and seal["sealed_digests"]["artifacts/PSMV_PURITY_ATTESTATION.json"]
+              == "67e13b1770d1895084c2a989fb8c67e5692b1888f11d3c21cd464cdb7f546c7e")
+        check("seal: S2 explicitly NOT authorized by the seal",
+              seal["authorizes"]["S2_IMPLEMENTATION"] == "NOT AUTHORIZED"
+              and seal["authorizes"]["R1_OUTCOME_REVEAL"] == "NOT AUTHORIZED")
+        check("seal: PSMV record preserved",
+              seal["psmv"]["PSMV_COMPLETE"] == "YES"
+              and seal["psmv"]["PSMV_RERUN"] == "NO"
+              and seal["psmv"]["PSMV_MDE_SCOPE_VIOLATION"] == "RECORD_HYGIENE_ONLY"
+              and seal["psmv"]["R1_OUTCOME_CONTAMINATION"] == "NO")
+        check("seal: P-5 preserved as NON_BLOCKING_RESIDUAL",
+              seal["residuals"]["P-5"] == "NON_BLOCKING_RESIDUAL")
+        check("seal: operative design matches the manifest",
+              seal["operative_design"]["k"] == man["materiality"]["k"]
+              and seal["operative_design"]["PRIMARY_ENTRY_REFERENCE"]
+              == man["entry_exit"]["entry"]
+              and seal["operative_design"]["EXIT"] == man["entry_exit"]["exit"]
+              and seal["operative_design"]["PRE_SEAL_STRUCTURAL_N"]
+              == man["structural_n"]["pre_seal_structural_n"])
+        if "SEALED_COMMIT        = PENDING" not in state:
+            check("PROJECT_STATE records the attested CONTENT_COMMIT",
+                  cc in state)
 
     for line in notes:
         print(line)
