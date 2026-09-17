@@ -10,7 +10,7 @@ RESEARCH_QUESTION    = After a public scheduled information release, and after a
                        realistically executable decision delay, does economically
                        meaningful directional price adjustment remain in NQ?
 RESEARCH_ID · LANE   = R1 · FULL
-STAGE                = S1 SEALED
+STAGE                = S2 BUILD (COMPLETE)
 S0                   = CLOSED  (Owner decision: RESEARCH — see R1_S0_PROVENANCE.md)
 S1                   = SEALED  (r4, 2026-09-17)
 PREREG_SEALED        = YES
@@ -29,7 +29,6 @@ PSMV                 = AUTHORIZED · COMPLETE 2026-09-17
                          PSMV_RERUN_REQUIRED      = NO
                          PSMV_RERUN               = NO
 PLANNING_POWER_TABLE = TO_BE_REFRESHED_OUTSIDE_PSMV / BEFORE_SEAL IF REQUIRED
-S2                   = NOT AUTHORIZED
 DATA_GRANT           = OD-1 GRANT, R1 scope only:
                          · existing NQ Development OHLCV
                            (NQ.v.0 ohlcv-1m, 2010-06-06 → 2022-01-01 exclusive,
@@ -54,11 +53,20 @@ IS_SEALED_COMMIT     = NO   (the seal is a separate Aaron Owner act)
 OPEN_MATERIAL_BLOCKERS = NONE
 OPEN_PRE_SEAL_ITEMS  = P-5 only (cost residual, NON-BLOCKING). P-1..P-4, P-7
                        and P-8 are CLOSED; P-6 is not applicable yet.
-CURRENT_NEXT_ACTION  = S1 SEALED — COMPLETE AND STOPPED HERE. S2 BUILD is the
-                       next possible stage and is NOT authorized. No R1 outcome
-                       may be computed, and nothing may be built, until Aaron
-                       authorizes S2.
-NEXT_OWNER_DECISION  = authorize S2 BUILD, or do not
+S2                   = BUILD COMPLETE 2026-09-17 (authorized by Aaron:
+                       implementation + synthetic validation ONLY)
+S3_RUN               = NOT AUTHORIZED
+OD3_POWER_GATE       = NOT RUN
+R1_OUTCOME           = NOT COMPUTED
+TRIAL_CONSUMED       = NO
+ENGINE               = r1/ (19 modules) + tests/ (203 tests, all passing)
+                       See S2_BUILD_REPORT.md.
+CURRENT_NEXT_ACTION  = S2 BUILD — COMPLETE AND STOPPED HERE. S3 RUN is the next
+                       possible stage and is NOT authorized. Before it can run,
+                       Aaron must rule on the sealed-trial-registry conflict in
+                       S2_BUILD_REPORT.md §10.
+NEXT_OWNER_DECISION  = (a) rule on the sealed-registry append conflict;
+                       (b) authorize S3 RUN, or do not
 ```
 
 ## What this project is, in one paragraph
