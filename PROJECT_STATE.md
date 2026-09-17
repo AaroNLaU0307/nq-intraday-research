@@ -10,7 +10,7 @@ RESEARCH_QUESTION    = After a public scheduled information release, and after a
                        realistically executable decision delay, does economically
                        meaningful directional price adjustment remain in NQ?
 RESEARCH_ID · LANE   = R1 · FULL
-STAGE                = S2 BUILD (COMPLETE)
+STAGE                = S3-A COMPLETE (pre-run power gate); S3-B NOT AUTHORIZED
 S0                   = CLOSED  (Owner decision: RESEARCH — see R1_S0_PROVENANCE.md)
 S1                   = SEALED  (r4, 2026-09-17)
 PREREG_SEALED        = YES
@@ -55,9 +55,19 @@ OPEN_PRE_SEAL_ITEMS  = P-5 only (cost residual, NON-BLOCKING). P-1..P-4, P-7
                        and P-8 are CLOSED; P-6 is not applicable yet.
 S2                   = BUILD COMPLETE 2026-09-17 (authorized by Aaron:
                        implementation + synthetic validation ONLY)
+S3A_POWER_GATE       = COMPLETE 2026-09-18 (real data, outcome-blind)
+                       E4_COUNT = 6 -> POST_SEAL_SIGNAL_DEFINED_N = 246
+                       s_hat = $28.2082/MNQ (C2 dispersion, 2331 non-event days)
+                       SE_hat = $1.7985  MDE_50 = $6.9485  MDE_80 = $8.4610
+                       CI half-width would exceed M: NO
+                       artifact artifacts/R1_S3A_POWER_GATE.json
+                       sha256 f8760918c7ce79f47492bcf7aaf2da4ae3c00d1df42cc3d6f891ce2ef6dd5cfd
+OWNER_POWER_DECISION = PENDING (PROCEED_TO_PRIMARY_RUN | PARK_FOR_INSUFFICIENT_POWER)
+S3B_RUN              = NOT AUTHORIZED
 S3_RUN               = NOT AUTHORIZED
-OD3_POWER_GATE       = NOT RUN
+OD3_POWER_GATE       = RUN 2026-09-18 (pre-reveal, outcome-blind)
 R1_OUTCOME           = NOT COMPUTED
+RUN_STARTED          = NO
 TRIAL_CONSUMED       = NO
 ENGINE               = r1/ (22 modules) + tests/ (264 tests, all passing)
                        See S2_BUILD_REPORT.md (r2, after bounded repair).
@@ -77,10 +87,10 @@ SEALED_ERRATA        = R1_SEALED_ERRATA.md (post-seal, descriptive only)
 VALIDATION           = SEAL_SNAPSHOT_VALIDATION = PASS (seal-time context)
                        CURRENT_STATE_VALIDATION = PASS (tools/validate_state.py)
                        S2_TEST_SUITE            = PASS
-CURRENT_NEXT_ACTION  = S2 BUILD — COMPLETE AND STOPPED HERE. S3 RUN is the next
-                       possible stage and is NOT authorized. No material
-                       blocker remains.
-NEXT_OWNER_DECISION  = authorize S3 RUN, or do not
+CURRENT_NEXT_ACTION  = S3-A — COMPLETE AND STOPPED HERE. The Primary run
+                       (S3-B) is NOT authorized and may not begin until Aaron
+                       rules on the power packet.
+NEXT_OWNER_DECISION  = PROCEED_TO_PRIMARY_RUN or PARK_FOR_INSUFFICIENT_POWER
 ```
 
 ## What this project is, in one paragraph
@@ -105,6 +115,7 @@ different question about the 09:30–10:00 opening drive.
 | `R1_EXECUTION_LEDGER.md` | operational append-only lifecycle chain — **not sealed** |
 | `R1_SEALED_ERRATA.md` | post-seal descriptive corrections — **not sealed** |
 | `R1_S2_BUILD_ATTESTATION.json` | the attested S2 executable identity — **not sealed** |
+| `artifacts/R1_S3A_POWER_GATE.json` | the S3-A power-gate artifact — outcome-free |
 | `S2_BUILD_REPORT.md` | the S2 build record |
 | `R1_TRIAL_REGISTRY.md` | R1's own trial/exposure identity |
 | `psmv/psmv_structural.py` | the pre-seal structural reader (L-13 constrained) |
