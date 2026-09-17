@@ -75,10 +75,41 @@ def test_run_identity_binds_everything_required(contract):
 def test_identity_is_not_a_real_run_without_authorization(contract):
     assert _identity(contract).is_real_run is False
     assert _identity(contract).trial_consumed is False
+
+
+def test_real_run_refuses_without_an_attested_code_identity(contract, monkeypatch):
+    """A real run may not assume which code it is: it must be attested."""
+    from r1 import run_identity as ri
+    from r1.errors import SealIdentityError
+
+    def _absent():
+        raise SealIdentityError("no attestation in this tree")
+
+    monkeypatch.setattr(ri, "load_build_identity", _absent)
+    with pytest.raises(SealIdentityError):
+        _identity(contract, s3_authorization="S3_RUN_AUTHORIZED_BY_AARON:x")
+
+
+def test_real_run_binds_the_attested_code_identity(contract, monkeypatch):
+    from pathlib import Path
+
+    from r1 import run_identity as ri
+    from r1.build_identity import BuildIdentity
+
+    fake = BuildIdentity(s2_code_commit="d" * 40,
+                         content_commit=contract.content_commit,
+                         seal_attestation_commit="e" * 40,
+                         runtime_source_rollup_sha256="f" * 64,
+                         runtime_source_files=23,
+                         attestation_path=Path("R1_S2_BUILD_ATTESTATION.json"))
+    monkeypatch.setattr(ri, "load_build_identity", lambda: fake)
     real = _identity(contract,
                      s3_authorization="S3_RUN_AUTHORIZED_BY_AARON:2026-xx")
     assert real.is_real_run is True
     assert real.trial_consumed is False       # consumed at RUN_STARTED, not here
+    assert real.s2_code_commit == "d" * 40
+    assert real.s2_build_attestation_commit == "tag:r1-s2-built"
+    assert real.runtime_source_rollup_sha256 == "f" * 64
 
 
 def test_malformed_authorization_is_refused(contract):
@@ -106,19 +137,27 @@ def test_environment_identity_is_recorded():
     assert "numpy" in env
 
 
-# --------------------------------------- post-seal identity separation (r2)
+# --------------------------------------- post-seal identity separation
 def test_implementation_identity_is_kept_apart_from_the_sealed_identity(contract):
-    ident = _identity(contract, s2_build_commit="a" * 40,
-                      sealed_errata_sha256="b" * 64,
+    """Four identities, never interchangeable."""
+    ident = _identity(contract, sealed_errata_sha256="b" * 64,
                       operational_ledger_digest="c" * 64)
     p = ident.payload()
     assert p["content_commit"] == contract.content_commit
-    assert p["seal_attestation_commit"] == \
-        "595af1c9663eb868e9f2d72f44abfe2f426ca24d"
-    assert p["s2_build_commit"] == "a" * 40
-    # three distinct fields, never the same value by construction
-    assert len({p["content_commit"], p["seal_attestation_commit"],
-                p["s2_build_commit"]}) == 3
+    assert p["seal_attestation_commit"] ==         "595af1c9663eb868e9f2d72f44abfe2f426ca24d"
+    assert p["content_commit"] != p["seal_attestation_commit"]
+    # the implementation identity is READ from the attestation, not passed in
+    assert "s2_build_commit" not in p
+    assert "s2_code_commit" in p and "s2_build_attestation_commit" in p
+
+
+def test_implementation_identity_is_not_caller_supplied(contract):
+    import inspect
+
+    from r1.run_identity import build_run_identity
+    params = inspect.signature(build_run_identity).parameters
+    assert "s2_build_commit" not in params
+    assert "s2_code_commit" not in params
 
 
 def test_post_seal_artifacts_are_bound_but_not_sealed(contract):
@@ -131,11 +170,12 @@ def test_post_seal_artifacts_are_bound_but_not_sealed(contract):
     seal = json.loads(
         (Path(__file__).resolve().parent.parent
          / "R1_S1_SEAL_ATTESTATION.json").read_text(encoding="utf-8"))
-    for post_seal in ("R1_SEALED_ERRATA.md", "R1_EXECUTION_LEDGER.md"):
+    for post_seal in ("R1_SEALED_ERRATA.md", "R1_EXECUTION_LEDGER.md",
+                      "R1_S2_BUILD_ATTESTATION.json"):
         assert post_seal not in seal["sealed_digests"]
 
 
-def test_identity_digest_moves_with_the_build_commit(contract):
-    a = _identity(contract, s2_build_commit="a" * 40).digest()
-    b = _identity(contract, s2_build_commit="b" * 40).digest()
+def test_identity_digest_moves_with_the_bound_data(contract):
+    a = _identity(contract).digest()
+    b = _identity(contract, data_manifest_sha256="9" * 64).digest()
     assert a != b

@@ -10,12 +10,19 @@ later be described loosely:
     run configuration . cost scenario definitions . seed set .
     trial-registry identity
 
-Three identities are kept apart on purpose, because conflating them is how a
-sealed design quietly becomes whatever the code happens to do:
+FOUR identities are kept apart on purpose, because conflating them is how a run
+ends up claiming one implementation while executing another:
 
-    CONTENT_COMMIT          the SEALED research content       immutable
-    SEAL_ATTESTATION_COMMIT the attestation to it             immutable
-    S2_BUILD_COMMIT         the IMPLEMENTATION that runs it   versioned
+    CONTENT_COMMIT              the SEALED research content        immutable
+    SEAL_ATTESTATION_COMMIT     the attestation to it              immutable
+    S2_CODE_COMMIT              the attested EXECUTABLE code       immutable
+    S2_BUILD_ATTESTATION_COMMIT its metadata-only child (tag)      immutable
+
+The last two are read from `R1_S2_BUILD_ATTESTATION.json` via
+`r1.build_identity`, never hard-coded here. At S3 preflight
+`assert_executable_identity` refuses if the live runtime bytes are not the
+attested ones -- a metadata-only ledger append does not invalidate it, a code
+edit does.
 
 Post-seal interpretation artifacts -- the errata record and the operational
 execution ledger -- are bound here too, and are never part of the S1 sealed
@@ -34,8 +41,9 @@ import sys
 from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping
 
+from .build_identity import load_build_identity
 from .contract import BOUND_SEAL_ATTESTATION_COMMIT, SealedContract
-from .errors import AuthorityError
+from .errors import AuthorityError, SealIdentityError
 
 S3_TOKEN_PREFIX = "S3_RUN_AUTHORIZED_BY_AARON:"
 
@@ -75,9 +83,11 @@ class RunIdentity:
     psmv_artifact_sha256: str
     event_universe_digest: str          # L-6: frozen before any outcome
 
-    # code and environment identity -- NEVER confused with the sealed identity
+    # implementation identity -- NEVER confused with the sealed identity
     code_commit: str
-    s2_build_commit: str | None            # implementation identity only
+    s2_code_commit: str | None               # the attested executable code
+    s2_build_attestation_commit: str | None  # its metadata-only child (tag)
+    runtime_source_rollup_sha256: str | None
     environment: Mapping[str, str]
 
     # post-seal interpretation artifacts (additive; never part of the S1 seal)
@@ -117,7 +127,6 @@ class RunIdentity:
 def build_run_identity(contract: SealedContract, *, run_label: str,
                        code_commit: str, data_manifest_sha256: str,
                        event_universe_digest: str,
-                       s2_build_commit: str | None = None,
                        sealed_errata_sha256: str | None = None,
                        operational_ledger_digest: str | None = None,
                        s3_authorization: str | None = None,
@@ -127,6 +136,17 @@ def build_run_identity(contract: SealedContract, *, run_label: str,
         s3_authorization.startswith(S3_TOKEN_PREFIX)
     if s3_authorization is not None and not is_real:
         raise AuthorityError("malformed S3 authorization token")
+
+    # The S2 implementation identity is READ from the build attestation on
+    # disk -- never hard-coded, never supplied by a caller, never defaulted to
+    # a historical commit. A synthetic identity may be built before the
+    # attestation exists; a REAL run may not.
+    build = None
+    try:
+        build = load_build_identity()
+    except SealIdentityError:
+        if is_real:
+            raise
 
     scenarios = {
         name: {
@@ -154,7 +174,11 @@ def build_run_identity(contract: SealedContract, *, run_label: str,
         psmv_artifact_sha256=contract.psmv_artifact_sha256,
         event_universe_digest=event_universe_digest,
         code_commit=code_commit,
-        s2_build_commit=s2_build_commit,
+        s2_code_commit=build.s2_code_commit if build else None,
+        s2_build_attestation_commit=(build.s2_build_attestation_commit
+                                     if build else None),
+        runtime_source_rollup_sha256=(build.runtime_source_rollup_sha256
+                                      if build else None),
         environment=environment_identity(),
         sealed_errata_sha256=sealed_errata_sha256,
         operational_ledger_digest=operational_ledger_digest,

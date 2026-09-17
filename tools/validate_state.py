@@ -140,6 +140,26 @@ def main() -> int:
           not any(ln.startswith("import databento")
                   for ln in adapter_src.splitlines()))
 
+    # ---- 8b. S2 implementation identity ------------------------------
+    from r1.build_identity import (ATTESTATION_FILE, assert_executable_identity,
+                                   runtime_source_map, runtime_source_rollup)
+    rollup = runtime_source_rollup()
+    check("runtime source rollup computed",
+          len(rollup) == 64, f"{len(runtime_source_map())} files, {rollup[:12]}")
+    check("no runtime module hard-codes a build commit",
+          not any("0bc815dc22863e50777311a9c2c25922ecfeb4fd"
+                  in (ROOT / rel).read_text(encoding="utf-8")
+                  for rel in runtime_source_map()))
+    if (ROOT / ATTESTATION_FILE).exists():
+        ident = assert_executable_identity()
+        check("executable identity matches the attested S2_CODE_COMMIT",
+              True, ident.s2_code_commit[:12])
+        check("S2 build attestation is NOT in the sealed digest set",
+              ATTESTATION_FILE not in seal["sealed_digests"])
+    else:
+        notes.append("SKIP  S2 build attestation not present yet "
+                     "(expected inside the S2_CODE_COMMIT itself)")
+
     # ---- 9. A1 is wired into the production path ---------------------
     import inspect
 
