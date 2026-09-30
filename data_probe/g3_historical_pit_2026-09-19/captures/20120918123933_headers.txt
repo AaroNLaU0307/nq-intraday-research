@@ -1,0 +1,38 @@
+HTTP/1.1 200 OK
+Server: nginx
+Date: Sat, 19 Sep 2026 13:23:39 GMT
+Content-Type: text/plain
+Content-Length: 111986
+Connection: keep-alive
+x-archive-orig-set-cookie: accounts.profunds.com=R1556817303; path=/; expires=Wed, 19-Sep-2012 12:42:16 GMT
+x-archive-orig-date: Tue, 18 Sep 2012 12:39:33 GMT
+x-archive-orig-server: Apache/2.2.15 (Unix) mod_ssl/2.2.15 OpenSSL/0.9.8e-fips-rhel5 DAV/2
+x-archive-orig-last-modified: Tue, 18 Sep 2012 02:57:46 GMT
+x-archive-orig-etag: "27ea5-1b572-4c9f10dff9f1b"
+x-archive-orig-accept-ranges: bytes
+x-archive-orig-content-length: 111986
+x-archive-orig-connection: close
+cache-control: max-age=1800
+accept-ranges: bytes
+memento-datetime: Tue, 18 Sep 2012 12:39:33 GMT
+link: <https://accounts.profunds.com/etfdata/ByFund/UYM-historical_nav.csv>; rel="original", <https://web.archive.org/web/timemap/link/https://accounts.profunds.com/etfdata/ByFund/UYM-historical_nav.csv>; rel="timemap"; type="application/link-format", <https://web.archive.org/web/https://accounts.profunds.com/etfdata/ByFund/UYM-historical_nav.csv>; rel="timegate"
+content-security-policy: default-src 'self' 'unsafe-eval' 'unsafe-inline' data: blob: archive.org web.archive.org web-static.archive.org wayback-api.archive.org athena.archive.org analytics.archive.org pragma.archivelab.org wwwb-events.archive.org
+x-archive-src: google.com.sa-20120225-052545/IA-FOC-google.com-20120918073225-00001.warc.gz
+server-timing: captures_list;dur=0.372883, exclusion.robots;dur=0.038673, exclusion.robots.policy;dur=0.031552, esindex;dur=0.006755, cdx.remote;dur=23.801324, LoadShardBlock;dur=82.861732, PetaboxLoader3.datanode;dur=102.625354, PetaboxLoader3.resolve;dur=192.041469, load_resource;dur=316.386779
+x-app-server: wwwb-app220-dc8
+x-ts: 200
+x-tr: 435
+server-timing: TR;dur=0,Tw;dur=0,Tc;dur=0
+set-cookie: wb-p-SERVER=wwwb-app220; path=/
+cache-control: private
+X-location: All
+X-AS: 9930
+X-RL: 0
+X-NA: 0
+X-Page-Cache: MISS
+Server-Timing: MISS
+X-NID: TIME dotCom Berhad No. 14, Jalan Majistret U126 Hicom Glenmarie Industrial Park 40150 Shah Al
+Referrer-Policy: no-referrer-when-downgrade
+Permissions-Policy: interest-cohort=()
+X-sd: 0
+

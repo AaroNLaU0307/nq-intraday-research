@@ -1,0 +1,38 @@
+HTTP/1.1 200 OK
+Server: nginx
+Date: Sat, 19 Sep 2026 13:23:42 GMT
+Content-Type: text/plain
+Content-Length: 71206
+Connection: keep-alive
+x-archive-orig-set-cookie: accounts.profunds.com=R1256277944; path=/; expires=Fri, 28-Mar-2014 17:55:42 GMT
+x-archive-orig-date: Thu, 27 Mar 2014 17:46:07 GMT
+x-archive-orig-server: Apache/2.2.15 (Unix) mod_ssl/2.2.15 OpenSSL/0.9.8e-fips-rhel5 DAV/2
+x-archive-orig-last-modified: Wed, 26 Mar 2014 22:25:05 GMT
+x-archive-orig-etag: "2acc1-11626-4f589f0bbb367"
+x-archive-orig-accept-ranges: bytes
+x-archive-orig-content-length: 71206
+x-archive-orig-connection: close
+cache-control: max-age=1800
+accept-ranges: bytes
+memento-datetime: Thu, 27 Mar 2014 17:46:07 GMT
+link: <https://accounts.profunds.com/etfdata/ByFund/UVXY-historical_nav.csv>; rel="original", <https://web.archive.org/web/timemap/link/https://accounts.profunds.com/etfdata/ByFund/UVXY-historical_nav.csv>; rel="timemap"; type="application/link-format", <https://web.archive.org/web/https://accounts.profunds.com/etfdata/ByFund/UVXY-historical_nav.csv>; rel="timegate"
+content-security-policy: default-src 'self' 'unsafe-eval' 'unsafe-inline' data: blob: archive.org web.archive.org web-static.archive.org wayback-api.archive.org athena.archive.org analytics.archive.org pragma.archivelab.org wwwb-events.archive.org
+x-archive-src: WIDE-20140327145233-crawl414/WIDE-20140327172917-00147.warc.gz
+server-timing: captures_list;dur=0.503726, exclusion.robots;dur=0.059801, exclusion.robots.policy;dur=0.048077, esindex;dur=0.009244, cdx.remote;dur=32.639302, LoadShardBlock;dur=80.925984, PetaboxLoader3.datanode;dur=81.892389, PetaboxLoader3.resolve;dur=70.894355, load_resource;dur=180.766928
+x-app-server: wwwb-app264-dc8
+x-ts: 200
+x-tr: 313
+server-timing: TR;dur=0,Tw;dur=0,Tc;dur=0
+set-cookie: wb-p-SERVER=wwwb-app264; path=/
+cache-control: private
+X-location: All
+X-AS: 9930
+X-RL: 0
+X-NA: 0
+X-Page-Cache: MISS
+Server-Timing: MISS
+X-NID: TIME dotCom Berhad No. 14, Jalan Majistret U126 Hicom Glenmarie Industrial Park 40150 Shah Al
+Referrer-Policy: no-referrer-when-downgrade
+Permissions-Policy: interest-cohort=()
+X-sd: 0
+

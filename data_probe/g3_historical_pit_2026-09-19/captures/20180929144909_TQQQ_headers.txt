@@ -1,0 +1,38 @@
+HTTP/1.1 200 OK
+Server: nginx
+Date: Sat, 19 Sep 2026 13:20:37 GMT
+Content-Type: application/octet-stream
+Content-Length: 210977
+Connection: keep-alive
+x-archive-orig-set-cookie: accounts.profunds.com=R1556817303; path=/; expires=Sun, 30-Sep-2018 14:54:14 GMT
+x-archive-orig-date: Sat, 29 Sep 2018 14:49:10 GMT
+x-archive-orig-server: Apache/2.2.3 (Red Hat) mod_ssl/2.2.3 OpenSSL/0.9.8e-fips-rhel5 DAV/2
+x-archive-orig-last-modified: Fri, 28 Sep 2018 23:08:47 GMT
+x-archive-orig-etag: "2ec40-33821-89a6ddc0"
+x-archive-orig-accept-ranges: bytes
+x-archive-orig-content-length: 210977
+x-archive-orig-connection: close
+cache-control: max-age=1800
+accept-ranges: bytes
+memento-datetime: Sat, 29 Sep 2018 14:49:09 GMT
+link: <https://accounts.profunds.com/etfdata/ByFund/TQQQ-historical_nav.csv>; rel="original", <https://web.archive.org/web/timemap/link/https://accounts.profunds.com/etfdata/ByFund/TQQQ-historical_nav.csv>; rel="timemap"; type="application/link-format", <https://web.archive.org/web/https://accounts.profunds.com/etfdata/ByFund/TQQQ-historical_nav.csv>; rel="timegate"
+content-security-policy: default-src 'self' 'unsafe-eval' 'unsafe-inline' data: blob: archive.org web.archive.org web-static.archive.org wayback-api.archive.org athena.archive.org analytics.archive.org pragma.archivelab.org wwwb-events.archive.org
+x-archive-src: NO404-GDELT-20180929143342-crawl816/NO404-GDELT-20180929144400-01404.warc.gz
+server-timing: captures_list;dur=0.587475, exclusion.robots;dur=0.071894, exclusion.robots.policy;dur=0.059587, esindex;dur=0.008803, cdx.remote;dur=6.037938, LoadShardBlock;dur=362.346032, PetaboxLoader3.datanode;dur=62.333117, PetaboxLoader3.resolve;dur=377.536592, load_resource;dur=103.747615
+x-app-server: wwwb-app244-dc8
+x-ts: 200
+x-tr: 492
+server-timing: TR;dur=0,Tw;dur=0,Tc;dur=0
+set-cookie: wb-p-SERVER=wwwb-app244; path=/
+cache-control: private
+X-location: All
+X-AS: 9930
+X-RL: 0
+X-NA: 0
+X-Page-Cache: MISS
+Server-Timing: MISS
+X-NID: TIME dotCom Berhad No. 14, Jalan Majistret U126 Hicom Glenmarie Industrial Park 40150 Shah Al
+Referrer-Policy: no-referrer-when-downgrade
+Permissions-Policy: interest-cohort=()
+X-sd: 0
+

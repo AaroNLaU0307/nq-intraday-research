@@ -1,0 +1,38 @@
+HTTP/1.1 200 OK
+Server: nginx
+Date: Sat, 19 Sep 2026 13:31:00 GMT
+Content-Type: text/plain
+Content-Length: 221732
+Connection: keep-alive
+x-archive-orig-set-cookie: accounts.profunds.com=R1556817303; path=/; expires=Wed, 07-Dec-2016 21:19:23 GMT
+x-archive-orig-date: Tue, 06 Dec 2016 21:18:09 GMT
+x-archive-orig-server: Apache/2.2.3 (Red Hat) mod_ssl/2.2.3 OpenSSL/0.9.8e-fips-rhel5 DAV/2
+x-archive-orig-last-modified: Mon, 05 Dec 2016 23:56:50 GMT
+x-archive-orig-etag: "930cf-36224-a8bb480"
+x-archive-orig-accept-ranges: bytes
+x-archive-orig-content-length: 221732
+x-archive-orig-connection: close
+cache-control: max-age=1800
+accept-ranges: bytes
+memento-datetime: Tue, 06 Dec 2016 21:18:08 GMT
+link: <https://accounts.profunds.com/etfdata/ByFund/TBT-historical_nav.csv>; rel="original", <https://web.archive.org/web/timemap/link/https://accounts.profunds.com/etfdata/ByFund/TBT-historical_nav.csv>; rel="timemap"; type="application/link-format", <https://web.archive.org/web/https://accounts.profunds.com/etfdata/ByFund/TBT-historical_nav.csv>; rel="timegate"
+content-security-policy: default-src 'self' 'unsafe-eval' 'unsafe-inline' data: blob: archive.org web.archive.org web-static.archive.org wayback-api.archive.org athena.archive.org analytics.archive.org pragma.archivelab.org wwwb-events.archive.org
+x-archive-src: HNEWS-20161206210924-crawl890/HNEWS-20161206211458-09501.warc.gz
+server-timing: captures_list;dur=0.633364, exclusion.robots;dur=0.088387, exclusion.robots.policy;dur=0.077764, esindex;dur=0.010960, cdx.remote;dur=23.065092, LoadShardBlock;dur=444.768599, PetaboxLoader3.resolve;dur=168.440794, PetaboxLoader3.datanode;dur=120.083335, load_resource;dur=145.214219
+x-app-server: wwwb-app28-dc8
+x-ts: 200
+x-tr: 633
+server-timing: TR;dur=0,Tw;dur=0,Tc;dur=0
+set-cookie: wb-p-SERVER=wwwb-app28; path=/
+cache-control: private
+X-location: All
+X-AS: 9930
+X-RL: 0
+X-NA: 0
+X-Page-Cache: MISS
+Server-Timing: MISS
+X-NID: TIME dotCom Berhad No. 14, Jalan Majistret U126 Hicom Glenmarie Industrial Park 40150 Shah Al
+Referrer-Policy: no-referrer-when-downgrade
+Permissions-Policy: interest-cohort=()
+X-sd: 0
+

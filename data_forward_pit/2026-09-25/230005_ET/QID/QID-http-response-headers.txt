@@ -1,0 +1,12 @@
+HTTP/1.1 200 OK
+Date: Sat, 26 Sep 2026 03:00:07 GMT
+Server: Apache/2.4.37 (Red Hat Enterprise Linux) OpenSSL/1.1.1k
+Strict-Transport-Security: max-age=63072000
+Upgrade: h2
+Connection: Upgrade, close
+Last-Modified: Sat, 26 Sep 2026 00:20:42 GMT
+ETag: "6f31b-65c57cda5d0d5"
+Accept-Ranges: bytes
+Content-Length: 455451
+Content-Type: text/csv
+
