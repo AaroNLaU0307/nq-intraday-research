@@ -33,6 +33,7 @@ this log existed; their evidence is the file named, as preserved in the baseline
 | D-R2-2026-10-01-03d | as 03a | as 03a | Sequence: CP-R2-V2-01 → delegate PASS → CP-MONO-01 → Aaron pushes → post-push reproduce recorded — verbatim in §2.6 | this file §2.6 |
 | D-R2-2026-10-01-03e | as 03a | as 03a | Rigour audit after CP-MONO-01 is run by the delegate, read-only; the builder is the repair seat and does not start or pre-empt it — verbatim in §2.6 | this file §2.6 |
 | G-R2-2026-10-01-PUSH-OWNER | ≈2026-09-30T19:50Z | Aaron, directly (OWNER-R2-2026-10-01) | The push to `https://github.com/AaroNLaU0307/Intraday-Trend-Strategy-Framework.git` is performed by Aaron himself. The builder holds no push grant; the earlier `G-R2-2026-10-01-PUSH = NOT_YET_GRANTED` row stays true for the builder | this file §2.5 |
+| D-R2-2026-10-01-03d-A | received before 2026-09-30T19:53:16Z (builder clock); no UTC stated by sender | Fable 5.1 delegate session, 2026-10-01 (states: on Aaron's instruction that the audit may precede the upload) | Amends D-R2-2026-10-01-03d: the read-only rigour audit runs after CP-R2-V2-01 is accepted and BEFORE the mirror and the push; confirmed findings are repaired and accepted before CP-MONO-01 starts — verbatim in §2.7. The R1 record-correction lease it mentions is not taken up by this row | this file §2.7 |
 
 ## 2. Binding messages, verbatim
 
@@ -165,4 +166,23 @@ D-R2-2026-10-01-03b  PUBLICATION_TARGET = one public GitHub repository, AaroNLaU
 D-R2-2026-10-01-03c  VISIBILITY = PUBLIC; university name and Morningstar case number withheld from every builder-authored file; the two handoffs/ copies carry three bracketed substitutions (employee first name, university, case number) with a header note; hostname and Windows username remain.
 D-R2-2026-10-01-03d  Sequence: finish CP-R2-V2-01 (commit PROJECT_STATE, DECISION_LOG, README, tools/reproduce.py, handoffs/) → checkpoint message to me → on PASS, CP-MONO-01 as specified in my earlier message → checkpoint message → Aaron pushes → post-push reproduce run recorded.
 D-R2-2026-10-01-03e  Rigour audit: after CP-MONO-01 is accepted, the delegate runs a read-only multi-agent audit (ultracode workflow) of R1 and R2 from this session against the mirror's HEAD commit, reporting findings to you; you are the repair seat for anything confirmed. Do not start an audit yourself; do not pre-empt it.
+```
+
+### 2.7 D-R2-2026-10-01-03d-A (verbatim)
+
+Sender: Fable 5.1 delegate session 'NDX leveraged-ETF rebalancing research handoff'.
+Received before 2026-09-30T19:53:16Z, after the CP-R2-V2-01 checkpoint message (commit
+`e11a1c9`) was sent.
+
+```
+Sequence change (delegate D-R2-2026-10-01-03d amended, on Aaron's instruction that the rigour audit may precede the upload): the audit runs BEFORE the mirror and the push.
+
+New order:
+1. You finish CP-R2-V2-01 and send me the checkpoint (unchanged).
+2. I accept (PASS/HOLD). On PASS, I run the read-only R2 rigour audit from my session against your HEAD commit. The R1 audit is already running against 18639ee.
+3. I send you the confirmed findings for each project. You repair: R2 under builder autonomy (pre-seal, IMPLEMENTATION_FIX / RECORD_CORRECTION as classified); R1 only as new dated correction files — R1 is closed and its sealed artifacts, runs/ and ledgers are immutable; nothing there is rewritten. For R1 you hold a declared record-correction lease as the only writer; state it in R1's records when you first write there.
+4. Repairs committed locally → checkpoint → my acceptance.
+5. Then CP-MONO-01 (mirror, as specified) → checkpoint → Aaron pushes.
+
+Nothing else changes. Do not start the mirror until step 4 is accepted.
 ```
