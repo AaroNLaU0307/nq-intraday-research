@@ -189,3 +189,43 @@ The OD-1 grant over the local NQ Development archive exists and was **not exerci
 Everything inspected was archived ProShares/ProFunds HTTP artifacts, CSV date and
 share/NAV/AUM columns, archived ProShares fund pages, and two already-retrieved
 academic PDFs plus the Nasdaq NFN specification.
+
+---
+
+## Correction of record 2026-10-01 — under delegate decision D-R2-2026-10-01-01
+
+Appended at checkpoint CP-R2-V2-01. The text above is **not rewritten**; where it states a
+"safe start" of 2014-03-26 or a "safe period", this section governs. Decision logged in
+`DECISION_LOG.md` (decider: Fable 5.1 delegate, UTC 2026-09-30T19:30Z; scope: labels /
+causal-timing record only). Source, saved in the project:
+`handoffs/2026-10-01_FABLE_DELEGATE_RECONCILIATION.md` §3.
+
+Corrected causal-timing block (quoted from the reconciliation §3):
+
+```
+G3_HISTORICAL_STATUS             = PARTIAL                       (unchanged)
+AUM_FIELD_OBSERVED_START         = 2014-03-26                    (fact; unchanged)
+HISTORICAL_DAILY_PIT_SAFE_START  = NOT_ESTABLISHED
+PRE_2014-03-26_PERIOD            = UNRESOLVED                    (unchanged)
+FULL_SAMPLE_AUM_AVAILABLE_BY     = UNKNOWN                       (unchanged)
+G11_STALENESS_PROBLEM            = MATERIAL                      (unchanged)
+S1_TAU_CONSTRAINT                = tau > 09:30 ET on trading day t, applicable only to
+                                   dates a verified source proves eligible under OD-6
+                                   (mechanical constraint; tau is not chosen)
+```
+
+The lines `HISTORICAL_PIT_SAFE_START = 2014-03-26`, `SAFE_PERIOD_AUM_AVAILABLE_BY =
+NEXT_TRADING_DAY_OPEN … TYPICAL, NOT GUARANTEED` and `EVIDENCE_LEVEL = B` are withdrawn as a
+"safe period" concept; `PROJECT_STATE.md` carries the block above instead.
+
+**Why** (quoted from the reconciliation §3). OD-6 (`PROVEN_PUBLICATION_ONLY_ZERO_CARRY`,
+precedence level 1) makes eligibility a per-date, per-fund, proven property: rule 1
+"unproven availability = ineligible", rule 5 "no neighbouring-date inference". A "safe start
+date" derived from the first observed AUM-bearing artifact plus typical batch behaviour is
+exactly a neighbouring-date inference, and the 2016-04-01 stall shows the typical behaviour
+fails inside that period. The observation that the field exists from 2014-03-26 is a fact
+and is kept; the label "PIT-safe" is not a fact OD-6 allows the project to assert without a
+source. This agrees with Aaron's handoff §8 and does not reopen OD-5 or OD-6.
+
+Unchanged by this correction: the sample window (2010-06-06 → 2022-01-01 exclusive), OD-5,
+OD-6, `OUTCOME_EXPOSURE = NONE`, trial accounting. No eligibility table is created.
