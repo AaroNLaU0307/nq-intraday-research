@@ -729,3 +729,106 @@ correct for the date. Snapshot files are additionally marked read-only on disk �
 **operational safeguard only**, not cryptographic immutability. Integrity rests on the
 immutable-snapshot convention, the manifest, the SHA-256 digests, and the preserved raw
 bytes and raw headers.
+
+## 2026-10-01 — scheduled-run evidence to date
+
+Appended at checkpoint CP-R2-V2-01. Earlier sections are **not edited**; where they state
+the task's logon type, the pending quoting repair, `NATURAL_SCHEDULED_CAPTURES_TO_DATE = 0`
+or `NEXT_NATURAL_SCHEDULED_RUN = 2026-09-22`, this section supersedes them. Every number
+below is derived by `tools/reproduce.py` from `logs/forward_pit_scheduler.jsonl`,
+`logs/forward_pit_task_stdout.log`, the snapshot manifests and `ops/R2_FORWARD_PIT_TASK.xml`
+(REPRODUCED), counted as of snapshot `2026-09-30/144521_ET`.
+
+### Live task, read-only (`Get-ScheduledTask` / `Get-ScheduledTaskInfo`, 2026-10-01 03:35 +08:00)
+
+```
+TASK                = QuantTrade-R2-ForwardPIT
+PRINCIPAL_LOGON     = Password          RUN_LEVEL = Limited        STATE = Ready
+ACTION              = cmd.exe /d /s /c ""...\tools\run_forward_pit_task.cmd" "...\python.exe""
+                      (canonical quoting — the §6c repair is applied live)
+TRIGGER             = daily 11:00 +08:00, StartBoundary 2026-09-21T11:00:00+08:00
+START_WHEN_AVAILABLE= true   MULTIPLE_INSTANCES = IgnoreNew   EXECUTION_TIME_LIMIT = PT1H
+LAST_RUN_TIME       = 2026-10-01 02:45:20 +08:00      LAST_TASK_RESULT = 0
+NEXT_RUN_TIME       = 2026-10-01 11:00:00 +08:00      NUMBER_OF_MISSED_RUNS = 0
+COLLECTOR_VERSION   = 1.1.0 in every JSONL row; manifest schema 2 in every snapshot
+                      except 2026-09-19/125150_ET (schema 1, taken before v1.1.0)
+```
+
+The live export `ops/R2_FORWARD_PIT_TASK.xml` was re-written at 2026-09-21T19:00:42.16
++08:00 (file time) and the task started 90 ms later: the installer's re-registration and its
+`Start-ScheduledTask` validation. The export is no longer "pre-repair Interactive".
+
+### Origin rule (delegate decision D-R2-2026-10-01-02)
+
+A `==== task start` block is written by `tools/run_forward_pit_task.cmd` on **every**
+invocation of the `.cmd`, whether Task Scheduler or a person launches it, so the block alone
+does not separate scheduled from manual runs (14 captures have a block, 1 has none — an
+informational count only). The adopted rule:
+
+```
+NATURAL = task-start block present AND capture_type = ROUTINE_FORWARD_COLLECTION
+          AND scheduled_time >= trigger StartBoundary (2026-09-21T11:00+08:00)
+          AND the only recorded invocation for its scheduled slot
+MANUAL  = every other snapshot
+CATCH-UP (StartWhenAvailable) = NATURAL with late_by_seconds > 300
+```
+
+### Capture ledger
+
+| slot (+08:00) | snapshot | late_by_s | status | funds_ok | verified | capture_type (manifest) | origin |
+|---|---|---:|---|---|---|---|---|
+| — (no log row) | `2026-09-19/125150_ET` | — | — | 5/5 | PASS | INFRASTRUCTURE_VALIDATION | MANUAL — direct collector run |
+| 2026-09-19 11:00 | `2026-09-19/131606_ET` | 51366.1 | COMPLETED | 5/5 | true | SCHEDULER_VALIDATION | MANUAL — wrapper chain validation |
+| 2026-09-21 11:00 | `2026-09-21/063831_ET` | 27511.6 | COMPLETED | 5/5 | true | ROUTINE_FORWARD_COLLECTION | MANUAL — MSA context diagnostic |
+| 2026-09-21 11:00 | `2026-09-21/063916_ET` | 27556.9 | COMPLETED | 5/5 | true | ROUTINE_FORWARD_COLLECTION | MANUAL — MSA context diagnostic |
+| 2026-09-21 11:00 | `2026-09-21/064554_ET` | 27954.7 | COMPLETED | 5/5 | true | ROUTINE_FORWARD_COLLECTION | MANUAL — MSA context diagnostic |
+| 2026-09-21 11:00 | `2026-09-21/070042_ET` | 28842.4 | COMPLETED | 5/5 | true | ROUTINE_FORWARD_COLLECTION | MANUAL — installer `Start-ScheduledTask` validation (task context) |
+| 2026-09-22 11:00 | `2026-09-21/230004_ET` | 4.6 | COMPLETED | 5/5 | true | ROUTINE_FORWARD_COLLECTION | NATURAL |
+| 2026-09-23 11:00 | `2026-09-22/230004_ET` | 4.2 | COMPLETED | 5/5 | true | ROUTINE_FORWARD_COLLECTION | NATURAL |
+| 2026-09-24 11:00 | `2026-09-23/230004_ET` | 4.3 | COMPLETED | 5/5 | true | ROUTINE_FORWARD_COLLECTION | NATURAL |
+| 2026-09-25 11:00 | `2026-09-24/230004_ET` | 4.4 | COMPLETED | 5/5 | true | ROUTINE_FORWARD_COLLECTION | NATURAL |
+| 2026-09-26 11:00 | `2026-09-25/230005_ET` | 5.0 | COMPLETED | 5/5 | true | ROUTINE_FORWARD_COLLECTION | NATURAL |
+| 2026-09-27 11:00 | `2026-09-27/020143_ET` | 10903.8 | COMPLETED | 5/5 | true | ROUTINE_FORWARD_COLLECTION | NATURAL — catch-up, fired 14:01:40 |
+| 2026-09-28 11:00 | `2026-09-27/230001_ET` | 1.5 | COMPLETED | 5/5 | true | ROUTINE_FORWARD_COLLECTION | NATURAL |
+| 2026-09-29 11:00 | `2026-09-28/230001_ET` | 1.5 | COMPLETED | 5/5 | true | ROUTINE_FORWARD_COLLECTION | NATURAL |
+| 2026-09-30 11:00 | `2026-09-30/144521_ET` | 56721.5 | COMPLETED | 5/5 | true | ROUTINE_FORWARD_COLLECTION | NATURAL — catch-up, fired 2026-10-01 02:45:20 |
+
+```
+SNAPSHOTS = 15 · JSONL_ROWS = 14 · NATURAL = 9 (2 catch-ups) · MANUAL = 6 · VERIFIED = 15/15
+```
+
+Catch-ups are recorded at their **real** time: both show the true `actual_start_time` and
+`late_by_seconds`, and neither is presented as an 11:00 capture. The 2026-09-20 slot has no
+firing record in the logs; it predates the current trigger's StartBoundary.
+
+**Missing day.** The 2026-09-21 11:00:01 trigger firing produced `LastTaskResult = 1`, no
+stdout line, no JSONL row and no snapshot (§6c). That slot is **`MISSING_FORWARD_CAPTURE`**
+and is not backfilled: the four later 2026-09-21 invocations are manual and do not stand in
+for it.
+
+**The three 2026-09-21 manual captures labelled `ROUTINE_FORWARD_COLLECTION`**
+(`063831_ET`, `063916_ET`, `064554_ET`) carry that label in their immutable manifests
+because the wrapper was invoked directly and defaults to it; the manifests are not modified.
+They must never be represented as natural scheduled captures. `070042_ET` carries the same
+label for a different reason: the installer's one-shot `UNATTENDED_SCHEDULER_VALIDATION`
+marker was written with a UTF-8 BOM (Windows PowerShell 5.1 `Set-Content -Encoding utf8`),
+the wrapper's `json.loads` rejected it, deleted it and fell back to the default label. Its
+manifest is likewise not relabelled. Backlog row **BL-R2-01** (see `DECISION_LOG.md`).
+
+### What this shows and does not show
+
+It shows that the password-backed task **fires and captures unattended**: nine consecutive
+daily slots 2026-09-22 … 2026-09-30, each `COMPLETED` with 5/5 funds and a self-verifying
+snapshot, two of them via StartWhenAvailable after the machine was unavailable at 11:00.
+
+It does **not** repair 2010-2021 point-in-time availability, it assigns **no** post-2022
+sample tier (`POST_2022_SAMPLE_TIER = UNASSIGNED`), it does not show that the task runs with
+no user logged on (`TRUE_NO_INTERACTIVE_SESSION_VALIDATED = NO`, unchanged), and no capture
+here is a research observation.
+
+### Corrections to the §8 table
+
+`tools/collect_forward_pit.py` is v1.1.0 (manifest schema 2). `ops/R2_FORWARD_PIT_TASK.xml`
+is the live password-backed export with the canonical `/d /s /c` action, not "pre-repair
+Interactive". The test suite now has 40 tests plus 12 subtests (the number is printed by
+`tools/reproduce.py`, which is its source).
