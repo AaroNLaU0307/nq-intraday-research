@@ -5,9 +5,11 @@ RECORD_TYPE = VENDOR_RESPONSE_TRACKER
 LINEAGE     = R2
 WAVE        = 1
 CREATED     = 2026-09-20
-STATE       = five SENT_AWAITING_RESPONSE; one
-              CLARIFICATION_ANSWERED_AWAITING_VENDOR_RESPONSE; no evidentiary vendor
-              response received
+STATE       = four SENT_AWAITING_RESPONSE; ETF Global
+              CLARIFICATION_ANSWERED_AWAITING_VENDOR_RESPONSE; Morningstar
+              SALES_ROUTING_COMPLETE_AWAITING_RESPONSE; no evidentiary vendor response
+              received
+UPDATED     = 2026-10-01 (CP-R2-V2-01: Morningstar routing facts, SELF-REPORTED)
 ```
 
 Companion to `R2_VENDOR_WAVE1_DISPATCH.md`. One row per vendor, filled in as replies
@@ -26,7 +28,7 @@ blank is a finding; an invented value is a defect.
 | ETF Global | CLARIFICATION_ANSWERED_AWAITING_VENDOR_RESPONSE | 2026-09-21T19:25+08:00 (11:25Z) | EMAIL | YAHOO_SENT/00_62116 | — | — |
 | LSEG / Lipper | SENT_AWAITING_RESPONSE | 2026-09-21T20:16:08+08:00 (12:16:08Z) | OFFICIAL_CONTACT_FORM | LSEG_CONFIRMATION_PAGE/data-catalogue-thank-you | — | — |
 | Bloomberg | SENT_AWAITING_RESPONSE | 2026-09-21T20:16:54+08:00 (12:16:54Z) | OFFICIAL_CONTACT_FORM | BLOOMBERG_CONFIRMATION_PAGE/request-demo/thank-you | — | — |
-| Morningstar | SENT_AWAITING_RESPONSE | 2026-09-21T19:26+08:00 (11:26Z) | EMAIL | YAHOO_SENT/00_62118; ROUTING_REPLY/YAHOO_THREAD_00_62118 | 2026-09-22 | Morningstar Direct Product Consultant |
+| Morningstar | SALES_ROUTING_COMPLETE_AWAITING_RESPONSE | 2026-09-21T19:26+08:00 (11:26Z) | EMAIL | YAHOO_SENT/00_62118; ROUTING_REPLY/YAHOO_THREAD_00_62118 | 2026-09-22 | Morningstar Direct Product Consultant |
 | ProShares / ProFunds | SENT_AWAITING_RESPONSE | 2026-09-21T19:27+08:00 (11:27Z) | EMAIL | YAHOO_SENT/00_62120 | — | — |
 | FactSet | SENT_AWAITING_RESPONSE | 2026-09-21T19:27+08:00 (11:27Z) | EMAIL | YAHOO_SENT/00_62121 | — | — |
 
@@ -47,10 +49,12 @@ semantics.
 ### Morningstar operational follow-up and trial
 
 ```
-MORNINGSTAR_SUPPORT                  = ROUTING_REQUEST_SENT
+MORNINGSTAR                          = SALES_ROUTING_COMPLETE_AWAITING_RESPONSE   (2026-10-01, SELF-REPORTED)
+MORNINGSTAR_SUPPORT                  = ROUTING_REQUEST_SENT -> routed to Morningstar Sales team (SELF-REPORTED)
+MORNINGSTAR_SUPPORT_CASE             = Morningstar support case (number withheld)   (SELF-REPORTED)
 MORNINGSTAR_SUPPORT_SENT_AT          = 2026-09-22T14:30:19+08:00 (06:30:19Z)
 MORNINGSTAR_SUPPORT_REFERENCE        = YAHOO_THREAD/00_62118
-MORNINGSTAR_FREE_TRIAL               = APPLIED
+MORNINGSTAR_FREE_TRIAL               = APPLIED_NOT_ACTIVATED   (2026-10-01; was APPLIED)
 MORNINGSTAR_FREE_TRIAL_APPLIED_AT    = 2026-09-22T14:37:41+08:00 (06:37:41Z)
 MORNINGSTAR_FREE_TRIAL_REFERENCE     = MORNINGSTAR_DIRECT_TRIAL/THANK_YOU
 MORNINGSTAR_TRIAL_CONFIRMATION       = Thank you — Enjoy your free two-week trial of Morningstar Direct.
@@ -60,6 +64,31 @@ MORNINGSTAR_SOURCE_VERIFICATION      = UNCHANGED_PENDING_EVIDENCE
 `APPLIED` records the successful official-form confirmation. It does not assert that login
 credentials or usable access have been granted. The trial request does not change any
 source classification.
+
+**2026-10-01 — Morningstar routing, SELF-REPORTED (Aaron handoff 2026-10-01).** Evidence
+reference: `handoffs/2026-10-01_AARON_R2_HANDOFF.md` §17. As reported there, not reproduced
+from any vendor message:
+
+- Morningstar Direct Support opened a Morningstar support case (number withheld).
+- The displayed trial route was not usable in practice; the free trial was never
+  activated (`MORNINGSTAR_FREE_TRIAL = APPLIED_NOT_ACTIVATED`).
+- Morningstar stated that Morningstar Cloud is not available on an individual student
+  licence and suggested a university library; Aaron declined to pursue that route.
+- Morningstar found no account under Aaron's university and routed the enquiry to
+  its Sales team.
+- Aaron chose to wait.
+
+None of this answers the PIT question; no decisive cell changes and the classification
+stays `PENDING_RESPONSE`. "No account under Aaron's university" is not evidence about Morningstar's
+data. No follow-up, trial activation, purchase or library-access step is authorized.
+
+The support-case number and the university name are withheld from this published record
+under delegate decision D-R2-2026-10-01-03 (Owner instruction); they are held in the
+unpublished original handoff in the author's workspace (`Workspace Docs/handoffs/`).
+
+The Morningstar e-mail thread is not yet stored in the project; until Aaron exports it
+(contact details redacted) into `vendor_inbound/`, the handoff is the only evidence
+reference.
 
 ## 2. Decisive PIT semantics
 
@@ -150,12 +179,12 @@ VENDOR_WAVE1_STATUS         = ALL_SENT
 ETF_GLOBAL                  = CLARIFICATION_ANSWERED_AWAITING_VENDOR_RESPONSE
 LSEG_LIPPER                 = SENT_AWAITING_RESPONSE
 BLOOMBERG                   = SENT_AWAITING_RESPONSE
-MORNINGSTAR                 = SENT_AWAITING_RESPONSE
-MORNINGSTAR_SUPPORT         = ROUTING_REQUEST_SENT
-MORNINGSTAR_FREE_TRIAL      = APPLIED
+MORNINGSTAR                 = SALES_ROUTING_COMPLETE_AWAITING_RESPONSE   (SELF-REPORTED, §1)
+MORNINGSTAR_SUPPORT         = ROUTED_TO_SALES_TEAM, Morningstar support case (number withheld)  (SELF-REPORTED, §1)
+MORNINGSTAR_FREE_TRIAL      = APPLIED_NOT_ACTIVATED                       (SELF-REPORTED, §1)
 PROSHARES_PROFUNDS          = SENT_AWAITING_RESPONSE
 FACTSET                     = SENT_AWAITING_RESPONSE
-RESPONSES_RECEIVED          = 0  (evidentiary; operational routing replies excluded)
+RESPONSES_RECEIVED          = 0 (evidentiary)  (operational routing replies excluded)
 SV1_VERIFIED_SOURCE         = NONE
 R2_VENDOR_RESPONSE_REQUIRED = YES
 R2_PATH_C_PARK_TRIGGER      = NO
@@ -167,7 +196,8 @@ PAID_SUBSCRIPTION_AUTHORIZED= NO
 TRIAL_CONSUMED              = NO
 ```
 
-All six vendor enquiries have been dispatched. ETF Global's academic-affiliation
+All six vendor enquiries have been dispatched. Morningstar's enquiry has been routed to
+its Sales team (SELF-REPORTED, §1) and awaits a substantive answer. ETF Global's academic-affiliation
 clarification was answered and remains awaiting the vendor's substantive response. No
 source classification has changed. The PARK trigger is evidentiary and fires only if this
 bounded process **closes** with no qualifying source and no material candidate remaining.
