@@ -834,3 +834,41 @@ R2_S1_AUTHORIZED             = NO
 G-3 was the last remaining pre-S1 blocker; OD-1 and OD-2 disposed of the other two.
 Readiness is not authorization — a separate S1 design authorization from Aaron /
 ChatGPT is still required.
+
+---
+
+# Correction of record 2026-10-02 — CP-AUDIT-01 (R2-G11, R2-G03)
+
+Appended under delegate decision D-R2-2026-10-02-01 (`DECISION_LOG.md`); findings in
+`audits/2026-10-01_CP-AUDIT-01/2026-10-01_CP-AUDIT-01_R2.md` §3. The body and the 2026-09-19
+amendment above are **not edited**; where they disagree with this section, this section
+governs. Current state: `PROJECT_STATE.md`.
+
+## CR-1 — AM-2 is withdrawn as a full-sample claim
+
+AM-2's `G3_STATUS = CLOSED_PASS`, `AUM_AVAILABLE_BY = NEXT_TRADING_DAY_OPEN`,
+`EVIDENCE_LEVEL = B` and its unqualified `S1_TAU_CONSTRAINT`, and the extension of the bound
+over "the multi-year sample", are **withdrawn as claims about the sample**, in the same way
+as the 2026-09-19 HOLD in `R2_G3_PUBLICATION_TIMING_REPORT.md`:
+
+- the modern-endpoint observations (2020, 2022, 2026 batch times; header semantics) stay
+  accepted as observations of the modern endpoint;
+- `EVIDENCE_LEVEL = B` and the "safe period" concept are withdrawn per D-R2-2026-10-01-01:
+  `HISTORICAL_DAILY_PIT_SAFE_START = NOT_ESTABLISHED`, `FULL_SAMPLE_AUM_AVAILABLE_BY = UNKNOWN`;
+- `S1_TAU_CONSTRAINT` applies only to dates a verified source proves eligible under OD-6.
+
+The 2011 and 2012 captured vintages carry no AUM column
+(`data_probe/g3_historical_pit_2026-09-19`, 44/44 verified). See
+`R2_G3_HISTORICAL_PIT_AMENDMENT.md`.
+
+## CR-2 — AM-6 is withdrawn outright
+
+`R2_PRE_S1_BLOCKERS_REMAINING = NONE` and `R2_READY_FOR_S1_DESIGN = YES` are withdrawn. G-3
+was not closed for the sample; the open pre-S1 blockers are those in `PROJECT_STATE.md`
+OPEN_BLOCKERS (B-3, G-11). `R2_S1_AUTHORIZED = NO` is unchanged.
+
+## CR-3 — row count (pointer)
+
+Every "20,616" in this report (§5.1, §8 row 7, AM-4) should read **23,616**; the §5.1
+SQQQ share wording and "agreeing to 1e-7" are also corrected. Erratum and figures:
+`R2_DATA_SOURCE_AUDIT.md`, correction of record 2026-10-02, C-3.

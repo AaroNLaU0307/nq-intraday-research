@@ -239,3 +239,31 @@ full text at `R2_SV1_SOURCE_VERIFICATION_REPORT.md` AMENDMENT 2026-09-20.
    Those are distinct questions and both are worth asking; neither party subsumes the other.
 
 Classifications themselves are unchanged. `SV1_VERIFIED_SOURCE = NONE`.
+
+---
+
+# Correction of record 2026-10-02 — CP-AUDIT-01 (R2-G14, R2-G20)
+
+```
+APPLIES_TO = R2_SV1_SOURCE_MATRIX.md and R2_SV1_SOURCE_VERIFICATION_REPORT.md
+AUTHORITY  = delegate decision D-R2-2026-10-02-01 (DECISION_LOG.md)
+FINDINGS   = audits/2026-10-01_CP-AUDIT-01/2026-10-01_CP-AUDIT-01_R2.md §3
+```
+
+The table and text above are **not edited**; this section governs where they disagree.
+
+1. **Row 18, Nasdaq Fund Network: REJECTED (R3)**, replacing PLAUSIBLE_UNVERIFIED. The only
+   documented Total Net Assets message is "As of TBD 2027", so history begins after the
+   sample. The NFN specification bytes were never captured. No enquiry (COR-R2-G14).
+2. **Candidate count.** The table has **20** numbered candidates, not "Nineteen". The SV-1
+   report's §3 list ("Twenty products") has 19 items: it omits row 14 (CRSP
+   Survivor-Bias-Free US Mutual Fund Database).
+3. **TQQQ Internet Archive captures, 2014-2019: status-200 = 1** (2018-09-29), not 2; the
+   other TQQQ entry is a 302 (2016-03-10). The SV-1 report §4 "two for TQQQ" carries the same
+   error. The stored bytes hold exactly one target-fund CSV capture
+   (`20180929144909_TQQQ`, HTTP 200) and no CDX output.
+4. **Attribution of the 2016 302 is UNRESOLVED.** This matrix says TQQQ (2016-03-10);
+   `R2_G3_HISTORICAL_PIT_AMENDMENT.md` §6 attributes the 2016 302s to SQQQ. No CDX output is
+   stored, and no re-query is made (it needs the network, and nothing depends on it).
+
+No classification other than row 18 changes. Row 19 stays REJECTED (R2, R3) at any count.

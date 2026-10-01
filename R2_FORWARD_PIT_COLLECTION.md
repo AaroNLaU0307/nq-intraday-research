@@ -832,3 +832,59 @@ here is a research observation.
 is the live password-backed export with the canonical `/d /s /c` action, not "pre-repair
 Interactive". The test suite now has 40 tests plus 12 subtests (the number is printed by
 `tools/reproduce.py`, which is its source).
+
+## Correction of record 2026-10-02 — CP-AUDIT-01 (R2-G10, side observations i and iii)
+
+Appended under delegate decision D-R2-2026-10-02-01 (`DECISION_LOG.md`); findings in
+`audits/2026-10-01_CP-AUDIT-01/2026-10-01_CP-AUDIT-01_R2.md` §3 and §7(a)10. Earlier
+sections, including the 2026-10-01 section, are **not edited**.
+
+**Supersession list.** This section supersedes, where they disagree:
+
+- §4, "a missing header, a lagging fund, malformed CSV and a schema change each produce an
+  explicit record and a non-zero exit" (side observation i);
+- §6, "The validation run is labelled `UNATTENDED_SCHEDULER_VALIDATION` via a one-shot
+  marker that the wrapper consumes and deletes, so routine collections are never
+  mislabelled" (side observation iii);
+- the 2026-10-01 section's sentence "The 2026-09-20 slot has no firing record in the logs;
+  it predates the current trigger's StartBoundary" (R2-G10);
+- the 2026-10-01 section's statement that the counts are derived from
+  `ops/R2_FORWARD_PIT_TASK.xml`: the NATURAL boundary is now pinned in `tools/reproduce.py`
+  to the literal 2026-09-21T11:00:00+08:00 of D-R2-2026-10-01-02 (R2-G06). The counts are
+  unchanged.
+
+### The 2026-09-20 11:00 +08:00 slot (R2-G10)
+
+```
+SLOT_2026-09-20_11:00_+08:00 = NO_FIRING_RECORD — task registration instant not
+                               established in any committed byte; not counted as a
+                               missed firing and not backfilled
+```
+
+§6 records an intended first scheduled run at 2026-09-20 11:00 +08:00 (trigger
+StartBoundary 2026-09-20T11:00:00+08:00). No committed byte shows whether the task was
+registered before 11:00 that day, so this record does **not** assert that the slot was in
+force or that it fired. The slot has no stdout line, no JSONL row and no snapshot. The
+reason given on 2026-10-01 ("it predates the current trigger's StartBoundary") is withdrawn
+as not applicable: that boundary came from the re-registration of 2026-09-21. No evidence
+was lost either way: the endpoint state was byte-identical across the slot.
+`FIRST_NATURAL_SCHEDULED_RUN = OBSERVED_FAIL_2026_09_21` means the first *observed*
+firing. The 2026-09-21 11:00 slot stays `MISSING_FORWARD_CAPTURE`.
+
+### Exit codes (side observation i)
+
+The collector's exit code depends only on whether every fund's status is `OK` (transport
+and HTTP errors set another status) and on self-verification
+(`tools/collect_forward_pit.py`: status set at :474, :479, :527; `all_funds_ok` at :627;
+exit at :829-835). A missing header, a lagging fund, a parse problem or a schema change is
+recorded in the manifest (`missing_headers`, `notes`, `lagging_funds`,
+`funds_with_parse_problems`, `schema_monitor`) **but exits 0**. The records are kept; the
+"non-zero exit" claim is withdrawn.
+
+### Validation-run label (side observation iii)
+
+The one-shot marker did not label the 2026-09-21 19:00:42 +08:00 validation run: Windows
+PowerShell 5.1 wrote it with a BOM, the wrapper rejected it and the run was recorded
+`ROUTINE_FORWARD_COLLECTION` (`2026-09-21/070042_ET`, BL-R2-01; manifest not relabelled).
+The wrapper reads the marker with `utf-8-sig` from FIX-R2-2026-10-02-01 onward, with a
+regression test on the exact PowerShell 5.1 bytes. No installer re-run has happened since.

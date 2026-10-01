@@ -632,3 +632,68 @@ two-day interval is not a general guarantee.
 Wayback CDX queries for the endpoint returned the Internet Archive's "temporarily
 offline" page on 2026-09-19. No archival corroboration was obtainable; the route
 remains open for later use.
+
+---
+
+# Correction of record 2026-10-02 — CP-AUDIT-01 (R2-G11, R2-G02, R2-G03)
+
+Appended under delegate decision D-R2-2026-10-02-01 (`DECISION_LOG.md`); findings in
+`audits/2026-10-01_CP-AUDIT-01/2026-10-01_CP-AUDIT-01_R2.md` §3. The body and the 2026-09-19
+amendment above are **not edited**; where they disagree with this section, this section
+governs. Current state: `PROJECT_STATE.md`.
+
+## C-1 — A-1 is withdrawn as a full-sample claim (R2-G11)
+
+A-1's `G3_STATUS = CLOSED_PASS`, `AUM_AVAILABLE_BY = NEXT_TRADING_DAY_OPEN` and
+`EVIDENCE_LEVEL = B` carry no date scope and are **withdrawn as claims about the sample**
+(2010-06-06 → 2022-01-01), in the same way as the 2026-09-19 HOLD in
+`R2_G3_PUBLICATION_TIMING_REPORT.md`:
+
+- the modern-endpoint observations stay accepted as observations of the modern endpoint
+  (Apache `Last-Modified` / ETag semantics; batch writes at 19:25, 20:21 and 21:00-21:01 ET
+  in 2020, 2022 and 2026);
+- `EVIDENCE_LEVEL = B` and the "safe period" concept are withdrawn per D-R2-2026-10-01-01;
+  `HISTORICAL_DAILY_PIT_SAFE_START = NOT_ESTABLISHED`, `FULL_SAMPLE_AUM_AVAILABLE_BY = UNKNOWN`;
+- `S1_TAU_CONSTRAINT` (`tau > 09:30 ET on trading day t`) applies only to dates a verified
+  source proves eligible under OD-6.
+
+The captured bytes contradict an unscoped bound: `data_probe/g3_historical_pit_2026-09-19`
+verifies 44/44, and its 2011 and 2012 CSVs end at `Shares Outstanding (000)` with no AUM
+column. See `R2_G3_HISTORICAL_PIT_AMENDMENT.md` and `PROJECT_STATE.md` OPEN_BLOCKERS (B-3, G-11).
+
+**B-1 body, same withdrawal** (side observation iv): `HISTORICAL PIT? YES for the Assets
+Under Management column` (B-1 table) and `The AUM column is the point-in-time-usable field`
+(B-1 POINT_IN_TIME SAFETY) are withdrawn. The current file is a current-vintage rendering;
+SV-1 rejects it as a PIT source (`R2_SV1_SOURCE_MATRIX.md` row 1, R4/R5); historical
+availability is not established. The rule to use the published AUM column directly, never
+NAV × shares, stands.
+
+## C-2 — "condition.json marks each date 'available'" is false (R2-G02)
+
+The A-1 (Databento) entry says `condition.json marks each date "available"`. ITSF's committed QA of
+the same Databento job (same manifest sha256 `d8d1edc7…`), `qa_addendum_a1.json` in the
+Intraday Trend Strategy Framework (commit `ac2979f`), tallies **3,604 available and 20
+degraded** dates. The statement is withdrawn. (Not re-measured here: re-opening
+`condition.json` would exercise OD-1.) The OD-1 narrative is corrected in `DECISION_LOG.md`
+(COR-R2-G02): R2's pre-grant reads of this archive were metadata only (file listing,
+job metadata, `condition.json` flags, manifest hashes — `R2_FEASIBILITY_REPORT.md` §14);
+no bar was decoded and no outcome touched.
+
+## C-3 — Erratum: the probe holds 23,616 rows, not 20,616 (R2-G03)
+
+The 2026-09-17 probe CSVs (`data_probe/proshares_nav_2026-09-17/`) hold
+5,093 (QLD) + 5,078 (QID) + 5,093 (PSQ) + 4,176 (TQQQ) + 4,176 (SQQQ) = **23,616** data rows,
+as the B-1 per-fund table already shows (REPRODUCED 2026-10-02). Every committed "20,616"
+should read 23,616: this file (B-1 MISSINGNESS; A-5), `R2_FEASIBILITY_REPORT.md` (§5.1 QA
+line, §8 row 7, AM-4), `R2_G3_PUBLICATION_TIMING_REPORT.md` (§11 residuals line) and, as a
+pointer only, the verbatim copy `handoffs/2026-10-01_AARON_R2_HANDOFF.md` §6. Zero missing
+values, zero duplicate dates and zero restatements all hold over the 23,616 rows.
+
+Two smaller slips in the IDENTITY SAFETY paragraph (and `R2_FEASIBILITY_REPORT.md` §5.1):
+
+- SQQQ 2010-09-02 `Shares Outstanding (000)` holds the byte value `0.01`, i.e. 0.01
+  thousand = 10 shares; "= 10" misreads the unit.
+- "agreeing to 1e-7 on TQQQ, QLD and PSQ" is false. Maximum relative error of NAV × shares
+  against published AUM: QLD 2.08e-7, TQQQ 1.04e-7, PSQ 1.33e-6 (rows above 1e-7: 6, 9 and
+  686). The SQQQ 2971/4176 and QID 4065/5078 mismatch counts use relative error > 1e-6
+  (REPRODUCED 2026-10-02). The rule — use published AUM, never NAV × shares — is unchanged.

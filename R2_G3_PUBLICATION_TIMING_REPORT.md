@@ -601,3 +601,9 @@ R2_PRE_S1_TIMING_BLOCKER    = YES
 Sections 4-7 of the body (endpoint existence, 2026 metadata semantics, five-fund
 synchronisation, the 2020/2022/2026 evening-batch pattern) remain accepted and were
 not re-audited. Section 11's `R2_READY_FOR_S1_DESIGN = YES` is **withdrawn**.
+
+---
+
+**Pointer 2026-10-02 (CP-AUDIT-01 R2-G03, D-R2-2026-10-02-01).** "20,616 overlapping rows"
+in §11 should read **23,616**; see `R2_DATA_SOURCE_AUDIT.md`, correction of record
+2026-10-02, C-3. Nothing else in this report is changed.

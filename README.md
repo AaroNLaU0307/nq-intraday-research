@@ -68,19 +68,19 @@ snapshot named in `PROJECT_STATE.md`, and later ones are reported for informatio
 |---|---|
 | [R2_S0_PROVENANCE.md](R2_S0_PROVENANCE.md) | where R2 came from; what the feasibility stage is and is not |
 | [R2_MINIMUM_DATA_CONTRACT.md](R2_MINIMUM_DATA_CONTRACT.md) | prospective data contract, written before availability was judged |
-| [R2_DATA_SOURCE_AUDIT.md](R2_DATA_SOURCE_AUDIT.md) | local / public / paid source audit (+ 2026-09-19 amendment) |
-| [R2_FEASIBILITY_REPORT.md](R2_FEASIBILITY_REPORT.md) | coverage matrix, identifiability finding, classification (+ amendment) |
+| [R2_DATA_SOURCE_AUDIT.md](R2_DATA_SOURCE_AUDIT.md) | local / public / paid source audit (+ 2026-09-19 amendment); its A-1 full-sample G-3 close is **withdrawn** — see its correction of record 2026-10-02 |
+| [R2_FEASIBILITY_REPORT.md](R2_FEASIBILITY_REPORT.md) | coverage matrix, identifiability finding, classification (+ amendment); AM-2's full-sample G-3 close and AM-6's S1 readiness are **withdrawn** — see its correction of record 2026-10-02 |
 | [R2_G3_ACCEPTANCE_CRITERIA.md](R2_G3_ACCEPTANCE_CRITERIA.md) | G-3 closure standard, written before its evidence existed |
 | [R2_G3_PUBLICATION_TIMING_REPORT.md](R2_G3_PUBLICATION_TIMING_REPORT.md) | G-3 modern-endpoint evidence; its full-sample close was **not accepted** — see the amendment |
 | [R2_G3_HISTORICAL_PUBLICATION_TIMELINE.md](R2_G3_HISTORICAL_PUBLICATION_TIMELINE.md) | 2010-2019 evidence regimes R-1 … R-4 |
 | [R2_G3_HISTORICAL_PIT_AMENDMENT.md](R2_G3_HISTORICAL_PIT_AMENDMENT.md) | G-3 status PARTIAL; AUM field observed from 2014-03-26; historical daily PIT-safe start NOT_ESTABLISHED (correction 2026-10-01) |
 | [R2_SV1_SOURCE_ACCEPTANCE_CRITERIA.md](R2_SV1_SOURCE_ACCEPTANCE_CRITERIA.md) | SV-1 evidence standard, written before any candidate was judged; the standard for classifying vendor replies |
-| [R2_SV1_SOURCE_MATRIX.md](R2_SV1_SOURCE_MATRIX.md) | 20 candidates across 9 classes, decisive evidence and missing facts |
+| [R2_SV1_SOURCE_MATRIX.md](R2_SV1_SOURCE_MATRIX.md) | 20 candidates across 9 classes, decisive evidence and missing facts (Nasdaq Fund Network REJECTED 2026-10-02 — see its correction section) |
 | [R2_SV1_SOURCE_VERIFICATION_REPORT.md](R2_SV1_SOURCE_VERIFICATION_REPORT.md) | SV-1 result, 2016 acid test, acquisition readiness, forward option |
 | [R2_SV1_VENDOR_ENQUIRY_PACKET.md](R2_SV1_VENDOR_ENQUIRY_PACKET.md) | the six prepared vendor enquiries |
 | [R2_VENDOR_WAVE1_DISPATCH.md](R2_VENDOR_WAVE1_DISPATCH.md) | Wave-1 dispatch package as prepared 2026-09-20 (its header predates dispatch; all six were later sent) |
 | [R2_VENDOR_RESPONSE_TRACKER.md](R2_VENDOR_RESPONSE_TRACKER.md) | one row per vendor; 6/6 sent; no evidentiary response yet |
-| [vendor_outbound/](vendor_outbound/) | the six messages as sent: four by e-mail, two by official contact form |
+| [vendor_outbound/](vendor_outbound/) | the six messages as prepared 2026-09-20 (pre-send text; sent copies, recipients and the ETF Global clarification not stored; channels actually used: tracker §1) |
 | [R2_FORWARD_PIT_COLLECTION.md](R2_FORWARD_PIT_COLLECTION.md) | forward point-in-time collection: purpose, schema, schedule, capture ledger (2026-10-01 section is current) |
 | [tools/collect_forward_pit.py](tools/collect_forward_pit.py) | collector + verifier, v1.1.0, manifest schema 2 |
 | [tools/run_forward_pit_scheduled.py](tools/run_forward_pit_scheduled.py) | scheduled wrapper: lock, JSONL log, honest timing |
@@ -88,8 +88,9 @@ snapshot named in `PROJECT_STATE.md`, and later ones are reported for informatio
 | [tools/run_forward_pit_task.cmd](tools/run_forward_pit_task.cmd) | Task Scheduler entry point; captures stdout and stderr |
 | [tools/install_forward_pit_task.ps1](tools/install_forward_pit_task.ps1) | resolves the interpreter, registers, verifies, exports the task XML |
 | [tools/remove_forward_pit_task.ps1](tools/remove_forward_pit_task.ps1) | removes only `QuantTrade-R2-ForwardPIT` |
-| `tools/test_*.py` | offline tests for the collector, the wrapper and the task action |
+| `tools/test_*.py` | offline tests for the collector, the wrapper, the task action and the reproduce command |
 | [tools/reproduce.py](tools/reproduce.py) | the reproduce command |
+| [audits/](audits/) | persisted review records, immutable (CP-AUDIT-01, 2026-10-01) |
 | [ops/R2_FORWARD_PIT_TASK.xml](ops/R2_FORWARD_PIT_TASK.xml) | live task export: password-backed principal, canonical `/d /s /c` action, no secrets |
 | [ops/R2_FORWARD_PIT_TASK.template.xml](ops/R2_FORWARD_PIT_TASK.template.xml) | sanitized declarative target definition, no secrets |
 | [logs/](logs/) | append-only scheduler log (no fund values), task stdout log, console log |

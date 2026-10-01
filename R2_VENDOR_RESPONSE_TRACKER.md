@@ -9,7 +9,8 @@ STATE       = four SENT_AWAITING_RESPONSE; ETF Global
               CLARIFICATION_ANSWERED_AWAITING_VENDOR_RESPONSE; Morningstar
               SALES_ROUTING_COMPLETE_AWAITING_RESPONSE; no evidentiary vendor response
               received
-UPDATED     = 2026-10-01 (CP-R2-V2-01: Morningstar routing facts, SELF-REPORTED)
+UPDATED     = 2026-10-02 (CP-REPAIR-01: dispatch-record note, VERIFIED_PARTIAL rule note,
+              trial flag; under D-R2-2026-10-02-01)
 ```
 
 Companion to `R2_VENDOR_WAVE1_DISPATCH.md`. One row per vendor, filled in as replies
@@ -25,7 +26,7 @@ blank is a finding; an invented value is a defect.
 
 | VENDOR | OUTBOUND_STATUS | SENT_AT | CHANNEL | MESSAGE_ID_OR_REFERENCE | RESPONSE_DATE | RESPONDER_ROLE |
 |---|---|---|---|---|---|---|
-| ETF Global | CLARIFICATION_ANSWERED_AWAITING_VENDOR_RESPONSE | 2026-09-21T19:25+08:00 (11:25Z) | EMAIL | YAHOO_SENT/00_62116 | — | — |
+| ETF Global | CLARIFICATION_ANSWERED_AWAITING_VENDOR_RESPONSE | 2026-09-21T19:25+08:00 (11:25Z) | EMAIL | YAHOO_SENT/00_62116 | UNKNOWN | UNKNOWN |
 | LSEG / Lipper | SENT_AWAITING_RESPONSE | 2026-09-21T20:16:08+08:00 (12:16:08Z) | OFFICIAL_CONTACT_FORM | LSEG_CONFIRMATION_PAGE/data-catalogue-thank-you | — | — |
 | Bloomberg | SENT_AWAITING_RESPONSE | 2026-09-21T20:16:54+08:00 (12:16:54Z) | OFFICIAL_CONTACT_FORM | BLOOMBERG_CONFIRMATION_PAGE/request-demo/thank-you | — | — |
 | Morningstar | SALES_ROUTING_COMPLETE_AWAITING_RESPONSE | 2026-09-21T19:26+08:00 (11:26Z) | EMAIL | YAHOO_SENT/00_62118; ROUTING_REPLY/YAHOO_THREAD_00_62118 | 2026-09-22 | Morningstar Direct Product Consultant |
@@ -89,6 +90,22 @@ unpublished original handoff in the author's workspace (`Workspace Docs/handoffs
 The Morningstar e-mail thread is not yet stored in the project; until Aaron exports it
 (contact details redacted) into `vendor_inbound/`, the handoff is the only evidence
 reference.
+
+**2026-10-02 — dispatch record, SELF-REPORTED (CP-AUDIT-01 R2-G18, D-R2-2026-10-02-01).**
+
+- The files in `vendor_outbound/` are the messages **as prepared 2026-09-20** (status
+  READY_NOT_SENT, with unfilled name / affiliation placeholders). The sent copies, the
+  recipients and any inbound vendor message are not stored in the project; the dispatch
+  evidence is the SELF-REPORTED `SENT_AT` / `MESSAGE_ID_OR_REFERENCE` cells above.
+- Channels changed from the plan: ETF Global was planned as a web form and ProShares as a
+  phone route; both were e-mailed (CHANNEL = EMAIL above). The recipient addresses are not
+  recorded (contact details are not persisted).
+- ETF Global's academic-affiliation clarification: that it was received and answered is
+  SELF-REPORTED; its date and content are UNKNOWN, so the ETF Global RESPONSE_DATE and
+  RESPONDER_ROLE read UNKNOWN.
+- Citation correction: the withholding note above cites "D-R2-2026-10-01-03 (Owner
+  instruction)". That id was never logged; the governing rows are OWNER-R2-2026-10-01 and
+  D-R2-2026-10-01-03c (`DECISION_LOG.md`).
 
 ## 2. Decisive PIT semantics
 
@@ -169,6 +186,16 @@ with exact `HISTORY_START`. Partial coverage is never promoted to full.
 sample-eligibility / sample-boundary rule is required under OD-5** — a rule made under the
 decision, not a revision of it.
 
+**2026-10-02 — correction to item 4 and to the §2 `2016_ACID_TEST` legend (CP-AUDIT-01
+R2-G15, delegate decision D-R2-2026-10-02-01).** `R2_SV1_SOURCE_ACCEPTANCE_CRITERIA.md` §2
+governs. R6 (the 2016 acid test) must be **assessed** for every VERIFIED candidate;
+`2016_ACID_TEST = PASS` is **required only for VERIFIED_FULL**, or where the claimed PIT scope
+covers 2016-03-31 to 2016-04-05. A candidate whose proven PIT coverage starts after
+2016-04-05 can be VERIFIED_PARTIAL with `2016_ACID_TEST = FAIL` (outside its scope), recorded
+with its exact `HISTORY_START`. Item 4 above and the legend in §2 are read with this
+correction; `R2_VENDOR_WAVE1_DISPATCH.md` §4 (the same stricter wording) is superseded by this
+note. This is a record correction, not a methodology change.
+
 ## 6. Current state
 
 ```
@@ -188,7 +215,9 @@ RESPONSES_RECEIVED          = 0 (evidentiary)  (operational routing replies excl
 SV1_VERIFIED_SOURCE         = NONE
 R2_VENDOR_RESPONSE_REQUIRED = YES
 R2_PATH_C_PARK_TRIGGER      = NO
-FREE_TRIAL_AUTHORIZED       = YES
+TRIAL_ACTIVATION_AUTHORIZED = NO   (the 2026-09-22 free-trial application was carried out under
+                                     an authorization recorded only in bd66324; decider,
+                                     instant and scope UNKNOWN — DECISION_LOG COR-R2-G16)
 PAID_TRIAL_AUTHORIZED       = NO
 DATA_PURCHASE_AUTHORIZED    = NO
 CONTRACT_AUTHORIZED         = NO

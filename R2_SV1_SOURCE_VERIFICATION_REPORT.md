@@ -521,3 +521,34 @@ FORWARD_PIT_COLLECTION = AUTHORIZED AND BUILT  (see R2_FORWARD_PIT_COLLECTION.md
 NQ_DATA_DECODED = NO   NQ_RETURN_COMPUTED = NO   R2_PNL_COMPUTED = NO
 R2_S1_AUTHORIZED = NO  TRIAL_CONSUMED = NO
 ```
+
+---
+
+# Correction of record 2026-10-02 — CP-AUDIT-01 (R2-G14)
+
+Appended under delegate decision D-R2-2026-10-02-01 (`DECISION_LOG.md`, COR-R2-G14);
+finding in `audits/2026-10-01_CP-AUDIT-01/2026-10-01_CP-AUDIT-01_R2.md` §3. The body and the
+2026-09-20 amendment are **not edited**; this section governs where they disagree.
+
+**Nasdaq Fund Network is REJECTED under R3.** Its only documented Total Net Assets message
+is marked "As of TBD 2027", so any history begins after the sample. The NFN specification
+bytes were never captured; this rests on the matrix's documentary note. No enquiry is made:
+no vendor contact is authorized, and NFN cannot cover 2010-2021. `R2_SV1_SOURCE_MATRIX.md`
+row 18 is corrected in that file's correction section.
+
+**The hand-copied "six" is corrected.** A parse of the matrix gives 10 PLAUSIBLE_UNVERIFIED
+rows from **seven** vendors as of 2026-09-19: ETF Global, LSEG / Lipper, Bloomberg,
+Morningstar, FactSet, the ProShares issuer archive / batch logs (row 2), and Nasdaq Fund
+Network. Six of them were enquired in Wave-1; NFN was not.
+
+- §7 "Six vendors hold the answers and have not been asked" — as of 2026-09-19: seven
+  plausible vendors, none asked.
+- §8 "Six, each with its exact missing facts and its enquiry drafted" — seven were
+  plausible; the table omits the ProShares issuer archive / batch logs (enquiry drafted:
+  `vendor_outbound/05_proshares.md`), and no NFN enquiry was ever drafted.
+- §10 "six plausible candidates remain, unasked" — seven, unasked, as of 2026-09-19.
+- §14 "six specific questions to six specific vendors, already drafted" — six enquiries
+  were drafted, to six of the seven plausible vendors (NFN had none).
+
+With NFN now REJECTED, the plausible set is six vendors, all enquired in Wave-1
+(`R2_VENDOR_RESPONSE_TRACKER.md`). `R2_PATH_C_PARK_TRIGGER = NO` is unchanged.
