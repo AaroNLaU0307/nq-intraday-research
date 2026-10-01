@@ -32,6 +32,8 @@ append-only hash chain, which is the authoritative record of what actually
 happened -- and each stage asserts its own invariants:
 
     S2            no RUN_STARTED        -> trial NOT consumed, NO outcome file
+    S3A           POWER_GATE_EXECUTED,  -> the same pre-run invariants as S2
+                  no RUN_STARTED           (the power gate reads no outcome)
     S3B_CONSUMED  RUN_STARTED           -> trial consumed, EXACTLY ONE run and
                                            EXACTLY ONE outcome bundle
     S4_REVEALED   REVEALED              -> reveal granted and recorded
@@ -44,6 +46,13 @@ the invariant that actually protects an immutable result.
 
 This tool reads NO outcome value. It hashes the bundle and reads counts and
 identity fields; it never opens the payload records.
+
+CORRECTION 2026-10-02 (R1_RECORD_CORRECTIONS_2026-10-02.md, CP-AUDIT-01 R1-critic-1,
+delegate decision D-R2-2026-10-02-01 R1-f): the closeout version derived S3A but
+routed it to the post-run branches, so "each stage asserts its own invariants" did
+not hold for S3A (5 false FAILs replaying 7426a2f). S3A now takes the pre-run
+branches. The digest ec52a9f1... pinned at ledger seq 13 and in the final
+controller snapshot refers to the CLOSEOUT bytes of this file, not to this version.
 
 Run:  python tools/validate_state.py
 """
@@ -74,6 +83,8 @@ LEGAL_AXIS2 = ("MECHANISM_SPECIFICITY_ESTABLISHED",
                "MECHANISM_SPECIFICITY_NOT_ESTABLISHED")
 LEGAL_VERDICTS = ("SUPPORTED", "FALSIFIED", "INSUFFICIENT_EVIDENCE", "PARKED")
 
+
+PRE_RUN_STAGES = ("S2", "S3A")  # no RUN_STARTED yet: no trial consumed, no outcome
 
 def lifecycle_stage(entries) -> str:
     """Derive the stage from the append-only ledger, never from prose.
@@ -157,7 +168,7 @@ def main() -> int:
               f"{key} = {fields.get(key, '<missing>')[:48]}")
 
     # Stage-dependent. Each stage asserts ITS OWN truth, never a stale one.
-    if stage == "S2":
+    if stage in PRE_RUN_STAGES:
         for key, want, why in (
                 ("TRIAL_CONSUMED", "NO", "trial not consumed"),
                 ("OUTCOME_REVEAL", "NOT GRANTED", "reveal not granted"),
@@ -211,7 +222,7 @@ def main() -> int:
     # must still hash to the digest the receipt recorded. The second assertion
     # is strictly stronger than the first -- it is what protects immutability.
     bundles = sorted(ROOT.rglob("sealed_r1_outcome.json"))
-    if stage == "S2":
+    if stage in PRE_RUN_STAGES:
         check("no sealed R1 outcome file exists in the repository",
               not bundles, "; ".join(str(p) for p in bundles[:3]))
     else:
@@ -268,7 +279,7 @@ def main() -> int:
           entries[0].event == "GENESIS" and len(entries) >= 2,
           f"{len(entries)} entries, head {current_digest(ROOT / LEDGER_FILE)[:12]}")
     n_started = sum(1 for e in entries if e.event == "RUN_STARTED")
-    if stage == "S2":
+    if stage in PRE_RUN_STAGES:
         check("RUN_STARTED has NOT been appended -- the trial is not consumed",
               n_started == 0)
     else:
