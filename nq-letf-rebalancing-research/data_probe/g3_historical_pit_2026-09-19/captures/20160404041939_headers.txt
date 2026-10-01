@@ -1,0 +1,38 @@
+HTTP/1.1 200 OK
+Server: nginx
+Date: Sat, 19 Sep 2026 13:30:56 GMT
+Content-Type: text/plain
+Content-Length: 205945
+Connection: keep-alive
+x-archive-orig-set-cookie: accounts.profunds.com=R1556817303; path=/; expires=Tue, 05-Apr-2016 04:23:24 GMT
+x-archive-orig-date: Mon, 04 Apr 2016 04:19:39 GMT
+x-archive-orig-server: Apache/2.2.3 (Red Hat) mod_ssl/2.2.3 OpenSSL/0.9.8e-fips-rhel5 DAV/2
+x-archive-orig-last-modified: Thu, 31 Mar 2016 22:25:30 GMT
+x-archive-orig-etag: "ac01e-32479-bd6d2a80"
+x-archive-orig-accept-ranges: bytes
+x-archive-orig-content-length: 205945
+x-archive-orig-connection: close
+cache-control: max-age=1800
+accept-ranges: bytes
+memento-datetime: Mon, 04 Apr 2016 04:19:39 GMT
+link: <https://accounts.profunds.com/etfdata/ByFund/SSO-historical_nav.csv>; rel="original", <https://web.archive.org/web/timemap/link/https://accounts.profunds.com/etfdata/ByFund/SSO-historical_nav.csv>; rel="timemap"; type="application/link-format", <https://web.archive.org/web/https://accounts.profunds.com/etfdata/ByFund/SSO-historical_nav.csv>; rel="timegate"
+content-security-policy: default-src 'self' 'unsafe-eval' 'unsafe-inline' data: blob: archive.org web.archive.org web-static.archive.org wayback-api.archive.org athena.archive.org analytics.archive.org pragma.archivelab.org wwwb-events.archive.org
+x-archive-src: WPO-20160404033000-crawl893/WPO-20160404041453-06998.warc.gz
+server-timing: captures_list;dur=0.563741, exclusion.robots;dur=0.088655, exclusion.robots.policy;dur=0.076139, esindex;dur=0.008961, cdx.remote;dur=9.353535, LoadShardBlock;dur=39.463836, PetaboxLoader3.datanode;dur=48.977099, PetaboxLoader3.resolve;dur=214.621758, load_resource;dur=280.819729
+x-app-server: wwwb-app267-dc8
+x-ts: 200
+x-tr: 345
+server-timing: TR;dur=0,Tw;dur=0,Tc;dur=0
+set-cookie: wb-p-SERVER=wwwb-app267; path=/
+cache-control: private
+X-location: All
+X-AS: 9930
+X-RL: 0
+X-NA: 0
+X-Page-Cache: MISS
+Server-Timing: MISS
+X-NID: TIME dotCom Berhad No. 14, Jalan Majistret U126 Hicom Glenmarie Industrial Park 40150 Shah Al
+Referrer-Policy: no-referrer-when-downgrade
+Permissions-Policy: interest-cohort=()
+X-sd: 0
+

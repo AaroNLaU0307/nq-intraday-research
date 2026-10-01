@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<!--
+  SANITIZED DECLARATIVE TEMPLATE - NOT A LIVE EXPORT.
+
+  This documents the TARGET password-backed definition of QuantTrade-R2-ForwardPIT.
+  It is maintained by hand and contains NO credential material of any kind.
+
+  Windows stores a scheduled task's password as an LSA secret, never in the task
+  XML, so a live export is also secret-free. This template is the hand-maintained
+  declarative reference; the installer re-exports the live definition on every
+  successful registration and scans it for secrets before keeping it.
+
+  STATUS 2026-09-21: the live task IS registered password-backed under the
+  Microsoft Account principal (LogonType Password, RunLevel LeastPrivilege). Its
+  stored Arguments still carry the OLD single-outer-quote form and must be
+  re-registered with the corrected form below.
+
+  LogonType Password is deliberate:
+    * the collector needs outbound HTTPS to a public endpoint;
+    * S4U would issue a token WITHOUT network credentials and is therefore the
+      wrong fit - S4U_UPGRADE_FOR_FORWARD_COLLECTOR = FORBIDDEN_WRONG_FIT;
+    * RunLevel LeastPrivilege: the task needs only local project-file access,
+      normal outbound HTTPS, and Task Scheduler execution. Nothing requires
+      elevation, so "run with highest privileges" is NOT enabled.
+
+  Register via:
+    powershell -ExecutionPolicy Bypass -File tools\install_forward_pit_task.ps1
+  Do not hand-import this template; the installer resolves the interpreter
+  mechanically and verifies the result.
+-->
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>R2 forward point-in-time ETF fund-size collection. Data-preservation infrastructure only: it does not repair 2010-2021, assigns no sample tier, and authorizes no research.</Description>
+    <URI>\QuantTrade-R2-ForwardPIT</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <CalendarTrigger>
+      <!-- Fixed clock time, every calendar day. 11:00 Asia/Kuala_Lumpur is ~23:00 ET
+           on the prior US day under EDT and ~22:00 ET under EST, both after the
+           observed ~21:00 ET batch. This does NOT guarantee the batch has completed:
+           a late, stale or missing update is evidence, not a scheduling failure.
+           The machine timezone is UTC+08:00 with no DST, so local 11:00 is 11:00 MYT. -->
+      <StartBoundary>2026-09-20T11:00:00+08:00</StartBoundary>
+      <Enabled>true</Enabled>
+      <ScheduleByDay>
+        <DaysInterval>1</DaysInterval>
+      </ScheduleByDay>
+    </CalendarTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <!-- UserId is resolved by the installer. This profile is backed by a
+           MICROSOFT ACCOUNT, so the password authentication principal is
+           MicrosoftAccount\<account email> - NOT the NTAccount form
+           DESKTOP-B7VTGF0\Aaron, which authenticates an interactive token only.
+           The real address is never persisted here. -->
+      <UserId>MicrosoftAccount\&lt;account-email-not-persisted&gt;</UserId>
+      <LogonType>Password</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>cmd.exe</Command>
+      <!-- The second argument is the interpreter path, resolved mechanically by
+           the installer. Windows Store python.exe aliases are rejected: they are
+           zero-length reparse points and are not dependable under Task Scheduler. -->
+      <!-- /d /s plus DOUBLED outer quotes. The project path contains a space;
+           with a single outer pair cmd.exe breaks the command at that space and
+           the action fails silently with no output. See tools/task_action.py and
+           its negative-control regression test. -->
+      <Arguments>/d /s /c ""C:\Users\Aaron\OneDrive\Desktop\Quant trade\nq-letf-rebalancing-research\tools\run_forward_pit_task.cmd" "C:\Users\Aaron\AppData\Local\Programs\Python\Python314\python.exe""</Arguments>
+      <WorkingDirectory>C:\Users\Aaron\OneDrive\Desktop\Quant trade\nq-letf-rebalancing-research</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>

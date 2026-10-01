@@ -1,0 +1,42 @@
+﻿<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>R2 forward point-in-time ETF fund-size collection. Data-preservation infrastructure only: it does not repair 2010-2021, assigns no sample tier, and authorizes no research.</Description>
+    <URI>\QuantTrade-R2-ForwardPIT</URI>
+  </RegistrationInfo>
+  <Principals>
+    <Principal id="Author">
+      <UserId>S-1-11-96-3623454863-58364-18864-2661722203-1597581903-1731146629-2718730506-2096756750-1859834061-82820779</UserId>
+      <LogonType>Password</LogonType>
+    </Principal>
+  </Principals>
+  <Settings>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <IdleSettings>
+      <Duration>PT10M</Duration>
+      <WaitTimeout>PT1H</WaitTimeout>
+      <StopOnIdleEnd>true</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+  </Settings>
+  <Triggers>
+    <CalendarTrigger>
+      <StartBoundary>2026-09-21T11:00:00+08:00</StartBoundary>
+      <ScheduleByDay>
+        <DaysInterval>1</DaysInterval>
+      </ScheduleByDay>
+    </CalendarTrigger>
+  </Triggers>
+  <Actions Context="Author">
+    <Exec>
+      <Command>cmd.exe</Command>
+      <Arguments>/d /s /c ""C:\Users\Aaron\OneDrive\Desktop\Quant trade\nq-letf-rebalancing-research\tools\run_forward_pit_task.cmd" "C:\Users\Aaron\AppData\Local\Programs\Python\Python314\python.exe""</Arguments>
+      <WorkingDirectory>C:\Users\Aaron\OneDrive\Desktop\Quant trade\nq-letf-rebalancing-research</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>

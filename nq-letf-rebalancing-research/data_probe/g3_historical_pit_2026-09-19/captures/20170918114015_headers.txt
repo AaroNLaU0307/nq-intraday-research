@@ -1,0 +1,38 @@
+HTTP/1.1 200 OK
+Server: nginx
+Date: Sat, 19 Sep 2026 13:31:06 GMT
+Content-Type: application/octet-stream
+Content-Length: 182450
+Connection: keep-alive
+x-archive-orig-set-cookie: accounts.profunds.com=R1256277944; path=/; expires=Tue, 19-Sep-2017 11:59:04 GMT
+x-archive-orig-date: Mon, 18 Sep 2017 11:40:15 GMT
+x-archive-orig-server: Apache/2.2.3 (Red Hat) mod_ssl/2.2.3 OpenSSL/0.9.8e-fips-rhel5 DAV/2
+x-archive-orig-last-modified: Fri, 15 Sep 2017 23:31:03 GMT
+x-archive-orig-etag: "9240b-2c8b2-c944dbc0"
+x-archive-orig-accept-ranges: bytes
+x-archive-orig-content-length: 182450
+x-archive-orig-connection: close
+cache-control: max-age=1800
+accept-ranges: bytes
+memento-datetime: Mon, 18 Sep 2017 11:40:15 GMT
+link: <https://accounts.profunds.com/etfdata/ByFund/BIB-historical_nav.csv>; rel="original", <https://web.archive.org/web/timemap/link/https://accounts.profunds.com/etfdata/ByFund/BIB-historical_nav.csv>; rel="timemap"; type="application/link-format", <https://web.archive.org/web/https://accounts.profunds.com/etfdata/ByFund/BIB-historical_nav.csv>; rel="timegate"
+content-security-policy: default-src 'self' 'unsafe-eval' 'unsafe-inline' data: blob: archive.org web.archive.org web-static.archive.org wayback-api.archive.org athena.archive.org analytics.archive.org pragma.archivelab.org wwwb-events.archive.org
+x-archive-src: NO404-GDELT-20170918113818-crawl816/NO404-GDELT-20170918113818-3655288.warc.gz
+server-timing: captures_list;dur=0.630039, exclusion.robots;dur=0.074525, exclusion.robots.policy;dur=0.061367, esindex;dur=0.009934, cdx.remote;dur=11.830340, LoadShardBlock;dur=46.770393, PetaboxLoader3.datanode;dur=59.806767, load_resource;dur=95.598610, PetaboxLoader3.resolve;dur=53.006680
+x-app-server: wwwb-app246-dc8
+x-ts: 200
+x-tr: 171
+server-timing: TR;dur=0,Tw;dur=0,Tc;dur=1
+set-cookie: wb-p-SERVER=wwwb-app246; path=/
+cache-control: private
+X-location: All
+X-AS: 9930
+X-RL: 0
+X-NA: 0
+X-Page-Cache: MISS
+Server-Timing: MISS
+X-NID: TIME dotCom Berhad No. 14, Jalan Majistret U126 Hicom Glenmarie Industrial Park 40150 Shah Al
+Referrer-Policy: no-referrer-when-downgrade
+Permissions-Policy: interest-cohort=()
+X-sd: 0
+
