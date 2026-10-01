@@ -404,3 +404,22 @@ git diff --stat r1-final          this file, tools/validate_state.py,
                                   tools/r1_analysis_extension_2026_10_02.py,
                                   audits/2026-10-01_CP-AUDIT-01_R1.md
 ```
+
+## 8. Application record (appended 2026-10-02, same repair)
+
+```
+R1_CORRECTIONS_COMMIT = 5639cb9 (this file, tools/validate_state.py,
+                        tools/r1_analysis_extension_2026_10_02.py, audits/)
+KB_ANNOTATION_COMMIT  = quant-research-knowledge-base 3b7dafa (local; no history rewrite).
+                        The §5 text was appended to the card's notes verbatim except that
+                        "§" is written "sec." to keep the card ASCII; the card's
+                        source_files gained this file. quant_kb.validate: VALIDATION PASSED
+                        (102 cards, 0 errors); generated maps rebuilt.
+CHECKS at 5639cb9     = pytest tests 285 passed · validate_state 60 passed, 0 failed ·
+                        validate_seal_snapshot PASS · validate_prereg 183 passed,
+                        2 failed (the two standing seal-time state assertions)
+VALIDATOR REPLAY      = fixed tools/validate_state.py on git-archive snapshots:
+                        b99e10e 48/0 · 7426a2f 48/0 · 28ed268 51/0
+LOGGED                = nq-letf-rebalancing-research/DECISION_LOG.md (rows ANAEXT-R1-2026-10-02,
+                        KB-R1-2026-10-02)
+```
