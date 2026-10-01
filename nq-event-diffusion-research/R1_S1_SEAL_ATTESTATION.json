@@ -1,0 +1,138 @@
+{
+  "record": "R1_S1_SEAL_ATTESTATION",
+  "schema": "r1_s1_seal.v1",
+  "immutable": "This file is the seal. It is written once and never edited. A later change to the sealed design requires a NEW Owner act, a new revision and a new seal; this one is preserved.",
+  "PREREG_SEALED": "YES",
+  "SEALED_BY": "Aaron (Owner)",
+  "SEAL_EXECUTED_BY": "Claude Opus (Main Agent), acting under explicit Aaron authorization dated 2026-09-17",
+  "SEAL_DATE": "2026-09-17",
+  "SEAL_SCOPE": "S1 FINAL SEAL ONLY",
+  "statement": "Aaron authorized the S1 final seal; Claude Opus executed it. Those are two different acts and this record keeps them apart. The delegated Owner-decision packet that fixed OD-1..OD-7 and P-2 was a third, earlier act: Fable 5.1 decided it under Aaron's delegation and ChatGPT accepted it. FABLE DID NOT SEAL THIS PREREGISTRATION. Aaron retains override authority.",
+  "acceptance": {
+    "CHATGPT_FINAL_PRE_SEAL_ACCEPTANCE": "PASS",
+    "MATERIAL_BLOCKERS": 0,
+    "DESIGN_REVIEW_COMPLETE": "YES",
+    "PSMV_REVIEW_COMPLETE": "YES",
+    "OWNER_DECISIONS_COMPLETE": "YES"
+  },
+  "delegated_owner_packet": {
+    "DECISION_TYPE": "DELEGATED_OWNER_RULING",
+    "DELEGATED_BY": "Aaron",
+    "DECIDED_BY": "Fable 5.1",
+    "ACCEPTED_BY": "ChatGPT",
+    "PACKET_STATUS": "PASS / CLOSED",
+    "note": "an earlier, separate act from the seal; preserved unchanged"
+  },
+  "CONTENT_COMMIT": "46b8aef9d2471dd427db6a780435e743660a6f24",
+  "CONTENT_TREE": "c3917fa30c5d71d9c0eb6d14232adc667f94dcc6",
+  "SEAL_ATTESTATION_COMMIT": "the commit that adds THIS file, i.e. the child of CONTENT_COMMIT. It cannot be named here: a file cannot contain the SHA of the commit that introduces it. It is identified by the annotated tag r1-s1-sealed and by git history.",
+  "PRE_SEAL_PROJECT_COMMIT": "8656701564d798a227efa9f46e2f581353017ff5",
+  "pre_seal_commit_is_the_sealed_commit": false,
+  "tags": {
+    "seal": "r1-s1-sealed",
+    "pre_seal": "r1-pre-seal  (historical; preserved, not overwritten)"
+  },
+  "sealed_document": {
+    "path": "R1_S1_PREREGISTRATION_SEALED.md",
+    "revision": "r4",
+    "renamed_at_seal_from": "R1_S1_PREREGISTRATION_DRAFT_UNSEALED.md",
+    "rename_reason": "a sealed preregistration must not be named a draft; the seal binds the CONTENT, and git carries the rename",
+    "design_changed_at_seal": false,
+    "changed_at_seal": "status metadata and the new section T, nothing else"
+  },
+  "sealed_digests": {
+    "R1_S1_PREREGISTRATION_SEALED.md": "49267deb92a79cc9c5b36cd6a5e198c587cc81e347fbb91e82078989419c4bf8",
+    "R1_PREREG_MANIFEST.json": "385a171d8f81a17ebc13c3600845a51eca2e11f394b2496736461e85718a45e7",
+    "R1_DELEGATED_OWNER_DECISIONS.md": "27f4c4338aabf78de34782e128a442991c479b64b8ee4b80f80d21b7a5786882",
+    "R1_S0_PROVENANCE.md": "4d6386a90c614930004c3a7c4052965dd103f0e1f70219b6266b0a4fe1fcbeaa",
+    "R1_TRIAL_REGISTRY.md": "56715810cdadea3ee2b1da67d287ad243c64f0ae76a22efeddf074b576cc5fdd",
+    "artifacts/PSMV_STRUCTURAL_REPORT.json": "df0242bad6e2a1e2eb6ad1c412f91ffc1d9d421ef036ea802f7fd382e68aef47",
+    "artifacts/PSMV_PURITY_ATTESTATION.json": "67e13b1770d1895084c2a989fb8c67e5692b1888f11d3c21cd464cdb7f546c7e",
+    "psmv/psmv_structural.py": "f3f582a19578ba8718f737ca1180971fb1b772a1de329467baa2889c9fcb2b9c",
+    "psmv/psmv_purity_guard.py": "c53b4acc929acddfec0850e10115c2dfe4af21931afcd9b25e69a8e55ca44f2e",
+    "psmv/validate_prereg.py": "3a68e0bd59454a43108aa2992fcc5cbce44b133b36d47e3337e096e3cb7ba83d",
+    ".gitattributes": "23c116e48b60403467c4455c4268c57e7e749cd31499c7669d85807fb14c73f2",
+    ".gitignore": "5f2eb563f94e90354a6202b1b6249199c8c772524b3d30fe5bf0b2a6a0329cb9"
+  },
+  "digest_scope_note": "PROJECT_STATE.md is deliberately NOT in the sealed set. It records current STATE, never sealed research content, and the attestation commit updates it to carry CONTENT_COMMIT. Everything that IS sealed is above, and psmv/validate_prereg.py recomputes every digest from disk on each run.",
+  "operative_design": {
+    "EVENT_FAMILY": [
+      "CPI",
+      "NFP"
+    ],
+    "INITIAL_REACTION": "C(08:31) - C(08:29)",
+    "SIGNAL_COMPLETE_ET": "08:32:00",
+    "PRIMARY_ENTRY_REFERENCE": "O(08:33)",
+    "EXIT": "O(09:29)",
+    "HOLDING_MINUTES": 56,
+    "k": 1,
+    "M": "$3.99 per event per 1 MNQ",
+    "PRE_SEAL_STRUCTURAL_N": 252,
+    "CPI": 118,
+    "NFP": 134,
+    "ROLL_TRANSITION_EXCLUSIONS": 0,
+    "E4": "DEFERRED TO POST-SEAL S2 -- requires price-value comparison; NOT computed during sealing",
+    "FOMC": "UNRESOLVED / DEFERRED, never falsified",
+    "CROSS_ASSET_PURCHASE": "DECLINED",
+    "PLANNING_POWER_TABLE": "TO_BE_REFRESHED_OUTSIDE_PSMV / BEFORE_SEAL IF REQUIRED"
+  },
+  "authorizes": {
+    "S2_IMPLEMENTATION": "NOT AUTHORIZED",
+    "R1_OUTCOME_COMPUTATION": "NOT AUTHORIZED",
+    "R1_OUTCOME_REVEAL": "NOT AUTHORIZED",
+    "OD_3_POWER_GATE": "NOT AUTHORIZED (post-seal S2; still not run)",
+    "INTERNAL_VALIDATION": "NOT GRANTED",
+    "LOCKBOX": "NOT GRANTED",
+    "EXPERIMENTS": "NOT AUTHORIZED",
+    "BACKTESTS": "NOT AUTHORIZED",
+    "PARAMETER_CHANGES": "FORBIDDEN -- the design is sealed",
+    "PREREG_REDESIGN": "FORBIDDEN -- supersede on the record, never edit",
+    "note": "each of these needs its own explicit Aaron authorization"
+  },
+  "data_grant": {
+    "OD_1": "GRANT, R1 scope only",
+    "granted": [
+      "NQ Development OHLCV (existing R1-approved grant)",
+      "frozen F10 CPI/NFP calendar",
+      "derived spread-cost table"
+    ],
+    "NOT_GRANTED": [
+      "Internal Validation",
+      "Lockbox",
+      "protected ITSF outcomes",
+      "R1 outcome reveal"
+    ]
+  },
+  "trial_accounting": {
+    "LINEAGE": "R1, separate lineage",
+    "SAMPLE_FORMAL_TRIAL_ORDINAL": 2,
+    "INHERITED_RESEARCHER_EXPOSURE_COUNT": 1575,
+    "PRIOR_LINEAGE": "ITSF S0-T001",
+    "R1_OUTCOME_EXPOSURE": "NONE",
+    "R1_TRIAL_CONSUMED": "NO -- a seal is not a run",
+    "ITSF_REGISTRY_SHA256": "b964b19a6b788bf9f47d1d24018dfc93836f74cbfd7ef69e4680471368d11fe9",
+    "ITSF_REGISTRY_MUTATED": false,
+    "ITSF_REPOSITORY_MODIFIED": false
+  },
+  "psmv": {
+    "PSMV_COMPLETE": "YES",
+    "PSMV_RERUN": "NO",
+    "PSMV_MDE_SCOPE_VIOLATION": "RECORD_HYGIENE_ONLY",
+    "R1_OUTCOME_CONTAMINATION": "NO",
+    "artifacts_modified_at_seal": false
+  },
+  "residuals": {
+    "P-5": "NON_BLOCKING_RESIDUAL",
+    "P-5_detail": "the 2025-Q1 spread proxy applied to earlier pre-open history remains a DISCLOSED cost-model limitation; it was deliberately not resolved by a purchase at seal time",
+    "P-6": "NOT APPLICABLE YET (no KB card until a first Finding)"
+  },
+  "post_seal_state": {
+    "S0": "CLOSED",
+    "S1": "SEALED",
+    "PSMV": "COMPLETE",
+    "S2": "NOT STARTED / NOT AUTHORIZED",
+    "R1_OUTCOME_EXISTS": false,
+    "R1_OUTCOME_INSPECTED": false,
+    "next_possible_stage": "S2 BUILD, which this seal does NOT authorize"
+  }
+}

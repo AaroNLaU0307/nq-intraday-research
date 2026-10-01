@@ -1,0 +1,55 @@
+{
+  "artifact": "R1_PSMV_PURITY_ATTESTATION",
+  "schema": "r1_psmv_purity.v1",
+  "invariant": "L-13 PSMV output purity",
+  "target_artifact": "PSMV_STRUCTURAL_REPORT.json",
+  "target_artifact_sha256": "df0242bad6e2a1e2eb6ad1c412f91ffc1d9d421ef036ea802f7fd382e68aef47",
+  "producing_source": "psmv_structural.py",
+  "producing_source_sha256": "f3f582a19578ba8718f737ca1180971fb1b772a1de329467baa2889c9fcb2b9c",
+  "rules": {
+    "R1_NO_FLOAT_LEAF": "every numeric leaf is an int",
+    "R2_NO_FORBIDDEN_KEY": "no object key contains an outcome token, matched token-wise after splitting on every non-alphanumeric character",
+    "R3_SOURCE_FIELD_SCAN": "the producing module holds no string literal naming a price/volume field"
+  },
+  "live_result": {
+    "R1_NO_FLOAT_LEAF": {
+      "pass": true,
+      "findings": []
+    },
+    "R2_NO_FORBIDDEN_KEY": {
+      "pass": true,
+      "findings": []
+    },
+    "R3_SOURCE_FIELD_SCAN": {
+      "pass": true,
+      "findings": []
+    }
+  },
+  "live_pass": true,
+  "mutation_demonstration": {
+    "R1_NO_FLOAT_LEAF": {
+      "injected": "fabricated sentinel float 1.2345",
+      "refused": true,
+      "findings": 1
+    },
+    "R2_NO_FORBIDDEN_KEY": {
+      "injected": "key 'mean_return_per_event'",
+      "refused": true,
+      "findings": 1
+    },
+    "R3_SOURCE_FIELD_SCAN": {
+      "injected": "literal \"close\" in a subscript",
+      "refused": true,
+      "findings": 1
+    }
+  },
+  "mutation_demonstration_pass": true,
+  "mutation_fixture_location": "C:\\Users\\Aaron\\AppData\\Local\\Temp\\r1_psmv_mutation",
+  "mutation_fixture_note": "fabricated sentinels only; no market value was read, written or inspected",
+  "key_allowlist": {
+    "E4_r_init_zero_no_direction": "names the DEFERRED test PSMV did not perform; the node records only status and rationale, and carries no value",
+    "L1_minus_early_close_equals_L2": "'early close' is the scheduled half-day session structure (ITSF frozen L44), never a closing price",
+    "minus_scheduled_early_close_days": "same: scheduled half-day count"
+  },
+  "verdict": "PASS"
+}

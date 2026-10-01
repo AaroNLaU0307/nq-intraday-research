@@ -1,0 +1,173 @@
+{
+  "manifest": "R1_PREREG_MANIFEST",
+  "manifest_version": "1.0.0",
+  "generated": "2026-09-17",
+  "closes": "P-7 (mechanical validation of the preregistration format)",
+  "purpose": "The SMALLEST structured companion to the prose preregistration that permits mechanical validation of the fields that genuinely matter. It is deliberately not a schema translation of the document: the 1,300 lines of prose were NOT converted into a schema.",
+  "authoritative_document": "R1_S1_PREREGISTRATION_SEALED.md",
+  "authority_note": "THIS FILE IS NOT AUTHORITATIVE. The prose preregistration is. Every field below is cross-checked against the prose, PROJECT_STATE.md, R1_DELEGATED_OWNER_DECISIONS.md, R1_TRIAL_REGISTRY.md and the PSMV artifact by psmv/validate_prereg.py, so this companion cannot silently drift from the document it describes. On a conflict the prose wins and the manifest is the defect.",
+  "purity_note": "Contains no price, return, sign, P&L, dispersion, MDE or any other outcome quantity. Monetary constants are ruled Owner decisions carried as strings, not measurements.",
+
+  "lineage_identity": {
+    "lineage": "R1",
+    "title": "Scheduled-Release Information-Diffusion Continuation",
+    "research_id_lane": "R1 . FULL",
+    "prior_lineage": "ITSF S0-T001",
+    "is_continuation_of_prior_lineage": false,
+    "project_home": "nq-event-diffusion-research",
+    "workflow_authority": "QUANT_WORKFLOW_VNEXT.md",
+    "decision_provenance": {
+      "DECISION_TYPE": "DELEGATED_OWNER_RULING",
+      "DELEGATED_BY": "Aaron",
+      "DECIDED_BY": "Fable 5.1",
+      "ACCEPTED_BY": "ChatGPT",
+      "owner_override_retained": true
+    }
+  },
+
+  "stage": {
+    "stage": "S1 SEALED",
+    "revision": "r4",
+    "s0": "CLOSED",
+    "s1": "SEALED",
+    "psmv": "COMPLETE",
+    "s2_authorized": false,
+    "experiments_run": false,
+    "backtest_run": false
+  },
+
+  "event_family": {
+    "included": ["CPI", "NFP"],
+    "pooled": true,
+    "pooling_fixed_before_outcome_testing": true,
+    "deferred": ["FOMC"],
+    "fomc_status": "UNRESOLVED / DEFERRED",
+    "fomc_falsified": false,
+    "release_clock_et": "08:30"
+  },
+
+  "reaction_timing": {
+    "p_pre": "C(08:29)",
+    "r_init": "C(08:31) - C(08:29)",
+    "reaction_window_bars": 2,
+    "signal_complete_et": "08:32:00",
+    "alternative_timing_arm_exists": false,
+    "p_2_ruling": "OPTION A"
+  },
+
+  "entry_exit": {
+    "entry": "O(08:33)",
+    "exit": "O(09:29)",
+    "holding_minutes": 56,
+    "decision_latency_budget_seconds": 60,
+    "dropped_entry_reference": "O(08:32)",
+    "dropped_reason": "no order-to-fill latency evidence exists; a same-minute fill assumes an observe-and-transact instant that was never measured"
+  },
+
+  "materiality": {
+    "od_4": "OPTION A",
+    "k": 1,
+    "M": "$3.99",
+    "M_basis": "1 x C_base_RT, per event, per 1 MNQ",
+    "k_revisable_after_an_outcome": false,
+    "planning_power_table": "TO_BE_REFRESHED_OUTSIDE_PSMV / BEFORE_SEAL IF REQUIRED"
+  },
+
+  "data_grant": {
+    "od_1": "GRANT",
+    "scope": "R1 only",
+    "granted": [
+      "NQ Development ohlcv-1m, 2010-06-06 -> 2022-01-01 exclusive",
+      "frozen F10 CPI/NFP event calendar",
+      "derived spread-cost table"
+    ],
+    "internal_validation": "NOT GRANTED",
+    "lockbox": "NOT GRANTED",
+    "protected_itsf_outcomes": "NOT GRANTED",
+    "vendor_manifest_sha256": "d8d1edc7b549b441d691dda74331806c957a19946e746bd795978e01d73c3ae8",
+    "event_calendar_sha256": "5e92ad00737339c392ed2c0927736e196e076e185897c146c884d5f515bb5e8c",
+    "symbology_csv_sha256": "85a32d44994b51e004e0c322510527aae18b70e1fadc70437e754253a2ac1850",
+    "itsf_repository_modified": false
+  },
+
+  "outcome_reveal_authority": {
+    "outcome_reveal": "NOT GRANTED",
+    "reveal_authority": "Aaron (Owner) only",
+    "pre_reveal_power_gate": "OD-3 ACCEPTED / POST-SEAL S2 / NOT RUN",
+    "r1_outcome_inspected": false,
+    "r1_outcome_exposure": "NONE",
+    "r1_outcome_engine_built": false
+  },
+
+  "seal_status": {
+    "prereg_sealed": true,
+    "seal_conditions_total": 11,
+    "seal_conditions_satisfied": 11,
+    "outstanding_conditions": [],
+    "sealed_by": "Aaron (Owner)",
+    "seal_executed_by": "Claude Opus (Main Agent), acting under explicit Aaron authorization",
+    "sealed_date": "2026-09-17",
+    "sealed_commit": "SEE R1_S1_SEAL_ATTESTATION.json (CONTENT_COMMIT) -- a commit cannot contain its own SHA",
+    "seal_authorizes": "nothing beyond fixing the design; S2, the run, the reveal and the OD-3 gate each need their own Aaron authorization"
+  },
+
+  "trial_identity": {
+    "sample": "NQ Development, 2010-06-06 -> 2022-01-01 exclusive",
+    "sample_formal_trial_ordinal": 2,
+    "inherited_researcher_exposure_count": 1575,
+    "exposure_count_semantics": "conservative DISCLOSED UPPER BOUND, charter clause 13; no new multiple-testing correction was invented",
+    "r1_trial_consumed": false,
+    "exposure_consumed_at": "RUN_STARTED (not yet appended)",
+    "itsf_registry_sha256": "b964b19a6b788bf9f47d1d24018dfc93836f74cbfd7ef69e4680471368d11fe9",
+    "itsf_registry_mutated": false
+  },
+
+  "structural_n": {
+    "pre_seal_structural_n": 252,
+    "cpi": 118,
+    "nfp": 134,
+    "funnel": {
+      "E0_cpi_or_nfp_calendar_events": 277,
+      "E1_minus_any_fomc_calendar_entry": 258,
+      "E2_minus_exact_roll_transition_sessions": 258,
+      "E3_minus_missing_required_structural_anchors": 252
+    },
+    "exact_roll_transition_exclusions": 0,
+    "measured_by": "PSMV, artifacts/PSMV_STRUCTURAL_REPORT.json",
+    "post_seal_signal_defined_n": null
+  },
+
+  "e4_status": {
+    "stage": "E4_r_init_zero_no_direction",
+    "status": "DEFERRED_TO_S2",
+    "reason": "R_init == 0 requires comparing two bar CLOSE PRICES; invariant L-13 and the PSMV authorization both forbid reading a price pre-seal",
+    "price_inspected_to_close_e4": false,
+    "s2_first_outcome_adjacent_act": "publish POST_SEAL_SIGNAL_DEFINED_N and the E4 removal count, before the power gate consumes n"
+  },
+
+  "record_repair_2026_09_17": {
+    "psmv_scientific_integrity": "PASS",
+    "psmv_authority_compliance": "HOLD / BOUNDED_RECORD_REPAIR (repaired)",
+    "PSMV_MDE_SCOPE_VIOLATION": "RECORD_HYGIENE_ONLY",
+    "R1_OUTCOME_CONTAMINATION": "NO",
+    "PSMV_RERUN_REQUIRED": "NO",
+    "PSMV_RERUN": "NO",
+    "structural_facts_changed": false,
+    "artifacts_modified": false
+  },
+
+  "artifacts": {
+    "PSMV_STRUCTURAL_REPORT.json": "df0242bad6e2a1e2eb6ad1c412f91ffc1d9d421ef036ea802f7fd382e68aef47",
+    "PSMV_PURITY_ATTESTATION.json": "67e13b1770d1895084c2a989fb8c67e5692b1888f11d3c21cd464cdb7f546c7e"
+  },
+
+  "version_control": {
+    "repository": "standalone local git repository; no remote; nothing pushed",
+    "initialised": "2026-09-17, as technical implementation of OD-5 = OPTION A",
+    "PRE_SEAL_PROJECT_COMMIT": "8656701564d798a227efa9f46e2f581353017ff5",
+    "pre_seal_commit_is_the_sealed_commit": false,
+    "SEAL_IDENTITY": "R1_S1_SEAL_ATTESTATION.json",
+    "seal_tag": "r1-s1-sealed",
+    "pre_seal_tag_preserved": "r1-pre-seal"
+  }
+}

@@ -1,0 +1,57 @@
+# R1 — nq-event-diffusion-research
+#
+# This repository holds the R1 research RECORD: the preregistration, the
+# Owner-decision record, the trial identity, the PSMV code and the PSMV
+# structural artifacts. It holds no market data and no outcome.
+
+# --- generated caches -------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+
+# --- OS / editor noise ------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+*.swp
+*.bak
+*.orig
+
+# --- MARKET DATA MUST NEVER ENTER THIS REPOSITORY ---------------------------
+# R1 reads the purchased Databento data IN PLACE, under the OD-1 grant, from
+# outside this project. Nothing derived from it beyond structural COUNTS may be
+# stored here — that is what invariant L-13 and the PSMV artifacts are for.
+# If a future file genuinely needs one of these extensions, it must be added
+# deliberately with `git add -f` AND recorded in R1_TRIAL_REGISTRY.md; silence
+# is not consent.
+*.dbn
+*.dbn.zst
+*.zst
+*.gz
+*.parquet
+*.feather
+*.arrow
+*.h5
+*.hdf5
+*.npy
+*.npz
+*.pkl
+*.csv
+*.tsv
+*.xlsx
+*.db
+*.sqlite
+*.sqlite3
+
+# --- scratch / transient ----------------------------------------------------
+scratch/
+tmp/
+*.tmp
+*.log

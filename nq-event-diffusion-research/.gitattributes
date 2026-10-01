@@ -1,0 +1,11 @@
+# DIGEST STABILITY.
+#
+# R1_TRIAL_REGISTRY.md pins sha256 values of files in this repository, and the
+# validator recomputes them. Git must therefore never rewrite line endings on
+# add or on checkout: a CRLF/LF conversion would silently change every digest
+# on a fresh clone and make the pins unverifiable.
+#
+# `-text` disables all end-of-line conversion; `diff` keeps the files textual
+# for diffing, so history stays readable.
+
+* -text diff

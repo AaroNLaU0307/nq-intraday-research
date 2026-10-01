@@ -1,0 +1,217 @@
+{
+  "record": "R1_S4_FINAL_VERDICT",
+  "schema": "r1_s4_verdict.v1",
+  "immutable": "Written once at S4 closure. It interprets an immutable result; it does not create one.",
+  "run_id": "R1-S3B-001",
+  "lineage": "R1 -- Scheduled-Release Information-Diffusion Continuation",
+  "authorization": "Aaron (Owner), explicit: S4 reveal of the EXISTING R1-S3B-001 bundle plus deterministic verdict construction. No rerun, no recompute from raw data, no new analysis.",
+  "reveal_identity_gate": {
+    "result": "PASS",
+    "checks_passed": 18,
+    "checks_failed": 0,
+    "CONTENT_COMMIT": "46b8aef9d2471dd427db6a780435e743660a6f24",
+    "SEAL_ATTESTATION_COMMIT": "595af1c9663eb868e9f2d72f44abfe2f426ca24d",
+    "S2_CODE_COMMIT": "433e2cc035391ec73c5c94135ad9cf6afaca746e",
+    "S2_BUILD_ATTESTATION_COMMIT": "b99e10eeadbd254bc3e39256366ed3db1d9f84fd",
+    "tag_r1_s2_built_resolves_to": "b99e10eeadbd254bc3e39256366ed3db1d9f84fd",
+    "runtime_source_rollup_sha256": "3f64307d2b214c9cc21d7873c198be4ebc247de5b5fbcc56a082e6a17acad2a5",
+    "sealed_digests_verified": 12,
+    "sealed_digest_mismatches": 0,
+    "S3A_ARTIFACT_SHA256": "f8760918c7ce79f47492bcf7aaf2da4ae3c00d1df42cc3d6f891ce2ef6dd5cfd",
+    "OUTCOME_BUNDLE_DIGEST": "92c3877f1855f5d9a9865a87283c43303dd89684916994579c4173ec8f350514",
+    "OUTCOME_FILE_SHA256": "f6ca60e2dee7bb3c3c810fc8fe459d42449008ee12c9e331aefea75a16e5dd6e",
+    "run_identity_digest": "bb8655821ecd526c8fba7ad4b1601304368637794eccf9c0a44ec633d46b8a51",
+    "run_started_rows": 1,
+    "real_run_directories": 1,
+    "outcome_bundles": 1,
+    "previously_revealed": false,
+    "internal_validation_accessed": false,
+    "lockbox_accessed": false,
+    "sealed_trial_registry_byte_identical": true,
+    "ledger_chain_valid": true,
+    "working_tree_clean": true
+  },
+  "bundle_integrity": {
+    "result": "PASS",
+    "records": 246,
+    "duplicate_dates": 0,
+    "span": [
+      "2010-07-02",
+      "2021-12-10"
+    ],
+    "e4_exclusions_present": 0,
+    "structural_reconciliation": "252 structural - 6 E4 = 246 records",
+    "path_length_minutes": 56,
+    "bootstrap_reproduced_from_sealed_records": true,
+    "bootstrap_spec": "stationary block, block=5 events, 10000 resamples x seeds (7,13,31) pooled, two-sided 95 percent percentile",
+    "field_label_defect": {
+      "severity": "LABELLING ONLY -- no value is wrong",
+      "detail": "payload[mean_y_net_usd] carries the CONSERVATIVE arm point estimate, not the Base mean. r1/pipeline.py:176 assigns evidence.conservative_point_estimate to that key while payload[records] are the Base arm.",
+      "stored_value": -10.268455284552845,
+      "true_base_mean_recomputed_from_sealed_records": -8.768455284552845,
+      "reconciliation": "Conservative = Base - 1.50 exactly (flat per-event round-turn differential)",
+      "verdict_impact": "NONE -- the sealed rule reads conservative_point_estimate for the Conservative-survival guard, which is exactly this value; the Base mean enters only through base_interval, which is stored correctly and reproduces exactly."
+    }
+  },
+  "primary_result": {
+    "cost_scenario": "Base (sealed primary)",
+    "n": 246,
+    "mean_y_net_usd_per_event_per_mnq": -8.768455284552845,
+    "mean_y_net_nq_index_points": -4.384227642276422,
+    "bootstrap_interval_95": [
+      -13.920945121951219,
+      -4.107835365853666
+    ],
+    "ci_half_width_usd": 4.906554878048777,
+    "materiality_m_usd": 3.99,
+    "interval_position_vs_M": "ENTIRELY BELOW M",
+    "interval_position_vs_zero": "ENTIRELY BELOW ZERO",
+    "cost_scenario_means_usd": {
+      "Base": -8.768455284552845,
+      "Conservative": -10.268455284552845,
+      "Stress": -11.018455284552845,
+      "Severe": -11.518455284552845
+    },
+    "descriptive": {
+      "sd": 49.48010013571971,
+      "se": 3.154735960657701,
+      "median": -4.74,
+      "win_rate_pct": 39.83739837398374,
+      "min": -400.49,
+      "max": 252.51,
+      "sum": -2157.04
+    }
+  },
+  "primary_guards": {
+    "PRIMARY_INTERVAL_GATE": {
+      "result": "FAIL",
+      "rule": "CI_lower > M",
+      "observed": "-13.920945 > 3.99 is False"
+    },
+    "C1_GUARD": {
+      "result": "NOT_RECOVERABLE",
+      "rule": "C1 must NOT clear M",
+      "detail": "c1_clears_m was not persisted in the sealed bundle. Verdict shown INVARIANT: both c1_clears_m=True and c1_clears_m=False yield PREDICTIVE_EFFECT_UNRESOLVED."
+    },
+    "A1_GUARD": {
+      "result": "PASS",
+      "rule": "sign(mean Y_net | lower half of |R_init|) == sign(mean Y_net | all)",
+      "a1_sign_holds": true,
+      "a1_n_members": 126,
+      "note": "A1 is NON-CONFIRMATORY: it can only block support, never create it. Here it holds on a NEGATIVE mean."
+    },
+    "CONSERVATIVE_SURVIVAL": {
+      "result": "FAIL",
+      "rule": "Conservative point estimate > 0",
+      "observed": "-10.268455 > 0 is False"
+    },
+    "EXCLUSION_PRECISION_GATE": {
+      "result": "FAIL",
+      "rule": "CI_upper < M AND CI_half_width < M",
+      "upper_lt_M": true,
+      "half_width_lt_M": false,
+      "observed": "upper -4.107835 < 3.99 is True; half_width 4.906555 < 3.99 is False",
+      "binding_failure": "half_width"
+    }
+  },
+  "axis_1": {
+    "verdict": "PREDICTIVE_EFFECT_UNRESOLVED",
+    "stored": "PREDICTIVE_EFFECT_UNRESOLVED",
+    "recomputed_agrees": true,
+    "semantics": "Neither supported nor excluded at materiality M. The point estimate and the whole 95 percent interval are negative, but the sealed design requires half-width < M to call an effect of size >= M excluded, and the realized half-width (4.906555) exceeds M (3.99)."
+  },
+  "axis_2": {
+    "verdict": "MECHANISM_SPECIFICITY_NOT_ESTABLISHED",
+    "confirmatory": false,
+    "D_point_estimate": null,
+    "D_interval_95": null,
+    "recoverability": "NOT RECOVERABLE from the sealed bundle. r1.verdict.decide returns MECHANISM_SPECIFICITY_NOT_ESTABLISHED both when the D interval is absent and when its 95 percent lower bound <= 0; no D statistic was persisted. The VERDICT is determinate under either branch; the way it was produced is not.",
+    "permitted_language": "none -- specificity is not established, so no diffusion wording is available"
+  },
+  "final_research_verdict": "INSUFFICIENT_EVIDENCE",
+  "kb_claim_status": "unresolved",
+  "failure_type_classification": "INSUFFICIENT_EVIDENCE_LOW_POWER",
+  "reresearch_eligibility": "CONDITIONAL",
+  "power_gate_reconciliation": {
+    "od3_planning_s_hat_nonevent_usd": 28.2082,
+    "realized_event_day_sd_usd": 49.48010013571971,
+    "ratio": 1.7541034215483338,
+    "od3_planned_half_width_usd": 3.5251,
+    "realized_half_width_usd": 4.906554878048777,
+    "lesson": "The OD-3 nuisance parameter was estimated on NON-EVENT control days and understated event-day dispersion by about 1.75x. The gate cleared on a precision the Primary never achieved. Descriptive only: it changes no sealed rule and it was decided before the outcome existed."
+  },
+  "prop_feasibility": {
+    "basis": "stored per-record mae_usd / mfe_usd, sealed R.2",
+    "mae_usd_per_event_per_mnq": {
+      "median": -13.25,
+      "mean": -31.591463414634145,
+      "worst": -485.75
+    },
+    "breach_1000_dll_events": 0,
+    "breach_2000_mll_events": 0,
+    "excursion_ge_100_pct": 7.723577235772358,
+    "note": "At ONE micro no event breaches the 50k DLL/MLL limits. This is a feasibility fact about excursion only; it is NOT a deployment recommendation, and the Primary is negative."
+  },
+  "not_persisted_in_bundle": [
+    "c1_clears_m / C1 draw statistics",
+    "Axis-2 D point estimate and 95 percent interval",
+    "C2 control-arm summary",
+    "vol-tercile disclosure (requires ADR14)",
+    "era / micro-era disclosure",
+    "event-type (CPI vs NFP) labels",
+    "A1 per-event membership list, mean_members, mean_all"
+  ],
+  "authority_state": {
+    "R1_OUTCOME_REVEALED": "YES",
+    "TRIAL_CONSUMED": "YES",
+    "runs_executed": 1,
+    "additional_trial_consumed_at_S4": "NO",
+    "INTERNAL_VALIDATION_ACCESSED": "NO",
+    "LOCKBOX_ACCESSED": "NO",
+    "S4_COMPLETED": "YES",
+    "R1_LIFECYCLE": "STOP"
+  },
+  "observed_direction": {
+    "OBSERVED_DIRECTION": "STRONGLY_NEGATIVE",
+    "statement": "On this sample the sealed rule LOST money. The Base point estimate is -$8.768455 per event per 1 MNQ and the entire 95 percent interval [-13.920945, -4.107835] lies below zero. Every sealed cost scenario is negative. This is real negative evidence and it is recorded here so that the formal status cannot be mistaken for a null or a near-miss.",
+    "formal_status_is_separate": "FINAL_VERDICT = INSUFFICIENT_EVIDENCE is a statement about what the SEALED RULE licenses, not about the direction of the estimate. The two are deliberately recorded as separate facts.",
+    "why_not_falsified": "The sealed exclusion rule requires CI_upper < M AND CI_half_width < M. The first holds (-4.107835 < 3.99). The second does NOT: half-width 4.906555 > M 3.99. That single precision requirement is the whole reason this is not a falsification.",
+    "must_not_be_read_as": [
+      "FALSIFIED -- the sealed precision condition for exclusion was not met",
+      "SUPPORTED -- the primary interval gate and Conservative survival both FAIL",
+      "near-zero or absent evidence -- the estimate is strongly negative",
+      "a promising edge, a near-miss, or anything deployable",
+      "evidence about FOMC, other instruments, other horizons or other rules"
+    ]
+  },
+  "permanent_residuals": {
+    "OUTCOME_SCHEMA_LABEL_DEFECT": {
+      "status": "PERMANENT / NOT REPAIRED BY DESIGN",
+      "detail": "The sealed outcome field mean_y_net_usd contains -10.268455, which is the CONSERVATIVE point estimate. The true Base mean, reconstructed from the immutable Base records, is -8.768455. The $1.50 difference is the Base-to-Conservative flat round-turn cost differential (r1/pipeline.py:176 assigns evidence.conservative_point_estimate to that key while payload[\"records\"] are the Base arm).",
+      "classification": "LABEL defect. No stored value is wrong.",
+      "verdict_impact": "NONE -- the deterministic verdict is unchanged.",
+      "disposition": "The sealed outcome bundle is NOT edited, rewritten or replaced. The defect is recorded here, in the operational ledger and in the KB proposal so that no future reader misreports the Primary by $1.50."
+    },
+    "AXIS2_EVIDENCE_PROVENANCE_GAP": {
+      "status": "PERMANENT / NOT RECOVERABLE WITHOUT A FORBIDDEN RERUN",
+      "detail": "The bundle stores MECHANISM_SPECIFICITY_NOT_ESTABLISHED but does not persist D or its 95 percent interval. r1.verdict.decide returns NOT_ESTABLISHED both when the D interval is absent and when its 95 percent lower bound is <= 0.",
+      "classification": "NON-BLOCKING evidence-provenance gap.",
+      "consequence": "The final Axis-2 STATUS is known and determinate under either branch; the underlying statistic cannot be independently reconstructed from the sealed bundle. Rerunning is forbidden, so the gap is permanent.",
+      "verdict_impact": "NONE -- Axis 2 is non-confirmatory and cannot create Primary support."
+    },
+    "STALE_STAGE_VALIDATOR": {
+      "status": "REPAIRED at closeout",
+      "detail": "tools/validate_state.py hard-coded S2-era pre-run assertions and therefore failed once S3-B and S4 legitimately happened.",
+      "repair": "Made lifecycle-aware: the stage is derived from the append-only operational ledger and each stage asserts its own invariants. Nothing was weakened -- the post-run stage asserts strictly more than the pre-run stage did (exactly one run, exactly one bundle, bundle bytes still hash to the recorded digest, verdict enums legal, PROJECT_STATE agrees with the durable artifact).",
+      "scope": "tools/ only. It is outside the frozen r1/*.py runtime rollup, so the S2 executable identity is untouched. No scientific rule changed and no outcome value is read by the validator."
+    }
+  },
+  "closeout": {
+    "S4_CLOSED": "YES",
+    "R1_LIFECYCLE": "STOP",
+    "R1_RESEARCH_REOPEN_ALLOWED": "NO",
+    "reopen_exception": "Only an explicit future Aaron new-lineage decision, under a new seal and a new sample. Not a reopening of R1.",
+    "post_result_research": "NONE",
+    "sealed_outcome_bundle": "NOT edited, NOT replaced, NOT regenerated."
+  }
+}

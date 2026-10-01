@@ -1,0 +1,149 @@
+{
+  "record": "R1_S3A_POWER_GATE",
+  "schema": "r1_s3a_power_gate.v1",
+  "stage": "S3-A -- REAL-DATA PRE-RUN / PRE-REVEAL POWER GATE ONLY",
+  "authorization": "Aaron, explicit: S3-A only. NOT the Primary run, NOT RUN_STARTED, NOT trial consumption, NOT a reveal.",
+  "outcome_safety": "This artifact contains NO R1 Primary outcome and no C2 performance statistic. From C2 only the sealed DISPERSION and the population counts appear; no mean, median, sign, win rate, cumulative P&L, Sharpe, interval or event-arm comparison was computed anywhere in the S3-A path. The control arm object was destroyed before this artifact was assembled.",
+  "identity_gate": {
+    "result": "PASS",
+    "checks_passed": 14,
+    "checks_failed": 0,
+    "CONTENT_COMMIT": "46b8aef9d2471dd427db6a780435e743660a6f24",
+    "SEAL_ATTESTATION_COMMIT": "595af1c9663eb868e9f2d72f44abfe2f426ca24d",
+    "S2_CODE_COMMIT": "433e2cc035391ec73c5c94135ad9cf6afaca746e",
+    "S2_BUILD_ATTESTATION_COMMIT": "b99e10eeadbd254bc3e39256366ed3db1d9f84fd",
+    "tag_r1_s2_built_resolves_to": "b99e10eeadbd254bc3e39256366ed3db1d9f84fd",
+    "runtime_source_rollup_sha256": "3f64307d2b214c9cc21d7873c198be4ebc247de5b5fbcc56a082e6a17acad2a5",
+    "sealed_digests_verified": 12,
+    "sealed_digest_mismatches": 0,
+    "working_tree_clean_at_gate": true,
+    "code_modified_during_s3a": false
+  },
+  "real_input_preflight": {
+    "result": "PASS",
+    "data_role": "development_signal",
+    "job_dir": "C:\\Users\\Aaron\\quant-data\\databento-archive\\intraday-trend\\development_signal\\GLBX-20260727-DL3BEBCHJA",
+    "vendor_manifest_sha256": "d8d1edc7b549b441d691dda74331806c957a19946e746bd795978e01d73c3ae8",
+    "files_verified": 139,
+    "files_digest_rollup_sha256": "320b12c4c376acd165f67176dcfb0dc03d2fbd6f74fd872dc3e6912c9577d7f1",
+    "psmv_recorded_rollup_sha256": "320b12c4c376acd165f67176dcfb0dc03d2fbd6f74fd872dc3e6912c9577d7f1",
+    "rollup_matches_psmv": true,
+    "authorized_window": [
+      "2010-06-06",
+      "2022-01-01"
+    ],
+    "decoder": "databento DBN (ohlcv-1m), lazily imported by r1.dev_adapter",
+    "schema_fields_required": [
+      "ts_event",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume"
+    ],
+    "timestamp_semantics": "ts_event = bar START, ns UTC, converted once to ET minute-of-day",
+    "duplicate_policy": "a second record for one ET minute is a refusal; none occurred",
+    "et_dates_decoded": 3586,
+    "psmv_recorded_et_dates": 3586,
+    "event_calendar_sha256": "5e92ad00737339c392ed2c0927736e196e076e185897c146c884d5f515bb5e8c"
+  },
+  "structural_universe": {
+    "result": "REPRODUCED",
+    "PRE_SEAL_STRUCTURAL_N": 252,
+    "expected": 252,
+    "CPI": 118,
+    "NFP": 134,
+    "ROLL_TRANSITION_EXCLUSIONS": 0,
+    "funnel": {
+      "E0_cpi_or_nfp_calendar_events": 277,
+      "E1_minus_any_fomc_calendar_entry": 258,
+      "E2_minus_exact_roll_transition_sessions": 258,
+      "E3_minus_missing_required_structural_anchors": 252
+    },
+    "event_universe_digest": "f0f08a620725c8603cc54c00d67e9b22ca7e068517f0fa9cfa385bc3ce0c9554",
+    "required_anchors_present_on_real_data": "252 of 252 event dates carry C(08:29), C(08:31), O(08:33) and O(09:29)",
+    "span": [
+      "2010-07-02",
+      "2021-12-10"
+    ],
+    "span_note": "matches R1_SEALED_ERRATA.md E-1; the sealed D.3 span line is descriptively wrong and was not edited"
+  },
+  "e4": {
+    "definition": "R_init == 0 exactly, R_init = C(08:31) - C(08:29) (sealed C.1)",
+    "E4_COUNT": 6,
+    "exact_zero_event_dates": [
+      "2010-09-17",
+      "2011-07-15",
+      "2012-02-17",
+      "2012-06-14",
+      "2014-07-03",
+      "2016-06-16"
+    ],
+    "anchor_na_events": [],
+    "POST_SEAL_SIGNAL_DEFINED_N": 246,
+    "exposed": "counts and identifiers only; no sign, magnitude, distribution, direction, price or return"
+  },
+  "c2_dispersion_only": {
+    "purpose": "DISPERSION ONLY -- the OD-3 nuisance parameter",
+    "construction": "sealed K.2 / I.3: non-event days, direction = sign(C(08:31)-C(08:29)), O(08:33) -> O(09:29)",
+    "funnel": {
+      "archive_et_dates": 3586,
+      "minus_cpi_nfp_fomc_calendar_days": 3139,
+      "minus_missing_required_anchors": 2503,
+      "minus_exact_zero_no_direction": 2331
+    },
+    "c2_eligible_count": 2331,
+    "s_hat_usd_per_mnq": 28.20820679596105,
+    "s_hat_units": "USD per 1 MNQ per event",
+    "s_hat_crosscheck": {
+      "directed_gross_usd_sd": 28.20820679596105,
+      "delta": 0.0,
+      "note": "the sealed I.3 dispersion is over the directed PRICE CHANGE; the round-turn cost is a constant per event, so it cancels in a standard deviation. Verified identical."
+    },
+    "structurally_absent": [
+      "c2_mean",
+      "c2_median",
+      "c2_win_rate",
+      "c2_sign",
+      "c2_cumulative_pnl",
+      "c2_sharpe",
+      "c2_bootstrap_interval",
+      "mechanism_specificity_D",
+      "any_event_arm_comparison"
+    ]
+  },
+  "od3_power_gate": {
+    "formula": "SE_hat = s_hat / sqrt(n); MDE_50 = M + 1.645*SE_hat; MDE_80 = M + 2.486*SE_hat (sealed I.3)",
+    "inputs": {
+      "POST_SEAL_SIGNAL_DEFINED_N": 246,
+      "M_usd": 3.99,
+      "k": 1,
+      "s_hat_usd_per_mnq": 28.20820679596105
+    },
+    "SE_hat_usd": 1.7984895770379767,
+    "MDE_50_usd": 6.948515354227472,
+    "MDE_80_usd": 8.46104508851641,
+    "ci_half_width_would_exceed_M": false,
+    "resolution_note": "sealed I.3: if the CI half-width would exceed M the design cannot distinguish supported from excluded",
+    "owner_decision": null,
+    "owner_decision_options": [
+      "PROCEED_TO_PRIMARY_RUN",
+      "PARK_FOR_INSUFFICIENT_POWER"
+    ],
+    "decided_by": "Aaron (Owner). The machinery neither decides nor recommends."
+  },
+  "authority_state": {
+    "REAL_MARKET_DATA_READ": "YES",
+    "REAL_E4_EVALUATED": "YES",
+    "REAL_C2_DISPERSION_COMPUTED": "YES",
+    "OD3_POWER_GATE_RUN": "YES",
+    "R1_PRIMARY_OUTCOME_COMPUTED": "NO",
+    "R1_OUTCOME_INSPECTED": "NO",
+    "RUN_STARTED": "NO",
+    "TRIAL_CONSUMED": "NO",
+    "INTERNAL_VALIDATION_ACCESSED": "NO",
+    "LOCKBOX_ACCESSED": "NO",
+    "OUTCOME_BUNDLE_CREATED": "NO",
+    "S3B_AUTHORIZED": "NO"
+  }
+}
