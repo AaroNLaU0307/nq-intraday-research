@@ -1,0 +1,19 @@
+{
+  "authorized_commit": "08e74235afb4868acc7df80bbe0e0a13a1b5ba5a",
+  "chain_status": {
+    "manifest": "not_started",
+    "stages_completed": [
+      "A_PRECHECK"
+    ]
+  },
+  "exception_type": "RunGateError",
+  "failure_reason": "RunGateError at gate 'preflight_assertions_match' (incident INC-fa9234e0e541); raw detail sealed in INCIDENT_INC-fa9234e0e541.md inside the attempt directory",
+  "generated_at_utc": "2026-08-01T16:20:47+00:00",
+  "released_information": [
+    "guarded stage logs only"
+  ],
+  "report_type": "PRE_RUN_ATTEMPT_FAILURE",
+  "stage": "B_LOAD_VALIDATE",
+  "trial_id": "S0-T001",
+  "trial_state": "PACKET_APPROVED"
+}

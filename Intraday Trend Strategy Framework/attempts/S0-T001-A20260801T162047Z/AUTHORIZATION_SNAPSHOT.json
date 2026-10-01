@@ -1,0 +1,7 @@
+{
+ "authorized_commit": "08e74235afb4868acc7df80bbe0e0a13a1b5ba5a",
+ "event_sequence": 10,
+ "exact_authorization_text_sha256": "b9e171e6ad13b2dae9c07999549aaf9f90e5ea1d20b88a8a752a48b91b5ab2d2",
+ "registry_sha256": "63f427ffcf6b9431dc8c2f7e24c307d92f708f14cf4af3fb8dcdbf04b188b741",
+ "trial_id": "S0-T001"
+}

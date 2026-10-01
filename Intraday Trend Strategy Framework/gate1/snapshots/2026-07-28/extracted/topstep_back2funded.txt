@@ -1,0 +1,181 @@
+Back2Funded: Rules, Guidelines, and How It Works | Topstep Help Center Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Skip to main content 
+
+ Discord Topstep TopstepTV 
+
+ Discord Topstep TopstepTV 
+
+ Search for articles... 
+
+ All Collections 
+
+ Topstep Program 
+
+ Funded Accounts 
+
+ Express Funded Account® 
+
+ Back2Funded: Rules, Guidelines, and How It Works
+
+ Back2Funded: Rules, Guidelines, and How It Works
+ Lost it before your first Payout? Don&#x27;t start over. Reactivate.
+
+ June 18, 2026 
+
+ Table of contents
+
+ The Basics
+
+ Back2Funded gives you up to 2 Reactivations per account if you lose your Express Funded Account® (XFA) before your first Payout. Keep the same account size and Payout rules — no Trading Combine® required.
+
+ Eligibility
+
+ To be eligible for Back2Funded, all of the following must be true:
+
+ The XFA was earned through Topstep&#x27;s Trading Combine®
+
+ The XFA was closed due to a rule violation before taking a Payout
+
+ The XFA is on TopstepX™ in the new Topstep Dashboard
+
+ Trader is in good standing with no compliance concerns
+
+ ⚠️ Once a Payout is taken from an XFA, it is no longer eligible for Back2Funded. Traders on the Focused Trader Plan (FTP) cannot use Back2Funded.
+
+ Pricing
+
+ Prices exclude sales tax. Each purchase is separate, final, and non-refundable.
+
+ Account Size 
+
+ Reactivation Fee 
+
+ $50K XFA
+
+ $599
+
+ $100K XFA
+
+ $699
+
+ $150K XFA
+
+ $829
+
+ New: Responsible Trading Discount for Back2Funded
+
+ Select a Daily Loss Limit (DLL) at checkout when Reactivating your Express Funded Account, and receive a $50 discount.
+
+ ✅ $50 off → 50K (DLL: $1,000) 
+
+ ✅ $50 off → 100K (DLL: $2,000) 
+
+ ✅ $50 off → 150K (DLL: $3,000) 
+
+ 👉 Discount is applied at checkout.
+
+ 💰 Please note: If you added a DLL to your Trading Combine® before the Back2Funded Responsible Trading Discount launched, the $50 discount will still apply automatically when you Reactivate. The DLL stays with the account for its full lifetime — Trading Combine® → Express Funded Account® → Reactivation.
+
+ How to Use Back2Funded
+
+ Lose your XFA before your first Payout
+
+ Within 30 calendar days, decide if you want to Reactivate
+
+ Log in to the new Topstep Dashboard, select your account, and choose Back2Funded
+
+ Pay the Reactivation fee (including sales tax)
+
+ Your account is ready to trade at the start of the next trading session 
+
+ Example: Complete purchase at 10 PM CT Tuesday → account available Wednesday at 5 PM CT
+
+ Reactivation Window
+
+ You have 30 calendar days from account closure to decide
+
+ Back2Funded-eligible XFAs do not count toward your 5-account limit until the Reactivation fee is paid
+
+ If you take no action within 30 days — the offer expires and is automatically declined
+
+ After expiration, you must return to the Trading Combine® to earn a new XFA
+
+ ⏳ On May 29th, 2026, the Reactivation window increased from 7 days to 30 days! Accounts that were eligible for Back2Funded within the past 30 days will now show the updated time remaining based on 30 days minus however many days have already passed. This includes accounts where the original 7-day reactivation window have already passed. For example:
+
+ An XFA that was eligible for Back2Funded 3 days ago will now have 27 days remaining.
+
+ An XFA that was eligible for Back2Funded 10 days ago will now have 20 days remaining, even though the original 7-day reactivation window expired.
+
+ FAQs
+
+ Does the Payout policy change when I Reactivate?
+
+ No. You keep the same Payout rules as your original XFA.
+
+ What happens to my previous stats?
+
+ Everything resets to zero: balance, P&L, trade history, and winning days. It&#x27;s a fresh start with the same payout rules.
+
+ How many times can I Reactivate?
+
+ Up to 2 Reactivations per Express Funded Account. Each is purchased separately.
+
+ Why do I have to wait until the next trading session?
+
+ It gives you a chance to reset — not just your account, but your mindset. Take the break. Come back focused.
+
+ Is a Reactivation the same as a Reset?
+
+ No. A Reactivation is Back2Funded — it applies to lost Express Funded Accounts. A Reset can only be used on active Trading Combine® subscriptions. Learn more about Resets. 
+
+ Can I use Back2Funded on XFA Standard and XFA Consistency?
+
+ Yes — both types are eligible for Reactivation.
+
+ Can I use Back2Funded on my Live Funded Account, Pro Account, or Shoulder Tap XFA?
+
+ No. Back2Funded is available only for Express Funded Accounts that are not associated with a Live Funded Account® (LFA), Pro Account, or Shoulder Tap XFA.
+
+ What happens if I have 5 active XFAs and one becomes eligible for Back2Funded?
+
+ The eligible XFA does not count toward your 5-account limit during the 30-day window. If you do not Reactivate within 30 days, the Back2Funded offer expires for that account.
+
+ Related Articles
+ Express Funded Account™ Parameters 
+
+ Topstep Payout Policy 
+
+ Live Funded Account Parameters 
+
+ Topstep Pricing and Payment Questions 
+
+ What is a Pro Account? 
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Your Privacy Choices

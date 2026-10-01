@@ -1,0 +1,340 @@
+# platform_params.yaml v0.6 — 平台规则参数转录（与 MC_METHOD_SPEC 一同冻结）
+# 证据：所有 evidence 键指向 gate1/evidence_registry.yaml（完整64位哈希在彼处）。
+# v0.1 → v0.2：GPT 评审 3 项纠错＋5 项遗漏全部落实；其引用的全部新数字均已
+# 由本机新快照独立验证（Lucid scaling/consistency、Back2Funded、XFA params、分层表图片）。
+
+meta:
+  version: 0.6   # v0.5 → v0.6：生命周期次数上限、Lucid rail 归位＋保守费、G9 唯一 Primary
+                 # ＋hard_run_blocker、gate2_cost_guard、三处错挂节点归位（结构审计）
+  transcribed_at: "2026-07-28"
+  evidence_registry: gate1/evidence_registry.yaml
+  status: frozen   # Freeze Commit A（tag mc-freeze-v1，2026-07-28）；修订走 Evidence Resolution Addendum
+
+# =============================================================================
+lucidflex_50k:
+  evaluation:
+    evidence: [lucid_flex_evaluation]
+    fee_model: one_time_no_rebilling
+    fees:                                # v0.5：重购按保守标价（coupon 可复用性未证明）
+      evidence: [lucid_50k_flex_eval_png]
+      first_purchase_usd: 98.00          # 标价 $140，"w/ coupon at checkout"（截图当日现价）
+      list_price_usd: 140.00
+      subsequent_repurchase_primary_usd: 140.00   # coupon 复用/重购适用性未验证 → 防虚假 GO
+      subsequent_repurchase_sensitivity_usd: 98.00
+      reset_fee_usd: 95.00
+      tax_primary: {treatment: screenshot_price_is_final, rate: 0}   # 截图价为 One Time Payment 全价
+      tax_sensitivity: {rate: 0.10}
+      discount_policy: "coupon 于 checkout 生效；持续性/复用性未验证（已体现在重购 Primary 取标价）"
+    reference_products:                  # 同日截图归档（非 Primary，供未来 entry_mode 研究）
+      lucid_50k_pro_eval:  {price_usd: 129.50, reset_usd: 110.40, dll_usd: 1200, evidence: lucid_50k_pro_eval_png}
+      lucid_50k_direct_instant_funded: {price_usd: 364.00, consistency_pct: 20, dll_below_trail_usd: 1200, evidence: lucid_50k_direct_png}
+    time_limit: none
+    profit_target_usd: 3000
+    consistency:
+      nominal_pct: 50
+      formula: "largest_single_day_profit / account_profit <= 0.50"
+      cushion:
+        exists: true
+        example_50k: {nominal_usd: 1500, cushion_usd: 1560}   # evidence: lucid_consistency
+        formula: UNKNOWN   # 缺口 G6：官方明示为随实际盈利浮动的百分比，非固定金额
+        decision_role: "Primary 按严格 50%；cushion 仅作敏感性，不进 Primary 判决"
+    dll: none
+    scaling_in_evaluation: none          # 评估期无 scaling，第一天即满仓（lucid_scaling）
+    max_position: {minis: 4, micros: 40}
+    upgrade: {activation_fee_usd: 0, delay: "5-30 分钟"}
+  mll_engine:                            # 机器公式（GPT 建议格式；数值经快照验证）
+    evidence: [lucid_flex_drawdown, lucid_breach_reply_png]
+    starting_balance_usd: 50000
+    initial_mll_usd: 48000
+    trail_distance_usd: 2000
+    initial_trail_balance_usd: 52100
+    locked_mll_usd: 50100
+    eod_update: "mll_next = min(50100, max(mll_current, eod_closing_balance - 2000))"
+    payout_effect: "mll_next = 50100"
+    intraday_breach: "realtime_equity_including_unrealized <= current_mll → 即时违规"
+    breach_scope: "评估与 funded 相同"
+    breach_evidence_grade: "Level 2-AI：Lucid support 两轮回复均为 AI bot 生成（Aaron
+      2026-07-28 披露），非人工确认。V-A 维持 Primary：(a) 与官方页 'If your account
+      balance reached the MLL, your account will be breached' 一致；(b) V-A 为保守方向，
+      若 bot 有误则偏差只低估生存率导向 STOP，不产生虚假 GO。可选跟进：人工客服复确认。"
+  funded:
+    evidence: [lucid_flex_funded, lucid_scaling]
+    dll: none
+    consistency: none
+    payout_buffer: none
+    profit_split_trader_pct: 90
+    absolute_max_position: {minis: 4, micros: 40}
+    scaling_tiers:                       # 按模拟盈利，双向浮动，session 结束后更新
+      update_time: end_of_session
+      bidirectional: true                # payout 扣减余额可导致降档
+      tiers_50k:                         # 机器区间（官方表格式 "$0-$999" 的标准读法）
+        - {lower_inclusive: 0,    upper_exclusive: 1000, minis: 2, micros: 20}
+        - {lower_inclusive: 1000, upper_exclusive: 2000, minis: 3, micros: 30}
+        - {lower_inclusive: 2000,                        minis: 4, micros: 40}
+      negative_simulated_profit_tier: UNRESOLVED   # 官方表自 $0 起；负盈利档位待 support
+                                                   # 书面确认（lucid_inquiry_2.md 问题 1）；
+                                                   # 确认前 MC 保守取最低档 2/20 并标注假设
+      circumvention: "反复规避限额可致当日利润清零/账户审查"
+  payouts:
+    evidence: [lucid_flex_payouts]
+    qualifying_days_required: 5
+    qualifying_day_min_profit_usd: 150   # 每次批准 payout 后重置重计
+    cycle_net_profit: {comparator: ">", threshold_usd: 0, evidence_example_usd: 1}
+    min_request_usd: 500
+    max_request: "50% of profit, cap $2,000（50K）；上限不随次数增长"
+    max_payouts_before_live_review: 5
+    fixed_payout_window: none
+    processing: "批准后数分钟扣账；2 个工作日到账"
+    trading_during_processing_risk: "处理前交易致余额低于要求 → 申请可能被拒"
+    payout_rail:                         # v0.6：移入正确节点；费用未公布 → 保守假设（防乐观偏差）
+      evidence_status: unresolved
+      primary_fee_usd: 30                # 保守假设：以证据中唯一观察到的国际通道费
+      sensitivity_fee_usd: 0             # （Topstep Wire/ACH $30）为代理，非 Lucid 官方数字
+      model_role: conservative_assumption
+  platforms_automation:                  # v0.6：归位（曾被错挂于 payout_accounting）
+    evidence: [lucid_platforms, lucid_permitted, lucid_prohibited_hft]
+    automation: allowed_with_conditions
+  live_transition:                       # v0.6：归位（曾被错挂于 automation_compliance）
+    evidence: [lucid_live_structure]
+    trigger: "5 次 payout 后进入 live review pool；非保证、时点由风险团队决定"
+  commissions_per_side_usd:
+    evidence: [lucid_products_comms]
+    NQ: 1.75
+    MNQ: 0.50
+    ES: 1.75
+    MES: 0.50
+    GC: 2.30
+    MGC: 0.80
+    note: "AI bot 确认帮助页未写明全含性（lucid_reply2）→ 保守 Primary 见 execution_costs"
+
+# 统一执行成本表（v0.5；机器参数——S0 逐笔 P&L 已扣费，MC 严禁重复扣除）
+execution_costs:
+  topstepx_mnq:
+    evidence: [topstepx_commissions]
+    total_round_turn_usd: 1.22           # 全含（commission+exchange+NFA）；平台价格变动属 Gate 4 风险
+  lucidflex_mnq:
+    evidence: [lucid_products_comms, nfa_assessment_fees]
+    lucid_commission_per_side_usd: 0.50
+    cme_exchange_clearing_fee_per_side_usd: 0.35   # VERIFIED —— MC1.1-G9 addendum：
+                                                   # CME 官方费表 2026-07-27 生效版，Non-Members
+                                                   # Micro E-mini Index Globex-Outrights $0.35/side
+                                                   # evidence: cme_fee_schedule_2026_07_27_xls
+    nfa_fee_per_side_usd:                # 官方 NFA FAQ（2026-07-28 快照）
+      until_2027_06_30: 0.01
+      from_2027_07_01: 0.02
+    conservative_total_round_turn_usd:
+      until_2027_06_30: 1.72             # 2×(0.50+0.35+0.01)
+      from_2027_07_01: 1.74              # 2×(0.50+0.35+0.02)；synthetic 日历按日期分段计
+    sensitivity_all_in_round_turn_usd: 1.00
+  s0_cost_handoff:                       # v0.6：唯一 Primary 算法（MC1.1-G9 后 VERIFIED）
+    primary_method: constant_full_horizon_upper_cost
+    primary_round_turn_usd: 1.74         # 全 24 个月恒定；官方值恰等于冻结假定（Case A，不变）
+    time_varying_nfa_schedule:
+      decision_role: diagnostic_only     # 1.72/1.74 分段仅作诊断输出，不进 Primary
+    cme_component_status: verified_official   # MC1.1-G9 addendum（2026-07-28）
+    hard_run_blocker: false              # G9 已解除；真实运行仍受第二物理副本 flag 阻断
+                                         # （guards.assert_real_run_allowed 双 flag 缺一不可）
+    rationale: "S0 按引擎×成本场景生成路径、不分平台；保守烘入全期界最高费，
+      Topstep 侧 EV 被轻微低估（方向安全），已披露"
+    mc_reapply_transaction_fee: false
+  double_counting_guard: "交易费只在 S0 成交模拟中扣除一次；MC 商业层不得再扣"   # v0.6 归位
+
+gate2_cost_guard:                        # v0.6：Lucid 未知执行成本的乐观偏差防护
+  lucid_execution_software_cost_usd_modeled: 0
+  actual_cost_status: unconfirmed_until_gate2_poc
+  guard: lucid_cannot_independently_trigger_go_until_gate2_costs_confirmed
+  # 语义：若 GO 条件仅由 Lucid 组合满足而 Topstep 组合不满足，判决降级为边界区 α
+
+payout_accounting:                       # v0.5：gross/net 唯一化（evidence: topstep_payout 示例
+  gross_request_definition: amount_removed_from_sim_account_balance   # "$6,000 → 取 $3,000 → 余额 $3,000"）
+  account_balance_effect: "balance_after = balance_before − gross_request_usd"
+  trader_cash_received: "gross_request_usd × trader_split − payout_rail_fee_usd"
+  terminal_withdrawable_value: "eligible_gross × trader_split − payout_rail_fee_usd"
+  scaling_and_mll_use: gross_deducted_balance   # 降档与 buffer 计算基于扣除 gross 后的余额
+
+automation_compliance:                   # v0.5：合规证据机器引用（G5 已快照部分）
+  topstep:
+    evidence: [topstep_prohibited_conduct, topstep_prohibited_strategies, topstep_api]
+    notes: "禁 VPS/VPN、账户堆叠、跨账户对冲、不公平技术；每日一笔的 opening-drive
+      策略不接近任何禁止形态；完整 Terms of Use 全文 = 首次实盘执行前硬阻断（Gate 2）"
+  lucid:
+    evidence: [lucid_permitted, lucid_prohibited_hft]
+    notes: "允许自动化/copier；禁 HFT、microscalping、模拟成交利用；
+      完整 T&C 全文 = 首次实盘执行前硬阻断（Gate 2）"
+
+# =============================================================================
+topstep_50k:
+  trading_day:
+    evidence: [topstep_combine_params]
+    session: "5:00 PM CT → 次日 3:10 PM CT；此后强平至 5:00 PM CT"
+  combine:
+    evidence: [topstep_combine_params, topstep_pricing, topstep_consistency, topstep_mll]
+    subscription_usd_per_month: {standard_path: 49, no_activation_path: 95}
+    reset_fee_usd: {standard_path: 49, no_activation_path: 95}
+    profit_target_usd: 3000
+    mll_engine:
+      starting_balance_usd: 50000
+      initial_mll_usd: 48000
+      trail_distance_usd: 2000
+      locked_mll_usd: 50000              # MLL 达到起始余额时锁定（≈日终余额达 $52,000）
+      eod_update: "mll_next = min(50000, max(mll_current, eod_balance - 2000))"
+      intraday_breach: "realtime_net_pnl_including_unrealized 触及 → 当日强平；Reset 后恢复资格"
+    consistency_target:
+      type: soft_target_increase
+      rule: "best_day > 0.5 × profit_target → 新目标 = best_day ÷ 0.50"
+      best_day_lock_time: "15:10 America/Chicago"
+    max_position: {minis: 5, micros: 50, ratio: "10:1"}
+  dll:                                   # 完整状态机；同时适用 Combine 与 XFA（checkout 版固定）
+    evidence: [topstep_dll_optional, topstep_payout, topstep_mll]
+    optional: true
+    threshold_usd_50k: 1000
+    reference_equity: session_start_equity          # v0.4：基准唯一化
+    reference_reset_time: "17:00 America/Chicago"
+    net_pnl_formula: "dll_net_pnl = realtime_equity - session_start_equity"
+    trigger_condition: "dll_net_pnl <= -1000"
+    breach_path: adverse_path            # 实时 Net P&L 含未实现（topstep_mll："Same logic applies"）
+    on_trigger:
+      flatten_positions: true
+      cancel_orders: true
+      block_new_orders_until: "next session 17:00 America/Chicago"
+      close_account: false
+      temporary_violation: true
+      payout_request_blocked_until_violation_lifts: true
+    set_at_checkout_fixed: true
+    carries_to_xfa: true
+    distinct_from_pdll: "手动 PDLL 可随时调整/移除，属个人风控层，不进平台状态机"
+  subscription_engine:                   # v0.4 新增
+    evidence: [topstep_subscriptions]
+    charged_at_purchase: true
+    rebill_interval_days: 30             # 自原始注册日起，非自然月
+    rebill_credit_granted: 1             # 每次 rebill 送 1 个 Reset Credit（存于 profile，
+                                         # 可用于未来同规格 Combine；取消订阅后该账户不可再 reset）
+    auto_cancel_on_pass: true
+    continues_after_mll_breach: true     # 爆仓后订阅继续扣费、账户练习模式直至 reset
+    no_pause: true
+    pass_deadline_vs_rebill: "rebill 日前一交易日收盘前 dashboard 显示通过才免扣"
+  reset_policy:
+    evidence: [topstep_what_is_reset]    # G8 关闭（官方页 2026-07-28 快照）
+    use_available_reset_credit_first: true   # 冻结的我方政策（配对规则见下）
+    credit_matching: use_oldest_matching_credit_first   # 我方政策选择，非官方规则
+    paid_reset_fee_usd: {standard_path: 49, no_activation_path: 95}
+    reset_effect_on_rebill_date: set_to_reset_date_plus_30_days   # 付费与 credit 完全一致
+    reset_credit:
+      granted_per_rebill: 1
+      rebill_date_effect: identical_to_paid_reset
+      expires_after_days: 365            # 2025-12-11 起发放者；此前发放的无期限
+      tied_to_account_size_and_type: true   # Standard / No-Activation / DLL 互不通用
+      no_transfer_no_combine: true
+      survives_subscription_cancellation: true   # 但已取消的订阅本身不可再 reset
+    max_resets_per_account_per_day: 2
+    primary_policy: "失败即刻 reset（有匹配 credit 用 credit，无则付费）"
+    sensitivity_policy: "等待下一次 rebill 的免费 credit"
+    stats_reset_on_reset: true
+  activation:
+    evidence: [topstep_pricing]
+    standard_path_activation_usd: 149
+    no_activation_path_usd: 0
+  xfa:
+    evidence: [topstep_xfa_params, topstep_mll, topstep_payout, topstep_consistency]
+    balance_start_usd: 0                 # "50K" 为购买力标签
+    max_active_xfa: 5
+    payout_path_chosen_at_activation: true   # Standard / Consistency 二选一
+    mll_engine:
+      starting_balance_usd: 0
+      initial_mll_usd: -2000
+      locked_mll_usd: 0
+      eod_update: "mll_next = min(0, max(mll_current, eod_balance - 2000))"
+      payout_effect: "mll_next = 0（永久）"
+      intraday_breach: "realtime_net_pnl_including_unrealized 触及 → 永久关户"
+    scaling_tiers:
+      evidence: [topstep_scaling, topstep_xfa_scaling_table_png]
+      basis: current_account_balance
+      update: next_session_only          # 盘中不上调
+      tiers_50k:                         # 图表原文 Below/–/Above 的机器编码
+        - {upper_exclusive: 1500,                        lots: 2, micros: 20}
+        - {lower_inclusive: 1500, upper_inclusive: 2000, lots: 3, micros: 30}
+        - {lower_exclusive: 2000,                        lots: 5, micros: 50}
+      payout_effect: "payout 降低余额至低档 → 上限相应下调"
+    payout_paths:
+      standard:
+        qualifying: "5 个盈利日，每日净利 ≥ $150（不需连续）"
+        payout_day_lock_time: "16:00 America/Chicago"   # 与 Combine 的 15:10 属不同阶段参数
+        cycle_net_profit: ">= $0.01（首次豁免）"
+        max_request: "余额 50%，cap $2,000"
+        after_payout: "MLL 永久 = $0；5 日计数重启；申请当日不计入下轮"
+      consistency:
+        qualifying: "≥3 交易日（每日≥1笔）＋ largest_winning_day/total_net_profit ≤ 0.40（不取整）"
+        max_request: "余额 50%，cap $3,000"
+        after_payout: "MLL = $0；consistency 与 3 日计数重启（新窗口自次一交易日）"
+    payout_cap_promotion:                # 限时促销，非稳定制度
+      rule: "购买 Combine 时加 DLL → cap 翻倍（$4,000 / $6,000）"
+      status: limited_time_offering
+      offer_expiry: unknown
+      decision_role: "Primary: dll=false, promotion=false；Sensitivity: dll=true, cap×2"
+    payout_min_usd: 125
+    profit_split:
+      default_trader_pct: 90
+      grandfathered_cohort:
+        condition: "joined_new_dashboard_before_2026-01-12"
+        first_lifetime_profit_usd: 10000
+        trader_pct_on_first_lifetime_profit: 100
+      decision_role: "Primary = 现在新开账户 = 90/10；不得事后选用旧 cohort"
+    payout_processing: "XFA 资金即时扣账、可立即交易"
+    payout_rail:                         # Primary 通道冻结（马来西亚 = 国际用户）
+      primary: {method: Wise, topstep_fee_usd: 0, processing: "1-3 工作日", note: "Wise 自身汇兑费不计入平台费"}
+      alternatives: {ACH_usd: 30, Wire_usd: 30, Aeropay_usd: 0, Prop_to_brokerage: US_only}
+    back2funded:
+      evidence: [topstep_back2funded, topstep_pricing, topstep_mll]
+      max_reactivations_per_xfa: 2
+      availability_after_first_payout: false
+      window_days: 30
+      requires: [topstepx_new_dashboard, good_standing]
+      focused_trader_plan_eligible: false
+      retains: [account_size, payout_path, dll_selection]
+      fee_50k_usd: 599
+      dll_discount_usd: 50
+      effect: "余额 $0、统计清零、MLL 回 -$2,000（同全新 XFA）；次一 session 可交易"
+      not_counted_toward_5_limit_until_paid: true
+  lfa:
+    evidence: [topstep_payout, topstep_live_funded, topstep_api]
+    payout: "每周期 5 个 ≥$150 盈利日；50% 余额无上限；30 盈利日后解锁每日提款"
+    dll: automatic
+    automation: "允许自动化，但禁止经 ProjectX API 自动交易"
+    payout_processing_conduct: "申请后应暂停交易至处理完成"
+  api:
+    evidence: [topstep_api]
+    list_price_usd_per_month: 29
+    recurring_code_price_usd_per_month: 14.50   # code "topstep"，官方称长期有效
+    discount_dependency: "promo code"
+    decision_role: "Primary（保守）$29；current-policy 敏感性 $14.50"
+    vps_vpn_remote: prohibited
+    allowed_phases: {combine: true, xfa: true, lfa_projectx_api: false}
+  data_fees:
+    evidence: [topstep_pricing]
+    level1: included
+    level2_usd_per_month: 38
+
+# =============================================================================
+gaps:
+  G5: "部分关闭：Topstep Prohibited Conduct + Strategies 已快照并被 automation_compliance
+       机器引用；双方 Terms/Agreement 全文 = 首次实盘执行前硬阻断（Gate 2），
+       Gate 1 不得声称 Terms 已完整"
+  G6: "cushion 公式 UNKNOWN——Primary 严格 50%，Sensitivity 不运行（披露项）"
+  G7: "负盈利 scaling 档未定义——Primary 保守取 2/20 并强制披露（披露项）"
+  G9: "剩余：CME exchange/clearing 费（0.35/side）PROVISIONAL——CME 页 403，
+       首次 S0 计算前以浏览器渲染快照或其他官方来源确认；NFA 部分已官方关闭（0.01→0.02）"
+  # 已关闭：G1（重购 Primary 取标价 $140 防虚假 GO）、G2、G3（保守 Primary＋数值归 G9）、
+  #          G4、G8（What-is-a-Reset 官方页：+30 天推移、credit 同效、365 天到期、日限 2 次）
+
+evidence_grade_note: "Lucid support 两轮回复均为 AI bot 生成（Aaron 披露）；所有引用该来源的
+  参数标记 Level 2-AI。本表中 bot 回答仅用于确认'官方文档未定义'类事实（G3/G6/G7），
+  未有任何数字参数以 bot 回答为唯一来源。"
+
+transcription_notes:
+  N1: "已撤回——4:00 PM CT（XFA payout day 锁定）与 3:10 PM CT（Combine best day 锁定）属不同阶段的独立参数，无矛盾"
+  N2: "XFA 余额从 $0 起步——MC_METHOD_SPEC §2.3 需按此修订（v0.3）"
+  N3: "Topstep XFA payout 后可立即交易；Lucid 处理期交易有拒付风险——payout halt 条款分平台"
+  N4: "Combine consistency 为软规则（抬目标），不得建模为硬失败"
+  N5: "Lucid payout 后 MLL 直接跳至锁定位 $50,100"
+  N6: "Lucid funded 首日仅 2 手/20 micro（分层起步），非 absolute max 4/40——初期容量比 v0.1 假设低一半"
+  N7: "Topstep 同时最多 5 个活跃 XFA——多账户阶段（MC v1.1）的硬约束"

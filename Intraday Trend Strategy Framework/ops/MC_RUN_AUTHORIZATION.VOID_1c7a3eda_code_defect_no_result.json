@@ -1,0 +1,11 @@
+{
+  "run_id": "MC-R001",
+  "input_bundle_commit": "876c1b74131b4ab1a89dce433ecce646ba481f8c",
+  "mc_execution_commit": "1c7a3eda61e827466f7f93cd98656cb8b8d010d9",
+  "bundle_summary_digest": "7263f0c1802c205ae3bf3732a0d2de5b46f17aac67a93fe5aedcc7bb71262d67",
+  "sealed_supplement_sha256": "f59a009213f2e3b9ce3b4b4937c1945227c89e724fc6c4fa0c063d0326417e4d",
+  "prereg_sha256": "6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132",
+  "output_path": "C:\\Users\\Aaron\\quant-data\\itsf-runs\\runs\\MC-R001_20260915T080712Z",
+  "authorized_by": "Aaron",
+  "sentence": "启动第一次真实MC，授权run_id: MC-R001，MC执行代码commit: 1c7a3eda61e827466f7f93cd98656cb8b8d010d9，输入bundle来源commit: 876c1b74131b4ab1a89dce433ecce646ba481f8c"
+}

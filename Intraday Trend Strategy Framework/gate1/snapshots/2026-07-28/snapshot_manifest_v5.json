@@ -1,0 +1,523 @@
+{
+  "fetched_utc_v1": "2026-07-27T23:21:28.549390+00:00",
+  "fetched_utc_v2": "2026-07-27T23:51:56.872618+00:00",
+  "pages": {
+    "lucid_flex_evaluation": {
+      "url": "https://support.lucidtrading.com/en/articles/12945790-lucidflex-evaluation-account",
+      "file": "lucid_flex_evaluation.html",
+      "http_status": 200,
+      "bytes": 67902,
+      "sha256": "e859d2de1884d387f3ad09c4abb0cd9e29bae59cc765630f14d0b5a2dc989b83",
+      "title": "LucidFlex Evaluation Account | Lucid Trading Help Center",
+      "extracted_text_sha256": "190f7f6e8feb0c0f51d9bd28a0f8079950601581c460b6f71423af8a72898e44",
+      "extracted_chars": 1666
+    },
+    "lucid_flex_funded": {
+      "url": "https://support.lucidtrading.com/en/articles/12945795-lucidflex-funded-account",
+      "file": "lucid_flex_funded.html",
+      "http_status": 200,
+      "bytes": 69611,
+      "sha256": "cc4a482e58c4b3a82a11f07fb6277a12466b7aa55071435e461f5a070e7cb74a",
+      "title": "LucidFlex Funded Account | Lucid Trading Help Center",
+      "extracted_text_sha256": "447d856e8b245d6a26b3e356c502b9a0dff5180b4fc3205cc59e642a4ff18bd4",
+      "extracted_chars": 1647
+    },
+    "lucid_flex_drawdown": {
+      "url": "https://support.lucidtrading.com/en/articles/12945815-lucidflex-drawdown",
+      "file": "lucid_flex_drawdown.html",
+      "http_status": 200,
+      "bytes": 65727,
+      "sha256": "fedb6b86c0cb3d0691bd5c443ef2fdee99fde95c3cadf80267508391fb7ccee1",
+      "title": "LucidFlex Drawdown | Lucid Trading Help Center",
+      "extracted_text_sha256": "8be3e9d4b376683e2b871cf772eee034cb0ea627eb89485b5196247745bc6f01",
+      "extracted_chars": 1700
+    },
+    "lucid_flex_payouts": {
+      "url": "https://support.lucidtrading.com/en/articles/12945796-lucidflex-payouts",
+      "file": "lucid_flex_payouts.html",
+      "http_status": 200,
+      "bytes": 82833,
+      "sha256": "5f5a9cefecf43061b826b22bd74583565cc93d8ea2f1a7eca7493c65d669315d",
+      "title": "LucidFlex Payouts | Lucid Trading Help Center",
+      "extracted_text_sha256": "bc011016d7de7cd9e35a4dcef2c34724f269561ea94cd4e9cca33620a568265c",
+      "extracted_chars": 3375
+    },
+    "lucid_permitted": {
+      "url": "https://support.lucidtrading.com/en/articles/11404728-permitted-activities",
+      "file": "lucid_permitted.html",
+      "http_status": 200,
+      "bytes": 72723,
+      "sha256": "c59c93682645bc4a6f43e8aea803b4b5c16e08e2a20624583f4556c137caaaf6",
+      "title": "Other Activities | Lucid Trading Help Center",
+      "extracted_text_sha256": "05bf4cdbd3cbc609acfcb3732c1cbd485d66f1e9fc4061138176f234105a203e",
+      "extracted_chars": 2811
+    },
+    "lucid_prohibited_hft": {
+      "url": "https://support.lucidtrading.com/en/articles/11404736-prohibited-high-frequency-trading",
+      "file": "lucid_prohibited_hft.html",
+      "http_status": 200,
+      "bytes": 66198,
+      "sha256": "9d0fde96f3cee1a816ae5f53be2f7c16a6db7be3e52d97249147ea6777606f25",
+      "title": "Prohibited: High Frequency Trading | Lucid Trading Help Center",
+      "extracted_text_sha256": "801d10cfe863ada96a238ec5f598f2ebd20e012aa23e7569a0e741cf2dc68ff3",
+      "extracted_chars": 1968
+    },
+    "lucid_products_comms": {
+      "url": "https://support.lucidtrading.com/en/articles/11508978-approved-products-and-commissions",
+      "file": "lucid_products_comms.html",
+      "http_status": 200,
+      "bytes": 87644,
+      "sha256": "59555a69e5c276b9a0770b65eff69d983952eba38b7a26d357086fa26baadce2",
+      "title": "Approved Products and Commissions | Lucid Trading Help Center",
+      "extracted_text_sha256": "8bff4d45954526d851fc59dc9b63d25bee33340ac55f45f23660049fbeec12f2",
+      "extracted_chars": 2255
+    },
+    "lucid_restricted": {
+      "url": "https://support.lucidtrading.com/en/articles/11404636-restricted-countries",
+      "file": "lucid_restricted.html",
+      "http_status": 200,
+      "bytes": 57614,
+      "sha256": "51306003e5b30996069e481ba2c9ba3150f6d039de8e937db8162a9a66f25e62",
+      "title": "Restricted Countries | Lucid Trading Help Center",
+      "extracted_text_sha256": "29c774a79b6e06b43b7fb7296afbfec30090bcbb82cbe95b1ded7fff0c4cedf7",
+      "extracted_chars": 1585
+    },
+    "lucid_live_structure": {
+      "url": "https://support.lucidtrading.com/en/articles/13425130-new-live-structure",
+      "file": "lucid_live_structure.html",
+      "http_status": 200,
+      "bytes": 97014,
+      "sha256": "7b5a9ffc4b6c12e02fda4d0248f0ce7c43b8367e7817ee5581b55c2d533ef3a5",
+      "title": "New Live Structure | Lucid Trading Help Center",
+      "extracted_text_sha256": "a04f826e39731df5dab494a300c0e20a6e8d9fbbfb49eade4069fcd8cb3aef62",
+      "extracted_chars": 5441
+    },
+    "lucid_platforms": {
+      "url": "https://support.lucidtrading.com/en/articles/11404614-lucid-trading-supported-platforms",
+      "file": "lucid_platforms.html",
+      "http_status": 200,
+      "bytes": 67988,
+      "sha256": "af610a205592fb1dcb2706e604fdb98766d64a7cc3e0c2bb58966322159bb69a",
+      "title": "Lucid Trading Supported Platforms | Lucid Trading Help Center",
+      "extracted_text_sha256": "d5a9d8fff501c226c8a9eab9e5c7371ad95616c0b7f4886ad768e00ce900a254",
+      "extracted_chars": 1453
+    },
+    "topstep_mll": {
+      "url": "https://help.topstep.com/en/articles/8284204-what-is-the-maximum-loss-limit",
+      "file": "topstep_mll.html",
+      "http_status": 200,
+      "bytes": 109022,
+      "sha256": "87bfb2e77a083a482ea8f57142714387463c47ee363fd7770041ab923fb2eb0c",
+      "title": "What is the Maximum Loss Limit? | Topstep Help Center",
+      "extracted_text_sha256": "57b8e70529dabf24f6b2d573e5e4d40ab88bb0034a689da8131b3c41a35e2520",
+      "extracted_chars": 6467
+    },
+    "topstep_dll": {
+      "url": "https://help.topstep.com/en/articles/8284207-what-is-the-daily-loss-limit-and-what-happens-if-i-exceed-it",
+      "file": "topstep_dll.html",
+      "http_status": 200,
+      "bytes": 112711,
+      "sha256": "ff5ae33154bef0d7c9dd01a3cc8a5fc06ad58eed74f12929b0c5fbafaed54cf2",
+      "title": "Daily Loss Limit in the Trading Combine and Express Funded Account | Topstep Help Center",
+      "extracted_text_sha256": "8ef55c41f2e072bae5ad7576a3ead913a7c10fc40a3cab0df407767970cda9db",
+      "extracted_chars": 7012
+    },
+    "topstep_api": {
+      "url": "https://help.topstep.com/en/articles/11187768-topstepx-api-access",
+      "file": "topstep_api.html",
+      "http_status": 200,
+      "bytes": 118482,
+      "sha256": "e857986d03398f483eb115e607470803a758765729fed0cfdd442c231f5523d0",
+      "title": "TopstepX™ API Access | Topstep Help Center",
+      "extracted_text_sha256": "0825f6462c4545f3818c06f9a0e4f3a2a0ef99f556b553e84463ec1a0ff0464b",
+      "extracted_chars": 5432
+    },
+    "topstep_live_funded": {
+      "url": "https://help.topstep.com/en/articles/10657969-live-funded-account-parameters",
+      "file": "topstep_live_funded.html",
+      "http_status": 200,
+      "bytes": 124613,
+      "sha256": "1358e6e7e9a6947c0cee9fde4fe0905a395a74919692e6aca52edeb7b2b1a033",
+      "title": "Live Funded Account Parameters | Topstep Help Center",
+      "extracted_text_sha256": "2a5dd73bc9713de6ce00bccc7d72bf79a6343ebd50b7e23efa5469a31c200f46",
+      "extracted_chars": 8711
+    },
+    "topstep_scaling": {
+      "url": "https://help.topstep.com/en/articles/8284223-what-is-the-scaling-plan",
+      "file": "topstep_scaling.html",
+      "http_status": 200,
+      "bytes": 99496,
+      "sha256": "d350ba29b5bc43ba13728d1bad78470f224c4daf817d147bea7fdf7912b02b55",
+      "title": "What is the Scaling Plan? | Topstep Help Center",
+      "extracted_text_sha256": "df5c478d87e83733f4fd5558b0c32700f0ceb45cc3d1e12f79d3014921a5018a",
+      "extracted_chars": 4166
+    },
+    "topstep_payout": {
+      "url": "https://help.topstep.com/en/articles/8284233-topstep-payout-policy",
+      "file": "topstep_payout.html",
+      "http_status": 200,
+      "bytes": 168978,
+      "sha256": "e10a0f4cfee43214bada8435da781dc90d3fe41e6065beada102f2dca63ff973",
+      "title": "Topstep Payout Policy | Topstep Help Center",
+      "extracted_text_sha256": "3fc5d1470193021ba17f15e58968f8499424a2fa465bbb2d6878f100a729488b",
+      "extracted_chars": 14431
+    },
+    "topstep_pricing": {
+      "url": "https://help.topstep.com/en/articles/14289835-topstep-pricing-and-payment-questions",
+      "file": "topstep_pricing.html",
+      "http_status": 200,
+      "bytes": 134806,
+      "sha256": "5936b41bedf63cb34382f5c12ba6c9225a9eacdcdba98d1a43194e06e18a2d3a",
+      "title": "Topstep Pricing and Payment Questions | Topstep Help Center",
+      "extracted_text_sha256": "f3c5b4a107409f2300277626cfa10df231150bfc2be9d8c789567d756c568049",
+      "extracted_chars": 8235
+    },
+    "topstep_eligibility": {
+      "url": "https://help.topstep.com/en/articles/8284116-am-i-eligible-to-trade-with-topstep",
+      "file": "topstep_eligibility.html",
+      "http_status": 200,
+      "bytes": 113892,
+      "sha256": "12fc34b6ef6b167987ba9260a001c240561610c94cb36e619a2a03b6720986ec",
+      "title": "Am I Eligible to Trade with Topstep? | Topstep Help Center",
+      "extracted_text_sha256": "149829f50caf89bb5801e873c6c149effff27eec4ff7dc8046745554148b54e7",
+      "extracted_chars": 5428
+    },
+    "topstep_combine_params": {
+      "url": "https://help.topstep.com/en/articles/8284197-trading-combine-parameters",
+      "final_url": "https://help.topstep.com/en/articles/8284197-trading-combine-parameters",
+      "file": "topstep_combine_params.html",
+      "http_status": 200,
+      "bytes": 111060,
+      "sha256": "950801d2cb55ea8dee3bea3dee132aafff71072ceb6d7ae677907dd890fcefe5",
+      "content_type": "text/html; charset=utf-8",
+      "extracted_text_sha256": "29e0bd1149017323abc705515f1a5271ed8d366e8ff72f772aea6c85d5e9aef4",
+      "extracted_chars": 6004
+    },
+    "topstep_consistency": {
+      "url": "https://help.topstep.com/en/articles/8284208-consistency-at-topstep",
+      "final_url": "https://help.topstep.com/en/articles/8284208-consistency-at-topstep",
+      "file": "topstep_consistency.html",
+      "http_status": 200,
+      "bytes": 99612,
+      "sha256": "7fc012456a790977908cd7cd7a6be300cfc2f8eedeaef9ad1ab7c6c5a7c0e057",
+      "content_type": "text/html; charset=utf-8",
+      "extracted_text_sha256": "dc4cfa2d346a71f91e321d1ca7ee9ea770e66f2ae1324c348f3b9341875af4b5",
+      "extracted_chars": 5998
+    },
+    "topstep_dll_optional": {
+      "url": "https://help.topstep.com/en/articles/10490293-daily-loss-limit-in-the-trading-combine-and-express-funded-account",
+      "final_url": "https://help.topstep.com/en/articles/10490293-daily-loss-limit-in-the-trading-combine-and-express-funded-account",
+      "file": "topstep_dll_optional.html",
+      "http_status": 200,
+      "bytes": 112711,
+      "sha256": "ff5ae33154bef0d7c9dd01a3cc8a5fc06ad58eed74f12929b0c5fbafaed54cf2",
+      "content_type": "text/html; charset=utf-8",
+      "extracted_text_sha256": "8ef55c41f2e072bae5ad7576a3ead913a7c10fc40a3cab0df407767970cda9db",
+      "extracted_chars": 7012
+    },
+    "topstep_xfa_params": {
+      "url": "https://help.topstep.com/en/articles/8284215-express-funded-account-parameters",
+      "final_url": "https://help.topstep.com/en/articles/8284215-express-funded-account-parameters",
+      "file": "topstep_xfa_params.html",
+      "http_status": 200,
+      "bytes": 124500,
+      "sha256": "1227628eddc55de26fc5318d626f496a901957262bd58b06cfa556c79cb8a026",
+      "extracted_text_sha256": "5f7f3f9e7cf0f011a6b4ecaa4967d9e8a0fa2a11845ad9b8f5eaffd71c56339f",
+      "extracted_chars": 7660,
+      "retrieved_at_utc": "2026-07-28T00:29:10.788197+00:00"
+    },
+    "topstep_back2funded": {
+      "url": "https://help.topstep.com/en/articles/12060405-back2funded-rules-guidelines-and-how-it-works",
+      "final_url": "https://help.topstep.com/en/articles/12060405-back2funded-rules-guidelines-and-how-it-works",
+      "file": "topstep_back2funded.html",
+      "http_status": 200,
+      "bytes": 111266,
+      "sha256": "7134fad1a739faf7b82aa2f755821fa313fcaa48621c68e78bdd653d04a9dfc7",
+      "extracted_text_sha256": "b81def6c7ee6087b6a53d0ba435cc1117952cef4cfd4ab1f4442c87f48b8e0ed",
+      "extracted_chars": 6104,
+      "retrieved_at_utc": "2026-07-28T00:29:12.834656+00:00"
+    },
+    "lucid_scaling": {
+      "url": "https://support.lucidtrading.com/en/articles/12945808-lucidflex-scaling-plan",
+      "final_url": "https://support.lucidtrading.com/en/articles/12945808-lucidflex-scaling-plan",
+      "file": "lucid_scaling.html",
+      "http_status": 200,
+      "bytes": 77671,
+      "sha256": "1feea6a4098d288a88505eecb7b94999164ab4e55f8f10031f3760df1154a19e",
+      "extracted_text_sha256": "6144e5028f0c39c130dca7b344d4c9015987ce9e46412082ae02335f43c9c974",
+      "extracted_chars": 3577,
+      "retrieved_at_utc": "2026-07-28T00:29:14.418567+00:00"
+    },
+    "lucid_consistency": {
+      "url": "https://support.lucidtrading.com/en/articles/12945805-lucidflex-consistency-percentage",
+      "final_url": "https://support.lucidtrading.com/en/articles/12945805-lucidflex-consistency-percentage",
+      "file": "lucid_consistency.html",
+      "http_status": 200,
+      "bytes": 72701,
+      "sha256": "c907ba46b66f55398c26320cb6fdefb9e0609865e34f7d3f44e9a3104196d2bc",
+      "extracted_text_sha256": "5b611162aeadd49c12ccf309505a52915defbf687f6714ca834add14c8d73fdb",
+      "extracted_chars": 2837,
+      "retrieved_at_utc": "2026-07-28T00:29:15.809364+00:00"
+    },
+    "lucid_pricing_main": {
+      "url": "https://lucidtrading.com/",
+      "final_url": "https://lucidtrading.com/",
+      "file": "lucid_pricing_main.html",
+      "http_status": 403,
+      "bytes": 5726,
+      "sha256": "17a4a83596a727507bc4c4de19b69564d6d2cb44fd57daabaf7cdf8469b19d1d",
+      "extracted_text_sha256": "ae0b26c68939e8214056c2517af3b5091f1c674c8aef5f1e1fbab7804a78829b",
+      "extracted_chars": 58,
+      "retrieved_at_utc": "2026-07-28T00:29:17.014860+00:00"
+    },
+    "topstep_subscriptions": {
+      "url": "https://help.topstep.com/en/articles/8284121-trading-combine-subscriptions",
+      "final_url": "https://help.topstep.com/en/articles/8284121-trading-combine-subscriptions",
+      "file": "topstep_subscriptions.html",
+      "http_status": 200,
+      "bytes": 101170,
+      "sha256": "8525af0e7e43d4194506f9bf6d01dd5393734ecb0c8f62f9784905920e53d0fc",
+      "extracted_text_sha256": "3d46b9d6ce39db44ee22f0580e81fc57ee580123c7ce48fad7831a5437b8959a",
+      "extracted_chars": 4924,
+      "retrieved_at_utc": "2026-07-28T01:13:08.659234+00:00"
+    },
+    "topstepx_commissions": {
+      "url": "https://help.topstep.com/en/articles/8284213-topstepx-commissions-and-fees",
+      "final_url": "https://help.topstep.com/en/articles/8284213-topstepx-commissions-and-fees",
+      "file": "topstepx_commissions.html",
+      "http_status": 200,
+      "bytes": 114411,
+      "sha256": "01b53ef3ede627c2add7a6b1fe24e116b5cc7ae4e3f19d2b71658a8e442962b3",
+      "extracted_text_sha256": "1fe22c6b9c4f3be4502611c42763e4b1a492edb0c4db5671c7fd7be86aafb969",
+      "extracted_chars": 4540,
+      "retrieved_at_utc": "2026-07-28T01:13:10.773102+00:00"
+    },
+    "topstep_prohibited_conduct": {
+      "url": "https://help.topstep.com/en/articles/10296582-prohibited-conduct",
+      "final_url": "https://help.topstep.com/en/articles/10296582-prohibited-conduct",
+      "file": "topstep_prohibited_conduct.html",
+      "http_status": 200,
+      "bytes": 100650,
+      "sha256": "4f22188e447ada4fb34b7fbeff023bf9c3106888d4764710e1606738ba6ae4c6",
+      "extracted_text_sha256": "e24f84b219c466a53a2b6b91ced62e46a1a9390a49dc3a100ddfdc1c0d623368",
+      "extracted_chars": 5686,
+      "retrieved_at_utc": "2026-07-28T01:13:12.859596+00:00"
+    },
+    "topstep_prohibited_strategies": {
+      "url": "https://help.topstep.com/en/articles/10305426-prohibited-trading-strategies-at-topstep",
+      "final_url": "https://help.topstep.com/en/articles/10305426-prohibited-trading-strategies-at-topstep",
+      "file": "topstep_prohibited_strategies.html",
+      "http_status": 200,
+      "bytes": 90339,
+      "sha256": "6d1ab5c51de3df9f11dfcaadb2510633f525ab33649bb6e621f1d6913c6c2624",
+      "extracted_text_sha256": "83b95e8de6dad351f0fcdcbab4cff950964c2b850510506010713054727cee5a",
+      "extracted_chars": 4681,
+      "retrieved_at_utc": "2026-07-28T01:13:14.920077+00:00"
+    },
+    "topstep_what_is_reset": {
+      "url": "https://help.topstep.com/en/articles/8284128-what-is-a-reset",
+      "final_url": "https://help.topstep.com/en/articles/8284128-what-is-a-reset",
+      "file": "topstep_what_is_reset.html",
+      "http_status": 200,
+      "bytes": 98752,
+      "sha256": "0737210f2b4c0c04cfd18c5ff1f56efd4531745884750a322e1c7bf8ab56d3df",
+      "extracted_text_sha256": "c187fff7faec3a40f49c163c34855d52010ec4cf3f767579140250dbd5bf3bf2",
+      "extracted_chars": 4350,
+      "retrieved_at_utc": "2026-07-28T01:28:21.202652+00:00"
+    },
+    "nfa_assessment_fees": {
+      "url": "https://www.nfa.futures.org/faqs/members/nfa-assessment-fees.html",
+      "final_url": "https://www.nfa.futures.org/faqs/members/nfa-assessment-fees.html",
+      "file": "nfa_assessment_fees.html",
+      "http_status": 200,
+      "bytes": 156256,
+      "sha256": "ffac784ef21a7bb4730bacf5aff1d7bcb7bc306e378d6e39bbcbdd1bf4d56c12",
+      "extracted_text_sha256": "ac94858ab7f89272828519242567363ad26ff8f76adaa5a616d7c257918e1f9a",
+      "extracted_chars": 10360,
+      "retrieved_at_utc": "2026-07-28T01:28:24.276526+00:00"
+    },
+    "cme_clearing_fees": {
+      "url": "https://www.cmegroup.com/company/clearing-fees.html",
+      "final_url": "https://www.cmegroup.com/company/clearing-fees.html",
+      "file": "cme_clearing_fees.html",
+      "http_status": 403,
+      "bytes": 602,
+      "sha256": "eecde3fafbde4090c30e610a7ed4b8d877f8351c0490e4189574890e8a5a4f7e",
+      "extracted_text_sha256": "eecde3fafbde4090c30e610a7ed4b8d877f8351c0490e4189574890e8a5a4f7e",
+      "extracted_chars": 600,
+      "retrieved_at_utc": "2026-07-28T01:28:25.487784+00:00"
+    }
+  },
+  "failures": {},
+  "content_checks": {
+    "lucid_flex_evaluation": {
+      "status": "OK",
+      "chars": 1666,
+      "missing_keywords": []
+    },
+    "lucid_flex_funded": {
+      "status": "OK",
+      "chars": 1647,
+      "missing_keywords": []
+    },
+    "lucid_flex_drawdown": {
+      "status": "OK",
+      "chars": 1700,
+      "missing_keywords": []
+    },
+    "lucid_flex_payouts": {
+      "status": "OK",
+      "chars": 3375,
+      "missing_keywords": []
+    },
+    "lucid_permitted": {
+      "status": "OK",
+      "chars": 2811,
+      "missing_keywords": []
+    },
+    "lucid_prohibited_hft": {
+      "status": "OK",
+      "chars": 1968,
+      "missing_keywords": []
+    },
+    "lucid_products_comms": {
+      "status": "OK",
+      "chars": 2255,
+      "missing_keywords": []
+    },
+    "lucid_restricted": {
+      "status": "OK",
+      "chars": 1585,
+      "missing_keywords": []
+    },
+    "lucid_live_structure": {
+      "status": "OK",
+      "chars": 5441,
+      "missing_keywords": []
+    },
+    "lucid_platforms": {
+      "status": "OK",
+      "chars": 1453,
+      "missing_keywords": [],
+      "note": "short platform-list article below generic 1500-char threshold; human-verified complete 2026-07-28"
+    },
+    "topstep_mll": {
+      "status": "OK",
+      "chars": 6467,
+      "missing_keywords": []
+    },
+    "topstep_dll": {
+      "status": "OK",
+      "chars": 7012,
+      "missing_keywords": []
+    },
+    "topstep_api": {
+      "status": "OK",
+      "chars": 5432,
+      "missing_keywords": []
+    },
+    "topstep_live_funded": {
+      "status": "OK",
+      "chars": 8711,
+      "missing_keywords": []
+    },
+    "topstep_scaling": {
+      "status": "OK",
+      "chars": 4166,
+      "missing_keywords": []
+    },
+    "topstep_payout": {
+      "status": "OK",
+      "chars": 14431,
+      "missing_keywords": []
+    },
+    "topstep_pricing": {
+      "status": "OK",
+      "chars": 8235,
+      "missing_keywords": []
+    },
+    "topstep_eligibility": {
+      "status": "OK",
+      "chars": 5428,
+      "missing_keywords": []
+    },
+    "topstep_combine_params": {
+      "status": "OK",
+      "chars": 6004,
+      "missing_keywords": []
+    },
+    "topstep_consistency": {
+      "status": "OK",
+      "chars": 5998,
+      "missing_keywords": []
+    },
+    "topstep_dll_optional": {
+      "status": "OK",
+      "chars": 7012,
+      "missing_keywords": []
+    },
+    "topstep_xfa_params": {
+      "status": "OK",
+      "chars": 7660,
+      "missing_keywords": []
+    },
+    "topstep_back2funded": {
+      "status": "OK",
+      "chars": 6104,
+      "missing_keywords": []
+    },
+    "lucid_scaling": {
+      "status": "OK",
+      "chars": 3577,
+      "missing_keywords": []
+    },
+    "lucid_consistency": {
+      "status": "OK",
+      "chars": 2837,
+      "missing_keywords": []
+    },
+    "topstep_subscriptions": {
+      "status": "OK",
+      "chars": 4924,
+      "missing_keywords": []
+    },
+    "topstepx_commissions": {
+      "status": "OK",
+      "chars": 4540,
+      "missing_keywords": []
+    },
+    "topstep_prohibited_conduct": {
+      "status": "OK",
+      "chars": 5686,
+      "missing_keywords": []
+    },
+    "topstep_prohibited_strategies": {
+      "status": "OK",
+      "chars": 4681,
+      "missing_keywords": []
+    },
+    "topstep_what_is_reset": {
+      "status": "OK",
+      "chars": 4350,
+      "missing_keywords": []
+    },
+    "nfa_assessment_fees": {
+      "status": "OK",
+      "chars": 10360,
+      "missing_keywords": []
+    }
+  },
+  "fetched_utc_v3": "2026-07-28T00:29:18.015062+00:00",
+  "fetched_utc_v4": "2026-07-28T01:13:15.920426+00:00",
+  "fetched_utc_v5": "2026-07-28T01:28:26.487911+00:00",
+  "fetch_exceptions": {
+    "lucid_pricing_main": {
+      "http_status": 403,
+      "resolution": "superseded_by_authenticated_screenshot (lucid_50k_flex_eval_png)"
+    },
+    "cme_clearing_fees": {
+      "http_status": 403,
+      "resolution": "G9_hard_run_blocker"
+    }
+  }
+}

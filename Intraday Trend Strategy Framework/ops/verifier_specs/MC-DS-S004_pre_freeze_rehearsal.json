@@ -1,0 +1,42 @@
+{
+  "run_id": "MC-DS-S004",
+  "verifier_label": "verifier-dir-rehearsal",
+  "blindness": "CLAIM_BLIND",
+  "framework_commit": "ac16c39919cfb02739333a53c7a043cc06fdf66a",
+  "out_root": "C:\\Users\\Aaron\\quant-data\\review",
+  "brief": "C:\\Users\\Aaron\\OneDrive\\Desktop\\Quant trade\\Intraday Trend Strategy Framework\\ops\\templates\\VERIFICATION_BRIEF_TEMPLATE.md",
+  "pre_freeze": {
+    "files": [
+      {"src": "C:\\Users\\Aaron\\quant-data\\itsf-runs\\supplements\\MC-DS-S004_20260906T135831Z\\DAY_STRATA_SUPPLEMENT.json", "dst": "run/DAY_STRATA_SUPPLEMENT.json"},
+      {"src": "C:\\Users\\Aaron\\quant-data\\itsf-runs-archive\\supplements\\MC-DS-S004_20260906T135831Z\\DAY_STRATA_SUPPLEMENT.json", "dst": "archive/DAY_STRATA_SUPPLEMENT.json"},
+      {"src": "C:\\Users\\Aaron\\quant-data\\itsf-runs\\runs\\S0-T001_20260813T170432Z\\HANDOFF_ADMISSION.json", "dst": "s0/HANDOFF_ADMISSION.json"},
+      {"src": "C:\\Users\\Aaron\\quant-data\\itsf-runs\\runs\\S0-T001_20260813T170432Z\\MC_HANDOFF_E1_Base.jsonl", "dst": "s0/MC_HANDOFF_E1_Base.jsonl"},
+      {"src": "C:\\Users\\Aaron\\quant-data\\itsf-runs\\runs\\S0-T001_20260813T170432Z\\MC_HANDOFF_E1_Conservative.jsonl", "dst": "s0/MC_HANDOFF_E1_Conservative.jsonl"},
+      {"src": "C:\\Users\\Aaron\\quant-data\\itsf-runs\\runs\\S0-T001_20260813T170432Z\\MC_HANDOFF_E1_Severe.jsonl", "dst": "s0/MC_HANDOFF_E1_Severe.jsonl"},
+      {"src": "C:\\Users\\Aaron\\quant-data\\itsf-runs\\runs\\S0-T001_20260813T170432Z\\MC_HANDOFF_E1_Stress.jsonl", "dst": "s0/MC_HANDOFF_E1_Stress.jsonl"},
+      {"src": "C:\\Users\\Aaron\\quant-data\\itsf-runs\\runs\\S0-T001_20260813T170432Z\\MC_HANDOFF_E2_Base.jsonl", "dst": "s0/MC_HANDOFF_E2_Base.jsonl"},
+      {"src": "C:\\Users\\Aaron\\quant-data\\itsf-runs\\runs\\S0-T001_20260813T170432Z\\MC_HANDOFF_E2_Conservative.jsonl", "dst": "s0/MC_HANDOFF_E2_Conservative.jsonl"},
+      {"src": "C:\\Users\\Aaron\\quant-data\\itsf-runs\\runs\\S0-T001_20260813T170432Z\\MC_HANDOFF_E2_Severe.jsonl", "dst": "s0/MC_HANDOFF_E2_Severe.jsonl"},
+      {"src": "C:\\Users\\Aaron\\quant-data\\itsf-runs\\runs\\S0-T001_20260813T170432Z\\MC_HANDOFF_E2_Stress.jsonl", "dst": "s0/MC_HANDOFF_E2_Stress.jsonl"},
+      {"src": "C:\\Users\\Aaron\\quant-data\\itsf-runs\\runs\\S0-T001_20260813T170432Z\\REGISTRY_AFTER_RUN_STARTED.json", "dst": "s0/REGISTRY_AFTER_RUN_STARTED.json"},
+      {"src": "C:\\Users\\Aaron\\quant-data\\itsf-runs\\runs\\S0-T001_20260813T170432Z\\S0_REPORT.json", "dst": "s0/S0_REPORT.json"},
+      {"src": "C:\\Users\\Aaron\\quant-data\\itsf-runs\\runs\\S0-T001_20260813T170432Z\\S0_REPORT.md", "dst": "s0/S0_REPORT.md"},
+      {"src": "C:\\Users\\Aaron\\quant-data\\itsf-runs\\runs\\S0-T001_20260813T170432Z\\SEED_MANIFEST.json", "dst": "s0/SEED_MANIFEST.json"},
+      {"src": "C:\\Users\\Aaron\\quant-data\\itsf-runs\\runs\\S0-T001_20260813T170432Z\\manifest.jsonl", "dst": "s0/manifest.jsonl"},
+      {"src": "C:\\Users\\Aaron\\OneDrive\\Desktop\\Quant trade\\Intraday Trend Strategy Framework\\gate1\\f10_event_calendar\\f10_events.csv", "dst": "gate1/f10_events.csv"}
+    ],
+    "code_paths": [
+      "src/itsf/mc/supplement_contract.py",
+      "src/itsf/s0/gridmix.py",
+      "src/itsf/s0/handoff.py",
+      "src/itsf/s0/dataset.py",
+      "src/itsf/mc/consumer.py",
+      "src/itsf/mc/day_strata_supplement.py"
+    ]
+  },
+  "post_freeze": {
+    "files": [
+      {"src": "C:\\Users\\Aaron\\quant-data\\itsf-registry\\ops\\TRIAL_REGISTRY.md", "dst": "registry/TRIAL_REGISTRY.md"}
+    ]
+  }
+}

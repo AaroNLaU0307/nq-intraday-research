@@ -1,0 +1,145 @@
+Prohibited Conduct | Topstep Help Center Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Skip to main content 
+
+ Discord Topstep TopstepTV 
+
+ Discord Topstep TopstepTV 
+
+ Search for articles... 
+
+ All Collections 
+
+ Topstep FAQs 
+
+ Prohibited Conduct
+
+ Prohibited Conduct
+ Program integrity starts here.
+
+ Updated over a week ago 
+
+ Table of contents
+
+ Prohibited Conduct applies at every level of the Topstep program. It protects program integrity and makes sure passing the Trading Combine® actually means something. Violations are reviewed case-by-case based on severity and history.
+
+ Possible responses to a Prohibited Conduct violation:
+
+ Warning
+
+ Deletion of the impacted trading day
+
+ Account Reset
+
+ Permanent account closure
+
+ Delay or denial of a Payout request
+
+ Ultimately, the action Topstep takes will depend on the infractions severity and your prior history (or lack thereof).
+
+ What Is Prohibited Conduct?
+
+ Unprofessional behavior — see Professional Behavior at Topstep 
+
+ Excessive purchases of Trading Combines or Resets
+
+ Price exploitation — strategies designed to exploit errors in price display or data feed delays
+
+ Disruptive practices — including spoofing
+
+ Trading outside the best bid or offer 
+
+ Using an external or slow data feed to trade
+
+ Coordinated trading — performing trades in concert with others (including unconnected accounts or third parties) to pool risk, hedge aggregate positions, or trade the same or opposite strategy simultaneously
+
+ Cross-account hedging (single-user) — holding opposite positions across multiple accounts simultaneously
+
+ Trades conflicting with Topstep’s Terms of Use 
+
+ Unfair technology — using software, AI, ultra-high speed systems, or mass data entry to gain an unfair advantage
+
+ Trading inconsistent with real futures markets — or in a way that creates financial risk for Topstep
+
+ Exploiting platform deficiencies — using instruments or methods that misuse bugs, errors, or deficiencies in the platform
+
+ Circumventing geographical or technical restrictions 
+
+ Holding a position within 2% of a product’s price lock limit — see How to Ensure I Am Not Trading Within 2% of a Price Limit 
+
+ Trading on behalf of others — including sharing incentives as part of any business arrangement
+
+ Account stacking — repeatedly hitting the Maximum Loss Limit in one account and switching to another to repeat high-risk attempts
+
+ Any other conduct that Topstep determines, at its sole discretion, is uncommercial, games the market, is not a viable strategy, or is not responsible trading
+
+ Do not use a VPN. VPNs, proxy services, TOR, geo-location obfuscation, and other identity-masking services are not permitted at Topstep. If you see an Error 403 Forbidden message, disable your VPN or proxy and try again.
+
+ Who is the Trust Team?
+
+ The Trust Team protects the integrity of the program. If your conduct is called into question, they&#x27;re who you&#x27;ll hear from.
+
+ Trust reviews Terms of Use violations, fraudulent activity, and account manipulation. They do not handle platform or technical issues — that&#x27;s Trader Support.
+
+ Appeals
+
+ You don&#x27;t need to initiate an appeal. The Trust Team will contact you directly if one is available. Trader Support cannot assist with appeals.
+
+ Once you receive an email from Trust, respond directly to the assigned team member with any supporting documents or information. Respond as soon as possible — there&#x27;s no fixed deadline, but early responses help.
+
+ Appeals can be denied if the review finds ToU violations, fraudulent activity, or account manipulation. If accepted, you&#x27;ll receive an email with terms and conditions you must accept to return. Breaching those terms will result in immediate account termination.
+
+ Trust FAQs
+
+ Why can&#x27;t I appeal? 
+
+ An appeal may not be possible depending on the severity of the Terms of Use violation. The Trust Team will let you know whether one is available.
+
+ ​ What if I just create a new profile? 
+
+ Don&#x27;t. New profiles created after a ban will be closed immediately and no refunds will be issued.
+
+ ​ Do I need to verify my identity? 
+
+ Yes. Topstep conducts IDV (Identity Verification) checks on all Traders. You may be asked to re-verify at any time. Learn more about how IDV works. 
+
+ View the full Prohibited Conduct section in the Terms of Use 
+
+ Related Articles
+ Trading Combine® Parameters 
+
+ Prohibited Trading Strategies at Topstep 
+
+ What is Responsible Trading? 
+
+ How IDV/Identity Verification Works 
+
+ Understanding Hedging 
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Your Privacy Choices

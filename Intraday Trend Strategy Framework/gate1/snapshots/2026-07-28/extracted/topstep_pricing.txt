@@ -1,0 +1,285 @@
+Topstep Pricing and Payment Questions | Topstep Help Center Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Skip to main content 
+
+ Discord Topstep TopstepTV 
+
+ Discord Topstep TopstepTV 
+
+ Search for articles... 
+
+ All Collections 
+
+ Getting Started 
+
+ Topstep Pricing and Payment Questions
+
+ Topstep Pricing and Payment Questions
+ Everything about costs, pricing, and payments in one place.
+
+ Updated over a week ago 
+
+ Table of contents
+
+ Topstep accepts Visa, Mastercard, American Express, and Discover. PayPal is not supported. Sales tax may be added at checkout where applicable.
+
+ Trading Combine
+
+ Account Size 
+
+ Standard Path 
+
+ No Activation Fee Path 
+
+ 50K
+
+ $49/month
+
+ $95/month
+
+ 100K
+
+ $99/month
+
+ $149/month
+
+ 150K
+
+ $199/month
+
+ $229/month
+
+ ⚠️ Important: Paths cannot be changed after purchase.
+
+ The Details: 
+
+ Standard Path: Lower monthly cost. $149 Activation Fee charged once per Express Funded Account (XFA) earned. Best for Traders still building consistency.
+
+ No Activation Fee Path: Higher monthly cost. No fee when you pass. Best for Traders confident they’ll pass in 1–2 attempts.
+
+ Reset Pricing
+
+ Account Size 
+
+ Standard Path 
+
+ No Activation Fee Path 
+
+ 50K
+
+ $49
+
+ $95
+
+ 100K
+
+ $99
+
+ $149
+
+ 150K
+
+ $199
+
+ $229
+
+ Express Funded Account Activation & Reactivation
+
+ ☝️ Activation
+
+ Depends on your path: Standard Path — $149, charged once per XFA earned. No Activation Fee Path — $0.
+
+ 👉 Reactivation
+
+ Lost your XFA before your first Payout? Reactivate through our Back2Funded option.
+
+ Reactivation fees: 
+
+ $50K XFA — $599
+
+ $100K XFA — $699
+
+ $150K XFA — $829
+
+ ⏳ Reactivation window: 30 calendar days from account closure. Learn more here .
+
+ Responsible Trading Discount
+
+ 🙌 There&#x27;s now a Responsible Trading Discount when you add a DLL at purchase for No Activation Fee Trading Combines, Express Funded Account Activations, and Back2Funded Reactivations. 👉 Discount is applied at checkout. Learn more here .
+
+ No Activation Fee Trading Combine 
+
+ Back2Funded Reactivation 
+
+ $10 off → 50K
+
+ $20 off → 100K
+
+ $30 off → 150K
+
+ $50 off Reactivation Fees
+
+ 🔥 We reward traders who manage risk the right way. Discount recurs monthly. The DLL is fixed and carried into your XFA when you pass.
+
+ Trader Tip: Over 63% of traders have lost an account in a single day. Adding a DLL to your account caps how much you can lose in a single session, so one bad day doesn’t turn into a closed account. The traders who last… manage risk first! ​ Adding a Daily Loss Limit helps you:
+
+ Stay disciplined
+
+ Protect your account
+
+ Trade like it’s real capital
+
+ 💪 Always trade for tomorrow.
+
+ Additional Pricing Information
+
+ Data Fees 
+
+ Data Type 
+
+ What’s Included 
+
+ Cost 
+
+ Level 1 (Top of Book)
+
+ Best bid/ask; required for chart trading
+
+ Included
+
+ Level 2 (DOM)
+
+ Multiple bid/ask levels; required for DOM/Matrix trading
+
+ $38/month
+
+ Level 2 is billed on the 28th of each month and is not prorated. 
+
+ To add it: Dashboard → Accounts → Add-Ons → Depth of Market Bundle.
+
+ ☝ Live Funded Account® (LFA) Traders are subject to Professional Data fees. See the LFA Costs article for details.
+
+ Commissions and Fees 
+
+ Commissions and fees are deducted automatically from your balance with each filled trade and show up in your Net P&L. See the full breakdowns: Trading Combines® & Express Funded Accounts · Live Funded Accounts 
+
+ VAT and Sales Tax 
+
+ Listed prices are base costs only. Depending on where you&#x27;re located, applicable taxes — VAT, GST, or sales tax — will be calculated and shown at checkout in accordance with local regulations. The exact amount varies by region and will appear before you complete your purchase. Topstep collects and remits all taxes directly — we don&#x27;t keep any of it. Check your account dashboard for a full breakdown of billing details anytime.
+
+ Promo Codes 
+
+ Log in before applying — do not create a new profile
+
+ Codes apply to a new Trading Combine® or a Reset — not both
+
+ Case-sensitive; no extra spaces
+
+ Profile-specific — codes won’t work under a different email
+
+ First month only billed at promo price (unless stated otherwise)
+
+ Topstep does not refund purchases where a code wasn’t applied, or full-price purchases made before a sale
+
+ To apply a code: Dashboard → Start a Trading Combine → select size → confirm address → enter code under Coupons & Payment → click Apply
+
+ How to Add or Update Payment Details
+
+ Go to your Billing Page on the Dashboard
+
+ Click Add New Card and enter your details
+
+ Scroll to Subscriptions 
+
+ Click the Edit icon next to the subscription you want to update
+
+ Select your preferred card and save
+
+ ☝ Important: At least 1 card must remain on file while a Trading Combine is active. Removing all cards will close your account. Once you set a default card, new purchases will automatically be tied to that card. To update an existing subscription’s payment method, you must change your default card and update the individual subscription.
+
+ Payment Troubleshooting
+
+ Use a card in your name — must match your Topstep profile exactly. Using someone else’s card violates the Terms of Use.
+
+ Check your billing address — must match your bank’s records exactly, including formatting.
+
+ Delete and re-enter payment details manually — avoid autofill.
+
+ Wait at least 1 hour between retry attempts — rapid retries can trigger bank blocks.
+
+ Contact your bank — ask the Fraud department to check for holds, confirm online/international transactions are enabled, and allowlist Topstep.
+
+ Browser checks — clear cache and cookies, try a private/incognito window, disable VPNs and ad blockers, or try a different browser/device.
+
+ For refund questions, see Topstep® Refund Policies .
+
+ Chargebacks at Topstep 
+
+ Have a question about a charge? Call us first. Always.
+
+ Most fees at Topstep are non-refundable, but we’re always happy to review your account and clear up confusion. Filing a chargeback before reaching out could limit your options and put your account at risk.
+
+ What’s the Difference Between a Chargeback and an Unjustified Chargeback?
+
+ A chargeback is when you dispute a charge with your bank and request a reversal.
+
+ An unjustified chargeback is filing a dispute without a valid reason — for example:
+
+ Forgetting to cancel a subscription
+
+ Misunderstanding a charge
+
+ Overlooking Topstep’s refund policies 
+
+ Attempting to bypass the standard refund process
+
+ What Happens If You File a Chargeback?
+
+ Filing triggers an account review. Excessive or unjustified chargebacks may result in account suspension or permanent removal from the Topstep program.
+
+ Initiating chargebacks is listed as prohibited conduct .
+
+ Already filed one? You can still contact Trader Support to discuss your options.
+
+ What If You Want to Dispute a Charge?
+
+ Contact Trader Support first. We’ll review your situation and let you know what’s available under our refund policies .
+
+ Related Articles
+ Topstep Payout Policy 
+
+ Professional Behavior at Topstep 
+
+ Getting Started with the Topstep Dashboard 
+
+ Back2Funded: Rules, Guidelines, and How It Works 
+
+ Topstep Labs 
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Your Privacy Choices

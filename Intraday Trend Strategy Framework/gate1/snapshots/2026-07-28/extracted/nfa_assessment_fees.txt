@@ -1,0 +1,238 @@
+NFA Assessment Fees FAQs | NFA 
+
+ Skip to Main Content 
+
+ Glassdoor 
+
+ Email a Friend 
+
+ CPO Education 
+
+ Enforcement Actions 
+
+ Investor Library 
+
+ Investors 
+
+ Member Notices 
+
+ Members 
+
+ Registration 
+
+ Rulebook 
+
+ Basic 
+
+ Print 
+
+ Search 
+
+ Alerts 
+
+ Audio Conference 
+
+ Online Learning Programs 
+
+ Podcast 
+
+ Video Tutoirals 
+
+ Webinars 
+
+ Workshops 
+
+ Document Type ai 
+
+ Document Type css 
+
+ Document Type doc 
+
+ Document Type eps 
+
+ Document Type gif 
+
+ Document Type htm 
+
+ Document Type jpg 
+
+ Document Type js 
+
+ Document Type mp3 
+
+ Document Type pdf 
+
+ Document Type plain 
+
+ Document Type png 
+
+ Document Type ppt 
+
+ Document Type txt 
+
+ Document Type xls 
+
+ Document Type zip 
+
+ Electronic Filing Systems 
+
+ NFA Rulebook 
+
+ Online Registration System 
+
+ File a Complaint 
+
+ About 
+
+ News & Notices 
+
+ Members 
+
+ Registration 
+
+ Investors 
+
+ Careers 
+
+-->
+ Home 
+
+ FAQs
+
+ Members
+
+ NFA Assessment Fees FAQs
+
+ NFA Assessment Fees FAQs
+
+ Expand All 
+ Collapse All 
+
+ What is a futures contract "round-turn?" 
+
+ The term "round-turn" as used in NFA Bylaw 1301(b) is intended to include all transactions where an actual futures position is closed out or offset. This would include futures positions closed out by delivery, cash settlement, through an exchange for physicals, and as a result of the transfer to the carrying FCM from another FCM of offsetting futures contracts.
+
+ (Note: Although the NFA assessment fee for futures is calculated on a round-turn basis, NFA Bylaws leave Member FCMs free to invoice and accrue the fee at any point in a round-turn or to split the fee among transactions which make up a round-turn.)
+
+ What is meant by "per trade" for the options assessment fee? 
+
+ The term "per trade" as used in NFA Bylaw 1301(b) means a purchase or sale of an option but does not include the exercise or expiration of an option. However, if an option is exercised, NFA's assessment fee will be assessed on the underlying futures transaction on a round-turn basis.
+
+ How much is the NFA assessment fee? 
+
+ As of July 1, 2026, the NFA assessment fee, payable by FCMs with respect to futures contracts, is $.01 per side, invoiced to customers. The assessment fee on exchange-traded options is $.01 per side.
+
+ Effective July 1, 2027, the NFA assessment fee, payable by FCMs with respect to futures contracts, will be $.02 per side, invoiced to customers. Additionally, the assessment fee on exchange-traded options will be $.02 per side.
+
+ Is there a different NFA assessment fee for futures contracts that have a very small notional value? 
+
+ No. The NFA assessment fee for all futures contracts no matter the size is $.01 per side, invoiced to customers. Effective July 1, 2027, the assessment fee will be increased to $.02 per side.
+
+ What is the amount of the NFA assessment fee for security futures contracts and to which accounts is it applied? 
+
+ The NFA assessment fee for security futures contracts is $.01 per side, invoiced to customers. Effective July 1, 2027, the assessment fee will be increased to $.02 per side. NFA's assessment fee applies to security futures contracts held in a commodity futures account only.
+
+ When is the NFA assessment fee payable? 
+
+ The assessment fee is payable 30 days following the end of the month for all transactions effected during that month.
+
+ How is the NFA assessment fee form submitted every month? 
+
+ FCMs will receive an automated e-mail on the first day of the month with a link to access EasyFile. The NFA assessment fee form will only be accepted via EasyFile submission.
+
+ Can an FCM combine the NFA assessment fee with commissions in its statement to customers? 
+
+ No. Assessment fee amounts must be shown or included in a line item on the customer statement separate from the line item which is used to designate commissions. Such an item may be devoted exclusively to the NFA assessment fee or may include other fees (i.e., a "miscellaneous fees" category). If, however, the amount indicated in the line is higher than the applicable NFA assessment fee, the customer must receive notice either on the statement or in a separate document of the actual amount of the NFA assessment fee.
+
+ Are FCMs required to invoice the customer for the assessment fee paid to NFA for their futures transactions? 
+
+ Yes. Bylaw 1301(b)(i) requires that the assessment fee be invoiced to customers.
+
+ Can the NFA assessment fee be invoiced on a monthly statement? 
+
+ Yes. Although Bylaw 1301(b )(i) requires that an FCM Member invoice assessments to its customers and remit the amount due to NFA, the FCM is given some discretion as to how the customer is invoiced. Invoicing through monthly statements or purchase and sale statements are both acceptable methods.
+
+ May the NFA assessment fee on futures transactions be invoiced to customers at the opening of a futures position? 
+
+ Yes. The invoicing requirement of Bylaw 1301(b) does not restrict or prescribe the timing of the invoicing.
+
+ Does the assessment fee apply to accounts of persons having "privileges of membership" on a contract market? 
+
+ No. NFA Bylaw 1301(b)(i) makes the NFA assessment fee inapplicable to trades of customers who have "privileges of membership on a contract market where such contract is entered (except that this exemption does not apply to transactions by commodity pools operated by NFA Member CPOs)." If the exchange formally recognizes the customer as a member, the NFA assessment fee does not apply to trades placed on that exchange.
+
+ Does the assessment fee apply to commodity pools operated by NFA Members? 
+
+ Yes. If a commodity pool (exempt or non-exempt) is operated by an NFA Member and has privileges of membership on a contract market where such contract is entered, then the commodity pool is still required to pay assessment fees.&#160;The assessment fee also applies to an exempt commodity pool operated by a non-Member unless the pool has privileges of membership on a contract market.
+
+ Does the assessment fee apply to proprietary accounts? 
+
+ Generally, accounts belonging to affiliated firms that wholly own, are wholly owned by, or share 100 percent ownership with the FCM are exempt from paying the NFA assessment fee if the transactions are executed on an exchange where the FCM is a member. There are two exceptions to this general rule.
+
+ First, any account that is in the name of a commodity pool operated by an NFA Member CPO is subject to the NFA assessment fee, regardless of affiliations or exchange memberships. Second, any account where someone other than the exchange member FCM or affiliate makes deposits in the account or bears the risk of loss is subject to the assessment fee.
+
+ If an FCM carries an omnibus account for another FCM which is an NFA Member, which FCM is liable to NFA for the assessment fee on trades in the omnibus account? 
+
+ The originating FCM is liable to NFA.
+
+ Would an FCM carrying an omnibus account ever be liable to NFA for the assessment fee on trades in the omnibus account? 
+
+ Yes. If the originating broker is not an FCM Member, the carrying FCM pays the fee. This situation would arise where the originating broker is a foreign broker.
+
+ Does an FCM pay an assessment fee on trades of a non-U.S. customer on a domestic exchange? 
+
+ Yes. The assessment fee applies to trades on domestic exchanges without regard to the nationality or residence of the customer.
+
+ Does the assessment fee apply to trades of U.S. customers on foreign exchanges? 
+
+ Generally, yes. Foreign futures and options are assessed the assessment fee at the same rates applicable to domestic futures and options. There are two exceptions: 1) The "omnibus account" exemption, discussed under Part IV, question 5, applies to foreign futures and options. (A "U.S. customer" includes any customer who resides in the United States, its territories or possessions.); and 2) The exemption referenced in Bylaw 1301(b)(i)(D)(2) regarding proprietary trades of a person who has privileges of membership on certain NFA Member contract markets (irrespective of whether that person is a member of the foreign exchange; in addition, this does not apply to commodity pools operated by an NFA Member). Currently those contract markets are CME Group, ICE Futures and MIAX.
+
+ Does the assessment fee apply to trades of non-U.S. customers on foreign exchanges? 
+
+ No. Trades by non-U.S. customers on foreign exchanges are excluded from the definition of "foreign futures and options" and therefore are not subject to the assessment fee.
+
+ Does an FCM pay an assessment fee on transactions which are merely bookkeeping entries, such as those made to correct errors or to transfer a position from the books of one FCM to the books of another? 
+
+ No. The term "round-turn" excludes offsets that do not represent an actual transaction and are merely bookkeeping entries, such as those made to correct errors or to transfer a position from the books of one FCM to the books of another.
+
+ Concerning linked-market transactions, how do NFA assessment fees apply to futures positions executed on a foreign exchange (e.g., the Singapore Exchange (SGX)) and vice versa? 
+
+ Any futures transaction that is carried as a CME trade by an FCM Member for the account of a customer (except trades which under Bylaw 1301(b) are not assessable) will be subject to an NFA assessment fee upon completion of the round-turn even though one or both sides of the round-turn may have been actually executed on SGX. Any transaction that is carried as an SGX trade by an FCM Member for the account of a U.S. customer (except trades which under Bylaw 1301(b) are not assessable) will be subject to an NFA assessment fee. Any trade that is executed on the CME but is transferred to an SGX member and the SGX clearinghouse through the Mutual Offset System will not be subject to an NFA assessment fee.
+
+ Expand All 
+ Collapse All 
+
+ Subscribe to NFA Email Communications
+
+ -->
+
+ Email Address 
+
+ Subscribe 
+
+ Manage Subscriptions 
+
+ -->
+
+ Contact NFA 
+
+ File a Complaint 
+
+ Arbitration Services 
+
+ Market Regulation Services 
+
+ FAQs 
+
+ Alerts 
+
+ Home 
+
+ Site Index 
+
+ Disclaimer and Privacy Policy 
+
+ Connect With Us
+
+ Twitter LinkedIn Facebook Glassdoor RSS 
+
+ &#169; National Futures Association. All Rights Reserved. NFA and NATIONAL FUTURES ASSOCIATION are registered trademarks of National Futures Association.

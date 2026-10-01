@@ -1,0 +1,101 @@
+LucidFlex Consistency Percentage | Lucid Trading Help Center Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Skip to main content 
+
+ Lucid Home 
+
+ Lucid Home 
+
+ Search for articles... 
+
+ All Collections 
+
+ LucidFlex 
+
+ LucidFlex Consistency Percentage
+
+ LucidFlex Consistency Percentage
+
+ D 
+ Written by Doug 
+ Updated over a month ago 
+
+ Table of contents
+
+ Consistency
+
+ The Consistency Percentage tracks a traders ability to earn profits over multiple sessions. This demonstrates a that a trader has and can adhere to a risk management strategy.
+
+ The Calculation
+
+ In LucidFlex evaluation accounts you must have Consistency Percentage of 50% or less to be eligible to upgrade to a LucidFlex funded account.
+
+ Use the following formula to determine if you are adhering to the Consistency Percentage:
+
+ Largest Single Day Profit / Account Profit = Consistency Percentage 
+
+ Example
+
+ You trade your $50k LucidFlex evaluation account and your Largest Single Day Profit was $750 when you reached the $3,000 profit target. Plug the values into the above formula.
+
+ $750 / $3,000 = 25% 
+
+ Congratulations, you have maintained consistency under the LucidFlex evaluation 50% requirement. You may now upgrade to a LucidFlex funded account. However, if your largest day had exceeded 50% of your account profit, you would need to continue trading until your largest day is 50% or less.
+
+ Consistency Cushion
+
+ There is a small cushion built into the LucidFlex consistency so that traders that are super eager to pass in two days can do so. However, taking your time to reach your profit target is the best approach. ​ Please see below for an example of how the cushion works.
+
+ Account Size
+
+ Profit Target
+
+ 50% Consistency
+
+ Cushion
+
+ 25k Flex
+
+ $1,250
+
+ $625
+
+ $650.00
+
+ 50k Flex
+
+ $3,000
+
+ $1,500
+
+ $1,560.00
+
+ 100k Flex
+
+ $6,000
+
+ $3,000
+
+ $3,120.00
+
+ 150k Flex
+
+ $9,000
+
+ $4,500
+
+ $4,680.00
+
+ Important: This is merely an example table based on hitting exactly 50% of your profit target. The cushion is a percentage calculated on what your actual profit earned is for the day and will vary from trader to trader.
+
+ It is NOT a fixed dollar amount for all scenarios. The actual dollar amount is dependent on how much profit you earned on your biggest day.
+
+ Consistency at Live Account Status
+
+ Once promoted to Live account status, the consistency requirement no longer applies. The 50% consistency requirement applies only during the evaluation stage.
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Lucid Trading Help Center

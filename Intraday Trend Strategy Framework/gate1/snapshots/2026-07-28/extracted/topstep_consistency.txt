@@ -1,0 +1,149 @@
+Consistency at Topstep | Topstep Help Center Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Skip to main content 
+
+ Discord Topstep TopstepTV 
+
+ Discord Topstep TopstepTV 
+
+ Search for articles... 
+
+ All Collections 
+
+ Topstep FAQs 
+
+ Consistency at Topstep
+
+ Consistency at Topstep
+ Consistency Targets and Consistency Objectives: What Every Topstep Trader Needs to Know
+
+ May 28, 2026 
+
+ Table of contents
+
+ Consistency rules exist because big spike days don&#x27;t build funded traders. Sustainable habits do. Here&#x27;s how the Consistency rules work in the Trading Combine® and the Express Funded Account®.
+
+ Trading Combine — Consistency Target (50%)
+
+ Your single best day of profit must stay at or below 50% of your Profit Target. If it exceeds that, your Profit Target increases. You&#x27;ll need to earn more to pass.
+
+ ​ Formula: Best Day Profit ÷ Total Profit = Best Day %
+
+ ​ Best Day Recommendations (stay below these to avoid a Profit Target increase):
+
+ Account Size 
+
+ Profit Target 
+
+ Best Day Recommendation 
+
+ $50K
+
+ $3,000
+
+ Less than $1,500
+
+ $100K
+
+ $6,000
+
+ Less than $3,000
+
+ $150K
+
+ $9,000
+
+ Less than $4,500
+
+ Example: $1,200 best day ÷ $2,800 total profit = 43% ✅ — Consistency Target met.
+
+ There&#x27;s a small backend buffer for market fluctuations — you don&#x27;t need to hit numbers to the penny. You can pass in as few as 2 days, as long as no single day exceeds 50% of your total profit and your Profit Target is met.
+
+ ⚠️ Losses do not reset your best day. The Consistency Target applies regardless of your current account balance.
+
+ How does the Best Day lock in?
+
+ Your best day updates throughout the session as your P&L moves. At 3:10 PM CT, that day&#x27;s value locks into your trading history and cannot be changed. A future day becomes your new best day if it exceeds the previous one and locks at 3:10 PM CT on its own day.
+
+ What happens if I have a losing day?
+
+ Losses don&#x27;t reset your best day. If your best day is $1,500 but a losing day brings your total profit down to $1,000, your best day is still $1,500.
+
+ To find your new Profit Target: Best Day ÷ 0.50 = Total Profit Needed.
+
+ Example: $1,500 best day ÷ 0.50 = $3,000 Profit Target. You need to recover losses and reach $3,000 without letting any single day exceed $1,500. If your next day earns $2,000, your best day becomes $2,000 and your new Profit Target becomes $4,000.
+
+ Can I keep trading after hitting my Best Day Recommendation?
+
+ Yes, but exceeding it increases your Profit Target and makes the Trading Combine harder to pass.
+
+ 💡 Tip: On TopstepX™, you can set a Personal Daily Profit Target to lock in your gains before exceeding the Consistency Target. Go to Settings, then Risk Settings, set your dollar amount and action (Do Nothing, Liquidate, or Liquidate and Block), then save. Read more or watch the video .
+
+ Express Funded Account Consistency — Consistency Objective (40%)
+
+ The Consistency path in the Express Funded Account® (XFA) rewards Traders who build profit steadily, not in one big day. When you activate your XFA, you choose Standard or Consistency as your Payout path. The Consistency path gets you to Payout eligibility faster but adds a 40% threshold.
+
+ Formula: Largest Single-Day Net Profit ÷ Total Net Profit = Consistency %
+
+ Your Consistency % must be 40% or below to be Payout eligible. This is not rounded. Any result above 40% does not qualify.
+
+ To request a Payout, you must also have: 
+
+ A minimum of 3 trading days with at least 1 trade per day
+
+ Example: $3,600 largest day ÷ $9,500 total net profit = 37.9% ✅
+
+ If your Consistency % exceeds 40%, keep trading. As you earn more net profit, the percentage will naturally come down.
+
+ 👉 Your dashboard updates in real time and shows your Consistency %, total net profit, largest single-day profit, and Payout eligibility status.
+
+ ​ Does Consistency reset after a Payout? 
+
+ Yes. After a Payout is requested, your consistency calculation resets to $0 and applies only to profits earned in the new window. All eligibility requirements must be met again.
+
+ The new window starts on the trading day after your Payout was requested. Trades made on the same day as your Payout request do not count toward your next Consistency Objective, even if made after the request was submitted.
+
+ 👉 Consistency Examples 
+
+ You request a Payout on Monday. Your new window starts on Tuesday. Profits from Monday don&#x27;t carry over. ​
+
+ You earn $15,000 across 3 days and request a $5,000 Payout on day 3. Your balance drops to $10,000, but your consistency resets to $0. That $10,000 remaining does not count as profit in your new window. You need to earn new profits starting the next trading day.
+
+ Related Articles
+ Topstep Program Overview 
+
+ Express Funded Account™ Parameters 
+
+ Topstep Payout Policy 
+
+ Topstep Labs 
+
+ The Topstep Octagon 
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Your Privacy Choices

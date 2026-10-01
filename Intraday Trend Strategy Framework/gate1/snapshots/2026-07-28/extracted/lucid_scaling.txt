@@ -1,0 +1,124 @@
+LucidFlex Scaling Plan | Lucid Trading Help Center Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Skip to main content 
+
+ Lucid Home 
+
+ Lucid Home 
+
+ Search for articles... 
+
+ All Collections 
+
+ LucidFlex 
+
+ LucidFlex Scaling Plan
+
+ LucidFlex Scaling Plan
+ LucidFlex scaling plan explained: max contract size adjusts dynamically with your profits. No scaling limits during evaluation. Updated at end of session.
+
+ A 
+ Written by AJ 
+ May 6, 2026 
+
+ Table of contents
+
+ LucidFlex Funded Account Scaling Plan
+
+ The scaling plan controls how much of your max size is available to trade based on the simulated profits in your account. As your simulated profits in the funded account increase and decrease, your max tradable contract size moves up and down based. There is no scaling plan in the evaluation phase. ​ The scaling plan updates at the end of each session, so your limits will not update in real-time throughout the day. Please see the table below for details:
+
+ Simulated Profits 
+
+ $25,000 ​ Contract Limits 
+
+ $50,000 ​ Contract Limits 
+
+ $100,000 ​ Contract Limits 
+
+ $150,000 ​ Contract Limits 
+
+ $0 - $999
+
+ 1 mini or 10 micros
+
+ 2 minis or 20 micros
+
+ 3 minis or 30 micros
+
+ 4 minis or 40 micros
+
+ $1,000 - $1,999
+
+ 2 minis or 20 micros
+
+ 3 minis or 30 micros
+
+ 4 minis or 40 micros
+
+ 5 minis or 50 micros
+
+ $2,000 - $2,999
+
+ -
+
+ 4 minis or 40 micros
+
+ 5 minis or 50 micros
+
+ 6 minis or 60 micros
+
+ $3,000 - $4,499
+
+ -
+
+ -
+
+ 6 minis or 60 micros
+
+ 8 minis or 80 micros
+
+ $4,500+
+
+ -
+
+ -
+
+ -
+
+ 10 minis or 100 micros
+
+ Circumventing the Scaling Plan
+
+ Some trader may be inclined to try and get around the scaling plan. Our back-end systems track and adjust balances for this. If we see repeated behavior attempting to get around the limits, we may review your account.
+
+ What is a Scaling Plan for a Futures Prop Firm Account?
+
+ A scaling plan in futures trading controls how many contracts you&#x27;re allowed to trade at one time in your funded account. Your limit is tied directly to your simulated profit balance. The more you&#x27;ve earned, the more buying power you have access to. Unlike many prop firms, LucidFlex has no scaling restrictions during the evaluation phase. You have access to your full max contract size from your first trade.
+
+ Scaling Plan FAQs
+
+ Does the scaling plan apply during my evaluation? 
+
+ No. There is no scaling plan in the LucidFlex evaluation phase.
+
+ When does my contract limit update? 
+
+ At the end of each trading session. It does not update in real-time during the day.
+
+ What happens to my contract limit if I take a payout? 
+
+ Since payouts reduce your simulated balance, your scaling tier may adjust downward to reflect the updated profit level.
+
+ Can I trade my full contract size from day one in the funded account? 
+
+ Your starting size is determined by your initial profit level per the scaling table. As you build profits, your max size grows.
+
+ What if I accidentally exceed my contract limit? 
+
+ Each platform/datafeed provider has guardrails in place to prevent/block this a much as possible, however users whom intentionally try to, or succeed in circumventing these limits may result in having profit wiped for the day.
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Lucid Trading Help Center

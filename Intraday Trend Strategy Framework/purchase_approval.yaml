@@ -1,0 +1,25 @@
+# 采购批准记录 —— 与 purchase_plan.yaml 分离，消除自引用哈希问题
+# approved_plan_sha256 = 冻结状态 purchase_plan.yaml 原始文件字节的 SHA-256
+# （已从 Freeze Commit A [89e2505] 的 git blob 字节级重算，并与 FREEZE_LOG.md
+# 及工作区三方核验一致，2026-07-27）。
+# 执行脚本运行前必须验证：SHA256(purchase_plan.yaml 当前字节) == approved_plan_sha256，
+# 不一致 → 中止。
+
+approval:
+  plan_id: PP-2026-07-27-A
+  plan_revision: 4
+  approved_plan_sha256: "02edbc2cb8481089ecf7b30156fd86eb3cf524112e3f97d253f94acc60c39e6c"
+  approved_charter_sha256: "5176320fb54a30e5e5dcc7f1ee96b828e7d38f727a573e8bd152ca3ff4299327"
+  approved_prereg_sha256: "6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132"
+  approved_by: "Aaron"
+  approved_at: "2026-07-27T22:28:15+08:00"
+  max_out_of_pocket_usd: 0.00
+  approval_note: >-
+    仅批准A1（NQ.v.0 ohlcv-1m 2010-06-06至2022-01-01 exclusive）和
+    A2（MNQ.v.0 bbo-1s 2025-01-01至2025-04-01 exclusive）。
+    A3 Internal Validation、A4 Physical Lockbox及purchase_plan.yaml
+    明确排除的任何其他数据不在本次批准范围内。
+    批准条件：hard cost cap USD 24.00；每项重报价不得超过计划估价的110%；
+    实际总报价不得超过USD 24.00且必须完全由实查可用credit覆盖；
+    任何超出credit的费用均不批准；任一重报价、hard cap、credit或
+    哈希检查不通过即停止，不提交batch job。

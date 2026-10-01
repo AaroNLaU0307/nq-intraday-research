@@ -1,0 +1,241 @@
+Express Funded Account™ Parameters | Topstep Help Center Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Skip to main content 
+
+ Discord Topstep TopstepTV 
+
+ Discord Topstep TopstepTV 
+
+ Search for articles... 
+
+ All Collections 
+
+ Topstep Program 
+
+ Funded Accounts 
+
+ Express Funded Account® 
+
+ Express Funded Account™ Parameters
+
+ Express Funded Account™ Parameters
+ Pass the Trading Combine. Pick your path. Start earning.
+
+ June 24, 2026 
+
+ Table of contents
+
+ The Basics
+
+ You passed the Trading Combine®. Now it&#x27;s time to trade for real Payouts. The Express Funded Account® (XFA) is the simulated funded-level account you earn after passing your Trading Combine . Your balance starts at $0 and grows from your trading profits.You can hold up to 5 active XFAs at a time. At activation, you choose your Payout path: Standard or Consistency. 
+
+ 🤜 The XFA is the proving ground. Put in the reps, prove your strategy is consistent, and earn your call-up to the big leagues. Trade with discipline, hit your Payouts, and build the track record that gets you to Live . 
+
+ 📺 Check out this quick video to learn about the Express Funded Account: 
+
+ Standard vs. Consistency: at a glance
+
+ XFA Standard 
+
+ XFA Consistency 
+
+ Payout eligibility 
+
+ 5 winning days of $150+
+
+ 3 days traded, 40% consistency target
+
+ Max Payout 
+
+ 50% of balance, up to $5,000*
+
+ 50% of balance, up to $6,000*
+
+ Profit split 
+
+ 90/10
+
+ 90/10
+
+ Scaling Plan 
+
+ ✅
+
+ ✅
+
+ Maximum Loss Limit (MLL) 
+
+ ✅
+
+ ✅
+
+ Daily Loss Limit (DLL) 
+
+ Optional
+
+ Optional
+
+ Consistency Target 
+
+ ❌
+
+ ✅
+
+ Profit Target 
+
+ ❌
+
+ ❌
+
+ *See the Payout Policy for Payout cap details by account size.
+
+ Express Funded Account Standard 
+
+ Rule 
+
+ Do not hit your Maximum Loss Limit 
+
+ Objectives 
+
+ Follow the Scaling Plan — the max contracts you can hold at one time — based on your current account balance.
+
+ Hit 5 winning days with at least $150 profit each
+
+ If you’ve chosen to add a Daily Loss Limit, you must stay within the limits each day.
+
+ Express Funded Account Consistency
+
+ Rule 
+
+ Do not hit your Maximum Loss Limit 
+
+ Objectives 
+
+ Follow the Scaling Plan — the max contracts you can hold at one time — based on your current account balance.
+
+ Trade at least 3 days with at least 1 trade per day
+
+ Keep your consistency at 40% or below: 
+
+ Consistency = Largest Winning Day ÷ Total Net Profit 
+
+ If you’ve chosen to add a Daily Loss Limit, you must stay within the limits each day.
+
+ XFA Consistency FAQs
+
+ What is XFA Consistency? 
+
+ An alternative Payout path that rewards balanced trading. Instead of 5 winning days, you need 3 trading days. But no single day can make up more than 40% of your total profits. Consistency is reset after each Payout.
+
+ ​ How is consistency calculated? 👉 Consistency = Largest Winning Day ÷ Total Net Profit
+
+ Consistency tracking only appears on your dashboard once you have positive net profit. If your balance is negative, build profit first. Consistency is calculated for each payout window. Once you request a payout, it resets.
+
+ Example: 
+
+ Total profit $1,000, best day $400 = 40% ✅. 
+
+ Best day $450 = 45% ❌. 
+
+ Keep trading to bring that percentage down.
+
+ Why does the Consistency Target exist? To reward traders who make money regularly, not just on one big day. Discipline over time beats one lucky session.
+
+ Can I have a mix of Standard and Consistency XFA accounts? Yes, up to the 5-account limit, unless you&#x27;re on the Focused Trader Plan (FTP) .
+
+ How does a Payout affect my Consistency? Your consistency calculation resets after each Payout and applies only to profits earned afterward. Payout eligibility must be met again from scratch.
+
+ Example: You earn $15,000 over 3 days ($5,000 each = 33% consistency ✅) and take a $5,000 Payout. Your remaining balance is $10,000, but your consistency clock resets. You now need 3 new qualifying days on profits earned after that Payout.
+
+ Express Funded Account FAQs
+
+ Can I have more than 1 XFA?
+
+ Yes, up to 5 active at a time. If you pass a Trading Combine® while at the limit, the new XFA goes on hold until one closes. Shoulder Tap account holders are limited to 1 XFA.
+
+ What happens if I breach the Maximum Loss Limit?
+
+ Your account is liquidated and closed at the end of the day. Back2Funded lets you reactivate up to 2 times at the same size and Payout policy.
+
+ Can I mix account sizes?
+
+ Yes. Example: two 50K XFAs and three 150K XFAs. 
+
+ Can I change my XFA size or type?
+
+ No. Your size matches the Trading Combine® you passed and is locked before and after activation. Once you select XFA Consistency or Standard, that choice cannot be changed either.
+
+ Why does my XFA show a $0 balance?
+
+ This is expected. Your buying power is still the full account size (50K, 100K, or 150K). Your balance grows as you earn profits.
+
+ What are the fees?
+
+ No monthly subscription fee after passing. A one-time Activation Fee applies per XFA (Unless you chose the No Activation Fee Trading Combine). See Topstep Pricing for current rates.
+
+ Do I need a data subscription?
+
+ No. Level 1 (Top of Book) data is included with your Topstep membership. Level 2 (Depth of Market) is available as an upgrade. See Level 1 and Level 2 Market Data .
+
+ How long does it take to get my XFA?
+
+ Minutes after paying the Activation Fee . If you pass on a Friday, your XFA won&#x27;t be available until markets reopen at 5 PM CT Sunday.
+
+ What happens if I go inactive?
+
+ XFAs with no trading activity for more than 30 days may be closed. XFAs can&#x27;t be put on hold.
+
+ How do Payouts work on a simulated account?
+
+ Topstep pays you real money based on your simulated trading results. See the Payout Policy for how to qualify and request.
+
+ Can I get called up to a Live Funded Account?
+
+ That&#x27;s the goal — the call-up. The Risk Team is watching your tape. Keep trading consistently and let your performance make the case. Learn more here .
+
+ Can I use automated strategies?
+
+ Yes, with conditions. Topstep won&#x27;t help set them up or cover malfunctions. Review Prohibited Conduct and Prohibited Trading Strategies first.
+
+ Can I trade across multiple XFAs at once?
+
+ Yes, up to $750K buying power using a trade copier. See What is a Trade Copier . Hedging across accounts and coordinated trading with others is prohibited. See Understanding Hedging and Topstep&#x27;s Terms of Use .
+
+ Related Articles
+ Topstep Program Overview 
+
+ Trading Combine® Parameters 
+
+ Topstep Payout Policy 
+
+ Live Funded Account Parameters 
+
+ What is a Pro Account? 
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Your Privacy Choices

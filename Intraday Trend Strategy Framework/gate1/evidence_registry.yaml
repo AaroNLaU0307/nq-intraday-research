@@ -1,0 +1,271 @@
+# evidence_registry.yaml — 自动生成自 snapshot_manifest_v5.json，勿手改
+# 参数表以页面键引用本注册表；完整64位哈希在此，不在参数表内重复。
+evidence_registry:
+  cme_clearing_fees:
+    file: snapshots/2026-07-28/cme_clearing_fees.html
+    url: "https://www.cmegroup.com/company/clearing-fees.html"
+    final_url: "https://www.cmegroup.com/company/clearing-fees.html"
+    http_status: 403
+    raw_sha256: "eecde3fafbde4090c30e610a7ed4b8d877f8351c0490e4189574890e8a5a4f7e"
+    extracted_text_sha256: "eecde3fafbde4090c30e610a7ed4b8d877f8351c0490e4189574890e8a5a4f7e"
+    retrieved_at_utc: "2026-07-28T01:28:25.487784+00:00"
+  lucid_consistency:
+    file: snapshots/2026-07-28/lucid_consistency.html
+    url: "https://support.lucidtrading.com/en/articles/12945805-lucidflex-consistency-percentage"
+    final_url: "https://support.lucidtrading.com/en/articles/12945805-lucidflex-consistency-percentage"
+    http_status: 200
+    raw_sha256: "c907ba46b66f55398c26320cb6fdefb9e0609865e34f7d3f44e9a3104196d2bc"
+    extracted_text_sha256: "5b611162aeadd49c12ccf309505a52915defbf687f6714ca834add14c8d73fdb"
+    retrieved_at_utc: "2026-07-28T00:29:15.809364+00:00"
+  lucid_flex_drawdown:
+    file: snapshots/2026-07-28/lucid_flex_drawdown.html
+    url: "https://support.lucidtrading.com/en/articles/12945815-lucidflex-drawdown"
+    http_status: 200
+    raw_sha256: "fedb6b86c0cb3d0691bd5c443ef2fdee99fde95c3cadf80267508391fb7ccee1"
+    extracted_text_sha256: "8be3e9d4b376683e2b871cf772eee034cb0ea627eb89485b5196247745bc6f01"
+  lucid_flex_evaluation:
+    file: snapshots/2026-07-28/lucid_flex_evaluation.html
+    url: "https://support.lucidtrading.com/en/articles/12945790-lucidflex-evaluation-account"
+    http_status: 200
+    raw_sha256: "e859d2de1884d387f3ad09c4abb0cd9e29bae59cc765630f14d0b5a2dc989b83"
+    extracted_text_sha256: "190f7f6e8feb0c0f51d9bd28a0f8079950601581c460b6f71423af8a72898e44"
+  lucid_flex_funded:
+    file: snapshots/2026-07-28/lucid_flex_funded.html
+    url: "https://support.lucidtrading.com/en/articles/12945795-lucidflex-funded-account"
+    http_status: 200
+    raw_sha256: "cc4a482e58c4b3a82a11f07fb6277a12466b7aa55071435e461f5a070e7cb74a"
+    extracted_text_sha256: "447d856e8b245d6a26b3e356c502b9a0dff5180b4fc3205cc59e642a4ff18bd4"
+  lucid_flex_payouts:
+    file: snapshots/2026-07-28/lucid_flex_payouts.html
+    url: "https://support.lucidtrading.com/en/articles/12945796-lucidflex-payouts"
+    http_status: 200
+    raw_sha256: "5f5a9cefecf43061b826b22bd74583565cc93d8ea2f1a7eca7493c65d669315d"
+    extracted_text_sha256: "bc011016d7de7cd9e35a4dcef2c34724f269561ea94cd4e9cca33620a568265c"
+  lucid_live_structure:
+    file: snapshots/2026-07-28/lucid_live_structure.html
+    url: "https://support.lucidtrading.com/en/articles/13425130-new-live-structure"
+    http_status: 200
+    raw_sha256: "7b5a9ffc4b6c12e02fda4d0248f0ce7c43b8367e7817ee5581b55c2d533ef3a5"
+    extracted_text_sha256: "a04f826e39731df5dab494a300c0e20a6e8d9fbbfb49eade4069fcd8cb3aef62"
+  lucid_permitted:
+    file: snapshots/2026-07-28/lucid_permitted.html
+    url: "https://support.lucidtrading.com/en/articles/11404728-permitted-activities"
+    http_status: 200
+    raw_sha256: "c59c93682645bc4a6f43e8aea803b4b5c16e08e2a20624583f4556c137caaaf6"
+    extracted_text_sha256: "05bf4cdbd3cbc609acfcb3732c1cbd485d66f1e9fc4061138176f234105a203e"
+  lucid_platforms:
+    file: snapshots/2026-07-28/lucid_platforms.html
+    url: "https://support.lucidtrading.com/en/articles/11404614-lucid-trading-supported-platforms"
+    http_status: 200
+    raw_sha256: "af610a205592fb1dcb2706e604fdb98766d64a7cc3e0c2bb58966322159bb69a"
+    extracted_text_sha256: "d5a9d8fff501c226c8a9eab9e5c7371ad95616c0b7f4886ad768e00ce900a254"
+  lucid_pricing_main:
+    file: snapshots/2026-07-28/lucid_pricing_main.html
+    url: "https://lucidtrading.com/"
+    final_url: "https://lucidtrading.com/"
+    http_status: 403
+    raw_sha256: "17a4a83596a727507bc4c4de19b69564d6d2cb44fd57daabaf7cdf8469b19d1d"
+    extracted_text_sha256: "ae0b26c68939e8214056c2517af3b5091f1c674c8aef5f1e1fbab7804a78829b"
+    retrieved_at_utc: "2026-07-28T00:29:17.014860+00:00"
+  lucid_products_comms:
+    file: snapshots/2026-07-28/lucid_products_comms.html
+    url: "https://support.lucidtrading.com/en/articles/11508978-approved-products-and-commissions"
+    http_status: 200
+    raw_sha256: "59555a69e5c276b9a0770b65eff69d983952eba38b7a26d357086fa26baadce2"
+    extracted_text_sha256: "8bff4d45954526d851fc59dc9b63d25bee33340ac55f45f23660049fbeec12f2"
+  lucid_prohibited_hft:
+    file: snapshots/2026-07-28/lucid_prohibited_hft.html
+    url: "https://support.lucidtrading.com/en/articles/11404736-prohibited-high-frequency-trading"
+    http_status: 200
+    raw_sha256: "9d0fde96f3cee1a816ae5f53be2f7c16a6db7be3e52d97249147ea6777606f25"
+    extracted_text_sha256: "801d10cfe863ada96a238ec5f598f2ebd20e012aa23e7569a0e741cf2dc68ff3"
+  lucid_restricted:
+    file: snapshots/2026-07-28/lucid_restricted.html
+    url: "https://support.lucidtrading.com/en/articles/11404636-restricted-countries"
+    http_status: 200
+    raw_sha256: "51306003e5b30996069e481ba2c9ba3150f6d039de8e937db8162a9a66f25e62"
+    extracted_text_sha256: "29c774a79b6e06b43b7fb7296afbfec30090bcbb82cbe95b1ded7fff0c4cedf7"
+  lucid_scaling:
+    file: snapshots/2026-07-28/lucid_scaling.html
+    url: "https://support.lucidtrading.com/en/articles/12945808-lucidflex-scaling-plan"
+    final_url: "https://support.lucidtrading.com/en/articles/12945808-lucidflex-scaling-plan"
+    http_status: 200
+    raw_sha256: "1feea6a4098d288a88505eecb7b94999164ab4e55f8f10031f3760df1154a19e"
+    extracted_text_sha256: "6144e5028f0c39c130dca7b344d4c9015987ce9e46412082ae02335f43c9c974"
+    retrieved_at_utc: "2026-07-28T00:29:14.418567+00:00"
+  nfa_assessment_fees:
+    file: snapshots/2026-07-28/nfa_assessment_fees.html
+    url: "https://www.nfa.futures.org/faqs/members/nfa-assessment-fees.html"
+    final_url: "https://www.nfa.futures.org/faqs/members/nfa-assessment-fees.html"
+    http_status: 200
+    raw_sha256: "ffac784ef21a7bb4730bacf5aff1d7bcb7bc306e378d6e39bbcbdd1bf4d56c12"
+    extracted_text_sha256: "ac94858ab7f89272828519242567363ad26ff8f76adaa5a616d7c257918e1f9a"
+    retrieved_at_utc: "2026-07-28T01:28:24.276526+00:00"
+  topstep_api:
+    file: snapshots/2026-07-28/topstep_api.html
+    url: "https://help.topstep.com/en/articles/11187768-topstepx-api-access"
+    http_status: 200
+    raw_sha256: "e857986d03398f483eb115e607470803a758765729fed0cfdd442c231f5523d0"
+    extracted_text_sha256: "0825f6462c4545f3818c06f9a0e4f3a2a0ef99f556b553e84463ec1a0ff0464b"
+  topstep_back2funded:
+    file: snapshots/2026-07-28/topstep_back2funded.html
+    url: "https://help.topstep.com/en/articles/12060405-back2funded-rules-guidelines-and-how-it-works"
+    final_url: "https://help.topstep.com/en/articles/12060405-back2funded-rules-guidelines-and-how-it-works"
+    http_status: 200
+    raw_sha256: "7134fad1a739faf7b82aa2f755821fa313fcaa48621c68e78bdd653d04a9dfc7"
+    extracted_text_sha256: "b81def6c7ee6087b6a53d0ba435cc1117952cef4cfd4ab1f4442c87f48b8e0ed"
+    retrieved_at_utc: "2026-07-28T00:29:12.834656+00:00"
+  topstep_combine_params:
+    file: snapshots/2026-07-28/topstep_combine_params.html
+    url: "https://help.topstep.com/en/articles/8284197-trading-combine-parameters"
+    final_url: "https://help.topstep.com/en/articles/8284197-trading-combine-parameters"
+    http_status: 200
+    raw_sha256: "950801d2cb55ea8dee3bea3dee132aafff71072ceb6d7ae677907dd890fcefe5"
+    extracted_text_sha256: "29e0bd1149017323abc705515f1a5271ed8d366e8ff72f772aea6c85d5e9aef4"
+  topstep_consistency:
+    file: snapshots/2026-07-28/topstep_consistency.html
+    url: "https://help.topstep.com/en/articles/8284208-consistency-at-topstep"
+    final_url: "https://help.topstep.com/en/articles/8284208-consistency-at-topstep"
+    http_status: 200
+    raw_sha256: "7fc012456a790977908cd7cd7a6be300cfc2f8eedeaef9ad1ab7c6c5a7c0e057"
+    extracted_text_sha256: "dc4cfa2d346a71f91e321d1ca7ee9ea770e66f2ae1324c348f3b9341875af4b5"
+  topstep_dll:
+    file: snapshots/2026-07-28/topstep_dll.html
+    url: "https://help.topstep.com/en/articles/8284207-what-is-the-daily-loss-limit-and-what-happens-if-i-exceed-it"
+    http_status: 200
+    raw_sha256: "ff5ae33154bef0d7c9dd01a3cc8a5fc06ad58eed74f12929b0c5fbafaed54cf2"
+    extracted_text_sha256: "8ef55c41f2e072bae5ad7576a3ead913a7c10fc40a3cab0df407767970cda9db"
+  topstep_dll_optional:
+    file: snapshots/2026-07-28/topstep_dll_optional.html
+    url: "https://help.topstep.com/en/articles/10490293-daily-loss-limit-in-the-trading-combine-and-express-funded-account"
+    final_url: "https://help.topstep.com/en/articles/10490293-daily-loss-limit-in-the-trading-combine-and-express-funded-account"
+    http_status: 200
+    raw_sha256: "ff5ae33154bef0d7c9dd01a3cc8a5fc06ad58eed74f12929b0c5fbafaed54cf2"
+    extracted_text_sha256: "8ef55c41f2e072bae5ad7576a3ead913a7c10fc40a3cab0df407767970cda9db"
+  topstep_eligibility:
+    file: snapshots/2026-07-28/topstep_eligibility.html
+    url: "https://help.topstep.com/en/articles/8284116-am-i-eligible-to-trade-with-topstep"
+    http_status: 200
+    raw_sha256: "12fc34b6ef6b167987ba9260a001c240561610c94cb36e619a2a03b6720986ec"
+    extracted_text_sha256: "149829f50caf89bb5801e873c6c149effff27eec4ff7dc8046745554148b54e7"
+  topstep_live_funded:
+    file: snapshots/2026-07-28/topstep_live_funded.html
+    url: "https://help.topstep.com/en/articles/10657969-live-funded-account-parameters"
+    http_status: 200
+    raw_sha256: "1358e6e7e9a6947c0cee9fde4fe0905a395a74919692e6aca52edeb7b2b1a033"
+    extracted_text_sha256: "2a5dd73bc9713de6ce00bccc7d72bf79a6343ebd50b7e23efa5469a31c200f46"
+  topstep_mll:
+    file: snapshots/2026-07-28/topstep_mll.html
+    url: "https://help.topstep.com/en/articles/8284204-what-is-the-maximum-loss-limit"
+    http_status: 200
+    raw_sha256: "87bfb2e77a083a482ea8f57142714387463c47ee363fd7770041ab923fb2eb0c"
+    extracted_text_sha256: "57b8e70529dabf24f6b2d573e5e4d40ab88bb0034a689da8131b3c41a35e2520"
+  topstep_payout:
+    file: snapshots/2026-07-28/topstep_payout.html
+    url: "https://help.topstep.com/en/articles/8284233-topstep-payout-policy"
+    http_status: 200
+    raw_sha256: "e10a0f4cfee43214bada8435da781dc90d3fe41e6065beada102f2dca63ff973"
+    extracted_text_sha256: "3fc5d1470193021ba17f15e58968f8499424a2fa465bbb2d6878f100a729488b"
+  topstep_pricing:
+    file: snapshots/2026-07-28/topstep_pricing.html
+    url: "https://help.topstep.com/en/articles/14289835-topstep-pricing-and-payment-questions"
+    http_status: 200
+    raw_sha256: "5936b41bedf63cb34382f5c12ba6c9225a9eacdcdba98d1a43194e06e18a2d3a"
+    extracted_text_sha256: "f3c5b4a107409f2300277626cfa10df231150bfc2be9d8c789567d756c568049"
+  topstep_prohibited_conduct:
+    file: snapshots/2026-07-28/topstep_prohibited_conduct.html
+    url: "https://help.topstep.com/en/articles/10296582-prohibited-conduct"
+    final_url: "https://help.topstep.com/en/articles/10296582-prohibited-conduct"
+    http_status: 200
+    raw_sha256: "4f22188e447ada4fb34b7fbeff023bf9c3106888d4764710e1606738ba6ae4c6"
+    extracted_text_sha256: "e24f84b219c466a53a2b6b91ced62e46a1a9390a49dc3a100ddfdc1c0d623368"
+    retrieved_at_utc: "2026-07-28T01:13:12.859596+00:00"
+  topstep_prohibited_strategies:
+    file: snapshots/2026-07-28/topstep_prohibited_strategies.html
+    url: "https://help.topstep.com/en/articles/10305426-prohibited-trading-strategies-at-topstep"
+    final_url: "https://help.topstep.com/en/articles/10305426-prohibited-trading-strategies-at-topstep"
+    http_status: 200
+    raw_sha256: "6d1ab5c51de3df9f11dfcaadb2510633f525ab33649bb6e621f1d6913c6c2624"
+    extracted_text_sha256: "83b95e8de6dad351f0fcdcbab4cff950964c2b850510506010713054727cee5a"
+    retrieved_at_utc: "2026-07-28T01:13:14.920077+00:00"
+  topstep_scaling:
+    file: snapshots/2026-07-28/topstep_scaling.html
+    url: "https://help.topstep.com/en/articles/8284223-what-is-the-scaling-plan"
+    http_status: 200
+    raw_sha256: "d350ba29b5bc43ba13728d1bad78470f224c4daf817d147bea7fdf7912b02b55"
+    extracted_text_sha256: "df5c478d87e83733f4fd5558b0c32700f0ceb45cc3d1e12f79d3014921a5018a"
+  topstep_subscriptions:
+    file: snapshots/2026-07-28/topstep_subscriptions.html
+    url: "https://help.topstep.com/en/articles/8284121-trading-combine-subscriptions"
+    final_url: "https://help.topstep.com/en/articles/8284121-trading-combine-subscriptions"
+    http_status: 200
+    raw_sha256: "8525af0e7e43d4194506f9bf6d01dd5393734ecb0c8f62f9784905920e53d0fc"
+    extracted_text_sha256: "3d46b9d6ce39db44ee22f0580e81fc57ee580123c7ce48fad7831a5437b8959a"
+    retrieved_at_utc: "2026-07-28T01:13:08.659234+00:00"
+  topstep_what_is_reset:
+    file: snapshots/2026-07-28/topstep_what_is_reset.html
+    url: "https://help.topstep.com/en/articles/8284128-what-is-a-reset"
+    final_url: "https://help.topstep.com/en/articles/8284128-what-is-a-reset"
+    http_status: 200
+    raw_sha256: "0737210f2b4c0c04cfd18c5ff1f56efd4531745884750a322e1c7bf8ab56d3df"
+    extracted_text_sha256: "c187fff7faec3a40f49c163c34855d52010ec4cf3f767579140250dbd5bf3bf2"
+    retrieved_at_utc: "2026-07-28T01:28:21.202652+00:00"
+  topstep_xfa_params:
+    file: snapshots/2026-07-28/topstep_xfa_params.html
+    url: "https://help.topstep.com/en/articles/8284215-express-funded-account-parameters"
+    final_url: "https://help.topstep.com/en/articles/8284215-express-funded-account-parameters"
+    http_status: 200
+    raw_sha256: "1227628eddc55de26fc5318d626f496a901957262bd58b06cfa556c79cb8a026"
+    extracted_text_sha256: "5f7f3f9e7cf0f011a6b4ecaa4967d9e8a0fa2a11845ad9b8f5eaffd71c56339f"
+    retrieved_at_utc: "2026-07-28T00:29:10.788197+00:00"
+  topstepx_commissions:
+    file: snapshots/2026-07-28/topstepx_commissions.html
+    url: "https://help.topstep.com/en/articles/8284213-topstepx-commissions-and-fees"
+    final_url: "https://help.topstep.com/en/articles/8284213-topstepx-commissions-and-fees"
+    http_status: 200
+    raw_sha256: "01b53ef3ede627c2add7a6b1fe24e116b5cc7ae4e3f19d2b71658a8e442962b3"
+    extracted_text_sha256: "1fe22c6b9c4f3be4502611c42763e4b1a492edb0c4db5671c7fd7be86aafb969"
+    retrieved_at_utc: "2026-07-28T01:13:10.773102+00:00"
+  topstep_xfa_scaling_table_png:
+    file: snapshots/2026-07-28/topstep_xfa_scaling_table.png
+    note: "embedded image in topstep_scaling.html, signed Intercom CDN URL"
+    raw_sha256: "55ec76b4b293822849c9bf8a8ac2de362fa895010d39ce9c0d00f4ed275e6cbd"
+  lucid_breach_reply_png:
+    file: lucid_inquiry_reply/lucid_reply_2026-07-28.png
+    note: "Level 2-AI: Lucid support AI bot answer"
+    raw_sha256: "620dee3911e616fafeacf9c399da054dfda4cf1414a0d0a24fd46d2a0358925a"
+  lucid_breach_resolution_md:
+    file: lucid_inquiry_reply/RESOLUTION.md
+    raw_sha256: "af7c498946789b899839af9c34221a6c0a07a4703ba894830e6a1f920964823e"
+  lucid_reply2_png:
+    file: lucid_inquiry_reply/lucid_reply2_2026-07-28.png
+    note: "Level 2-AI: bot confirms docs silent on G3/G6/G7"
+    raw_sha256: "4d9197093c7e865d3c6aa94dd7c612f6e677d1b55e95bf843f213c85735dbec6"
+  lucid_50k_flex_eval_png:
+    file: lucid_pricing_2026-07-28/lucid_50k_flex_eval.png
+    note: "Aaron screenshot 2026-07-28: $98 purchase / $95 reset"
+    raw_sha256: "41dc3293d09bd81234124a5517a9b5431305afbaae7fd2723720653a88d8c046"
+  lucid_50k_pro_eval_png:
+    file: lucid_pricing_2026-07-28/lucid_50k_pro_eval.png
+    raw_sha256: "d506aba3e9fd60b2348d4f0c77396a02514c997a05ddc3facb1bcf702a776506"
+  lucid_50k_direct_png:
+    file: lucid_pricing_2026-07-28/lucid_50k_direct.png
+    note: "instant-funded reference: $364"
+    raw_sha256: "508d68ff66b5abd1908f7c758407d4412826a4cd20c94862dc2d42f6b21395dc"
+  lucid_inquiry_1_md:
+    file: lucid_inquiry.md
+    raw_sha256: "a0887b0008e5769b74819285bc7f8075cb60c5d3daa20a2c6c97f68c49e3af21"
+  lucid_inquiry_2_md:
+    file: lucid_inquiry_2.md
+    raw_sha256: "e1bef5ac72df3abd64421a98db23dfddd8f814e89a7635dabaaff75caed62fa9"
+  cme_fee_schedule_2026_07_27_pdf:
+    file: snapshots/2026-07-28/cme_fee_schedule_2026-07-27.pdf
+    note: "MC1.1-G9: official CME fee schedule effective 2026-07-27, fetched via in-app browser session"
+    raw_sha256: "58f842b1c07d8e1a5fe3e31cff798b210d702ff0a6c770aa43ca500f583873d2"
+  cme_fee_schedule_2026_07_27_xls:
+    file: snapshots/2026-07-28/cme_fee_schedule_2026-07-27.xls
+    note: "MC1.1-G9: machine-readable; Equity/Non-Members/Micro E-mini Index Globex-Outrights $0.35 per side"
+    raw_sha256: "7c4ff19c6f732ca176b71c86c273bff8c481615656ad539d29d44dc2915bf90b"
+  g9_evidence_resolution_md:
+    file: G9_EVIDENCE_RESOLUTION.md
+    raw_sha256: "2aa7e146f38f582504619ca9dc2ad9fb425fef07b61fb3d2d26e9f0cdf48b1ac"

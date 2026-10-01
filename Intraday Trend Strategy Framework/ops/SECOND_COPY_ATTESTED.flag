@@ -1,0 +1,5 @@
+second_physical_copy_verified: true
+attested: 2026-07-29 per Aaron-approved sequence (copy confirmed by Aaron,
+three-way verification all_raw_sha256_match=true, 20304<->20304 files,
+10207 official manifest entries matched)
+attestation: ops/physical_copy_attestation.json sha256 51ce415c6e2c06eb363d8061b9543c13d1b9ff11dfecbd9ec2312e3c66212813

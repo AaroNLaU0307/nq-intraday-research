@@ -1,0 +1,241 @@
+{
+ "corrections": {
+  "2012-11-26": {
+   "inferred_s0": [
+    "2012",
+    "T3",
+    "none"
+   ],
+   "supplement": [
+    "2012",
+    "T2",
+    "none"
+   ]
+  },
+  "2012-11-27": {
+   "inferred_s0": [
+    "2012",
+    "T3",
+    "none"
+   ],
+   "supplement": [
+    "2012",
+    "T2",
+    "none"
+   ]
+  },
+  "2013-05-06": {
+   "inferred_s0": [
+    "2013",
+    "T3",
+    "none"
+   ],
+   "supplement": [
+    "2013",
+    "T2",
+    "none"
+   ]
+  },
+  "2014-10-20": {
+   "inferred_s0": [
+    "2014",
+    "T3",
+    "none"
+   ],
+   "supplement": [
+    "2014",
+    "T2",
+    "none"
+   ]
+  },
+  "2015-12-10": {
+   "inferred_s0": [
+    "2015",
+    "T3",
+    "none"
+   ],
+   "supplement": [
+    "2015",
+    "T2",
+    "none"
+   ]
+  },
+  "2019-10-11": {
+   "inferred_s0": [
+    "2019",
+    "T2",
+    "none"
+   ],
+   "supplement": [
+    "2019",
+    "T2",
+    "FOMC"
+   ]
+  },
+  "2020-03-03": {
+   "inferred_s0": [
+    "2020",
+    "T3",
+    "none"
+   ],
+   "supplement": [
+    "2020",
+    "T3",
+    "FOMC"
+   ]
+  },
+  "2020-03-23": {
+   "inferred_s0": [
+    "2020",
+    "T3",
+    "none"
+   ],
+   "supplement": [
+    "2020",
+    "T3",
+    "FOMC"
+   ]
+  }
+ },
+ "full_k": {
+  "theta_0.3|E1|Base": {
+   "seed_sets": 189,
+   "seed_sets_identical": 189
+  },
+  "theta_0.3|E1|Conservative": {
+   "seed_sets": 189,
+   "seed_sets_identical": 189
+  },
+  "theta_0.3|E1|Severe": {
+   "seed_sets": 189,
+   "seed_sets_identical": 189
+  },
+  "theta_0.3|E1|Stress": {
+   "seed_sets": 189,
+   "seed_sets_identical": 189
+  },
+  "theta_0.3|E2|Base": {
+   "seed_sets": 189,
+   "seed_sets_identical": 189
+  },
+  "theta_0.3|E2|Conservative": {
+   "seed_sets": 189,
+   "seed_sets_identical": 189
+  },
+  "theta_0.3|E2|Severe": {
+   "seed_sets": 189,
+   "seed_sets_identical": 189
+  },
+  "theta_0.3|E2|Stress": {
+   "seed_sets": 189,
+   "seed_sets_identical": 189
+  },
+  "theta_0.5|E1|Base": {
+   "seed_sets": 189,
+   "seed_sets_identical": 189
+  },
+  "theta_0.5|E1|Conservative": {
+   "seed_sets": 189,
+   "seed_sets_identical": 189
+  },
+  "theta_0.5|E1|Severe": {
+   "seed_sets": 189,
+   "seed_sets_identical": 189
+  },
+  "theta_0.5|E1|Stress": {
+   "seed_sets": 189,
+   "seed_sets_identical": 189
+  },
+  "theta_0.5|E2|Base": {
+   "seed_sets": 189,
+   "seed_sets_identical": 189
+  },
+  "theta_0.5|E2|Conservative": {
+   "seed_sets": 189,
+   "seed_sets_identical": 189
+  },
+  "theta_0.5|E2|Severe": {
+   "seed_sets": 189,
+   "seed_sets_identical": 189
+  },
+  "theta_0.5|E2|Stress": {
+   "seed_sets": 189,
+   "seed_sets_identical": 189
+  }
+ },
+ "full_k_total": {
+  "identical": 3024,
+  "seed_sets": 3024
+ },
+ "headline": {
+  "theta_0.3|E1|Base": {
+   "rows": 189,
+   "rows_identical": 189
+  },
+  "theta_0.3|E1|Conservative": {
+   "rows": 189,
+   "rows_identical": 189
+  },
+  "theta_0.3|E1|Severe": {
+   "rows": 189,
+   "rows_identical": 189
+  },
+  "theta_0.3|E1|Stress": {
+   "rows": 189,
+   "rows_identical": 189
+  },
+  "theta_0.3|E2|Base": {
+   "rows": 189,
+   "rows_identical": 189
+  },
+  "theta_0.3|E2|Conservative": {
+   "rows": 189,
+   "rows_identical": 189
+  },
+  "theta_0.3|E2|Severe": {
+   "rows": 189,
+   "rows_identical": 189
+  },
+  "theta_0.3|E2|Stress": {
+   "rows": 189,
+   "rows_identical": 189
+  },
+  "theta_0.5|E1|Base": {
+   "rows": 189,
+   "rows_identical": 189
+  },
+  "theta_0.5|E1|Conservative": {
+   "rows": 189,
+   "rows_identical": 189
+  },
+  "theta_0.5|E1|Severe": {
+   "rows": 189,
+   "rows_identical": 189
+  },
+  "theta_0.5|E1|Stress": {
+   "rows": 189,
+   "rows_identical": 189
+  },
+  "theta_0.5|E2|Base": {
+   "rows": 189,
+   "rows_identical": 189
+  },
+  "theta_0.5|E2|Conservative": {
+   "rows": 189,
+   "rows_identical": 189
+  },
+  "theta_0.5|E2|Severe": {
+   "rows": 189,
+   "rows_identical": 189
+  },
+  "theta_0.5|E2|Stress": {
+   "rows": 189,
+   "rows_identical": 189
+  }
+ },
+ "headline_total": {
+  "identical": 3024,
+  "rows": 3024
+ },
+ "seconds": 85.8
+}

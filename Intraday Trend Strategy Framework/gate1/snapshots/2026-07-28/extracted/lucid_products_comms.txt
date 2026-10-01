@@ -1,0 +1,305 @@
+Approved Products and Commissions | Lucid Trading Help Center Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Skip to main content 
+
+ Lucid Home 
+
+ Lucid Home 
+
+ Search for articles... 
+
+ All Collections 
+
+ General Info 
+
+ Approved Products and Commissions
+
+ Approved Products and Commissions
+
+ A 
+ Written by AJ 
+ February 9, 2026 
+
+ Symbol 
+
+ Name 
+
+ Commission (Per Side) 
+
+ Exchange 
+
+ ES
+
+ E-mini S&P 500 Futures
+
+ 1.75
+
+ CME
+
+ MES
+
+ Micro E-mini S&P 500 Index Futures
+
+ 0.50
+
+ CME
+
+ NQ
+
+ E-mini Nasdaq-100 Futures
+
+ 1.75
+
+ CME
+
+ MNQ
+
+ Micro E-mini Nasdaq-100 Index Futures
+
+ 0.50
+
+ CME
+
+ RTY
+
+ E-mini Russell 2000 Index Futures
+
+ 1.75
+
+ CME
+
+ M2K
+
+ Micro E-mini Russell 2000 Index Futures
+
+ 0.50
+
+ CME
+
+ NKD
+
+ Nikkei/USD Futures
+
+ 1.75
+
+ CME
+
+ YM
+
+ E-mini Dow ($5) Futures
+
+ 1.75
+
+ CBOT
+
+ MYM
+
+ Micro E-mini Dow Jones Industrial Average Index Futures
+
+ 0.50
+
+ CBOT
+
+ 6A
+
+ Australian Dollar Futures
+
+ 2.40
+
+ CME
+
+ 6B
+
+ British Pound Futures
+
+ 2.40
+
+ CME
+
+ 6C
+
+ Canadian Dollar Futures
+
+ 2.40
+
+ CME
+
+ 6E
+
+ Euro FX Futures
+
+ 2.40
+
+ CME
+
+ 6J
+
+ Japanese Yen Futures
+
+ 2.40
+
+ CME
+
+ 6S
+
+ Swiss Franc Futures
+
+ 2.40
+
+ CME
+
+ 6N
+
+ New Zealand Dollar Futures
+
+ 2.40
+
+ CME
+
+ CL
+
+ Crude Oil Futures
+
+ 2.00
+
+ NYMEX
+
+ MCL
+
+ Micro Crude Oil
+
+ 0.50
+
+ NYMEX
+
+ QM
+
+ E-mini Crude Oil Futures
+
+ 2.00
+
+ NYMEX
+
+ QG
+
+ E-mini Natural Gas Futures
+
+ 1.30
+
+ NYMEX
+
+ NG
+
+ Henry Hub Natural Gas Futures
+
+ 2.00
+
+ NYMEX
+
+ PL
+
+ Platinum Futures
+
+ 2.30
+
+ NYMEX
+
+ HG
+
+ Copper Futures
+
+ 2.30
+
+ COMEX
+
+ GC
+
+ Gold Futures
+
+ 2.30
+
+ COMEX
+
+ MGC
+
+ Micro Gold Futures
+
+ 0.80
+
+ COMEX
+
+ SI
+
+ Silver
+
+ 2.30
+
+ COMEX
+
+ HE
+
+ Lean Hog Futures
+
+ 2.80
+
+ CME
+
+ LE
+
+ Live Cattle Futures
+
+ 2.80
+
+ CME
+
+ ZS
+
+ Soybean Futures
+
+ 2.80
+
+ CBOT
+
+ ZC
+
+ Corn Futures
+
+ 2.80
+
+ CBOT
+
+ ZL
+
+ Soybean Oil Futures
+
+ 2.80
+
+ CBOT
+
+ ZM
+
+ Soybean Meal Futures
+
+ 2.80
+
+ CBOT
+
+ ZW
+
+ Chicago SRW Wheat Futures
+
+ 2.80
+
+ CBOT
+
+ SIL
+
+ Micro Silver
+
+ 1.60
+
+ COMEX
+
+ Did this answer your question? 😞 😐 😃 
+
+ Lucid Trading Help Center

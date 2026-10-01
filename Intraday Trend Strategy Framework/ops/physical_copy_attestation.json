@@ -1,0 +1,16 @@
+{
+  "primary_root": "C:\\Users\\Aaron\\quant-data",
+  "backup_root": "E:\\quant-data",
+  "verified_at_utc": "2026-07-28T16:04:43.183375+00:00",
+  "verifier": "Aaron (copy confirmed) + main-agent machine verification",
+  "primary_file_count": 20304,
+  "backup_file_count": 20304,
+  "official_manifest_entries_checked": 10207,
+  "all_raw_sha256_match": true,
+  "missing_in_backup": [],
+  "extra_in_backup": [],
+  "primary_vs_backup_mismatches": [],
+  "primary_vs_official_mismatches": [],
+  "official_entries_missing_from_primary": [],
+  "flag_created": false
+}

@@ -1,0 +1,106 @@
+{
+  "_comment": "Frozen while a reviewer holds them. Remove an entry when the review returns; an empty list is the normal state. `unchanged_since` is the commit the declaration pins: no commit after it may touch the path. HEAD itself is NEVER pinned -- committing the review prompt moves HEAD, so a HEAD pin is stale the moment it is written (measured 2026-08-25: a Sol session STOPped on exactly that). Nothing on ops/OUTCOME_CARRYING_ARTIFACTS.json may be listed here. Each entry declares role: \"delivery\" (a document authored for this review; must itself carry the off-limits list) or \"reference\" (pre-existing bytes handed along; scanned for unmarked quarantined paths, but NOT required to carry governance text — requiring that would mean editing an approved record to satisfy a test). Guarded by tests/test_artifacts_under_review_are_frozen.py and tests/test_review_artifacts_are_outcome_clean.py",
+  "under_review": [],
+  "_withdrawn_before_dispatch": [
+    {
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "packet": "ops/REVIEW_PACKET_QROS_CF_F01_F06_FINAL_CERT_2026-09-07.md",
+      "withdrawn_at": "2026-09-07",
+      "was_dispatched": false,
+      "why": "the builder measured three residuals (R1, R2, R3) while preparing this very transport, Aaron authorized a bounded PRE-CERT repair, and the repair changes bytes this set pinned. The set is withdrawn rather than left pinning stale hashes. NOT a review round: nothing was dispatched and no seat saw these bytes.",
+      "entries_withdrawn": 22,
+      "reissue": "the SAME review_id is reissued against the repaired bytes. No second parallel final-cert review id is created."
+    },
+    {
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "packet": "ops/REVIEW_PACKET_QROS_CF_F01_F06_FINAL_CERT_2026-09-07.md",
+      "withdrawn_at": "2026-09-07",
+      "was_dispatched": false,
+      "entries_withdrawn": 51,
+      "why": "the mechanically derived writer inventory in this very packet identified an F06 blocker -- s0/runner.append_registry_event_line mutating the governed registry outside serialization -- and Aaron authorized a bounded PRE-CERT repair for F06 only. The repair changes bytes this set pinned. NOT a review round: nothing was dispatched and no seat saw these bytes.",
+      "reissue": "SAME review_id against the repaired bytes."
+    },
+    {
+      "review_id": "QROS-CF-F01-F06-FINAL-CERT-001",
+      "packet": "ops/REVIEW_PACKET_QROS_CF_F01_F06_FINAL_CERT_2026-09-07.md",
+      "withdrawn_at": "2026-09-07",
+      "was_dispatched": false,
+      "entries_withdrawn": 52,
+      "why": "the F06 completeness guard was found to carry two registered writer rows its own rule could never yield -- coverage that looked real and was not. Widened the rule and dropped the non-mutating caller; that changes a pinned test file.",
+      "reissue": "SAME review_id."
+    },
+    {
+      "review_id": "QROS-CF-F06-OWNER-SEMANTICS-CLOSURE-001",
+      "packet": "ops/REVIEW_PACKET_QROS_CF_F06_OWNER_SEMANTICS_CLOSURE_2026-09-07.md",
+      "withdrawn_at": "2026-09-07",
+      "was_dispatched": true,
+      "returned_verdict": "HOLD (GPT-5.6 Sol XHigh substantive closure review)",
+      "i1_i2": "NOT SAFE TO ACTIVATE",
+      "entries_withdrawn": 54,
+      "why": "that closure review RETURNED with HOLD and reduced the remaining failures to two root blocker families. Aaron then authorized ONE final bounded repair on the strength of a Fable 5.1 design-only review. The repair changes bytes this set pinned, so the set is retired. The HOLD record itself is preserved, not rewritten.",
+      "successor": "a CLOSED-SCOPE mechanical closure package, scope A1-A6/B1-B4/S"
+    },
+    {
+      "review_id": "N13-F1-REREVIEW-002",
+      "packet": "ops/OFF_LIMITS_N13_F1_REREVIEW_R2_2026-09-10.md",
+      "withdrawn_at": "2026-09-10",
+      "was_dispatched": false,
+      "returned_verdict": null,
+      "why": "Aaron authorized a bounded reviewer-model policy migration on 2026-09-10: GPT-6 Astra becomes the OWNER_DEFAULT_INDEPENDENT_REVIEWER for NEW work, and GPT-5.6 Sol keeps the legacy / fallback / frozen-lineage seat. Resolving this pending round's seat to Astra changes `ops/REVIEWER_CONTRACT.md` §2 and §2.1 and the routing sentence in `ops/RESEARCH_STATE.md`, both of which this set pinned. The set is withdrawn rather than left pinning stale hashes. NOT a review round: nothing was dispatched and no seat saw these bytes -- the Sol brief, dispatch and manifest were prepared and never sent, and no REVIEW_VERDICT row exists for them.",
+      "entries_withdrawn": 26,
+      "reissue": "the SAME review_id is reissued against an Astra seat, which is what preserves ISSUE_LINEAGE=N13-F1 and REVIEW_ROUND=2 of 2. No parallel round-2 review id is created and the round counter is NOT reset. The Sol package remains on disk and in git as a historical prepared-but-never-executed transport."
+    },
+    {
+      "review_id": "N14-EXACT-TREE-005",
+      "packet": "ops/OFF_LIMITS_N14_EXACT_TREE_2026-09-10.md",
+      "withdrawn_at": "2026-09-10",
+      "was_dispatched": null,
+      "returned_verdict": null,
+      "why": "Retired on the adoption of CODE_REVIEW_BUNDLE_CONTRACT v1 (ops/DECISIONS.md DEC-CRB-ADOPT-1). The old live-repo carrier/allowlist/freeze-pin transport is prospectively retired for code-conformance review. NO STOP REPORT FOR 005 REACHED THE SESSION THAT RETIRED IT: `was_dispatched` is null rather than false because this session cannot establish either value, and asserting one would be inventing history. Accounting is unaffected either way -- SUBSTANTIVE_VERDICT = ABSENT and ROUND_CONSUMED = NO. See DEC-N14-ATTEMPT5-1."
+    },
+    {
+      "review_id": "N14-BUNDLE-001",
+      "packet": "sealed bundle at C:\\Users\\Aaron\\quant-data\\review\\bundles (BUNDLE-v1 transport; no repository path was handed to a seat, so this register was never armed for it)",
+      "withdrawn_at": "2026-09-11",
+      "was_dispatched": false,
+      "why": "PRE-DISPATCH DELIVERY-IDENTITY DEFECT, not a content defect. The valid re-cut reused the logical identity of the earlier invalid cut, so `N14-BUNDLE-001` came to name TWO different manifests (dd2b9c26... and ecd95c69...). CODE_REVIEW_BUNDLE_CONTRACT v1 requires a corrected delivery to carry a UNIQUE identity, because a citation of one id must resolve to one package. Both cuts are retained on disk, both marked DO_NOT_DISPATCH, and neither carries a substantive verdict: SUBSTANTIVE_VERDICT=ABSENT.",
+      "entries_withdrawn": 0,
+      "reissue": "the SAME accepted payload is re-cut under the next unused BUNDLE-v1 identity, N14-BUNDLE-002 (MANIFEST_SHA256 = 171d953c18bcbc7f3dc6e40a85fb1a845285ce390dffb17d54454a1dfdec5f43). 130 of 130 payload files are BYTE-IDENTICAL to the retired cut; only REVIEW.md's two id strings and the manifest differ. NOT a substantive round: LINEAGE=N14, ROUND=1 of at most 2, ROUND_CONSUMED=NO."
+    },
+    {
+      "review_id": "N14-BUNDLE-002",
+      "packet": "sealed bundle at C:\\Users\\Aaron\\quant-data\\review\\bundles (BUNDLE-v1 transport; no repository path was handed to a seat, so this register was never armed for it)",
+      "withdrawn_at": "2026-09-11",
+      "was_dispatched": true,
+      "why": "REVIEW-RUNTIME PORTABILITY DEFECT in the contract, not a content defect. The seat verified 130/130 payload hashes and then could not start Python -- twice, the second time on the exact host-local interpreter path, because the only invocable route to it is a Windows App Execution Alias. Making the runtime portable changes ENVIRONMENT.json, the manifest and the launch entrypoint, so this delivery is retired rather than mutated. Both STOP attestations are preserved with it. SUBSTANTIVE_VERDICT=ABSENT; O1-O13 UNASSESSED.",
+      "entries_withdrawn": 0,
+      "reissue": "the SAME accepted payload is re-cut as N14-BUNDLE-003 (MANIFEST_SHA256 = 7e1a16f5784a32c518b222989db193871d3ce7aa7b83022df31a60538c9ab362) beside a portable review runtime N14-RUNTIME-001 (RUNTIME_MANIFEST_SHA256 = 293f460242614eb83a0281a74bc3da8532e8dc039badc1f92fb37b07cb9c27ce). No test, probe, admission, authority or obligation-map semantics changed. NOT a substantive round: LINEAGE=N14, ROUND=1 of at most 2, ROUND_CONSUMED=NO."
+    },
+    {
+      "review_id": "N14-BUNDLE-003",
+      "packet": "sealed bundle at C:\\Users\\Aaron\\quant-data\\review\\bundles (BUNDLE-v1 transport; no repository path was handed to a seat, so this register was never armed for it)",
+      "withdrawn_at": "2026-09-11",
+      "was_dispatched": true,
+      "why": "PRE-SUBSTANTIVE WRITE-PERMISSION failure. The runner created its scratch directory at the SEALED BUNDLE ROOT; the seat got WinError 5 there before the guard armed. The seat was right -- a sealed input directory should not be writable. Moving scratch onto the reviewer surface changes the runner and the guard, hence the bytes, so this delivery is retired rather than mutated. Its STOP attestation is preserved with it. SUBSTANTIVE_VERDICT=ABSENT; O1-O13 UNASSESSED; no INITIAL_FINDINGS and no FREEZE exist.",
+      "entries_withdrawn": 0,
+      "reissue": "the SAME accepted payload is re-cut as N14-BUNDLE-004 (MANIFEST_SHA256 = f83de6e3062d1f84a796a3bf4b179020fea37f46ad526cb4cc0d031f85b852c7) against the UNCHANGED runtime N14-RUNTIME-001 (293f460242614eb83a0281a74bc3da8532e8dc039badc1f92fb37b07cb9c27ce). Scratch now lives at return/.scratch and the guard makes the sealed payload read-only to review execution. No test, probe, admission, authority or obligation-map semantic changed. NOT a substantive round: LINEAGE=N14, ROUND=1 of at most 2, ROUND_CONSUMED=NO."
+    }
+  ],
+  "_last_returned_review": {
+    "review_id": "N13-F1-REREVIEW-002",
+    "delivery": "ops/OFF_LIMITS_N13_F1_R2_ASTRA_2026-09-10.md",
+    "issue_lineage": "N13-F1",
+    "review_round": "2 of 2 (the final ordinary round)",
+    "seat": "fresh GPT-6 Astra session, claim-blind",
+    "returned_at": "2026-09-10",
+    "verdict": "HOLD",
+    "reviewed_target": "b9eb342f0e8aa43bd20a3938f097489d0f4a1a7b",
+    "reviewed_tree": "c0413d6f89865e38564bf22c2f1c945b1a0d6e93",
+    "result": "ONE blocking finding, F1-R2-01: an ALL-marked grid aborted the runner, because `_witness` called `drawn_count()` unconditionally and it raised `grid_draw_every_cell_infeasible` when no sampleable representative cell existed. Established working: individual marked cells; mixed marked+feasible passes; MARK; SKIP; local REPORT; local K; local 2K; no fabricated statistics; downstream fourth-cell-class semantics otherwise acceptable. Claim 13b remained INCONCLUSIVE_NON_BLOCKING; N13-F2 remained NON-BLOCKING backlog.",
+    "entries_retired": 26,
+    "ledger_row": "ops/DECISIONS.md DEC-N13-B27-17",
+    "budget": "EXHAUSTED for this issue lineage. REVIEWER_CONTRACT.md S1 gives two rounds per lineage, and a round-2 HOLD escalates to Aaron. Aaron authorized the bounded builder repair directly; NO round 3 and no new reviewer was created.",
+    "attestation": "NOT SUPPLIED as a file to the builder. The verdict reached this session as Aaron's transcription in the repair instruction, so no attestation sha256 is cited and none was invented.",
+    "ordering_note": "the register was cleared AFTER the repair edits rather than before. The freeze guard (test_every_artifact_under_review_still_hashes_to_what_was_sent) caught it; the Astra package's pinned bytes are recoverable from git at 2918cf8. Recorded rather than hidden by reordering commits."
+  }
+}

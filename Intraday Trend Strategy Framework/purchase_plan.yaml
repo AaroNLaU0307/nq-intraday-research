@@ -1,0 +1,94 @@
+# Databento 采购计划 PP-2026-07-27-A rev4（A′-dev + Execution Cost Calibration probe）
+# rev4 变更：批准字段拆分到 purchase_approval.yaml（对本文件冻结字节做 SHA-256，
+#           取代自定义 canonical 算法）；hard cap 修正 $23 → $24（消除与 110% 容差的算术冲突）；
+#           执行脚本必须同时满足三个条件（见 budget 注释）。
+# 状态：草案，等待（1）Freeze Commit A/B，（2）purchase_approval.yaml 批准（Commit C）
+# 本文件冻结后不再修改；批准信息全部在 purchase_approval.yaml。
+
+plan_id: PP-2026-07-27-A
+revision: 4
+status: frozen_pending_approval   # Freeze Commit A（tag s0-freeze-v1）；批准记录见 purchase_approval.yaml
+
+budget:
+  credit_available_usd_approx: 29.00       # 执行时以 portal/API 实查为准
+  estimated_total_usd: 20.93               # A1 估算 14.30 + A2 已报价 6.63
+  hard_cost_cap_usd: 24.00                 # 安全护栏，非目标花费
+  requote_tolerance: 1.10
+  # 执行脚本必须同时满足（AND，缺一即中止）：
+  #   1. 每项 actual_quote ≤ 该项 estimated/quoted × 1.10
+  #   2. Σ actual_quote ≤ hard_cost_cap_usd
+  #   3. Σ actual_quote ≤ 实查可用 credit（超出部分需 approval 中 max_out_of_pocket 覆盖）
+
+items:
+  - id: A1
+    data_role: development_signal
+    dataset: GLBX.MDP3
+    symbols: NQ.v.0
+    stype_in: continuous
+    schema: ohlcv-1m
+    start: "2010-06-06"
+    end: "2022-01-01"                      # exclusive；与 S0 Development 分区边界一致
+    estimated_usd: 14.30                   # 按全窗报价 $18.56 天数比例估算；执行时必须重报价
+    estimate_basis: "18.56 × (2010-06-06..2022-01-01 天数 / 2010-06-06..2025-07-01 天数)"
+  - id: A2
+    data_role: execution_cost_calibration
+    dataset: GLBX.MDP3
+    symbols: MNQ.v.0
+    stype_in: continuous
+    schema: bbo-1s
+    start: "2025-01-01"
+    end: "2025-04-01"                      # exclusive
+    quoted_usd: 6.63
+    quoted_date: "2026-07-27"
+    isolation: |
+      原始文件仅 cost_calibration/ 模块可读，产出 spread_cost_table.parquet；
+      alpha_research/ 禁止读取原始 BBO（章程条款 14）。
+
+future_items_not_in_this_approval:
+  - id: A3
+    data_role: internal_validation_signal
+    dataset: GLBX.MDP3
+    symbols: NQ.v.0
+    stype_in: continuous
+    schema: ohlcv-1m
+    start: "2022-01-01"
+    end: "2025-07-01"
+    estimated_usd: 4.30
+    purchase_trigger: "H1 Freeze Commit 完成后"
+    status: not_approved_in_current_plan   # 届时需独立的批准 commit；此前 IV 数据不得存在于本机
+  - id: A4
+    data_role: physical_lockbox
+    start: "2025-07-01"
+    end: "最终评估日"
+    estimated_usd: ~1.40
+    purchase_trigger: "最终评估时刻"
+    status: not_approved_in_current_plan
+
+explicitly_not_purchased_now:
+  - IV 段（2022-01-01 之后的 NQ 任何数据）
+  - lockbox 任何部分
+  - MNQ/MES/MGC ohlcv-1m
+  - ES / GC / MES / MGC 任何 schema
+  - trades / tbbo 任何窗口
+
+post_purchase_pipeline:
+  - batch 提交后立即下载全部文件与官方 support files
+  - SHA-256 逐文件校验
+  - 归档至 C:\Users\Aaron\quant-data\databento-archive\intraday-trend\<job_id>\
+  - 按 data_role 建立独立目录与读取边界
+  - 本地 manifest（data_file_count / support_file_count 分列）
+  - 记录换月 symbology 映射
+  - 提醒撤销临时 API key
+  - 第二物理副本（不同介质）在首次研究计算前完成
+  - S0 冻结 commit 之前，研究代码不得读取任何新购数据
+
+sequencing_precondition: |
+  1. PROJECT_CHARTER.md + STUDY_0_PREREGISTRATION.md → Freeze Commit A（tag: s0-freeze-v1）
+     （本文件同时在 Commit A 冻结，status 改 frozen）
+  2. FREEZE_LOG.md 登记 → Registry Commit B
+  3. Aaron 填写 purchase_approval.yaml（含本文件冻结字节的 SHA-256）→ Purchase Approval Commit C
+  4. 新建临时 Databento key 注入环境变量
+  5. 执行脚本核对：approval 哈希 == 本文件当前字节哈希 → 重报价 → 三条件检查 →
+     采购 → 下载 → 校验 → 归档 → 撤销 key
+  注：仓库已置 .gitattributes（* -text）禁用行尾自动转换，保证工作区字节 == 提交字节，
+  文件字节哈希无歧义。

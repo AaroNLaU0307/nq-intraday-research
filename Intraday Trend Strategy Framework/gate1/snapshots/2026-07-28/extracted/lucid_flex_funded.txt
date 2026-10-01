@@ -1,0 +1,94 @@
+LucidFlex Funded Account | Lucid Trading Help Center Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Copyright (c) 2023, Intercom, Inc. ( [email&#160;protected] ) with Reserved Font Name "Inter".
+ This Font Software is licensed under the SIL Open Font License, Version 1.1. Skip to main content 
+
+ Lucid Home 
+
+ Lucid Home 
+
+ Search for articles... 
+
+ All Collections 
+
+ LucidFlex 
+
+ LucidFlex Funded Account
+
+ LucidFlex Funded Account
+ The LucidFlex funded account is a simulated futures trading account where traders build capital to earn payouts and potentially be moved to live markets.
+
+ A 
+ Written by AJ 
+ June 2, 2026 
+
+ Table of contents
+
+ LucidFlex Funded Account Overview
+
+ LucidFlex funded accounts have no daily loss limit, no consistency rule, and no payout buffer. 90/10 profit split. EOD trailing drawdown. Account sizes: $25K–$150K.
+
+ See futures account sizes and details below:
+
+ Account Size 
+
+ Max Loss Limit 
+
+ DLL 
+
+ Scaling Plan 
+
+ Max Size 
+
+ $25,000 
+
+ $1,000
+
+ None
+
+ Yes
+
+ 2 mini or 20 micros
+
+ $50,000 
+
+ $2,000
+
+ None
+
+ Yes
+
+ 4 mini or 40 micros
+
+ $100,000 
+
+ $3,000
+
+ None
+
+ Yes
+
+ 6 mini or 60 micros
+
+ $150,000 
+
+ $4,500
+
+ None
+
+ Yes
+
+ 10 mini or 100 micros
+
+ LucidFlex Funded Account Benefits
+
+ Objectives on our dashboard update in real-time within 5-30 minutes of your last closed trade
+
+ There is no DLL on LucidFlex funded accounts
+
+ There is no Consistency Percentage on LucidFlex funded accounts
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Lucid Trading Help Center

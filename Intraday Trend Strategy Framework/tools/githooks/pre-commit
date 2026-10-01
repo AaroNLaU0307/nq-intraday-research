@@ -1,0 +1,60 @@
+#!/bin/sh
+# Refuse a commit that moves bytes a reviewer is holding.
+#
+# WHY THIS EXISTS. The freeze register and its guards were already correct and
+# already in the suite. They fired six minutes into a full run, three separate
+# times on 2026-08-27, each time after the offending commit was already made:
+#
+#   1. window-2 round 4 returned TRANSPORT_STOP — a pinned file committed
+#      under a live reviewer;
+#   2. a decision packet issued with five hashed artifacts while the register
+#      was empty;
+#   3. a DELIVERY_STATUS line added to a packet that was already registered
+#      and already marked ISSUED — by the very backfill that introduced the
+#      rule against doing that.
+#
+# A guard that reports after the fact is a record, not a brake. These two test
+# files run in about a second, and the hash check compares the WORKING TREE
+# against the register, so a violation is caught at the moment it would be
+# committed rather than at the end of the next full suite.
+#
+# Deliberately NARROW: only the transport guards. A pre-commit hook that ran
+# the whole suite would be turned off within the day, and a hook that is off
+# guards nothing.
+#
+# To bypass once, for a deliberate re-issue:   git commit --no-verify
+# To uninstall:                                git config --unset core.hooksPath
+
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+TESTS="tests/test_artifacts_under_review_are_frozen.py
+tests/test_issued_deliveries_are_registered.py"
+
+EXISTING=""
+for t in $TESTS; do
+    [ -f "$t" ] && EXISTING="$EXISTING $t"
+done
+
+if [ -z "$EXISTING" ]; then
+    echo "pre-commit: no transport guards found in this repository -- refusing"
+    echo "  to pass silently. Expected at least one of:"
+    echo "$TESTS"
+    exit 1
+fi
+
+if ! PYTHONIOENCODING=utf-8 python -B -m pytest $EXISTING -q > /tmp/precommit.$$ 2>&1
+then
+    echo
+    echo "COMMIT REFUSED -- a transport guard is red."
+    echo
+    cat /tmp/precommit.$$
+    rm -f /tmp/precommit.$$
+    echo
+    echo "If a reviewer is holding these bytes, do not commit: clear the"
+    echo "register entry first, or wait for the review to return."
+    echo "If this is a deliberate re-issue, re-register with the new hash and"
+    echo "the derived pin, then commit again."
+    exit 1
+fi
+rm -f /tmp/precommit.$$

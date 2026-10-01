@@ -1,0 +1,195 @@
+Daily Loss Limit in the Trading Combine and Express Funded Account | Topstep Help Center Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Copyright 2023. Intercom Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License. Skip to main content 
+
+ Discord Topstep TopstepTV 
+
+ Discord Topstep TopstepTV 
+
+ Search for articles... 
+
+ All Collections 
+
+ Topstep FAQs 
+
+ Daily Loss Limit in the Trading Combine and Express Funded Account
+
+ Daily Loss Limit in the Trading Combine and Express Funded Account
+ Bad days happen. The Daily Loss Limit (DLL) makes sure one bad day doesn&#x27;t wipe out your account.
+
+ Updated over 3 weeks ago 
+
+ Table of contents
+
+ Overview
+
+ The Daily Loss Limit (DLL) is optional in the Trading Combine® and Express Funded Account® (XFA). It’s automatic in the Live Funded Account® (LFA). Triggering it is not a rule violation — it&#x27;s a forced break for the rest of that session.
+
+ What Happens When It Triggers
+
+ Net P&L hits or exceeds the DLL during the trading day (5 PM CT – 3:10 PM CT):
+
+ Open positions are flattened
+
+ Pending orders are canceled
+
+ No new trades until 5 PM CT next session
+
+ ☝️ Account stays eligible for funding. Resume tomorrow.
+
+ Example: $150K Trading Combine® with a $3,000 DLL. Net P&L hits -$3,000 → auto-liquidated. Back at it tomorrow at 5 PM CT.
+
+ Set It at Purchase
+
+ You now have the option to add a Daily Loss Limit at checkout when purchasing a Trading Combine or activating/Reactivating an Express Funded Account. 
+
+ The Daily Loss Limit parameters are:
+
+ $50K Account: $1,000
+
+ $100K Account: $2,000
+
+ $150K Account: $3,000
+
+ ⚠️ Important:
+
+ Daily Loss Limit at checkout is fixed (no changes later)
+
+ Applies to your Express Funded Account after you pass
+
+ All original account rules and objectives still apply
+
+ Trader Tip: Over 63% of traders have lost account in a single day. Adding a DLL to your account caps how much you can lose in a single session, so one bad day doesn’t turn into a closed account. The traders who last… manage risk first! ​ Adding a Daily Loss Limit helps you:
+
+ Stay disciplined
+
+ Protect your account
+
+ Trade like it’s real capital
+
+ 💪 Always trade for tomorrow.
+
+ Responsible Trading Discount
+
+ There&#x27;s now a Responsible Trading Discount when you add a DLL at purchase for No Activation Fee Trading Combines and Back2Funded Reactivations. Learn more here .
+
+ No Activation Fee Trading Combine 
+
+ Back2Funded Reactivation 
+
+ $10 off → 50K 
+
+ $20 off → 100K 
+
+ $30 off → 150K 
+
+ $50 off Reactivation Fees
+
+ ⏰ Limited Time Offering: Add a Daily Loss Limit at checkout in the Trading Combine, and increase your Payout Cap once you pass and activate an Express Funded Account. Learn more here .
+
+ If you don&#x27;t set a Daily Loss Limit at purchase
+
+ After purchasing, you can still add a Daily Loss Limit manually through Risk Settings. Unlike Daily Loss Limits set at purchase, manual limits can be adjusted or removed at any time — making it easier to rationalize bad habits in the moment.
+
+ Set it Manually — Personal Daily Loss Limit (PDLL)
+
+ Didn&#x27;t set one at purchase? Add a Personal Daily Loss Limit (PDLL) in Risk Settings any time. Manual PDLLs can be adjusted or removed — unlike purchase-set DLLs.
+
+ ​ Choose your action when the PDLL hits: 
+
+ Do Nothing — keep trading
+
+ Liquidate — immediate liquidation
+
+ Liquidate and Block — liquidation + locked out for the session
+
+ ⚠️ Chose Liquidate and it triggered? You must increase your PDLL by the liquidated amount OR switch to "Do Nothing" before trading again. Example: PDLL at $200, liquidated at $209 → raise to at least $210 to resume.
+
+ Click "Lock Out Risk Settings For Day" to save.
+
+ Set it Manually — Trailing PDLL
+
+ The Trailing PDLL rises as your balance grows — locking in gains while capping downside.
+
+ Balance $50,000 + Trailing PDLL $500 → liquidation at $49,500
+
+ Balance grows to $51,200 → threshold moves to $50,700
+
+ Trailing method: 
+
+ Unrealized Gains — adjusts in real time with open trades
+
+ Realized Gains — adjusts only after closing a profitable trade
+
+ How Does This Benefit Traders? 
+
+ Protect profits — The limit trails your highest balance, letting you lock in gains while staying within a loss limit.
+
+ Dynamic loss limit — As your balance grows, the limit adjusts automatically so you can capitalize on strong days without taking on more risk.
+
+ Flexibility — Trail based on unrealized or realized profits to match your trading style.
+
+ After liquidation, system resets to "Do Nothing." Re-enable the Trailing PDLL manually.
+
+ ☝ Important: Traders can adjust or remove manual PDLLs unless risk settings are locked. Two exceptions: PDLLs set to "Liquidate and Block" can&#x27;t be removed, and "Lock Out Settings for the Day" freezes all settings for the rest of the session — so if liquidation triggers at $200, you can&#x27;t raise the limit to keep trading. ​ Please note: If the loss amount is adjusted in your risk settings, the current amount that has been lost for the day will be reset to $0. 
+
+ FAQs
+
+ Can Topstep remove my DLL or PDLL for me?
+
+ No. Topstep cannot make any adjustments or changes to Personal Risk Settings. Once set, it can&#x27;t be removed mid-session. Wait for the next trading session.
+
+ Is hitting the DLL a rule violation?
+
+ No. It&#x27;s a temporary break — not a violation. Your account stays eligible for funding.
+
+ Can the Trailing PDLL go down?
+
+ No. It only moves up as your balance increases. It never trails down.
+
+ What does "Realized Trailing" mean?
+
+ Your loss limit stays fixed until you close a profitable trade. Once realized, it starts trailing. More control over when the adjustment kicks in.
+
+ How does the Daily Loss Limit work in the Live Funded Account?
+
+ All Live Funded Account accounts have a Daily Loss Limit. Learn more here . 
+
+ Related Articles
+ What is the Maximum Loss Limit? 
+
+ Dynamic Live Risk Expansion 
+
+ Risk Lock-In 
+
+ What is the Responsible Trading Program? 
+
+ Topstep Labs 
+
+ Did this answer your question? 😞 😐 😃 
+
+ Table of contents
+
+ Your Privacy Choices

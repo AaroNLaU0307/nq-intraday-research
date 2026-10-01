@@ -1,0 +1,508 @@
+# PROJECT_STATE — ITSF
+
+Current **state** of this project under
+[`QUANT_WORKFLOW_VNEXT.md`](../QUANT_WORKFLOW_VNEXT.md) (cutover 2026-09-12) — state,
+never workflow authority (vNext §0). One page, rewritten in place, history in git.
+
+```
+RESEARCH_QUESTION   = NQ opening-drive (09:30-10:00) continuation: base rate and
+                      distribution (Q1); a 10:00 Oracle's cost-after performance
+                      under executable + Micro integer-position constraints (Q2);
+                      Prop MC commercial-EV adjudication GO / STOP / boundary on
+                      the Oracle's daily USD P&L distribution (Q3).
+                      Verbatim and binding: STUDY_0_PREREGISTRATION.md (SEALED).
+RESEARCH_ID · LANE  = ITSF-S0 · FULL
+STAGE               = STOPPED / PARKED (Aaron, 2026-09-16). S3 RUN was
+                      reached and attempted twice; S4 was never reached
+                      because no governed MC result was ever produced.
+FINAL_EVIDENCE_VERDICT = INSUFFICIENT_EVIDENCE
+                      Canonical KB term: `unresolved`. The KB enum
+                      (confirmed · supported · not_promoted · falsified ·
+                      active · archived · experimental · unresolved) has no
+                      `insufficient_evidence` member, and the project
+                      convention is explicit that `unresolved` is its
+                      replacement. Both words are kept here deliberately:
+                      INSUFFICIENT_EVIDENCE is what happened, `unresolved`
+                      is what the schema calls it.
+RESEARCH_STATUS     = PARKED. Nearest canonical KB term: `archived`. No
+                      enum value is asserted anywhere, because ITSF holds
+                      no KB strategy card (see §KB note below) — so this is
+                      a description, not a schema claim.
+WHY PARKED          = NOT because the signal failed. MC robustness
+                      validation remained incomplete after two substantive
+                      execution attempts, and a third 40–50+ hour attempt is
+                      not currently justified by research priority and
+                      compute cost on the available host.
+ACTIVE_HYPOTHESIS   = sealed Study-0 contract; MC pipeline must produce the
+                      Checkpoint-0 statistic the sealed §10.4 decision table reads
+DATA_GRANT          = the existing ITSF S0 grant only. No new grant. Protected
+                      Development outcomes remain UNINSPECTED.
+TRIAL_ACCOUNTING    = ops/TRIAL_REGISTRY.md
+OUTCOME_EXPOSURE    = tracked — ops/EXPOSURE_LEDGER.md. RETAINED: this project has a
+                      sealed preregistration and an unrevealed statistic, so
+                      blinding is materially required (vNext §11).
+OPEN_MATERIAL_BLOCKERS = NONE. The project is parked, not blocked: every
+                      mechanical prerequisite is green and the missing thing
+                      is compute time on a reliable host, which is an Owner
+                      priority call rather than a defect.
+HISTORICAL (pre-park, kept because it is what a reopening would inherit):
+                      The sealed bundle is identified,
+                      unambiguous and now bound BY DIGEST in the gate, so a
+                      substituted bundle at any path refuses.
+                      `ops/MC_RUN_AUTHORIZATION.json` does not exist — which
+                      is not a defect, it IS the authorization.
+                      The two commits are now bound SEPARATELY:
+                      `input_bundle_commit` = 876c1b74… (the sealed bundle's
+                      provenance) and `mc_execution_commit` = the governed
+                      checkout's HEAD, MEASURED by the gate. Because it is
+                      measured at run time, ANY further commit invalidates a
+                      standing authorization — authorize against the HEAD in
+                      the block above and commit nothing before the run.
+                      Non-blocking rows carried: B-35, NB1, B-29, B-30.
+NEXT_OWNER_DECISION = NONE. ITSF is stopped. It may be reopened for final
+                      MC validation ONLY by an explicit Aaron Owner
+                      decision, preferably once a more reliable long-run
+                      execution environment or a materially better
+                      execution solution is available.
+REAL_MC             = NOT AUTHORIZED. No authorization exists. MC-R001 has
+                      never completed and no outcome has ever been exposed.
+```
+
+## ITSF STOPPED / PARKED — 2026-09-16
+
+**What exists.** A sealed Study-0 preregistration and charter, a frozen
+`MC_METHOD_SPEC`, the full MC implementation with its governed gates, the
+sealed 14-file S0-T001 input bundle, the sealed DAY_STRATA supplement, a
+durable run-output contract, a host preflight, and a repaired Topstep payout
+path — all tested, with the full suite green.
+
+**What is missing, and it is the thing that mattered.** The governed MC
+robustness evidence the sealed §10.4 decision table reads. MC-R001 never
+completed. Nothing downstream of it exists.
+
+**Therefore ITSF is recorded as neither SUPPORTED nor FALSIFIED.** No claim
+about the strategy is on record, in either direction, and none may be
+inferred from this page. The Checkpoint-0 statistic has never been computed,
+let alone read.
+
+### The two substantive attempts, both real, neither a research outcome
+
+```
+ATTEMPT 1   MC-R001_20260913T063102Z
+            substantive computation STARTED: YES
+            terminated by OS_RESTART_OR_MACHINE_FAILURE at ~39h52m
+            (System event 1074, MoUsoCoreWorker, planned service-pack restart)
+            result persisted NO · outcome exposed NO
+            authorization void: MC_RUN_AUTHORIZATION.VOID_23ca9b05_os_restart_no_result.json
+
+ATTEMPT 2   MC-R001_20260915T080712Z
+            substantive computation STARTED: YES
+            terminated by CODE_DEFECT at ~29h05m
+            Topstep payout eligibility ordering: eligibility was sampled from
+            the state entering the session (correct) and re-validated after
+            the session's P&L (wrong), so a losing day that took the balance
+            under $250 raised `payout requested while ineligible`
+            result persisted NO · outcome exposed NO
+            defect REPAIRED and regression-tested at 48c1ac94
+            authorization void: MC_RUN_AUTHORIZATION.VOID_1c7a3eda_code_defect_no_result.json
+```
+
+Neither failure is a research result. An infrastructure restart and a code
+defect say nothing whatever about the strategy, and this page must never be
+read as though they did. No third attempt was made.
+
+### Canonical identities at the park
+
+```
+CURRENT_CANONICAL_COMMIT   48c1ac94149b795e5b31b90575000c806994686d
+input_bundle_commit        876c1b74131b4ab1a89dce433ecce646ba481f8c
+bundle_summary_digest      7263f0c1802c205ae3bf3732a0d2de5b46f17aac67a93fe5aedcc7bb71262d67
+sealed_supplement_sha256   f59a009213f2e3b9ce3b4b4937c1945227c89e724fc6c4fa0c063d0326417e4d
+prereg_sha256              6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132
+development_manifest       d8d1edc7b549b441d691dda74331806c957a19946e746bd795978e01d73c3ae8
+trial registry             b964b19a6b788bf9f47d1d24018dfc93836f74cbfd7ef69e4680471368d11fe9
+                           — byte-unchanged; 0 rows mention MC-R001
+runs/                      only S0-T001_20260813T170432Z. No MC-R001 output
+                           of any kind was ever created, final or .partial.
+```
+
+### Reopening
+
+ITSF may be reopened for final MC validation **only by an explicit Aaron
+Owner decision**, preferably when a more reliable long-run execution
+environment, or a materially better execution solution, is available. A
+reopening inherits everything above: the seals hold, the bundle is bound by
+digest, and the execution commit will have to be re-measured and re-bound
+because the gate measures it at run time.
+
+### KB note
+
+ITSF holds no knowledge-base strategy card, by the KB's own standing rule:
+*"Catalogue it once it produces its first Finding, not before"*
+(`docs/session-conventions.md` §11; `docs/state-of-play.md`). It produced no
+Finding, so it stays uncatalogued and that rule is not being reversed here.
+The KB's existing ITSF bullet was updated in place to stop describing the
+project as early-stage, and nothing else in the KB was touched.
+
+## MC-R001 attempts — one trial, two physical attempts
+
+Aaron's ruling, 2026-09-15: MC-R001 is ONE scientific trial. A mechanical
+recomputation after an infrastructure failure is not a new statistical trial
+and does not increment the trial count.
+
+```
+ATTEMPT 1  MC-R001_20260913T063102Z
+           FAILED_AFTER_SUBSTANTIVE_START
+           cause = OS_RESTART_OR_MACHINE_FAILURE
+           result_persisted = NO
+           outcome_exposed  = NO
+           the bound output path was never created on disk
+ATTEMPT 2  MC-R001_20260915T080712Z
+           prepared, NOT AUTHORIZED, NOT STARTED
+```
+
+The attempt identity IS the output directory, and it is enforced rather than
+conventional: the gate refuses an `output_path` that already exists, so no
+attempt can occupy another's identity.
+
+## MC-R001 attempt 1 — lost to a Windows Update restart, 2026-09-15
+
+The first real MC genuinely ran. It was not a launcher defect this time and
+not a research failure; the machine restarted underneath it.
+
+```
+launched      2026-09-13T07:21:49Z, through scripts\run_governed.cmd
+ran           39h52m, ~96-98% CPU-bound throughout, inside `_execute`
+killed        2026-09-14T23:14Z (local 2026-09-15 07:14:11)
+cause         System event 1074 — MoUsoCoreWorker.exe initiated a restart
+              on behalf of NT AUTHORITY\SYSTEM, "Operating System:
+              Service pack (Planned)". Not a user kill, not an OOM, no
+              MemoryError, no python Application error event.
+persisted     NOTHING. No `.partial`, no final output. `_execute` writes
+              nothing until it returns, so the whole run was lost.
+exposed       NOTHING. No outcome was read, printed or recorded.
+registry      TRIAL_REGISTRY.md sha256 b964b19a… unchanged, 0 MC-R001 rows
+```
+
+The authorization is preserved byte-exact, out of the live gate path:
+
+```
+ops/MC_RUN_AUTHORIZATION.VOID_23ca9b05_os_restart_no_result.json
+763 bytes, sha256 c982f91e97cb5b47c053e159a5f53faf3ede0dfee422307edf9b571a58145878
+SUBSTANTIVE_EXECUTION_STARTED · OS_RESTART_TERMINATED ·
+NO_RESULT_PERSISTED · NO_OUTCOME_EXPOSED
+```
+
+The earlier three VOID files are `never_executed`; this one is not, and the
+name says so.
+
+### Why there is no resume, and why one is not being built
+
+`_execute` and `_arm` make no write, print or log call of any kind
+(AST-verified), so there is no durable state to continue from. That is the
+shallow reason. The architectural reason is that the governed evidence
+objects — `GridReplayAuthority`, `GridPass`, `KReplayEvidence`,
+`GridConvergence` — are **factory-only by capability token**: each
+`__post_init__` refuses construction unless handed the module-private
+capability, and `KReplayEvidence`'s own docstring states the point, that an
+outer K "can no longer be asserted, it has to match a comparison that was
+actually computed from two grid passes".
+
+A resume reconstructs completed work from disk. For these objects that means
+**asserting** evidence rather than minting it by computation — exactly what
+the capability pattern exists to forbid. Implementing it would require
+either exporting the capability or adding a second trusted-deserialization
+minting path, and both delete the guarantee for every caller, not just for
+resume. So: CHECKPOINT_RESUME_FEASIBLE = NO, and nothing was built.
+
+### The run-identity question, unresolved by current authority
+
+Separate the two identities:
+
+* SCIENTIFIC TRIAL — nothing statistical occurred. No outcome was produced,
+  observed or recorded, and a recomputation from identical seeds, inputs and
+  method is the same deterministic trial. No code or sealed document makes
+  `run_id` single-attempt: `mc_contract.RUN_ID_RE` validates the FORM
+  (`^MC-R[0-9]{3}$`) and nothing anywhere records prior use.
+* PHYSICAL ATTEMPT — already expressed by the timestamped output directory,
+  and the gate enforces it: an `output_path` that already exists refuses. The
+  project's own S0 convention separates these the same way
+  (`runs/<trial>_<UTC>` beside `attempts/<trial>-A<seq>`).
+
+So the mechanics permit reusing MC-R001 with a new output path. What blocks
+it is Aaron's own authorization language, which excluded "automatic rerun
+after substantive computation begins". That is an Owner reservation, not a
+code rule, so only Aaron can lift it.
+
+### Host resilience — what was found and what it costs
+
+```
+edition        Windows 11 Home Single Language — no Group Policy, so
+               NoAutoRebootWithLoggedOnUsers / AUOptions are unavailable
+active hours   14:00-05:00 (span 15 h). The restart fired at 07:14, in the
+               gap. Windows caps Active Hours at 18 h, so it CANNOT cover a
+               40-hour run however it is set.
+pause updates  available on Home, up to 5 weeks. This is the only
+               Windows-supported mechanism that can cover the window.
+```
+
+`src/itsf/host_preflight.py` refuses to START a long run when Windows is
+already waiting to restart (the CBS and Windows Update servicing markers),
+and reports Active Hours, pause state and pending file renames. **It cannot
+prevent a restart and must never be described as protection** — a test
+asserts that the module says so.
+
+
+## The output contract, Owner-decided 2026-09-13
+
+A completed real MC produced a `RunnerResult` and nothing wrote it: the run
+would have finished and the evidence would have died with the process. Found
+before MC-R001 started, not after. Aaron ruled the destination; the
+persistence reuses the existing sealed-run discipline rather than adding a
+second one.
+
+```
+RUNS_ROOT            C:\Users\Aaron\quant-data\itsf-runs\runs
+FINAL_OUTPUT_PATH    <RUNS_ROOT>\MC-R001_20260913T063102Z
+PARTIAL_OUTPUT_PATH  <RUNS_ROOT>\MC-R001_20260913T063102Z.partial
+ARTIFACTS            RUN_IDENTITY.json · SEAL_CANDIDATE.json ·
+                     GRID_STANDING.json · PER_SEED_EVIDENCE.json ·
+                     OUTPUT_MANIFEST.json
+ATOMICITY            stage into `.partial`, re-read and verify every staged
+                     byte, promote with one `os.replace`. A failed attempt
+                     keeps its `.partial` and never occupies the final name.
+ARCHIVE              `runinfra.archive_sealed_run`, reused unchanged, to
+                     `C:\Users\Aaron\quant-data\itsf-runs-archive`.
+                     Reported, never raised: an archive problem does not
+                     un-complete a finished run.
+```
+
+The path is pinned in `scripts/mc_real_run.py` as `OUTPUT_PATH`, so the
+executing commit fixes it, AND the Owner authorization must carry the same
+value in a new required `output_path` field. The gate refuses a mismatch, a
+path that is not one directory directly under the ruled runs root, and a
+path that already exists — which is what makes "one run, one output"
+mechanical rather than a convention.
+
+The console reports operational identities only. The verdict, seal candidate
+and every statistic live in the evidence and are never printed.
+
+## The authorization's two commits, separated 2026-09-13
+
+`authorized_commit` was one word for two identities that do not move
+together. They are now separate required fields, and the sentence names
+both:
+
+```
+input_bundle_commit   876c1b74131b4ab1a89dce433ecce646ba481f8c
+                      the commit the sealed S0-T001 bundle was produced at;
+                      historical and fixed. Compared against
+                      `prepared.authorized_commit`.
+mc_execution_commit   NOT PINNED HERE, and deliberately: it is whatever
+                      the governed checkout is at when the run starts, so a
+                      value written on this page would be stale the next
+                      time anything is committed -- including the commit
+                      that wrote it. MEASURE it:
+                        scripts.mc_real_run:authorization_preview
+                      It is measured by the gate through the
+                      governed-identity resolver, never accepted from a
+                      caller, and refused when any governed path is
+                      modified.
+```
+
+Two consequences worth knowing before writing the authorization:
+
+* the execution commit is measured AT RUN TIME, so any further commit
+  invalidates a standing authorization and a fresh one is needed;
+* `ops/MC_RUN_AUTHORIZATION.json` is NOT in the governed set
+  (`covering_mechanism` returns None for it), so writing it does not dirty
+  the governed checkout and cannot invalidate the gate it feeds.
+
+## MC-R001: two non-executions and the repair — 2026-09-13
+
+The Owner authorized MC-R001 twice. **It has never started.** Both launches
+failed in this session's own launch/entry plumbing, before any bundle byte
+was consumed by a run, and both authorizations are voided by rename:
+
+```
+ae964754…  ModuleNotFoundError: No module named 'scripts'
+           `run_governed.py` launched the child with `-P`, which keeps the
+           launcher's own directory off `sys.path`, so a `scripts.*` target
+           could not be imported. Nothing ran. Repaired by appending the
+           repository root after `src`; pinned by a regression test.
+           VOID file: ops/MC_RUN_AUTHORIZATION.VOID_ae964754_never_executed.json
+
+27fe40f3…  MCInputError: authorization_snapshot_missing
+           THE GATE PASSED. The entry then built its own prepared input and
+           handed `prepare_mc_input` the REGISTRY snapshot where a
+           `{trial_id, authorized_commit}` mapping is required. Nothing ran.
+           VOID file: ops/MC_RUN_AUTHORIZATION.VOID_27fe40f3_never_executed.json
+```
+
+EVIDENCE OF NON-EXECUTION, measured after the second failure: `runs/`
+contains only `S0-T001_20260813T170432Z`; `attempts/` only
+`S0-T001-A20260813T170432Z`; zero registry rows mention MC-R001; registry
+sha256 `b964b19a6b788bf9f47d1d24018dfc93836f74cbfd7ef69e4680471368d11fe9`.
+
+ROOT CAUSE OF THE SECOND, stated plainly because it was a builder error and
+not a design gap: **the assembly already existed.**
+`real_input._assemble_from_sealed_run` has been the production prepare
+caller since R2.1 and already pins the Owner-bound bundle root as
+`SEALED_RUN_DIR`. `scripts/mc_real_run.py` duplicated it and got it wrong.
+An earlier builder statement on this page's lineage — "no pinned governed
+bundle root exists in code" — was **wrong**, and that error is what made the
+duplicate look necessary.
+
+REPAIR (engineering only; no methodology, threshold, input, sample or
+authority changed):
+
+* the entry calls `real_input._assemble_from_sealed_run()` and contains no
+  assembly of its own — enforced by an AST test that fails on any local
+  `prepare_mc_input(` call;
+* the bundle-root argument is checked against `SEALED_RUN_DIR` and refuses
+  (exit 4) on disagreement, rather than silently preferring either;
+* the gate's authorization path is passed explicitly, so the module constant
+  and the file actually read cannot diverge through a def-time default;
+* `main()` is now exercised end to end past the gate — the testability gap
+  that allowed both failures. Previously nothing had ever executed it.
+
+THIRD STOP, 2026-09-13, before any launch: the run persisted nothing. See
+the output contract above. The authorization for `9fb14015…` is preserved as
+`ops/MC_RUN_AUTHORIZATION.VOID_9fb14015_never_executed.json` (671 bytes,
+sha256 `997cf40a…`) and never executed MC-R001.
+
+## The sealed bundle, Owner-bound 2026-09-13
+
+```
+BUNDLE_ROOT   C:\Users\Aaron\quant-data\itsf-runs\runs\S0-T001_20260813T170432Z
+IDENTITY      bundle_summary_digest
+              7263f0c1802c205ae3bf3732a0d2de5b46f17aac67a93fe5aedcc7bb71262d67
+              (mc_bundle_ondisk_summary.v1 — the EXISTING governed aggregate,
+               not a new format invented to make another hash)
+INVENTORY     14/14 files, 440,688,080 bytes, every digest matching the
+              code-pinned attestation table
+COMMIT BOUND  876c1b74131b4ab1a89dce433ecce646ba481f8c (the bundle's own)
+```
+
+Exactly two directories on this machine carry that run name, and both
+precheck to the SAME summary digest: the ruled runs root above and its
+attested archive under `itsf-runs-archive`. They are one bundle at two
+paths, not two candidates — `contracts` distinguishes the roles, and
+`E:\quant-data` (the attested backup root) is not mounted. The gate now
+binds the DIGEST, so the path is no longer the security-relevant choice: a
+substituted bundle refuses wherever it sits.
+
+## Two legacy obligations, reclassified 2026-09-13
+
+Under vNext §0 the MC five-event registry chain
+(`MC_PACKET_DRAFTED → … → MC_RUN_AUTHORIZED`) and the `SMOKE-001` / E3
+production-scale smoke are **HISTORICAL_WORKFLOW_OBLIGATION**, not current
+research obligations. Their only authority is
+`ops/DELEGATED_RULINGS_2026-08-24.md` (G1, G8), whose own header records
+`RECORD_TYPE=DELEGATED_RULING`, `DECIDED_BY=Codex GPT-5.6 Sol` and
+`DELEGATED=YES —— 这是委托裁定，不是 Aaron 本人的判断`, and which instructs
+that it never be recorded as Aaron's judgement. Neither obligation appears in
+the sealed `STUDY_0_PREREGISTRATION.md`, in the FROZEN `MC_METHOD_SPEC.md`, in
+`PROJECT_CHARTER.md`, or in any Aaron `OWNER_DECISION` row. That is vNext
+level 4 — generic project history — and level 4 cannot add an obligation vNext
+does not carry.
+
+What survives, and is enforced: vNext §10 makes a real MC Owner-only, and
+DEC-N14-R1-7 (Aaron, level 1) keeps the writer boundary — a generic serialized
+writer may never create or advance authorization state. The retired chain and
+smoke were **not** rebuilt, **not** executed for compatibility, and **no**
+replacement governance mechanism was created. `mc_contract`'s ratified grammar
+is untouched: historical artifacts are not rewritten.
+
+## N15 as it measured — 2026-09-13
+
+The S3 mechanical run gate was executed read-only. **Green:** code identity
+(`HEAD e523a740`; `src/itsf` `e8fffdfd…` and `src/itsf/mc` `bfed0b62…` are
+byte-identical to the independently verified R2 target `537354bf`, and nothing
+under `src/` or `tests/` has changed since) · data identity (the authorized job
+dir resolves, its `manifest.json` hashes to the pinned
+`d8d1edc7b549b441…`, 141 manifest entries, 139 `.dbn.zst` present and NOT
+opened; the sealed DAY_STRATA supplement MC-DS-S004 hashes to the registry's
+own `f59a0092…`) · prereg binding (`guards.verify_frozen_hashes()` PASS) ·
+environment (Python 3.13.14, all 49 pinned packages present, zero drift) ·
+runner safety (the production entry is gate-first and its gate refuses
+unconditionally; `assert_real_run_allowed` refuses outside the trusted launch
+boundary; `runner_readycheck` is read-only and appended nothing) ·
+reproducibility (5771 passed, 1 xfailed, 0 failed).
+
+**Not green:** the three prerequisites above. `runner_readycheck(MC-R001)`
+returns `live_authorization=False`, `may_start=False`, "no MC event chain
+exists for this run id". The ratified chain is
+`MC_PACKET_DRAFTED → MC_PACKET_APPROVED → MC_RUNNER_READYCHECKED(smoke_ref)
+→ MC_READY_FOR_RUN_AUTHORIZATION → MC_RUN_AUTHORIZED` (Aaron-only), and no row
+of it exists. `MC_RUNNER_READYCHECKED` and Aaron's sentence both require
+`SMOKE-001=PASS`, which has never been produced —
+`ops/MC_COST_PROBE_FINDINGS.md` says so in its own words and estimates E3 at
+roughly three hours for two runs. Nothing was appended, no smoke was run, and
+no protected outcome was inspected.
+
+## Node mapping at cutover
+
+| node | status |
+|---|---|
+| N13 | CLOSED 2026-09-10 (Aaron, DEC-N13-CLOSE-1/2) |
+| **N14** — exact-tree independent review of the MC implementation | **CLOSED** by Aaron, on the independent `FINAL_R2_VERIFIED` return of `N14-POSTHOLD-RESIDUAL-VERIFY-004` (R2 CLOSED against `537354bf`, nine controls NO_REGRESSION). Every round, finding and return is preserved unrewritten — see below. |
+| **N15** | the **S3 mechanical run gate**: code identity · data identity · prereg binding · runtime/environment identity · runner safety · replay/reproducibility · outcome-access state · Owner authorization present. Mechanical only — no reviewer seat, no review packet, no sealed bundle unless a concrete blindness need arises. **Not executed.** |
+| **N16** | the real MC run. Owner-only. Requires the N15 gate green **and** Aaron's precise authorization. **Not executed.** |
+| N17 | the reveal. Owner-only, after S4 mechanical recomputation. Outcome blinding holds until then. |
+
+### N14, as it actually closed
+
+Round 1 → **HOLD, consumed**: Finding A not reproduced on the reviewed bytes and
+frozen as 16 evidence tests; Finding B reproduced and repaired — `serialized_append`
+now refuses any event that creates or advances authorization state. Round 2 →
+**HOLD, consumed**. **No round 3 was ever opened: the two-round substantive ceiling
+(vNext §6) is spent.** The post-hold verifications below are Owner-authorized bounded
+closure checks, not new substantive rounds.
+
+An independent post-hold residual verification then **closed F02-K, F04, F06 and
+R1, with all four non-regression controls NO_REGRESSION**, leaving one item —
+**R2 / F02-B**: non-base seeds compared their doubled-B drift against the base
+seed's baseline instead of their own. Aaron authorized one micro-repair
+(DEC-N14-R2-1); it reproduced exactly in isolation and was repaired so each arm is
+measured against the arm it doubles, with the pairing recorded in
+`ConvergenceReport.drift_reference_by_axis` (DEC-N14-R2-2/3/4).
+
+Three further verification deliveries were cut. Their true dispatch history:
+
+| delivery | dispatched | outcome |
+|---|---|---|
+| `N14-POSTHOLD-RESIDUAL-VERIFY-001` | **NO** | superseded before dispatch — it bound an incomplete target; retained under its DO_NOT_DISPATCH marker |
+| `N14-POSTHOLD-RESIDUAL-VERIFY-003` | **YES** | **PROCEDURAL STOP** — the reviewer opened an optional, reviewer-selected file the package had not admitted. A **transport/packaging defect**: **no substantive verdict, no substantive review round consumed** |
+| `N14-POSTHOLD-RESIDUAL-VERIFY-004` | **YES** | **FINAL_R2_VERIFIED** — R2 independently verified **CLOSED** against commit `537354bf9f9f2511679c739b284873401c3221f1`, with **all nine controls NO_REGRESSION** |
+
+On that return Aaron made the Owner decision **N14 = CLOSED**. All three
+deliveries are retained intact under their markers. Under vNext no further
+verification node follows: a finding becomes a row, a bounded repair, or an Owner
+decision — never automatically another node.
+
+Carried forward as a **non-blocking row**, unrepaired and not re-litigated: the
+verifier's **NB1** — the public aggregation/seal API accepts a deliberately
+truncated attempt chain as NON_CONVERGED, judged non-blocking because the runner
+never emits such a chain.
+
+## What changed for this project at cutover
+
+Retired as default routing — **kept for reproducing pre-cutover work, never
+rewritten**: the QROS-CF A–L stage chain and `qros next` routing; Review Packet
+issuance / outcome binding; the per-node reviewer-seat and blind-transport
+machinery in `ops/REVIEWER_CONTRACT.md`; closure and residual-verification
+packages; review-of-review; `PASS_WITH_BACKLOG` routing; automatic node creation
+from reviewer findings. `qros check` / `qros status` remain **on-demand** mechanical
+diagnostics — the four known runtime gaps (A2→B, I→J, `trial_accounting` STALE,
+14 UNASSESSED triggers) are information, not gates.
+
+Still in force: the **sealed preregistration**, outcome blinding and the exposure
+ledger, the immutable registry and `runs/` discipline, and every Owner gate in
+vNext §10. `ops/REVIEWER_CONTRACT.md` §3 remains the reference for blindness
+levels **if and when** a blind seat is actually needed (vNext §11) — it is no
+longer a standing obligation.
+
+Reading order for a new session: this file → `ops/BACKLOG.md` §1 → `ops/DECISIONS.md`
+for the decision behind anything here. `ops/RESEARCH_STATE.md` is the pre-cutover
+stage authority, retained as history.

@@ -1,0 +1,309 @@
+# ITSF-S0 state file (L6 Runtime spec §2). LIVE as of 2026-08-24.
+#
+# `lane` was declared by Aaron; `workflow_stage` by this working session.
+# Which is which, and on what authority, is recorded at each field.
+#
+# Every other value here is TRANSCRIBED from a canonical ITSF artifact, with
+# the source named. Nothing is inferred. Per the ratified §10.2 the DECLARED
+# partition is a non-authoritative self-report — canonical artifacts win in
+# their domains, always — and per §2.1 the state file is edited only by
+# working sessions of this project, which is what wrote this draft.
+#
+# The CLI's YAML subset takes double-quoted scalars only and no trailing
+# comments, so every note here sits on its own line.
+
+schema_version: "17"
+
+# ---------------------------------------------------------------- DECLARED --
+# research_id: free value, declares no vocabulary (§2.4).
+# S0-T001 is the TRIAL id, not the research id.
+research_id: "ITSF-S0"
+
+# lane: FULL | MEASUREMENT | EXPLORATORY, closed, "Never inferred" (§2.4).
+#
+# DECLARED BY AARON, 2026-08-24, by adopting the working session's
+# recommendation. His words, verbatim: 「直接按你建议的做吧，能执行的全执行」,
+# answering a message whose recommendation was FULL with its basis. Lane
+# declarations sit in §4.1's Authority row, so this records HIS act, not the
+# session's — the session recommended and he adopted. Precedent for the
+# shape: IR-29, where Aaron sent a named prompt and then said 「那现在执行吧」.
+#
+# Basis of the recommendation he adopted: QROS §1 makes lane semantics
+# "which claims the work may emit, nothing else". The sealed prereg §10.4
+# commits to emitting STOP / GO / β / α — a strategy-performance verdict on
+# deployment. MEASUREMENT may not emit that; EXPLORATORY may emit no
+# confirmatory performance evidence at all. FULL is the only lane whose
+# may-emit set contains what this project's own sealed contract promises to
+# produce.
+#
+# Consequence, recorded rather than hidden: FULL makes A2 an unconditional
+# gate that can never be retroactively satisfied — no runs/ A2 record exists
+# and B is long past (SEAL=VERIFIED). The state file will permanently show
+# A2 → B HOLD. That is an honest permanent disclosure of a real gap, and it
+# is why ITSF can supply a Stage I pilot for §9.1 but never an A2 one.
+lane: "FULL"
+
+# workflow_stage: A A2 B C D E F G H I J K L, closed (§2.5). The stage
+# currently DUE OR IN PROGRESS — not a status, not a verdict, not a health
+# indicator.
+#
+# DECLARED BY THE WORKING SESSION. I asked Aaron for this one and should not
+# have: §4.1's Authority row is "every K-stage decision, seals, unlocks, LANE
+# DECLARATIONS, seat-map changes, all spends". `workflow_stage` is not in it,
+# and §10.2 makes DECLARED a working-session self-report that no canonical
+# artifact is overridden by. So it is mine to state and Aaron's to correct.
+#
+# C. Basis: S0 itself ran and was revealed, but its verdict is
+# INCONCLUSIVE_PENDING_MC — the Checkpoint-0 statistic is produced by the MC,
+# and the MC pipeline is under construction (N01–N13). N16 is the
+# preregistered run, which is E. So what is in progress is the build.
+# Contestable, and recorded as contestable: read the MC as a separate study
+# and ITSF-S0 sits at F awaiting its evidence.
+workflow_stage: "C"
+
+# §10.4 requires a one-line `MATERIALITY: ORDINARY | MATERIAL` in the
+# measurement plan or preregistration. SEARCHED: no such line exists in this
+# repository. The one MATERIALITY string present is
+# `MATERIALITY_CONCLUSION=NOT_ESTABLISHED`, in a post-reveal addendum — a
+# different statement about a different question. Per §10.4 absence renders
+# UNKNOWN, and UNKNOWN holds `F -> L`. Fail-closed and correct; not a gap to
+# paper over by declaring ORDINARY.
+measurement_materiality: "UNKNOWN"
+
+# §3.4. S0-T001 was revealed 2026-08-14; the ledger records the whole of it.
+#
+# scope: HISTORICAL_CUMULATIVE, not CURRENT_REVIEW_SCOPE. §3.4A makes scope
+# the POPULATION a value is computed over, and every row in the ledger is a
+# historical event; there is no current review to scope to. My first draft
+# said CURRENT_REVIEW_SCOPE and the runtime returned UNKNOWN because no row
+# fell in that population -- fail-closed, and correct.
+# D-1 条件 1（Fable 裁定 2026-08-26，DELEGATED=YES）：双向可发现性必须机械化。
+# 本项目的暴露分两条轴，各有台账，**两者并举**：
+#   研究轴  ops/EXPOSURE_LEDGER.md        —— 研究自由度消耗；`scope` 一栏说的是它
+#   席位轴  ops/REVIEWER_EXPOSURE_LOG.md  —— 复审席位被烧；不消耗研究自由度
+# 下面的 `scope` 是运行时的封闭枚举，装不下路径（试过加兄弟字段，validator 判
+# OUTCOME_EXPOSURE_SHAPE 拒绝），所以指针在这里，强制在
+# tests/test_exposure_discoverability.py。
+outcome_exposure:
+  declared: "TARGET_METRIC"
+  scope: "HISTORICAL_CUMULATIVE"
+
+prereg:
+  reference: "STUDY_0_PREREGISTRATION.md"
+  seal_revision: "c685ebc1ed65e0c6fc9b9b7212a054289d1b37fd"
+  lineage_anchor: "修订记录"
+
+# POINTER ONLY — no count is ever copied into this file.
+#
+# value_anchor carries the "## " heading prefix because the runtime matches
+# anchors on the WHOLE LINE: packet.py:359 is
+# `line.strip() == anchor.strip()`. Without the prefix the anchor could
+# never match, and both packets issued before 2026-08-26 therefore rendered
+# TRIAL_ACCOUNTING_RESOLUTION=... anchor not found and
+# TRIAL_ACCOUNTING_EXCERPT=NOT_MECHANICALLY_EXTRACTABLE. That is the
+# runtime's fail-closed canonical negative behaving correctly (§5.2.3) —
+# the declaration was simply wrong, and a reviewer was handed a pointer
+# that resolved to nothing.
+#
+# The section it now resolves to was scanned before this change, not after:
+# 26 lines, outcome-clean by the repository's own scanner AND on reading —
+# it ends at "COMPLETED | S0 report sealed" and states no verdict and no
+# statistic. Checked deliberately, because making an anchor resolve puts
+# its excerpt inside every future packet, including packets handed to
+# outcome-blind seats.
+trial_accounting:
+  canonical_ref: "ops/TRIAL_REGISTRY.md"
+  value_anchor: "## S0-T001（FIRST_REAL_S0_FULL_DEVELOPMENT_RUN，exposure_seq 1）"
+
+change_labels: []
+
+# --------------------------------------------------------- RECONSTRUCTIBLE --
+cache:
+  exposure_mirror:
+    from_input: "exposure_record"
+    excerpt: "累计 exposure：1575（全部来自 S0-T001 正式揭盲一次性查看；历史各行均为 0 查看行）"
+
+# --------------------------------------------- OPERATIONAL, append-only -----
+# Empty by construction. Every review this project has run so far travelled
+# as a hand-written prompt, never as a Review Packet v1, and produced no
+# PACKET_ISSUANCE / PACKET_OUTCOME record. Back-filling them would be
+# manufacturing operational records for events the runtime never witnessed,
+# so they stay out. The pre-attachment review history lives in ops/ and in
+# the master plan's §14 anchor.
+# §2.7 ops_events —— 封闭词表，只有 OWNER_HOLD / PACKET_REJECTED_INCOMPLETE /
+# ERRATUM 三种 type。下面两条补记 2026-08-26 的两次复审拒绝：运行时一直有这个
+# 槽位，而此前每一次交付我都没用过它。source=review：两次都是复审席在开工核对
+# 之后拒的，不是 packet 生成失败。
+ops_events:
+  - ts: "2026-08-26T00:00:00Z"
+    type: "PACKET_REJECTED_INCOMPLETE"
+    source: "review"
+    actor: "fresh Sol (ND1 R3 amendment proposal, first delivery)"
+    reason: "No Review Packet v1 and no declared SHA-256 for the proposal — the builder sent the bare file. ORIGIN=BUILDER, CAUSE=SOURCE_CONTENT."
+  - ts: "2026-08-26T00:00:01Z"
+    type: "PACKET_REJECTED_INCOMPLETE"
+    source: "review"
+    actor: "fresh Sol (ND1 R3 amendment proposal, second delivery, rv-6cd8abb41a43-1ddf0617d52e)"
+    reason: "The reviewed set carried no authoritative ratification baseline: the file cited as the ND1 approval record declares NOTHING_HEREIN_IS_APPROVED=YES, and ops/ND1_PROFILE_RATIFICATION.md was absent. ORIGIN=BUILDER, CAUSE=SOURCE_CONTENT."
+session_log: []
+human_decisions: []
+packets:
+  # PACKET_ISSUANCE — immutable append (§5.5). In-place completion
+  # is prohibited; a correction appends within the same review_id.
+  - kind: "PACKET_ISSUANCE"
+    packet_record_id: "pr-rv3651f9fe0b68-001"
+    review_id: "rv-3651f9fe0b68-da56aecb6991"
+    saved_path: "runs/packets/rv-3651f9fe0b68-da56aecb6991.packet"
+    sha256: "74fbcea03dfe8fb1a794ab5ab53f21f3e46322db067162c39f703155f1a5fae9"
+    gate: "TIER1_DISCRETIONARY"
+    head: "af5528fa8a2e03a33305f588efb2605bdb942267"
+    basis: "HEAD"
+    scope_kind: "TIER1_BATCH"
+    scope_base: "857eed711558e488efb814462d822706049f82e6"
+    scope_base_origin: "selected"
+    scope_content_digest: "b33bd4a64205ef327d94d264ecdc24662702828049535049f43387c530e32d6b"
+    prereg_input_sha256: "6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132"
+    material_design_contributor: "UNKNOWN"
+    effective_table_bundle_identity: "5008F5253E47F2196B5DA541038DB08C7B096C0C2D8F65FFD2507404F3637B5F"
+    decision_requested: "Should the N09 execution-path design R2 be built as written?"
+    selector: "builder"
+    appended_at: "2026-08-25T16:39:57Z"
+  # CORRECTION within the same review_id (§5.5). The packet BYTES are
+  # unchanged — only saved_path moves. Editing the record above in place is
+  # prohibited, so this appends instead.
+  #
+  # WHY: the runtime hardcodes `_SAVE_DIR = "runs/packets"`, but this repo
+  # forbids <repo>/runs existing at all. That prohibition guards the L-5
+  # defect (RUNS_ROOT = REPO / "runs" wrote outputs inside the synced repo
+  # tree), is asserted in ~10 places including a suite-wide autouse fixture,
+  # and was hardened after the R5 incident when a fixture briefly created it.
+  # Creating it for the packet broke evidence-critical regression tests —
+  # measured: test_s0_runner went 211/213, and 213/213 once runs/ was moved.
+  # Project instructions sit above QROS in the precedence lattice, so the
+  # project wins and the deviation is recorded rather than hidden.
+  - kind: "PACKET_ISSUANCE"
+    packet_record_id: "pr-rv3651f9fe0b68-002"
+    corrects: "pr-rv3651f9fe0b68-001"
+    review_id: "rv-3651f9fe0b68-da56aecb6991"
+    saved_path: "ops/packets/rv-3651f9fe0b68-da56aecb6991.packet"
+    sha256: "74fbcea03dfe8fb1a794ab5ab53f21f3e46322db067162c39f703155f1a5fae9"
+    gate: "TIER1_DISCRETIONARY"
+    head: "af5528fa8a2e03a33305f588efb2605bdb942267"
+    basis: "HEAD"
+    scope_kind: "TIER1_BATCH"
+    scope_base: "857eed711558e488efb814462d822706049f82e6"
+    scope_base_origin: "selected"
+    scope_content_digest: "b33bd4a64205ef327d94d264ecdc24662702828049535049f43387c530e32d6b"
+    prereg_input_sha256: "6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132"
+    material_design_contributor: "UNKNOWN"
+    effective_table_bundle_identity: "5008F5253E47F2196B5DA541038DB08C7B096C0C2D8F65FFD2507404F3637B5F"
+    decision_requested: "Should the N09 execution-path design R2 be built as written?"
+    selector: "builder"
+    appended_at: "2026-08-25T16:59:01Z"
+  # PACKET_ISSUANCE — a NEW review, not a correction of the one above.
+  # D-3: who appends P3 and the failure events to ops/TRIAL_REGISTRY.md.
+  # Saved under ops/packets/ for the reason recorded at pr-rv3651f9fe0b68-002
+  # and in ops/RUNTIME_DEVIATION_PACKET_SAVE_DIR.md — unchanged, still a
+  # deviation, still disclosed.
+  #
+  # basis is WORKTREE, not HEAD, and that is inherent rather than sloppy:
+  # generating the packet requires the delivery materials to exist, and
+  # committing them moves HEAD, so no packet can ever be generated on a
+  # clean tree that already contains itself. The two dirty paths at
+  # generation were ops/NEXT_HANDOFF.md and ops/PROMPT_D3_SOL_REVIEW.md —
+  # neither is a reviewed path. The authoritative transport checks are the
+  # six registered hashes and an empty
+  # `git log <unchanged_since>..HEAD -- <reviewed paths>`.
+  - kind: "PACKET_ISSUANCE"
+    packet_record_id: "pr-rvf4207865a116-001"
+    review_id: "rv-f4207865a116-c004854e6828"
+    saved_path: "ops/packets/rv-f4207865a116-c004854e6828.packet"
+    sha256: "452afc10e86909e15cf7884cbe134d249221dd9a7ae8c2e3315b42211c56d731"
+    gate: "TIER1_DISCRETIONARY"
+    head: "7b582b1240e4a9d93cd8c9d9ac470ca98525ce02"
+    basis: "WORKTREE"
+    scope_kind: "TIER1_BATCH"
+    scope_base: "713010eb3353df19acb8b3c22f938c40f509ad9e"
+    scope_base_origin: "selected"
+    # DERIVED, not transcribed: the packet renders no scope_content_digest
+    # field. It is serialize.scope_content_digest() over the packet's own
+    # FILE_MANIFEST pairs, per packet.py:942. Verified by recomputing the
+    # R2 record above from ITS packet — the method reproduces the recorded
+    # b33bd4a6… exactly, so this is the same quantity and not a guess.
+    # packet_content_identity f4207865a116… is NOT recorded here: the state
+    # schema rejects it as an unrecognised field (measured).
+    scope_content_digest: "72c6a33847b03d6c08ca1accba3766a56d17874f318aaa876136edafab0cc2f7"
+    prereg_input_sha256: "6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132"
+    material_design_contributor: "UNKNOWN"
+    effective_table_bundle_identity: "5008F5253E47F2196B5DA541038DB08C7B096C0C2D8F65FFD2507404F3637B5F"
+    decision_requested: "Ratify, modify, or reject the D-3 proposal on who appends P3 and the failure events, given that the ratified ND1 profile already assigns three failure events to the runner"
+    selector: "builder"
+    appended_at: "2026-08-26T00:00:00Z"
+  # PACKET_OUTCOME bound to the issuance above. Immutable append (§5.5):
+  # the issuance is NOT completed in place; a correction would append again
+  # under the same review_id.
+  #
+  # THE SCHEMA IS NARROW ON PURPOSE AND I FIRST WROTE IT WRONG. My initial
+  # draft carried seat_status, transport_precheck, verdict_record_sha256,
+  # findings counts and a builder_reproduced flag. None of those fields
+  # exist: _OUTCOME_FIELDS is exactly kind / packet_record_id / review_id /
+  # issuance_packet_record_id / corrects / returned_at / verdict /
+  # paths_pulled / rejection_origin_class / rejection_cause_class /
+  # ops_events_ref / appended_at. Everything else about this review lives in
+  # the canonical artifact named below, which is where it belongs — the
+  # state file is the operational log, not the evidence.
+  #
+  # No rejection_origin_class / rejection_cause_class: §5.5.2 admits them
+  # only on REJECTED_INCOMPLETE and rejects them on any other verdict.
+  #
+  # TIER1_DISCRETIONARY. Per §3.1 a discretionary review releases no
+  # transition and is never a requirement's gate, so this does NOT move
+  # REVIEW_SATISFACTION for A2 or STAGE_I; the A2->B and I->J HOLDs are
+  # unaffected. Recorded because it happened, not because it unlocks
+  # anything.
+  #
+  # Verdict, findings, and the builder's line-by-line reproduction of them:
+  #   ops/RULING_SOL_D3_HOLD_2026-08-26.md
+  #   sha256 5f533347622156932fce5c35f11ffa2b089771eba0f2dd6157b7bb2f801a00ff
+  # That hash certifies the TRANSCRIPTION — the verdict arrived by chat, and
+  # chat-carried bytes are never a source of truth.
+  - kind: "PACKET_OUTCOME"
+    packet_record_id: "pr-rvf4207865a116-002"
+    issuance_packet_record_id: "pr-rvf4207865a116-001"
+    review_id: "rv-f4207865a116-c004854e6828"
+    verdict: "HOLD"
+    returned_at: "2026-08-26T00:00:00Z"
+    ops_events_ref: "N_A — ops_events[] is empty; this review produced no operational event beyond this record and the ruling artifact"
+    paths_pulled:
+      - "ops/PROMPT_D3_SOL_REVIEW.md"
+      - "ops/packets/rv-f4207865a116-c004854e6828.packet"
+      - "ops/D3_REGISTRY_WRITER_PROPOSAL.md"
+      - "src/itsf/mc/supplement_contract.py"
+      - "src/itsf/mc/registry_boundary.py"
+      - "src/itsf/mc/supplement_runner.py"
+      - "src/itsf/s0/runner.py"
+      - "scripts/s0_real_run.py"
+      - "../L6_RUNTIME_SPEC.md"
+      - "../AI_RESEARCH_OPERATING_MODE.md"
+      - "C:/Users/Aaron/.codex/plugins/cache/openai-curated-remote/codex-engineering-guardrails/1.1.1/skills/code-verification/SKILL.md"
+      - "C:/Users/Aaron/.codex/plugins/cache/openai-curated-remote/codex-engineering-guardrails/1.1.1/skills/code-verification/references/verification-matrix.md"
+    appended_at: "2026-08-26T00:00:00Z"
+
+# ------------------------------------------------------------- INPUTS §2.3 --
+inputs:
+  - id: "prereg"
+    path: "STUDY_0_PREREGISTRATION.md"
+    observed_revision: "5d3574145b6291594e4eb072ac654be3b92fc402"
+    observed_sha256: "6cca20b7b1ce496d582ef5b4677333ba1b74bc577020ab29df00ff0c0d1af132"
+  - id: "exposure_record"
+    path: "ops/EXPOSURE_LEDGER.md"
+    observed_revision: "14dc9f857f349711604f0f0e1ab023ad3826ffe7"
+    observed_sha256: "2752bb1a0204ec65f174259eeb01fbf021a30c4ff7c07d287979d062abf9d816"
+  - id: "trial_accounting"
+    path: "ops/TRIAL_REGISTRY.md"
+    observed_revision: "5d3574145b6291594e4eb072ac654be3b92fc402"
+    observed_sha256: "ee9da33fdbb47725dc036243adc76d7d9ba69ff06df0df443b09103f897353d6"
+
+state_declared_at:
+  revision: "5d3574145b6291594e4eb072ac654be3b92fc402"
+  timestamp: "2026-08-24T00:00:00Z"

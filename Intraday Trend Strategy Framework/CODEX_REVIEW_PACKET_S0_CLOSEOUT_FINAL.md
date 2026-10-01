@@ -1,0 +1,567 @@
+# CODEX_REVIEW_PACKET_S0_CLOSEOUT_FINAL（S0 封存主线一次性总验收，供 Codex 独立复审）
+
+## 现势事实表（唯一现势来源；其后所有章节均为历史记录，冲突以本表为准）
+
+```
+BASELINE=bcdf8f368393dba3affcda2b4b729bc525a98886
+COMMITS_AFTER_BASELINE=8   # …→ 594bca5 → 999b494 → 408e908 → 本候选（S0 运维 attestation 轮）
+FILES_CHANGED=41           # bcdf8f36..本候选（最终 staged tree 机械复算，含本文件）
+INSERTIONS=22340
+DELETIONS=8927
+CODEX_LIMITED_ENGINEERING_REVIEW=PASS        # @999b494
+CODEX_EXACT_TREE_FULL_SUITE=2617 passed / 0 failed / 0 skipped
+CODEX_TESTED_HEAD=408e9085e1482c542a58fd6dee6652c9b8bff7e4
+OUTPUT_ROOTS_CREATED=YES                     # 2026-08-14 具名授权 attestation 轮
+OUTPUT_ROOTS_OPERATIONAL_GATE=PASS           # 生产窄入口，探针写删实测，探针后两根空
+SYNC_ATTESTATION=PASS                        # 客户端配置证据，非路径推断
+DISK_HEALTH_ATTESTATION=PASS                 # MSFT_PhysicalDisk+Win32_DiskDrive 双源
+SAME_VOLUME_FOR_S0_T001=ACCEPTED_WITH_DISCLOSED_COMMON_MODE_RISK
+FROZEN_RUNTIME_CANONICAL_SET_COUNT=7
+APPROVAL_PROVENANCE_ORIGINALS={gate1/G9_EVIDENCE_RESOLUTION.md,IR_APPROVAL_PACKET.md}
+APPROVAL_PROVENANCE_BINDING=AUTHORIZED_COMMIT_PLUS_GIT_CLEAN
+APPROVAL_PROVENANCE_IN_A12_DIRECT_HASH_SET=NO
+DR5_MC_CONSUMER=ABSENT
+DR5_STATUS=PARTIAL_BY_RULING
+REPO_RUNS_DIR=ABSENT
+READY_APPENDED=NO
+REAL_RUN_AUTHORIZED=NO
+REAL_S0_EXECUTED=NO
+POST_S0_STRATEGY_BUILD_STARTED=NO
+```
+
+（运维裁定与证据全文：`ops/S0_OUTPUT_ROOTS_OPERATIONS_DECISION.md`＋
+`ops/OUTPUT_ROOTS_READINESS_CHECKLIST.md` 证明记录节；授权链下一步见
+`S0_REAL_RUN_AUTHORIZATION_PACKET.md`。）
+
+- **baseline commit**：`bcdf8f368393dba3affcda2b4b729bc525a98886`（M6.1.8）
+- **本审查对象**：**包含本文件的那个 commit**（M6.1.8 纪律：文档不写自己的 SHA；
+  实际新 HEAD 见终端汇报）。**【HISTORICAL — 以下为 R5.1.1 时点事实块，
+  现势数字以顶部事实表为准】** baseline 之后已有多个候选
+  commit（Codex 逐轮 HOLD 的窄修复链）：
+
+```
+COMMITS_AFTER_BASELINE=7   # f54d05a → 0e352e9 → 3e3cc1f → 0bd3b21 → 594bca5 → 999b494 → 本候选（R5.1.1 纯文档）
+FILES_CHANGED=39           # bcdf8f36..本候选（最终 staged tree 机械复算，含本文件）
+INSERTIONS=22076
+DELETIONS=8927
+```
+
+（口径【R5.1.1 更正，Codex 裁定采纳】：四值覆盖**至本候选自身**——
+FILES/INSERTIONS/DELETIONS 为 `git diff --shortstat --cached bcdf8f36`
+对最终 staged tree 的机械输出（staged tree 即候选 commit 的树），
+COMMITS 为父候选累计数＋1；写入后重新暂存复算确认稳定，commit 后再以
+`git diff --shortstat bcdf8f36..HEAD` 逐项复核相等。不再使用旧的
+"统计到上一候选、当前候选另见终端"口径。）
+
+- **diff 范围**：`git diff bcdf8f36..<候选>`＝全部变更（五工程车道＋主代理
+  集成＋三轮 Codex 修复＋测试＋本文件）。
+- **授权状态**：`REAL_S0_NOT_AUTHORIZED` 不变。不追加 READY、不申请授权、不建 tag、
+  不追加任何 registry 事件。`runs/` 不存在，S0-T001 未消耗。
+
+## 0. 程序记录（含两项必须如实披露的程序事实）
+
+1. **裁决来源**：`AARON_S0_CLOSEOUT_DECISION_FORM_V1`（聊天交付，L-5＋DR-1..8 按依赖
+   排序，每项含冻结依据/互斥选项/Fable 推荐/Sol 立场/影响面/consumer/测试/逐字裁决句）。
+   Aaron 裁复"逐项裁决全跟你推荐的方式做即可"并以自然语言启动 PHASE C。
+2. **PHASE-C 精确口令豁免**：master prompt 要求逐字口令
+   `START_S0_CLOSEOUT_BUILD_AFTER_AARON_DECISIONS`；Aaron 未使用该句式。主代理判定：
+   口令要求的制定者本人以语义无歧义的指令豁免了自设仪式，予以执行并在此披露。
+   若 Codex 认为该豁免不成立，本候选整体退回，等 Aaron 重发精确口令后重建。
+3. **真实数据加载事件（测试进程，已修复＋永久防护）**：集成中段，F-1 快照物化接入
+   `prepare` 后（配置自此可解析成功），两次未打补丁的链测试运行越过了旧的
+   Stage-B 拒绝点、经 `RealChain._ensure` 触发对真实 quant-data 档案的**结构性 bar
+   加载**（每次持续数分钟，进程内存 ~1.1GB/687MB，被主代理发现后 taskkill 终止）。
+   定性：结构性加载；**无任何 outcome 数值被计算完成、查看或打印**（两次运行均在
+   断言阶段前被杀，测试输出仅有进度点与 2 个失败字母）；EXPOSURE_LEDGER 无涉。
+   永久防护：`tests/conftest.py` 新增 autouse 夹具——任何测试对真实档案路径调用
+   `load_real` 立即 RuntimeError（窄域：合成 tmp 路径不受影响）。该夹具此后在
+   全部 2489 测试上生效。
+
+## 1. Aaron 裁决 → IR → contracts 字段 → 生产 consumer → 测试 的完整映射
+
+裁决值单一来源：`contracts.aaron_ruled_methods()`（`src/itsf/contracts.py`）；
+逐值 pin：`tests/test_aaron_rulings.py`（11 测试）。IR-27（IMPLEMENTATION_RESOLUTIONS.md）
+为批量裁决档案。
+
+| 裁决 | contracts 字段 | 生产 consumer（入口可达） | 行为测试（红条件） |
+|---|---|---|---|
+| DR-1 B-i＋IR-7 i | SpreadCostMethod | costs.derive_spread_scalars（入口 `_approved_injectables`，spread 表 sha256 钉 `b6d6984f…`）＋costs.build_scenarios_from_method（build_full_study_result） | test_costs.py（窗界/插值/Stress 不复乘变异红） |
+| DR-2 vol20 全子项 | VolatilityRegimeMethod（含新字段 mapping_scope） | dataset.build_vol20_regime_mapping_from_universe（prepare 绑定单 mapping→双 resolver） | test_dr2_vol_regime.py（手算 pin/前视/守恒/ddof·log·r2 变异红） |
+| DR-3 FP=B | FpAllocationMethod | gridmix.build_grid ruled 路径（入口传 config.methods.fp_allocation） | test_gridmix_rulings.py（基准对照/tie-break/守恒） |
+| DR-4 七分项 | BootstrapMethod | stats.build_bootstrap_day_sequence＋bootstrap_mean_ci_ruled（入口 day-state 编码） | test_bootstrap.py（CRN 熵/零填充/NA 计数变异红） |
+| DR-5 K 政策 | GridRepeatPolicy | gridmix.build_grid ruled 路径（θ 入流、K-repeat、前缀嵌套、infeasible_by_convergence） | test_gridmix_rulings.py（θ 入流/前缀嵌套变异红） |
+| DR-6 F1 五层 | event_na_mapping | dataset.event_stratum_of（入口 event_of＋evidence.py:942 均经此单点） | test_s0_dataset.py DR-6 组 |
+| DR-7 双报 | stability_population | stability.build_stability_views populations 块（入口 kwarg）＋report 校验接线 check_populations | test_s0_stability.py（缺一总体即问题码） |
+| DR-8 linear | worst_day_estimator | study.resolve_worst_day_estimator→_percentile 必传参数（入口 build_study kwarg） | test_s0_study.py（未裁 raise/lower 变异移动 P1P5/linear 位同） |
+| L-5 双根 | RULED_RUNS_ROOT/RULED_ARCHIVE_ROOT＋RunConfig.runs_root/archive_root | runinfra.validate_output_roots（Stage-A 首门、无条件）＋archive_sealed_run（封存后、失败不解封）＋入口 GOVERNED_* 常量＋g_frozen_constants 9→11 | test_s0_runner.py L-5 组 29 测试（repo 内根拒绝/额外文件仍拒/归档失配/真实根不触碰 autouse 夹具） |
+
+**ruling→consumer 机器断言**：test_m6_chain `_METHOD_PROBES` 八字段行为 probe 全部
+就位（此前 7 个为 None）；`test_resolved_fields_must_have_a_behaviour_probe` 强制
+"裁决落地必须带 probe 同 commit"。
+
+## 2. F-1 / F-2 终态
+
+**F-1 = CLOSED（本轮验收边界内；第一候选的此宣称被 Codex 反例证伪——
+`capture_evidence` 内部活调用——已在第二候选修复，见 §11）**：`prepare`（pre-exposure）绑定生产 resolver 单例
+（G11 稳定身份）→ `context.materialize_day_value_snapshot` 物化逐日值快照 →
+`_PreparedExecutionInput.day_values` → Stage C 只消费快照（`build_full_study_result`
+的 `day_value_snapshot` 参数；config callable 曝光后零调用，行为测试证明）。
+诚实残留：ruled 实例的 adverse ticks MappingProxyType 后备 dict 为 contracts 模块私有
+（运行时无可变引用持有者）；bypass 构造的假配置仍由 gateway canonical-form 检查拦截。
+
+**F-2 = CLOSED（Aaron 定义的最小封存边界内）**：`output_proof.verify_key_claims` ——
+**封闭六主张释放闸**（KC1 日期总体 vs 锁定 preflight 字节；KC2 标签/NA 算术绑定独立
+L3＋F10 分区和；KC3 消费 evidence 字节级重建 hard 判定；KC4 封存名集绑定冻结
+engine×scenario 矩阵【闭合了 `_PARTIAL_DECLARATION_UNBOUND` 的名集轴】；KC5
+seeds/n_boot/估计量 vs 冻结与裁决常量；KC6 磁盘核验）。接线：渲染 pre-write 筛
+（manifest 注入后、任何文件落盘前；随 `methods=` 门控——生产链恒传
+`prepared.config.methods`，直调旧测试路径不筛）＋ post-write 释放（对**磁盘字节**
+重解析重验 KC1/2/4/5＋KC6；KC3 以 sealed-set 字节同一性传递 pre-write 判定，
+PARTIAL 标记显式声明该托管论证）。31 项密闭测试（test_key_claims.py）。
+**明确不是**通用叶证明框架：六个具名函数、封闭清单，加主张须改源码。
+
+## 3. 车道与文件归属（并行零交集）
+
+| 车道 | 文件 | 关键产出 |
+|---|---|---|
+| S1(Opus) | costs/stats/gridmix＋3 测试文件 | DR-1/4 消费者＋DR-3/5 原语（+73 测试） |
+| S2(Opus) | stability/dataset/context/study＋测试 | DR-2/6/7 消费者＋DR-8 估计量参数化＋F-1 快照（222 测试） |
+| S3(Sonnet) | runner/runinfra/test_s0_runner | L-5 门＋归档＋真实根防护（147→176） |
+| S4(Opus) | gridmix＋2 测试文件 | DR-3/5 上生产路径（54+22 测试；旧路径逐位不动性 git-show 对照证明） |
+| S5(Opus) | handoff＋test_s0_handoff | 39 处过时哨兵→裁决值贯通（158→178） |
+| 主代理 | contracts/entry/report/evidence/output_proof/conftest/test_m6_chain/test_key_claims/test_aaron_rulings/文档 | C0 裁决实体化＋全部集成＋F-2 闸＋CR-2 裁决口径＋probe 表 |
+
+## 4. 测试与全套件新鲜证据
+
+- **全套件 fresh（终态，R1 修复轮之后）：2495 passed / 0 failed / 0 skipped，
+  345.63s**（`-p no:cacheprovider`；候选 commit 前最后一次运行）。
+- `--collect-only` = 2495 = `MIN_COLLECTED_TESTS` 双钉（scripts/s0_real_run.py:56
+  与 tests/test_s0_runner.py，均 2495）。
+- 修复轮轨迹：R1 后全套件 2493/2（两败=被更正披露文本的字节稳定钉，随更正
+  同步更新）→ 2495/0。
+- 链测试收敛轨迹（诚实记录）：17→14→15→4→0 失败，五轮集中迭代；期间三个
+  前提反转的旧测试重写为"合成去裁决→仍拒绝"回归守卫（非删除）。
+- `SCANS=CLEAN`（final_candidate_scans.py 三扫描）；`guards.verify_frozen_hashes()`
+  OK；`git diff --check` 干净（两文件曾被编辑器写入 CRLF，已归一化并披露）。
+
+## 5. 合成 A→F 与工件证据
+
+- 合成 e2e（test_m6_chain E7 组）：完整裁定合成配置走真实
+  resolver→prepare→compute→render→disk verification→seal；A→F 抵达 COMPLETED；
+  8 个 MC_HANDOFF＋S0_REPORT.json/md＋HANDOFF_ADMISSION.json 落盘＋manifest 逐字节。
+- **合成通过 ≠ 真实路径已验证**（沿 M6.1.8 披露）：生产真实链从未运行；第一次
+  真实 S0 将是磁盘校验器/KC 闸/L-5 归档的第一次真实执行。
+- 准入终态（S5＋接线）：ruled 非 test_only 时 SEED_MANIFEST/DAY_STRATA 可封存并被
+  接纳；GRID_SAMPLES 诚实保持 withheld（真实剩余阻断=MC 侧 replay 接线，非已裁 DR——
+  哨兵措辞已按真实原因重写）；test_only 一律 withheld。
+
+## 6. L-5 输出根与归档边界
+
+- 根：`C:\Users\Aaron\quant-data\itsf-runs`（runs＋attempts 同根）；归档
+  `…\itsf-runs-archive`（run 完成后整目录复制＋逐文件 SHA-256 复核清单）。
+- RunConfig 显式字段＋`g_frozen_constants_in_process` 11 项在进程内钉两根；
+  Stage-A 首门 `validate_output_roots` 无条件运行（绝对性/互不包含/不在 repo 树内/
+  per-run 目录严格位于根下）；归档失败记录 loud 状态但**不解封不改运行目录**；
+  exact-set 零白名单逐字保留；仓库内 `runs/` 永不创建（测试钉）。
+
+## 7. 诚实保留的局限与工程判断（全部已披露、可被 Codex 升级）
+
+1. S1：DR-4 CRN 流键含 block_len（block-5/21 不共流的既有设计约定；裁决范围是
+   engine×scenario 共享）——若要求字面 (θ,seed) 是一行改动。
+2. S1：IR-7 Stress 存储 1.0 pre-multiplier（消费者统一乘 multiplier；存 2.0 即双计；
+   有效值硬断言＋`adverse_ticks_disclosure` 三值并列披露）。
+3. S2：straddle 边界 `older<t<=newer` 与三分位 numpy-linear 下含边界——两项子约定，
+   非裁决值。
+4. S4：K=200 全量证据形态 +≈56MB/+≈160s（headline k=k_start_index、digest 不含 k）；
+   压缩与否留 Aaron 会后裁。三个实现统计量跨 K 零离散系结构必然，作为发现披露。
+5. S5：GRID_SAMPLES replay=PENDING 的真实原因（headline-only 字节＋MC 侧 §5 电池）；
+   k_policy token 编码为工程选择。
+6. 主代理：KC3 post-write 为字节同一性托管判定（§2 已述）；`methods=None` 渲染路径
+   不筛不准入（生产链恒传，链测试钉）；DR-4 序列中"TP 类但 Oracle 无法成交"边缘
+   归 eligible_not_selected 计 0（批准输入集上结构不可达，沿 untradeable 披露纪律）。
+7. DR-5 加倍循环归 MC 接线（裁决原文如此）；`repeat_k_indices(doublings>0)` 就绪未接。
+8. **DR-1 adverse 向量与 DR-8 估计量的接线是行为无差异的**（R1 F1.1/F1.4）：裁决的
+   Primary 向量与 linear 估计量恰好复现既有工程惯例——这是真实且受欢迎的结果
+   （裁决确认了惯例），但意味着行为测试无法证伪"接线被撤"；两者以源码钉
+   （test_r1_f11_f14）锁定。
+9. **stability 方向轴新增 `DIRECTION_NONE_KEY="0"` 桶**（R1 F3.1）：仅存在于 DR-7
+   full-eligible 总体（d_open=0 日不得错侧）；系工程词汇选择，非裁决值，在此具名
+   披露供 Codex 裁定（备选=并入既有 NA 词汇）。
+10. **DR-4 与 DR-7 对 NA 日的处置不同**（R1 记录性注）：DR-4 序列按裁决 n1 剔除
+    （y_cont NA / d_open=0），DR-7 full-eligible 视图把同一批日零填充保留——两者
+    各自符合其裁决原文，但"完整合格序列"一词在同一封存报告的两个块中指两个日集；
+    在此显式披露。
+11. **`<repo>/attempts/` 历史残留**（R1 F4.2）：两个 pre-L-5 attempt 记录
+    （S0-T001-A20260801T121730Z / T162047Z）仍在 OneDrive 树内。按纪律不做静默
+    文件迁移——是否迁移至治理根归 Aaron 裁决；新 attempts 已在治理根下。
+12. **evidence.py＋test_s0_evidence.py 声明式 LF 归一化**（R1 F5.1）：两文件在 HEAD
+    为 CRLF（仓库其余为 LF），对 CRLF 文件新增行在 `* -text`＋默认 whitespace 下
+    永远无法通过 `git diff --check`，而 .gitattributes 属 Freeze Commit A 不可动。
+    故采 R1 备选：声明式归一化。**真实内容差异 = 77/30 与 13/1 行**（
+    `git diff --ignore-all-space --numstat`）；R1 已独立逐行核实无隐藏内容；
+    请 Codex 对这两个文件以 `--ignore-all-space` 复核。
+
+## 8. 独立 conformance review（R1，Opus，只读）＋唯一集中修复轮
+
+R1 六轴对抗审查裁定：**3 High / 7 Med / 8 Low**（轴 4 L-5 与轴 5 治理不变量
+PASS；四项治理钉逐字节复核通过）。无同类架构缺陷复现——三个 High 均为过时
+披露文本与缺失测试钉，非设计缺陷，故按规则执行了唯一的一轮集中修复。
+逐项处置：
+
+| R1 finding | 严重度 | 处置 |
+|---|---|---|
+| F6.1 sealed PERMANENT_MARKERS 断言八项裁决未做 | High | **FIXED**：evidence.py 九条标记逐条重写为"RULED＋真实残余验证缺口"表述 |
+| F6.2 sealed grid method 串称 DR-M6-B open | High | **FIXED**：gridmix 三处（docstring×2＋method 串） |
+| F2.1 methods=None 关闭 KC 筛/准入且无钉 | High | **FIXED**：源码钉 test_r1_f21（链 seam 必转发 prepared.config.methods） |
+| F1.2 F-1 快照接线零覆盖 | Med | **FIXED**：源码钉（compute 转发）＋行为钉（prepare 必物化且 covers 全日集） |
+| F1.3 DR-3/5/7 生产接线未钉 | Med | **FIXED**：payload 级存在性钉（repeats/fp_allocation/populations） |
+| F2.2 _INJECTABLES_CACHE 未设防 | Med | **FIXED**：删除缓存——scalars 每调用从 sha256 钉定字节重导出（毫秒级） |
+| F2.3 KC3 字节托管论证强于实际执行 | Med | **FIXED**：post_write 先对 written↔disk 的 S0_REPORT.json 做 sha256 绑定，托管论证成真 |
+| F3.1 DIRECTION_NONE_KEY 未披露 | Med | **DISCLOSED**：§7.9 |
+| F5.1 CRLF 幻影 diff | Med | **RESOLVED**：声明式 LF 归一化＋复核指引（§7.12） |
+| F6.3 S0_REPORT.md "rulings pending" | Med | **FIXED** |
+| F6.4 handoff 姿态段落与集成相反 | Med | **FIXED**（post-integration 姿态＋admitted 结果由新链测试 test_r1_ruled_non_test_only… 证明） |
+| F1.1/F1.4 行为无差异接线 | Low×2 | **DISCLOSED**（§7.8）＋源码钉 |
+| F2.4 unbind 死代码/后备回退 | Low | **FIXED**：unbind 删除；prepare 必物化由行为钉覆盖（day_values=None 仅 bypass 构造可达，类型钉与 AST 钉在位） |
+| F4.1 真实根守卫仅模块级 | Low | **FIXED**：守卫上移 tests/conftest.py（全套件 autouse） |
+| F4.2 attempts/ 残留 | Low | **DISCLOSED**（§7.11，迁移归 Aaron） |
+| F6.5 六处过时注释 | Low | **FIXED**（contracts/entry/report 全清） |
+| F6.6 IR-27 插入位置劈开 IR-26 表 | Low | **FIXED**（移至文件末） |
+| 轴 3 记录性注（DR-4 vs DR-7 NA 日处置） | note | **DISCLOSED**（§7.10） |
+
+修复轮后新增 6 个 R1 钉测试（test_m6_chain `test_r1_*`）全绿；修复轮触及文件的
+邻域与全套件在 §4 的最终数字中体现（修复轮后重跑）。
+
+## 9. 治理不变量（候选 commit 前逐项复核）
+
+```
+registry sha256 = de63b3d690c5c4be1def67aff9e0302138e9910df5b9a89acb1db57697b0b440（基线逐字）
+exposure sha256 = 394813431d879555b7504d2501c40123368d67a517359e056692eb6b0f6bc9e6（基线逐字）
+runs/ = ABSENT
+READY_APPENDED=NO
+RUN_AUTHORIZATION_REQUESTED=NO
+REAL_S0_RUN=NO
+REAL_DATA_READ=YES—STRUCTURAL_TEST_INCIDENT   # Codex 措辞采纳（IR-28d）：测试进程两次结构性加载（§0.3；零 outcome 接触；事件档案 ops/INCIDENT_STRUCTURAL_TEST_LOAD_20260810.md；conftest 永久闸）。生产/研究路径零读取
+POST_FREEZE_STRATEGY_IMPLEMENTED=NO
+AWAITING_CODEX_FINAL_INTEGRATED_REVIEW=YES
+```
+
+## 10. 给 Codex 的复核重点
+
+1. §0.2 口令豁免与 §0.3 数据加载事件的定性是否接受；
+2. KC 闸的六主张是否构成 Aaron 所定 F-2 最小边界的忠实实现（特别是 KC3 的
+   字节同一性托管论证与 `methods=` 门控的生产不可绕过性）；
+3. §7 的七项工程判断逐项裁定（采纳/升级为 DR）；
+4. DR-4 全序列口径在 evidence CR-2 与 KC5 的双重独立重建是否闭合；
+5. L-5 门与归档语义 vs 裁决句的逐字对照；
+6. READY supersession（Option A/B/C）在本包 PASS 后才由 Aaron 裁决（预登记，非本包内容）。
+
+## 11. Codex 第一轮终审（HOLD）的处置【HISTORICAL — superseded by §12 及其后的最新终态节；本节的"委托裁决"字样一律按 IR-28 现势 PENDING_AARON_RATIFICATION 读】
+
+Codex 对 `f54d05a` 裁 `CODEX_FINAL_REVIEW=HOLD / NOT READY`（六项阻断＋四项待
+Aaron 裁决）。主代理逐项 Level-1 复核：**六项阻断全部属实**（含对我方 F-1
+"CLOSED" 宣称的真实反例——`capture_evidence` 内部 `config.vol_axis_of` 调用被
+主代理与 R1 双双漏掉）。Aaron 以逐字指令"你替我研究以及做决定"委托裁决权，
+四项待裁项以 IR-28a-d 行使（授权出处入档，Aaron 可随时推翻）。处置：
+
+| Codex 阻断 | 修复 |
+|---|---|
+| #1 F-1 证据层活调用 | `capture_evidence(day_value_snapshot=)` 贯通；EV-5 消费快照；链级毒化-callable 行为钉＋源码钉 |
+| #2 KC 范围不足 | KC1 增日期集绑定（era 并集==锁定 L3＋removed 日不得复现——Codex 的同数换日反例已有专项钉）；KC2 增逐字段锁定计数绑定（F1-F10 na＋Y_cont/Y1-Y5 available/unavailable，守恒重排反例专项钉）；KC3 托管改真链——post-write 读磁盘密封 HANDOFF_ADMISSION.json（manifest 哈希绑定）内的 evidence 判定，合成标记删除 |
+| #3 exact-set 窗口 | Stage F 链验证后、COMPLETED 前最终目录枚举（零白名单；后植文件/子目录专项钉） |
+| #4 attempts 未验证创建 | `_attempt_dir` 最小自卫检查（绝对＋不在 repo 树），失败走既有 adir=None 降级 |
+| #5 归档不响亮/不可恢复 | `.partial` 复制＋原子晋升＋残留清理＋重试安全；入口终端行加印 archive_status |
+| #6 DR-5 宣称过强 | 更正为 `PARTIAL_BY_RULING`（S0 侧 consumer 已上路；加倍/收敛归 MC 接线——IR-28 状态行为准） |
+
+委托裁决：IR-28a（DR-7 零填充＋"0"方向桶转正）、IR-28b（DR-2 三子约定转正）、
+IR-28c（DR-1 ii=乘子后 {2,3,3,4}；报告链接入 PARTIAL 具名）、IR-28d（治理记账：
+本包 §9 行已按 Codex 措辞更正；事件档案入库；EXPOSURE_LEDGER 不追加的理由入档；
+口令豁免追认记录）。`2495 passed` 的 `FABLE_REPORTED / CODEX_NOT_REPRODUCED`
+定级照单接受——本轮终态数字同为 FABLE_MEASURED，供 Codex 复算。
+
+**第二候选终态数字（全部 FABLE_MEASURED，供 Codex 复算）**：
+
+- 全套件 fresh：**2519 passed / 0 failed / 0 skipped，482.17s**
+  （`-p no:cacheprovider`；S6 的 final_exact_set 新终态失败模式与全链交互零冲突）；
+  `--collect-only` = 2519 = 双钉。
+- 修复轮新增测试：+24（我方 8：KC 强化负例 6＋F-1 证据钉 2；S6：+16，每项
+  修复带 revert 实测证据——见 test_s0_runner S0-closeout 组）。
+- `SCANS=CLEAN`；`FROZEN OK`；`git diff --check` 干净；registry/exposure 逐字
+  基线；`runs/` 不存在；无 tag；无 READY/授权事件。
+- S6 诚实注记採纳入档：final exact-set 的第三分量（hook 写入名）按观察捕获而
+  非硬编码——mkdir→hook 返回窗口仍由 post_write_verify 的 exact-set 覆盖；
+  硬编码名等价于白名单，故弃。归档错误行经无守卫 stdout 打印为**有意的信道
+  选择**（H-1 定性：工件名=运行不变常量；与既有 terminal 行同信道）。
+- attempts/ 残留（§7.11）与 GRID_SAMPLES withheld（DR-5 PARTIAL_BY_RULING）
+  状态不变。
+
+## 12.【HISTORICAL】Codex 第二轮（`0e352e9` HOLD）的窄收口（第三候选，最终数字附后）
+
+Codex r2 四项逐一核验属实并处置：
+
+| Codex r2 | 处置 |
+|---|---|
+| #1 KC1 自锁＋任意换日假绿 | **FIXED**：排除集改为封闭三组具名整日移除（zero_bar/early_close/missing>10%）——adr14 warm-up 日按冻结 NA 政策留在 L3 样本，其出现在 eras 为合法（反自锁专项钉）；新增伪日 plausibility 筛（ISO 可解析＋锁定 Development 窗内＋工作日；周末/窗外/不可解析换日专项钉）；残余（窗内工作日假期）显式声明由 KC3 的 evidence 成员绑定合围（structural.eras vs EV-1 reducers），非隐藏 |
+| #2 根门失败仍建 attempts | **FIXED**（S7）：`output_roots_validated` 门失败 → 全配置输出路径零 I/O（adir=None 降级；其余 Stage-A 门行为不变） |
+| #3 归档非完整 inventory 证明 | **FIXED**（S7）：源 pre/post 双 inventory 等值＋staging 等值＋晋升后终 inventory 类型/尺寸/内容 sha 三次全验＋symlink/junction/reparse 拒绝；晋升后终验失配的 dest 保留为证据不删 |
+| #4 IR-28 不构成已批准 | **ACCEPTED**：IR-28a-d 降格 `PENDING_AARON_RATIFICATION`（IR 文件已改）；真实 S0 前必须逐项批准。DR-1 sensitivity 报告链与 DR-5 MC consumer 维持具名 PARTIAL |
+| 附带 | 断言快照冻结：`S0_INPUT_PREFLIGHT.json` 字节 sha256 钉
+  `9d6dd1c1…4debd6` 于两个 KC 读取点强制（测试双名补丁） |
+
+`2519 passed` 的 `FABLE_REPORTED` 定级照单接受；第三候选终态数字同为
+FABLE_MEASURED 待 Codex 复算。
+
+**第三候选终态数字（FABLE_MEASURED，供 Codex 复算）**：
+
+- 全套件 fresh：**2536 passed / 0 failed / 0 skipped，355.95s**
+  （`-p no:cacheprovider`，提交树逐字节即被测树）；`--collect-only` = 2536
+  = 双钉。附注：S7 两处条件 pytest.skip 经扫描器抓出后改为硬断言（junction
+  不可建的机器应 loud 失败而非缩减覆盖），改后全电池重跑。
+- 修复轮新增：+17（我方 KC1 反自锁/伪日 4；S7 根门零 I/O 4＋归档 inventory 9；
+  S7 的 13 项新测试在 HEAD 上 revert 实测 13 红 1 过——唯一过者即回归钉本身）。
+- S7 附加实证：真实 junction（mklink /J，attrs=0x410）两测均真实执行非 skip；
+  真实 symlink 因 WinError 1314 不可建，该分支经具名 monkeypatch 探针测试；
+  `shutil.rmtree` 不穿越 junction 经实测确认（staging 清理无删穿风险）。
+- 既有一测试**有记录地反转**：`test_output_roots_gate_refuses_runs_root_
+  inside_repo_tree_via_runner` 原本钉住"attempts 落安全 tmp"——恰是 r2 #2
+  拒绝的行为；现钉零创建，反转理由入其 docstring。
+- `SCANS=CLEAN`；`FROZEN OK`；`git diff --check` 干净；registry/exposure
+  逐字基线；`runs/` 不存在；无 tag；无 READY/授权事件。
+- 待办不变：IR-28a-d `PENDING_AARON_RATIFICATION`（真实 S0 前必须完成）；
+  DR-1 sensitivity 报告链与 DR-5 MC consumer 具名 PARTIAL；attempts/ 历史
+  残留待 Aaron。
+
+## 13.【HISTORICAL】R4 最终边界收口（第四候选；证据当时 FABLE_MEASURED / CODEX_NOT_YET_REPRODUCED）
+
+MASTER_PROMPT_S0_CLOSEOUT_R4_FINAL_BOUNDARY 三项工程闭合＋治理文字一致化：
+
+**B1 — KC1 exact L3 authority**：prepare（pre-exposure）从已验证结构原子重建
+exact L3（生产=`universe.funnel.structurally_eligible`，即 Stage-B 对锁定断言
+核验过的漏斗；hermetic=同族原子 ds.records，无第三路径），排序 tuple＋digest
+入 `_PreparedExecutionInput`。KC1 = `set(union(structural.eras)) ==
+set(exact_l3_dates)` 双向精确身份（missing/extra 各自问题码）＋跨/同 era 重复
+拒绝＋authority 缺失/错型 fail-closed（`exact_l3_authority_missing`——
+plausibility 筛不得顶替身份）。expected 侧永不取自 payload/evidence mirror；
+KC3 保留为第二道内部一致性。adr14 warm-up 合法留在 L3（专项钉）。
+**判别力实证**：仅禁用身份比较→5 测试红，含"窗口内合法工作日（2020-02-03）
+同数换日"——该案对全部前置筛不可见。59/59（test_key_claims）。
+
+**B2 — 断言真曝光前快照**：prepare 一次性读取＋sha 校验
+`S0_INPUT_PREFLIGHT.json`（钉 `9d6dd1c1…4debd6`），bytes＋digest 入 prepared；
+pre-write 筛、post-write 释放、KC1/KC2 全部消费同一 prepared 对象；
+`RUN_STARTED` 后对该路径读取次数=0（只读边界复核：仅存的两个模块级读取点
+分别为 prepare 自身与 legacy 直调回退，生产链不经过后者）；缺失/漂移/解析
+失败在 exposure 前拒绝。
+
+**B3 — COMPLETED 前内容+类型终 inventory**：共享 reducer
+`runinfra.build_tree_inventory`（relative_path/entry_type/size/sha256；
+symlink/junction/reparse/special 拒绝；旧私名删除有钉）；baseline hook 工件
+（含 REGISTRY_AFTER_RUN_STARTED.json）产生即按内容 digest 捕获；renderer
+expected=实际 written bytes；manifest 写后即捕获 expected bytes；chain 验证
+后、COMPLETED 前全目录 exact inventory equality（无白名单/无 subset/无仅名
+比较，有钉）；archive 终验后再复核 source inventory 覆盖整个归档窗口
+（`source_stable_after_verify`）。**判别力实证（revert）**：门降回名字级后，
+改写 report 内容/同名目录换型/改写 registry 快照/改写 manifest 四案全部
+COMPLETED——恰为 Codex r3 指出的洞；恢复后四案全红。213/213
+（test_s0_runner）。
+
+**PHASE C 治理文字**：IR-28 全部改"Fable proposal / PENDING_AARON_
+RATIFICATION"（生效措辞清除）；本包 §11 标 HISTORICAL/superseded；事件档案
+的 ledger 处置与口令豁免均标 pending Aaron；`REAL_DATA_READ=YES—STRUCTURAL_
+TEST_INCIDENT` 作为事实保留、不等同于裁决；DR-1 sensitivity 报告链与 DR-5
+MC consumer 维持具名 PARTIAL。
+
+**终态数字**：全套件 fresh **2562 passed / 0 failed / 0 skipped，358.44s**
+（`-p no:cacheprovider`，提交树即被测树）；`--collect-only`=2562=双钉；
+`SCANS=CLEAN`；`FROZEN OK`；`git diff --check` 干净；registry/exposure 逐字
+基线；`runs/` 不存在；无 tag/READY/授权事件。
+
+```
+REAL_RUN_READY=NO
+READY_APPENDED=NO
+STRATEGY_BUILD_STARTED=NO
+AWAITING_CODEX_FINAL_REVIEW=YES
+```
+
+## 14.【HISTORICAL】R5 终局（具名 Fable 委托六项裁定＋最小接线；第五候选）
+
+授权：Aaron"这些东西我会让fable决定"→ R5 MASTER_PROMPT 六项具名委托（不扩展、
+非无限）。六项裁定全文见 IMPLEMENTATION_RESOLUTIONS.md IR-28 终稿（含
+authority/alternatives/decision/reason/effects/remaining_boundary）。
+
+**五栏分类（现势）**：
+
+- **CLOSED**：R4 三边界（exact-L3 身份/run-scoped 断言/内容+类型终 inventory，
+  本轮回归全绿）；IR-28a/b（已实现已测）；IR-28c sensitivity 正式报告接线
+  （disclosures.sensitivity_adverse_plus1：裁定向量逐值钉＋E1 每场景
+  n_stop×−$0.50 纯算术 delta，校验器拒篡改，role=never_primary）；DR-5 机器
+  可读分阶段边界（HANDOFF_ADMISSION.dr5_staged_boundary，消费者 fail-closed
+  规则内嵌）；输出根运维门（Stage-A 第二门：存在/真实目录/非 reparse/可写
+  探针/1 GiB 容量地板；失败零 I/O；从不创建缺失根）。
+- **PARTIAL_BY_RULING**：DR-5 的 MC 侧（doubling/convergence consumer、
+  replay、GRID_SAMPLES）——按裁决归 MC 接线，本轮未发明结果。
+- **OPERATIONS_REQUIRED**：真实双根创建＋ops/OUTPUT_ROOTS_READINESS_
+  CHECKLIST.md 人工项（云同步核对/卷隔离/备份姿态）Aaron 签署；两真实根
+  本轮验证仍 ABSENT、未创建未探测。
+- **DECIDED_BY_EXPLICIT_FABLE_DELEGATION**：IR-28a-d＋DR-5 分阶段＋运维门
+  设计（六项，authority 逐字入档）。
+- **NOT_AUTHORIZED**：真实 S0 运行；READY/RUN_AUTHORIZED 追加；post-S0
+  策略 build（需外部口令）；PHASE-C 历史口令豁免不延伸为任何运行授权。
+
+**本轮治理事实变更（全部有据）**：
+1. `EXPOSURE_LEDGER.md` 依 IR-28d 追加一条 quantity=0/outcome_seen=NO/
+   formal_trial=NO 的 incident 交叉引用行（append-only；累计研究暴露仍 0）。
+   **新现势 sha256 = `e5fcfa14ca45e546981e1ef9e65d6c952635c3c7fd5269f5fc345a42fadf2966`**
+   （旧基线 `39481343…` 由该裁定行取代——此后一切不变量以新值核对）。
+2. **本轮自曝事件（已修复＋守卫化）**：R5 中间迭代里 make_deps 夹具第一版
+   mkdir 把测试的故意无效根一并创建，短暂在 `<repo>/runs` 留下一个**空目录**
+   （取证：零文件零子项；已 rmdir；随后把 `<repo>/runs` 加入套件级 autouse
+   守卫监视清单防复发）。registry/研究事件零涉及。
+3. 包头部 commit 链事实更正（R5 时点为 COMMITS_AFTER_BASELINE=4；R5.1 现势
+   =5，机械复算见 §0 区块与 §15）。
+
+**终态数字（FABLE_MEASURED / CODEX_NOT_FULLY_RERUN）**：全套件 fresh
+**2565 passed / 0 failed / 0 skipped，358.20s**（提交树即被测树）；
+collect==双钉==2565；SCANS=CLEAN；FROZEN OK；diff-check 干净；registry
+`de63b3d6…`（基线逐字）；exposure `e5fcfa14…`（裁定后现势）；`runs/` ABSENT；
+无 tag/READY/授权；两真实根 ABSENT。
+
+```
+REAL_RUN_AUTHORIZED=NO
+READY_APPENDED=NO
+REAL_S0_EXECUTED=NO
+POST_S0_STRATEGY_BUILD_STARTED=NO
+AWAITING_CODEX_FINAL_ACCEPTANCE=YES
+```
+
+## 15.【HISTORICAL】R5.1 终局窄收口（B1–B4 四项具名修复；第六候选，Codex 工程 PASS）
+
+授权：`START_S0_R5_1_FINAL_NARROW_CLOSEOUT`（Aaron 转发 Codex r5 verdict 并
+指示审核后执行）。范围严格限定 B1–B4 及其直接回归；无任何范围外重构。
+
+**B1 — sensitivity 正式封印 fail-closed（原为 validate-if-present）**：
+
+- `report.validate_formal_payload`：块**强制存在**＋精确键集（块级 7 键/
+  cell 级 2 键，未知键拒绝）＋channel/role/scope/e2_delta 逐字钉＋裁定向量
+  相等＋−$0.50/stop 钉＋场景集=冻结四场景＋逐 cell 类型/有限性/精确算术。
+- **独立重算（新增注册 HARD 检查 `IR-28c.sensitivity_recompute`）**：
+  `evidence._reconcile_sensitivity` 从**已解析的封存字节**（parsed sealed
+  rows，非 producer 聚合）逐 E1 场景重数 `stop_triggered is True` 行数并硬
+  比对公示 n 与 −$0.50×n delta；population=4（axis_scenarios），缺块/缺
+  cell 比对不足即 `evidence_check_incomplete` HARD。渲染器对"自洽篡改"
+  （n 与 delta 一起动）结构上不可见——该篡改现由字节重算拒绝（有测试）。
+- **行为测试电池**：validator 侧 19 项（正例封存/整块删除/逐场景删除×4/
+  ticks、n_stop、delta、role、scope、channel、e2_delta、per_stop、未知场景、
+  块级未知键、cell 级未知键、缺键 12 类篡改）；evidence 侧 5 项（自洽篡改、
+  封存字节 stop 位翻转、缺块、缺单 cell、未篡改基线干净）。
+- **旧候选放行证明（测试内、失败≠skip）**：
+  `test_r5_1_old_candidate_admitted_the_representative_tampers` 从 git 对象库
+  加载 `594bca5:src/itsf/s0/report.py` 为独立模块，证明三个代表性篡改
+  （整块删除/scope 篡改/删单场景 cell）在旧候选零 sensitivity 异议放行、
+  新候选逐一拒绝。加载失败即测试失败，从不 skip。
+
+**B2 — DR-5 staged boundary 封存校验＋default-refuse 消费者门**：
+
+- 单一来源：`handoff.build_dr5_staged_boundary`（producer）＋
+  `handoff.validate_dr5_staged_boundary`（精确键集＋逐值钉：status=
+  PARTIAL_BY_RULING、base_s0_sealable 字面 True、冻结三项 withheld 列表
+  逐序、consumer_rule 逐字）＋`handoff.mc_ready_gate`（三者共读同组常量）。
+- 封存时：admission record 序列化**前**校验，非空问题即
+  `dr5 staged boundary invalid at seal` 拒封（chain 测试证明 status 篡改/
+  缺键/未知键三类拒封）。post-write：`post_write_verify` 从磁盘字节重新解析
+  admission 并用同一 validator 复校（producer-drift 防线；stateful-fake
+  测试证明该磁盘分支独立拒绝）。
+- `mc_ready_gate` **无条件拒绝**（`McConsumerAbsent`）：任何 admission 内容
+  （含伪造 COMPLETE）都开不了门——MC consumer 只能以 MC 接线时的**显式代码
+  变更**出现，不存在任何 fake consumer/GRID_SAMPLES。测试 3 项。
+- **措辞更正（Codex r5 采纳）**：sensitivity 是 formal **disclosure 通道**
+  （validator＋字节重算护栏），DR-5 是 machine-readable **boundary**——
+  两者都**不是**"已存在的生产 consumer"。现势诚实状态：
+  `DR5_BASE_S0_STAGED_DISCLOSURE=VALIDATED`、`DR5_MC_CONSUMER=ABSENT`、
+  `DR5_STATUS=PARTIAL_BY_RULING`。
+
+**B3 — 治理文档结构修复＋结构测试**：
+
+- `IMPLEMENTATION_RESOLUTIONS.md`：line-284 旧提案段改题
+  `### IR-28（HISTORICAL_SUPERSEDED — …现势唯一定义见上方 R5 终稿…）`；
+  现势唯一 IR-28 定义=line-171 R5 终稿（DECIDED_BY_EXPLICIT_FABLE_DELEGATION）。
+- `EXPOSURE_LEDGER.md`：incident quantity=0 行移入表格内（紧接占位行）、
+  占位行改述"零研究 outcome 暴露"、`累计 exposure：0` 移至文末。**语义与
+  累计值零变化**（纯结构修复）。**新现势 sha256 =
+  `1d10a1db57d42efcac3ca0c4f915901059ac7edb430de28633dc90148e6b52e4`**
+  （取代 §14 的 `e5fcfa14…`；此后一切不变量以新值核对）。
+- 新增 `tests/test_governance_docs.py` 8 项结构钉：IR-28 现势定义唯一且先于
+  历史段/其余头必须带 HISTORICAL_SUPERSEDED；台账表格单一连续块/incident 行
+  在表内且数量列=0/累计 0 为文末最终句。
+
+**B4 — 包头 commit 链事实机械复算**：见 §0 区块
+（COMMITS_AFTER_BASELINE=5、FILES_CHANGED=37、INSERTIONS=21201、
+DELETIONS=8924，均为 `git rev-list --count` / `git diff --shortstat
+bcdf8f36..594bca5` 机械输出；R5.1 候选为第 6 个 commit）。
+
+**终态数字（FABLE_MEASURED / CODEX_NOT_YET_REPRODUCED）**：全套件 fresh
+**2615 passed / 0 failed / 0 skipped，368.07s**（提交树即被测树）；
+collect==双钉==**2615**（`scripts/s0_real_run.py::MIN_COLLECTED_TESTS` 与
+`tests/test_s0_runner.py` 同步重钉，旧值 2565）；SCANS=CLEAN；FROZEN 7 文件
+逐一 OK；`git diff --check` 干净；registry
+`de63b3d690c5c4be1def67aff9e0302138e9910df5b9a89acb1db57697b0b440`（基线
+逐字）；exposure `1d10a1db…`（B3 结构修复后现势，语义不变）；`runs/`
+ABSENT；无新 tag/READY/授权；两真实根 ABSENT 未创建未探测。
+
+```
+REAL_RUN_READY=NO
+REAL_RUN_AUTHORIZED=NO
+DR5_MC_CONSUMER=ABSENT
+POST_S0_STRATEGY_BUILD_STARTED=NO
+AWAITING_CODEX_LIMITED_FINAL_REVIEW=YES
+```
+
+## 16.【HISTORICAL】R5.1.1 纯文档终局（Codex 限定终审事实记录＋候选事实勘误；第七候选）
+
+授权：`START_S0_DOC_FINAL_AND_OPERATIONS_PREPARATION`（本节为其 PHASE C，
+纯文档；生产代码与测试行为零变更，`tests/test_governance_docs.py` 仅新增
+结构测试）。
+
+**Codex 对 `999b494` 的独立验收事实（照录）**：
+
+```
+CODEX_LIMITED_ENGINEERING_REVIEW=PASS
+CODEX_FULL_SUITE_REPRODUCED=2615 passed / 0 failed / 0 skipped
+CODEX_FULL_SUITE_DURATION=411.34s
+SCANS=CLEAN
+FROZEN_HASHES=PASS
+REGISTRY_UNCHANGED=YES
+RUNS_DIR=ABSENT
+```
+
+边界区分（防止误读）：
+
+- **B1–B3 工程行为已由 Codex 独立复核通过**（sensitivity 结构＋字节重算
+  测试、DR-5 边界/链路/默认拒绝测试、治理结构测试、全电池复跑）——本轮
+  对它们**零改动**；
+- **B4 是本轮修正的候选事实勘误**（`999b494` 包头仍统计到父提交
+  `594bca5` 的 5/37/21201/8924；现势口径与最终数字见 §0 区块）；
+- sensitivity 为 formal disclosure 通道、DR-5 为 machine-readable
+  boundary——均非已存在的生产 consumer：`DR5_MC_CONSUMER=ABSENT`、
+  `DR5_STATUS=PARTIAL_BY_RULING`；
+- `REAL_RUN_READY=NO`、`REAL_RUN_AUTHORIZED=NO` 不变。
+
+**本轮文档修正清单（全部 doc-only）**：
+
+1. §0 事实块改为最终候选口径（Codex HOLD 唯一阻断项）；
+2. `IMPLEMENTATION_RESOLUTIONS.md` 删除三处历史 python 切片编辑意外遗留
+   的重复块：IR-26 重复段（旧 236-254 行，与 123-141 字节级相同）、IR-27
+   重复段（旧 255-283 行，与 142-170 字节级相同）、无标题孤儿块（旧
+   215-234 行，为原 IR-25 段 P1/P2 表＋勘误的字节级副本）。删除后现势
+   IR-25/26/27/28 各恰一份＋一份显式 `HISTORICAL_SUPERSEDED` IR-28 存档
+   （302→233 行）。**不改变任何裁决内容或现势语义；删除意外重复不是撤销
+   历史裁决**；
+3. `tests/test_governance_docs.py` 新增结构证明：每个 IR 现势定义唯一
+   （IR-25/26/27/28 计数各=1＋恰一份历史 IR-28）＋任意 20 行实质内容
+   窗口不得重复（防同类漂移复发的通用守卫）。
+
+**本轮验收（doc-only 口径，如实）**：治理文档专项测试全绿；收集数上升
+（新增结构测试所致），`MIN_COLLECTED_TESTS=2615` 为下限语义且钉文件不在
+本轮允许修改清单，floor 不动；SCANS/冻结哈希/diff-check/registry/exposure
+哈希逐项复核；**本轮无生产代码变化，未重跑 2615 全电池（如实声明，
+Codex 已于 `999b494` 独立复跑通过）**。
