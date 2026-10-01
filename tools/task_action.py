@@ -71,8 +71,9 @@ def validate_action_arguments(arguments: str) -> tuple[bool, str]:
     inner = body[1:-1]
     if not (inner.startswith('"') and inner.endswith('"')):
         return False, "inner command is not quote-delimited"
-    if inner.count('"') != 4:
-        return False, f"expected exactly two quoted tokens, found {inner.count('\"') // 2}"
+    quotes = inner.count('"')
+    if quotes != 4:
+        return False, f"expected exactly two quoted tokens, found {quotes // 2}"
     return True, "ok"
 
 

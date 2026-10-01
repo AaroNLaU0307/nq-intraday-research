@@ -22,9 +22,15 @@ informational line only.
 
 NATURAL (trigger-fired) capture = a JSONL row whose invocation has a
 "==== task start" block in logs/forward_pit_task_stdout.log AND
-capture_type == ROUTINE_FORWARD_COLLECTION AND scheduled_time >= the task
-trigger's StartBoundary (ops/R2_FORWARD_PIT_TASK.xml) AND it is the only
-recorded invocation for its scheduled slot. Every other snapshot is MANUAL.
+capture_type == ROUTINE_FORWARD_COLLECTION AND scheduled_time >= the literal
+StartBoundary 2026-09-21T11:00:00+08:00 adopted by D-R2-2026-10-01-02 AND it is
+the only recorded invocation for its scheduled slot. Every other snapshot is
+MANUAL. The boundary is pinned, not read from ops/R2_FORWARD_PIT_TASK.xml: the
+installer rewrites that export on every registration, which would move the
+counts without new evidence (CP-AUDIT-01 R2-G06). The export is still read, only
+to print a labelled WARN when its StartBoundary differs from the pinned value.
+Rows that are not COMPLETED (fault, skip) count as JSONL rows and in the
+per-slot tally, never as NATURAL (R2-G05).
 The raw "task start" block count is printed for information only: the .cmd
 wrapper writes that block on every invocation, manual or scheduled, so it does
 not separate the two.
@@ -50,6 +56,8 @@ TASK_XML = PROJ / "ops" / "R2_FORWARD_PIT_TASK.xml"
 STATE = PROJ / "PROJECT_STATE.md"
 
 ROUTINE = "ROUTINE_FORWARD_COLLECTION"
+# D-R2-2026-10-01-02 (X2), pinned per D-R2-2026-10-02-01 R2-a.
+NATURAL_BOUNDARY = _dt.datetime.fromisoformat("2026-09-21T11:00:00+08:00")
 CATCH_UP_THRESHOLD_S = 300  # on-time firings start within seconds of the slot
 
 # key in PROJECT_STATE.md -> key in the derived counts
@@ -152,35 +160,43 @@ def derive(cutoff_id: str) -> dict:
     rows_in = [r for r in rows if _utc(r["actual_start_utc"]) <= cutoff]
 
     blocks, block_ids = task_start_invocations()
-    boundary = trigger_start_boundary()
-    per_slot = Counter(r["scheduled_time"] for r in rows_in)
+    boundary = NATURAL_BOUNDARY
+    try:
+        export_boundary = trigger_start_boundary()
+    except (OSError, ValueError, ET.ParseError) as exc:
+        export_boundary = f"unreadable ({exc.__class__.__name__})"
+    per_slot = Counter(r.get("scheduled_time") for r in rows_in)
 
     captures = []
     for r in rows_in:
-        has_block = r["invocation_id"] in block_ids
+        has_block = r.get("invocation_id") in block_ids
+        slot = r.get("scheduled_time")
         natural = (
             has_block
-            and r["capture_type"] == ROUTINE
-            and _dt.datetime.fromisoformat(r["scheduled_time"]) >= boundary
-            and per_slot[r["scheduled_time"]] == 1
+            and r.get("snapshot_id") is not None
+            and r.get("capture_type") == ROUTINE
+            and slot is not None
+            and _dt.datetime.fromisoformat(slot) >= boundary
+            and per_slot[slot] == 1
         )
+        late = r.get("late_by_seconds")
         captures.append({
             "snapshot_id": r.get("snapshot_id"),
-            "slot": r["scheduled_time"],
-            "late_by_seconds": r["late_by_seconds"],
-            "status": r["status"],
-            "funds_ok": r["funds_ok"],
-            "funds_failed": r["funds_failed"],
-            "snapshot_verified": r["snapshot_verified"],
-            "capture_type": r["capture_type"],
-            "collector_version": r["collector_version"],
+            "slot": slot or "?",
+            "late_by_seconds": late if isinstance(late, (int, float)) else float("nan"),
+            "status": r.get("status", "?"),
+            "funds_ok": r.get("funds_ok") or 0,
+            "funds_failed": r.get("funds_failed") or 0,
+            "snapshot_verified": r.get("snapshot_verified"),
+            "capture_type": r.get("capture_type", "?"),
+            "collector_version": r.get("collector_version", "?"),
             "task_start_block": has_block,
             "natural": natural,
-            "catch_up": natural and r["late_by_seconds"] > CATCH_UP_THRESHOLD_S,
+            "catch_up": natural and isinstance(late, (int, float)) and late > CATCH_UP_THRESHOLD_S,
         })
 
     in_scope_ids = {snapshot_id(d) for d in in_scope}
-    logged_ids = {c["snapshot_id"] for c in captures}
+    logged_ids = {c["snapshot_id"] for c in captures if c["snapshot_id"]}
     natural = [c for c in captures if c["natural"]]
     return {
         "dirs": in_scope,
@@ -196,11 +212,12 @@ def derive(cutoff_id: str) -> dict:
         "raw_blocks": blocks,
         "raw_with_block": sum(c["task_start_block"] for c in captures),
         "raw_without_block": len(in_scope) - sum(c["task_start_block"] for c in captures),
-        "collector_versions": sorted({c["collector_version"] for c in captures}),
+        "collector_versions": sorted({str(c["collector_version"]) for c in captures}),
         "schema_versions": dict(sorted(Counter(
             manifests[i]["manifest_schema_version"] for i in in_scope_ids).items())),
         "last_snapshot": max(in_scope_ids),
         "boundary": boundary.isoformat(),
+        "export_boundary": export_boundary,
     }
 
 
@@ -273,7 +290,12 @@ def main() -> int:
     print(f"  jsonl rows       : {d['jsonl_rows']}")
     print(f"  NATURAL          : {d['natural']}   (catch-ups > {CATCH_UP_THRESHOLD_S}s late: {d['catch_ups']})")
     print(f"  MANUAL           : {d['manual']}   (incl. no-log-row snapshots: {', '.join(d['snapshots_without_log_row']) or 'none'})")
-    print(f"  trigger boundary : {d['boundary']}")
+    print(f"  NATURAL boundary : {d['boundary']}  (pinned, D-R2-2026-10-01-02)")
+    exp = d["export_boundary"]
+    if not isinstance(exp, _dt.datetime) or exp != NATURAL_BOUNDARY:
+        shown = exp.isoformat() if isinstance(exp, _dt.datetime) else exp
+        print(f"  WARN (info only) : task export StartBoundary {shown} differs from the pinned "
+              "boundary; counts use the pinned value")
     print(f"  collector        : {', '.join(d['collector_versions'])}   manifest schema: {d['schema_versions']}")
     print(f"  last snapshot    : {d['last_snapshot']}")
     print(f"  natural not clean: {', '.join(bad_natural) or 'none'}")
@@ -283,7 +305,7 @@ def main() -> int:
     print("  captures:")
     for c in d["captures"]:
         tag = "NATURAL" + (" catch-up" if c["catch_up"] else "") if c["natural"] else "manual"
-        print(f"    {c['slot'][:16]}  {c['snapshot_id']:<20} late={c['late_by_seconds']:>9.1f}s "
+        print(f"    {c['slot'][:16]}  {str(c['snapshot_id']):<20} late={c['late_by_seconds']:>9.1f}s "
               f"{c['status']} {c['funds_ok']}/{c['funds_ok'] + c['funds_failed']} "
               f"verified={c['snapshot_verified']} {c['capture_type']} block={'Y' if c['task_start_block'] else 'N'}  {tag}")
     for f in failures:

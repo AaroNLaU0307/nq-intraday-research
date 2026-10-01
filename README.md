@@ -45,7 +45,10 @@ python tools/reproduce.py
 Offline (no network, no NQ data). Runs the test suite, verifies every forward snapshot's
 hashes, re-derives the forward-collection counts from `logs/` and the manifests, checks
 every relative Markdown link, compares the counts with `PROJECT_STATE.md`, and exits
-non-zero on any mismatch. Needs Python ≥ 3.10 with `pytest` and `tzdata` (Windows).
+non-zero on any mismatch. Needs `pytest`, and `tzdata` on Windows. Interpreters actually
+run: Python 3.13.14 with pytest 9.1.1 (reproduce PASS); the test suite also passes under
+Python 3.14.2 (the collector's interpreter) via `python -m unittest discover -s tools -p
+"test_*.py"`, which has no pytest. No other version has been run.
 The live task keeps adding snapshots after a checkpoint; counts are taken as of the
 snapshot named in `PROJECT_STATE.md`, and later ones are reported for information only.
 

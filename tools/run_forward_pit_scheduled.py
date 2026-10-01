@@ -217,7 +217,9 @@ def consume_capture_type_once(log_dir: Path, default: str) -> str:
     if not marker.exists():
         return default
     try:
-        payload = json.loads(marker.read_text(encoding="utf-8"))
+        # utf-8-sig: Windows PowerShell 5.1 `Set-Content -Encoding utf8` writes a
+        # BOM, which plain utf-8 + json.loads rejects (BL-R2-01).
+        payload = json.loads(marker.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError):
         payload = {}
     finally:

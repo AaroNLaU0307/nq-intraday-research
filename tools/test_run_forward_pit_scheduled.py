@@ -343,6 +343,23 @@ class ScheduledWrapperTestCase(unittest.TestCase):
         )
         self.assertFalse(marker.exists())
 
+    def test_powershell_51_bom_marker_is_honoured(self) -> None:
+        # The exact bytes the installer's `Set-Content -Encoding utf8` writes under
+        # Windows PowerShell 5.1: UTF-8 BOM + compact JSON + CRLF (BL-R2-01).
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        marker = self.log_dir / W.CAPTURE_ONCE_NAME
+        written = _dt.datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        payload = (
+            '{"written_utc":"' + written
+            + '","capture_type":"UNATTENDED_SCHEDULER_VALIDATION"}'
+        )
+        marker.write_bytes(b"\xef\xbb\xbf" + payload.encode("utf-8") + b"\r\n")
+        self.assertEqual(self.run_wrapper(), W.EXIT_OK)
+        self.assertEqual(
+            self.log_records()[-1]["capture_type"], "UNATTENDED_SCHEDULER_VALIDATION"
+        )
+        self.assertFalse(marker.exists())
+
     def test_corrupt_marker_is_ignored_and_removed(self) -> None:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         marker = self.log_dir / W.CAPTURE_ONCE_NAME
