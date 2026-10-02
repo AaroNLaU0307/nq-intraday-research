@@ -1,4 +1,7 @@
-# Intraday-Trend-Strategy-Framework — NQ intraday research programme (publication mirror)
+# nq-intraday-research — NQ intraday research programme (publication mirror)
+
+Published at <https://github.com/AaroNLaU0307/nq-intraday-research> (renamed 2026-10-02 from
+`Intraday-Trend-Strategy-Framework`; GitHub redirects the old name).
 
 This repository publishes one research programme on intraday behaviour in Nasdaq-100 futures
 (NQ / MNQ), run under a preregister-then-test workflow ([`QUANT_WORKFLOW_VNEXT.md`](QUANT_WORKFLOW_VNEXT.md),
@@ -27,12 +30,13 @@ no raw vendor data and no NQ returns are in this repository.
   like each project's: checked-out bytes equal committed bytes, so every recorded sha256
   verifies from a clone.
 - The ITSF subfolder keeps its workspace name, **`Intraday Trend Strategy Framework`** (with
-  spaces), while the repository name is hyphenated. Reason: R1's code resolves its sibling as
+  spaces), while the repository is named `nq-intraday-research`. Reason: R1's code resolves its sibling as
   `../Intraday Trend Strategy Framework` (`r1/events.py:39`, `r1/itsf_pin.py:26`,
   `psmv/psmv_structural.py:57`). With a hyphenated folder R1's suite silently skips 13 ITSF-pin
   and calendar tests (272 passed, 13 skipped); with the workspace name it runs in full (285).
   No record had to be edited.
 - Local placement: the mirror lives at `Quant trade/_publish/Intraday-Trend-Strategy-Framework/`
+  (the local folder keeps the original name; `tools/sync_mirror.ps1` resolves paths from it)
   in the author's workspace — an explicit path binding for the GitHub mirror, kept out of the
   project folders (`_Archive` is the precedent for an underscore root directory).
 
