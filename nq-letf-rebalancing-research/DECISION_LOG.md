@@ -62,6 +62,7 @@ this log existed; their evidence is the file named, as preserved in the baseline
 | ACC-CP-MONO-01 | received before 2026-10-01T18:42:02Z (builder clock; no UTC stated) | Fable 5.1 delegate session, 2026-10-02 | CP-MONO-01 **PASS** at mirror HEAD `bd6849cd25dd61e41660508abaf75a5c0d35ec20`. REPRODUCED by the delegate inside the mirror: clean incl. ignored; 544 commits; 0 remotes; three source HEADs are commits and each subfolder tree equals its source tree; six tags; workflow copy sha256 equals the workspace file; 0 withheld tokens / personal addresses over all revisions; R2 REPRODUCE PASS; R1 285 passed and validate_seal_snapshot PASS with the documented invocation; README exposure section present. ITSF's five repository-introspection failures accepted as recorded. WORKSPACE_MAP.md left as is (delegate raises with Aaron). Builder holds: no remote; the push is Aaron's act; after it, one post-push check, log and PROJECT_STATE update, mirror re-sync; the second mirror commit is pushed only on Aaron's next grant | delegate message; mirror `bd6849c` |
 | G-R2-2026-10-02-PUSH | grant given in the delegate session ≈2026-10-01T19:00Z (2026-10-02 ~03:00 +08:00, as reported by the delegate); confirmed to the builder ≈2026-10-02T04:13Z | Aaron (Owner; granted directly to the Fable delegate session; confirmed directly in the builder session) | One-shot Owner grant to push the publication mirror: `git remote add origin https://github.com/AaroNLaU0307/Intraday-Trend-Strategy-Framework.git` and `git push -u origin main --follow-tags`. Consumed by PUSH-2026-10-02. Grants no later push — the mirror re-sync commit stays local (OWNER-R2-2026-10-02, §2.9) | this file §2.9 |
 | PUSH-2026-10-02 | 2026-10-01T19:0xZ (executor's report; exact instant not established here) · post-push check 2026-10-02T04:08:33Z (builder clock) | executed by the Fable 5.1 delegate session under G-R2-2026-10-02-PUSH | Mirror pushed to the PUBLIC repository `https://github.com/AaroNLaU0307/Intraday-Trend-Strategy-Framework`: `main` = `bd6849cd25dd61e41660508abaf75a5c0d35ec20` (R2 subtree at `5c84a49`) and six annotated tags (r1-pre-seal, r1-s1-sealed, r1-s2-built, r1-final, mc-freeze-v1, s0-freeze-v1). Post-push check REPRODUCED by the builder: after fetch, `origin/main` == local `main` == `bd6849c`; each remote tag object equals the local one; R2 `tools/reproduce.py` inside the mirror at the pushed revision REPRODUCE PASS (16/16, NATURAL 10 / catch-ups 2, MANUAL 6); mirror tree clean | mirror `bd6849c`; remote `origin/main` |
+| RENAME-2026-10-02 | executed ≈2026-10-02 (delegate's report: ~05:0xZ); verified by the builder 2026-10-02T04:20:15Z (repository already renamed at that instant); Owner confirmation received ≈2026-10-02T04:22Z | Aaron (Owner; decided and authorized); executed by the Fable 5.1 delegate session | GitHub repository renamed from `https://github.com/AaroNLaU0307/Intraday-Trend-Strategy-Framework` to `https://github.com/AaroNLaU0307/nq-intraday-research` (GitHub redirects the old name); About text set by the executor. Verified read-only by the builder: `gh repo view` shows the new name, PUBLIC, default branch main; `ls-remote` main = `bd6849c`. Mirror `origin` updated and README amended locally (mirror `6471f60`), not pushed. The delegate's stated instant is later than the builder's verification; the builder's bound governs — verbatim confirmation in §2.10 | this file §2.10; mirror `6471f60` |
 
 ## 2. Binding messages, verbatim
 
@@ -257,4 +258,12 @@ Received ≈2026-10-02T04:13Z (builder clock read 04:13:48Z immediately after).
 
 ```
 我是 Aaron。我已直接授权 Fable delegate 执行推送，推送已于 2026-10-02 完成到 https://github.com/AaroNLaU0307/Intraday-Trend-Strategy-Framework（commit bd6849c，含六个标签）。请把这次授权和推送事件记入 R2 记录，并运行同步脚本。同步后的镜像提交留在本地，不推送。
+```
+
+### 2.10 OWNER-R2-2026-10-02-RENAME (verbatim, typed by Aaron in the builder session)
+
+Received ≈2026-10-02T04:22Z (builder clock read 04:22:32Z immediately after).
+
+```
+我是 Aaron。我已决定并授权把 GitHub 仓库从 Intraday-Trend-Strategy-Framework 改名为 nq-intraday-research，由 Fable delegate 于 2026-10-02 执行完成。请把这次改名记入 R2 记录并更新 PROJECT_STATE 的地址，然后运行同步脚本，镜像提交留在本地不推送。
 ```
