@@ -1,1 +1,7 @@
 * -text
+Intraday[[:space:]]Trend[[:space:]]Strategy[[:space:]]Framework/gate1/f10_event_calendar/raw/** linguist-vendored
+Intraday[[:space:]]Trend[[:space:]]Strategy[[:space:]]Framework/gate1/snapshots/** linguist-vendored
+Intraday[[:space:]]Trend[[:space:]]Strategy[[:space:]]Framework/gate1/lucid_pricing_2026-07-28/** linguist-vendored
+Intraday[[:space:]]Trend[[:space:]]Strategy[[:space:]]Framework/gate1/lucid_inquiry_reply/** linguist-vendored
+nq-letf-rebalancing-research/data_probe/** linguist-vendored
+nq-letf-rebalancing-research/data_forward_pit/** linguist-vendored

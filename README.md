@@ -29,6 +29,10 @@ no raw vendor data and no NQ returns are in this repository.
   `tools/sync_mirror.ps1`, `.gitattributes`) belong to the mirror. `.gitattributes` is `* -text`,
   like each project's: checked-out bytes equal committed bytes, so every recorded sha256
   verifies from a clone.
+- The root `.gitattributes` also marks captured evidence (ITSF `gate1/f10_event_calendar/raw/`,
+  `gate1/snapshots/`, `gate1/lucid_pricing_2026-07-28/`, `gate1/lucid_inquiry_reply/`; R2
+  `data_probe/`, `data_forward_pit/`) as `linguist-vendored`. These are **display-only**
+  attributes for GitHub's language statistics; they change no file bytes and no project record.
 - The ITSF subfolder keeps its workspace name, **`Intraday Trend Strategy Framework`** (with
   spaces), while the repository is named `nq-intraday-research`. Reason: R1's code resolves its sibling as
   `../Intraday Trend Strategy Framework` (`r1/events.py:39`, `r1/itsf_pin.py:26`,
