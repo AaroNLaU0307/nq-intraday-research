@@ -52,7 +52,7 @@ OPEN_BLOCKERS     = B-3  pre-2014-03-26 AUM publication not established; no veri
 LIVE_GRANTS       = OD-1 (standing, unexercised); forward collection (standing); no run grant;
                     no push grant (G-R2-2026-10-02-PUSH consumed); R1 correction lease (D-R2-2026-10-02-01)
 PUBLISHED         = github.com/AaroNLaU0307/nq-intraday-research (PUBLIC mirror; renamed 2026-10-02): main
-                    = bd6849c, R2 subtree at 5c84a49; post-push check PASS (PUSH-2026-10-02)
+                    = db53198, R2 subtree at 15e86b3; post-push check PASS (PUSH-2026-10-02-B)
 LIVE_OBLIGATIONS  = none dated; vendor responses pending (no follow-up authorized)
 FLAGS             = DATA_PURCHASE_AUTHORIZED NO · PAID_TRIAL_AUTHORIZED NO · CONTRACT NO ·
                     PAID_SUBSCRIPTION NO · FOLLOWUP_AUTHORIZED NO · TRIAL_ACTIVATION_AUTHORIZED

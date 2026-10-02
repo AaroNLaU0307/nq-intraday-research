@@ -63,6 +63,7 @@ this log existed; their evidence is the file named, as preserved in the baseline
 | G-R2-2026-10-02-PUSH | grant given in the delegate session ≈2026-10-01T19:00Z (2026-10-02 ~03:00 +08:00, as reported by the delegate); confirmed to the builder ≈2026-10-02T04:13Z | Aaron (Owner; granted directly to the Fable delegate session; confirmed directly in the builder session) | One-shot Owner grant to push the publication mirror: `git remote add origin https://github.com/AaroNLaU0307/Intraday-Trend-Strategy-Framework.git` and `git push -u origin main --follow-tags`. Consumed by PUSH-2026-10-02. Grants no later push — the mirror re-sync commit stays local (OWNER-R2-2026-10-02, §2.9) | this file §2.9 |
 | PUSH-2026-10-02 | 2026-10-01T19:0xZ (executor's report; exact instant not established here) · post-push check 2026-10-02T04:08:33Z (builder clock) | executed by the Fable 5.1 delegate session under G-R2-2026-10-02-PUSH | Mirror pushed to the PUBLIC repository `https://github.com/AaroNLaU0307/Intraday-Trend-Strategy-Framework`: `main` = `bd6849cd25dd61e41660508abaf75a5c0d35ec20` (R2 subtree at `5c84a49`) and six annotated tags (r1-pre-seal, r1-s1-sealed, r1-s2-built, r1-final, mc-freeze-v1, s0-freeze-v1). Post-push check REPRODUCED by the builder: after fetch, `origin/main` == local `main` == `bd6849c`; each remote tag object equals the local one; R2 `tools/reproduce.py` inside the mirror at the pushed revision REPRODUCE PASS (16/16, NATURAL 10 / catch-ups 2, MANUAL 6); mirror tree clean | mirror `bd6849c`; remote `origin/main` |
 | RENAME-2026-10-02 | executed ≈2026-10-02 (delegate's report: ~05:0xZ); verified by the builder 2026-10-02T04:20:15Z (repository already renamed at that instant); Owner confirmation received ≈2026-10-02T04:22Z | Aaron (Owner; decided and authorized); executed by the Fable 5.1 delegate session | GitHub repository renamed from `https://github.com/AaroNLaU0307/Intraday-Trend-Strategy-Framework` to `https://github.com/AaroNLaU0307/nq-intraday-research` (GitHub redirects the old name); About text set by the executor. Verified read-only by the builder: `gh repo view` shows the new name, PUBLIC, default branch main; `ls-remote` main = `bd6849c`. Mirror `origin` updated and README amended locally (mirror `6471f60`), not pushed. The delegate's stated instant is later than the builder's verification; the builder's bound governs — verbatim confirmation in §2.10 | this file §2.10; mirror `6471f60` |
+| PUSH-2026-10-02-B | executed 2026-10-02 before 04:24:08Z (builder's post-push check); Owner confirmation received ≈2026-10-02T04:25Z | Aaron (Owner; granted directly to the Fable delegate session, one-shot; confirmed directly in the builder session); executed by the Fable 5.1 delegate session | Second push of the publication mirror to `https://github.com/AaroNLaU0307/nq-intraday-research.git`: main `bd6849c..db53198c093cf61fcdf464d327f3e5e0af0bcbd3` (carries the post-push and rename records; R2 subtree at `15e86b3`); tags unchanged. Grant consumed; no push grant held now. Post-push check REPRODUCED by the builder at 2026-10-02T04:24:08Z: after fetch `origin/main` == local `main` == `db53198`; each of the six remote tag objects equals the local one; R2 `tools/reproduce.py` inside the mirror at the pushed revision REPRODUCE PASS; mirror tree clean — verbatim confirmation in §2.11 | this file §2.11; mirror `db53198` |
 
 ## 2. Binding messages, verbatim
 
@@ -266,4 +267,12 @@ Received ≈2026-10-02T04:22Z (builder clock read 04:22:32Z immediately after).
 
 ```
 我是 Aaron。我已决定并授权把 GitHub 仓库从 Intraday-Trend-Strategy-Framework 改名为 nq-intraday-research，由 Fable delegate 于 2026-10-02 执行完成。请把这次改名记入 R2 记录并更新 PROJECT_STATE 的地址，然后运行同步脚本，镜像提交留在本地不推送。
+```
+
+### 2.11 OWNER-R2-2026-10-02-PUSH-B (verbatim, typed by Aaron in the builder session)
+
+Received ≈2026-10-02T04:25Z (builder clock read 04:25:04Z immediately after).
+
+```
+我是 Aaron，我已授权并确认 2026-10-02 第二次推送到 db53198，请记录
 ```
