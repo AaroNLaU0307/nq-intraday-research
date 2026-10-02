@@ -14,6 +14,38 @@ full git history:
 | [`nq-event-diffusion-research/`](nq-event-diffusion-research/PROJECT_STATE.md) (R1) | scheduled-release (CPI / NFP) information-diffusion continuation in NQ; one sealed, preregistered, once-only test | **CLOSED** at S4, lifecycle STOP (tag `r1-final`); R1_FINAL_VERDICT INSUFFICIENT_EVIDENCE (KB `unresolved`) | see below |
 | [`nq-letf-rebalancing-research/`](nq-letf-rebalancing-research/PROJECT_STATE.md) (R2) | leveraged-ETF daily-reset rebalancing pressure transmitted into NQ | **PRE-S1 / WAITING_FOR_EXTERNAL_EVIDENCE**: no hypothesis, no preregistration, no outcome; waiting on vendor point-in-time evidence | `python tools/reproduce.py` |
 
+## How the programme fits together
+
+```mermaid
+flowchart LR
+  S0["S0 candidate families D1–D6<br/>(R1_S0_PROVENANCE.md §2; R2 handoff §4)"]
+  subgraph W["Workflow: S0 FRAME → S1 DESIGN+SEAL → S2 BUILD → S3 RUN → S4 VERDICT → STOP"]
+    direction LR
+    ITSF["ITSF — framework & Study 0<br/>opening-drive continuation, MC adjudication"]
+    R1["R1 — scheduled-release diffusion (CPI/NFP)<br/>sealed prereg → one governed run → S4"]
+    R2["R2 — leveraged-ETF reset pressure<br/>S0 feasibility done → point-in-time data gate"]
+  end
+  S0 -- "R1 = D2 narrowed" --> R1
+  S0 -- "R2 = D4 narrowed" --> R2
+  ITSF -. "NQ Development sample & reference assets (trial ordinal 1 → 2)" .-> R1
+  ITSF -. "same sample, granted, not exercised (ordinal 3 if run)" .-> R2
+  R1 --> R1v["STOP · verdict: unresolved<br/>(interval half-width 4.91 > M 3.99)"]
+  R2 --> R2v["PRE-S1 · waiting for vendor PIT evidence<br/>forward PIT collector running daily"]
+  ITSF --> ITSFv["PARKED 2026-09-16 · no MC result"]
+  classDef stop fill:#eee,stroke:#666,color:#000;
+  classDef wait fill:#fff6d5,stroke:#b58900,color:#000;
+  class R1v,ITSFv stop;
+  class R2v wait;
+```
+
+Solid arrows from S0 are research lineage: R1 and R2 were both selected in one S0 narrowing of
+candidate families D1–D6. The dispositions are recorded in
+`nq-event-diffusion-research/R1_S0_PROVENANCE.md` §2; the D2 → R1 and D4 → R2 mapping in
+`nq-letf-rebalancing-research/handoffs/2026-10-01_AARON_R2_HANDOFF.md` §4.
+Dotted arrows mark reuse of ITSF's NQ Development sample and reference assets, which is why the
+lineages share one trial count on that sample. Arrows are lineage, not data flow; nothing in this
+repository is a trading result.
+
 Nothing here states a result beyond what each project's own records state. No NQ market data,
 no raw vendor data and no NQ returns are in this repository.
 
