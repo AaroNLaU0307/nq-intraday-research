@@ -36,11 +36,11 @@ VENDOR_WAVE1      = 6/6 sent, RESPONSES_RECEIVED = 0 (evidentiary), all PENDING_
   AWAITING_RESPONSE. Nasdaq Fund Network REJECTED (R3) 2026-10-02; these six are the set
 FORWARD_PIT       = task QuantTrade-R2-ForwardPIT, daily 11:00 +08:00; principal
                     LogonType Password, RunLevel Limited, State Ready; last result 0;
-                    next run 2026-10-02 11:00 +08:00 (read 2026-10-02 02:07 +08:00)
-  derived by tools/reproduce.py, COUNTS_AS_OF_SNAPSHOT = 2026-09-30/230001_ET
-  SNAPSHOTS = 16   SNAPSHOTS_VERIFIED = 16/16   JSONL_ROWS = 15
-  NATURAL_CAPTURES = 10   CATCH_UPS = 2   MANUAL_CAPTURES = 6
-  LAST_SNAPSHOT = 2026-09-30/230001_ET
+                    next run 2026-10-03 11:00 +08:00 (read 2026-10-02 12:10 +08:00)
+  derived by tools/reproduce.py, COUNTS_AS_OF_SNAPSHOT = 2026-10-01/230002_ET
+  SNAPSHOTS = 17   SNAPSHOTS_VERIFIED = 17/17   JSONL_ROWS = 16
+  NATURAL_CAPTURES = 11   CATCH_UPS = 2   MANUAL_CAPTURES = 6
+  LAST_SNAPSHOT = 2026-10-01/230002_ET
   rule (D-R2-2026-10-01-02): NATURAL = task-start block + ROUTINE_FORWARD_COLLECTION +
   slot >= 2026-09-21T11:00+08:00 (pinned) + sole invocation for its slot; else MANUAL.
   Gaps: 2026-09-21 11:00 MISSING_FORWARD_CAPTURE; 2026-09-20 NO_FIRING_RECORD.
@@ -49,20 +49,20 @@ OPEN_BLOCKERS     = B-3  pre-2014-03-26 AUM publication not established; no veri
                          source carries historical availability for 2010-2021
                     G-11 the publication batch can miss a day (2016-04-01); S1 needs a
                          per-date staleness rule under OD-6
-LIVE_GRANTS       = OD-1 (standing, unexercised); forward collection (standing);
-                    no one-shot run grant; publication scope D-R2-2026-10-01-03a–e (push is
-                    Aaron's own act); R1 record-correction lease (D-R2-2026-10-02-01)
+LIVE_GRANTS       = OD-1 (standing, unexercised); forward collection (standing); no run grant;
+                    no push grant (G-R2-2026-10-02-PUSH consumed); R1 correction lease (D-R2-2026-10-02-01)
+PUBLISHED         = github.com/AaroNLaU0307/Intraday-Trend-Strategy-Framework (PUBLIC mirror): main
+                    = bd6849c, R2 subtree at 5c84a49; post-push check PASS (PUSH-2026-10-02)
 LIVE_OBLIGATIONS  = none dated; vendor responses pending (no follow-up authorized)
 FLAGS             = DATA_PURCHASE_AUTHORIZED NO · PAID_TRIAL_AUTHORIZED NO · CONTRACT NO ·
                     PAID_SUBSCRIPTION NO · FOLLOWUP_AUTHORIZED NO · TRIAL_ACTIVATION_AUTHORIZED
                     NO (free trial applied 2026-09-22, not activated) · POST_2022_TIER UNASSIGNED ·
                     NQ_DATA_DECODED NO · NQ_RETURN_COMPUTED NO · R2_PNL_COMPUTED NO ·
                     TRIAL_CONSUMED NO · R2_S1_AUTHORIZED NO
-NEXT_DECISION     = delegate acceptance of CP-REPAIR-01, then CP-MONO-01, then Aaron's push;
-                    research: classify the first evidentiary vendor reply under criteria §2
-                    (COR-R2-G15) — delegate, informed by builder; purchase/trial/follow-up: Aaron
-LAST_CHECKPOINT   = CP-R2-V2-01 at e11a1c9266a53b8c0c021b5081745941f098b4a2, ACCEPTED
-                    (ACC-CP-R2-V2-01); CP-REPAIR-01 pending (commit range in DECISION_LOG)
+NEXT_DECISION     = research: classify the first evidentiary vendor reply under criteria §2 — delegate,
+                    informed by builder; purchase/trial/follow-up and any push (incl. mirror re-sync): Aaron
+LAST_CHECKPOINT   = CP-REPAIR-01 at 5c84a498e9eb8532bbdf11c63fbdbd157b248781, ACCEPTED;
+                    CP-MONO-01 (mirror bd6849c) ACCEPTED and pushed
 ```
 
 **Not present, deliberately.** No sealed preregistration, no trial registry, no signal definition,
